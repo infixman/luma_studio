@@ -12,8 +12,7 @@ ADMIN_HTML = r"""<!doctype html>
     * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:#f7f6f2; }
     main { max-width:1080px; margin:0 auto; padding:44px 24px 72px; }
     header { display:flex; justify-content:space-between; gap:16px; align-items:center; border-bottom:1px solid #d8ddd7; padding-bottom:26px; }
-    .brand { display:flex; min-width:0; align-items:center; gap:22px; } .brand-logo { display:block; flex:0 0 auto; width:154px; height:auto; } .brand-copy { min-width:0; padding-left:22px; border-left:1px solid #d8ddd7; }
-    h1 { margin:0; font-size:1.75rem; letter-spacing:-.03em; color:#172433; } h2 { font-size:1.125rem; margin:0; color:#1f3343; } p { color:#596775; line-height:1.5; }
+    .brand-logo { display:block; width:154px; height:auto; } h2 { font-size:1.125rem; margin:0; color:#1f3343; } p { color:#596775; line-height:1.5; }
     button, input { font:inherit; } button { border:1px solid #247e78; border-radius:7px; padding:9px 13px; background:#287f79; color:#fff; cursor:pointer; font-weight:600; transition:background-color .15s ease, border-color .15s ease; }
     button:hover:not(:disabled) { background:#1f6e69; border-color:#1f6e69; } button:disabled { cursor:not-allowed; opacity:.55; } button.danger { background:#b74355; border-color:#b74355; } button.danger:hover:not(:disabled) { background:#9f3447; border-color:#9f3447; } button.ghost { background:#fff; color:#405160; border-color:#c8d0cc; }
     button:focus-visible, input:focus-visible { outline:3px solid #a7d5d0; outline-offset:2px; }
@@ -29,12 +28,12 @@ ADMIN_HTML = r"""<!doctype html>
     .setting-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:17px 22px; margin:18px 0 0; } fieldset { min-width:0; margin:0; padding:0; border:0; } legend { padding:0; color:#253746; font-weight:700; } .choices { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
     button.choice { min-height:38px; border-color:#d1d9d4; background:#f3f5f2; color:#45545d; font-size:.875rem; } button.choice:hover:not(:disabled) { border-color:#80aaa4; background:#edf5f3; color:#1e625e; } button.choice.selected { border-color:#247e78; background:#287f79; color:#fff; } button.choice:disabled { border-color:#e1e5e1; background:#f7f8f6; color:#a4afaa; opacity:1; }
     .print-summary { margin:17px 0 0; color:#536371; font-size:.92rem; } .print-summary strong { color:#1f3343; } .cache-notice { margin:12px 0 0; padding:10px 12px; border-radius:7px; background:#f3f6f2; color:#596775; font-size:.875rem; line-height:1.55; }
-    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } header { align-items:flex-start; flex-direction:column; } .brand { gap:15px; } .brand-logo { width:126px; } .brand-copy { padding-left:15px; } .row { align-items:stretch; flex-wrap:wrap; } .row input[type="file"] { min-width:100%; } .setting-grid { grid-template-columns:1fr; gap:15px; } button.choice { min-height:44px; } }
+    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } .brand-logo { width:126px; } .row { align-items:stretch; flex-wrap:wrap; } .row input[type="file"] { min-width:100%; } .setting-grid { grid-template-columns:1fr; gap:15px; } button.choice { min-height:44px; } }
   </style>
 </head>
 <body>
   <main>
-    <header><div class="brand"><img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌"><div class="brand-copy"><h1>ibon 圖檔管理</h1><p>R2 bucket: <code>luma-ibon-images</code></p></div></div><button id="logout" class="ghost">登出</button></header>
+    <header><img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌"><button id="logout" class="ghost">登出</button></header>
     <div id="status" aria-live="polite"></div>
     <section class="grid">
       <div class="card"><h2>資料夾</h2><p class="muted">資料夾名稱就是列印 API 的 id。</p>
