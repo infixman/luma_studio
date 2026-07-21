@@ -5,20 +5,23 @@ ADMIN_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Luma Studio · ibon 圖檔管理</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, "Microsoft JhengHei", system-ui, sans-serif; background:#10151d; color:#edf2f7; }
-    body { margin:0; background:radial-gradient(circle at top right,#204e4b 0,#10151d 38rem); min-height:100vh; }
-    main { max-width:980px; margin:0 auto; padding:36px 20px 64px; }
-    header { display:flex; justify-content:space-between; gap:16px; align-items:center; border-bottom:1px solid #354050; padding-bottom:22px; }
-    h1 { margin:0; font-size:26px; } h2 { font-size:18px; margin:0; } p { color:#b9c3d0; }
-    button, input { font:inherit; } button { border:0; border-radius:8px; padding:9px 13px; background:#2f8d83; color:white; cursor:pointer; }
-    button:hover { background:#3aa697; } button.danger { background:#913c4b; } button.ghost { background:#273241; }
-    .grid { display:grid; grid-template-columns:310px 1fr; gap:20px; margin-top:26px; } .card { background:#17202cdd; border:1px solid #344152; border-radius:12px; padding:18px; }
-    .row { display:flex; gap:9px; align-items:center; } .row input { min-width:0; flex:1; padding:9px; border:1px solid #475569; border-radius:8px; background:#0f1722; color:#fff; }
-    .folders, .files { list-style:none; padding:0; margin:14px 0 0; } li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 3px; border-bottom:1px solid #2b3747; }
-    .folder { flex:1; text-align:left; background:transparent; padding:4px 0; color:#d6f2ec; } .file-name { overflow-wrap:anywhere; } .muted { color:#91a0b2; font-size:13px; }
-    #status { min-height:22px; margin:16px 0 0; } #status.error { color:#ff9da8; } #status.ok { color:#8ee7c8; }
-    .empty { padding:22px 0; color:#91a0b2; text-align:center; }
-    @media (max-width:720px) { .grid { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+    :root { color-scheme:light; font-family:"Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; background:#f7f6f2; color:#1e2938; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:#f7f6f2; }
+    main { max-width:1080px; margin:0 auto; padding:44px 24px 72px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:center; border-bottom:1px solid #d8ddd7; padding-bottom:26px; }
+    h1 { margin:0; font-size:1.75rem; letter-spacing:-.03em; color:#172433; } h2 { font-size:1.125rem; margin:0; color:#1f3343; } p { color:#596775; line-height:1.5; }
+    button, input { font:inherit; } button { border:1px solid #247e78; border-radius:7px; padding:9px 13px; background:#287f79; color:#fff; cursor:pointer; font-weight:600; transition:background-color .15s ease, border-color .15s ease; }
+    button:hover:not(:disabled) { background:#1f6e69; border-color:#1f6e69; } button:disabled { cursor:not-allowed; opacity:.55; } button.danger { background:#b74355; border-color:#b74355; } button.danger:hover:not(:disabled) { background:#9f3447; border-color:#9f3447; } button.ghost { background:#fff; color:#405160; border-color:#c8d0cc; }
+    button:focus-visible, input:focus-visible { outline:3px solid #a7d5d0; outline-offset:2px; }
+    .grid { display:grid; grid-template-columns:320px minmax(0, 1fr); gap:28px; margin-top:32px; } .card { background:#fff; border:1px solid #d8ddd7; border-radius:10px; padding:22px; }
+    .row { display:flex; gap:10px; align-items:center; } .row input { min-width:0; flex:1; padding:10px 11px; border:1px solid #bbc6c1; border-radius:7px; background:#fff; color:#1e2938; }
+    .folders, .files { list-style:none; padding:0; margin:16px 0 0; } li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid #e1e5e1; }
+    .folder { flex:1; text-align:left; border:0; background:transparent; padding:6px 4px; color:#253746; font-weight:600; } .folder:hover:not(:disabled) { background:#edf5f3; color:#1e625e; } .folder-row.selected { margin:0 -8px; padding:11px 8px; border-radius:7px; background:#edf5f3; border-bottom-color:transparent; }
+    .copy-link { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; padding:0; border:1px solid #c7d2cd; border-radius:7px; background:#fff; color:#3a6c68; } .copy-link:hover:not(:disabled) { background:#edf5f3; border-color:#80aaa4; } .copy-link svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .file-name { overflow-wrap:anywhere; font-weight:600; } .muted { color:#697683; font-size:.875rem; }
+    #status { min-height:24px; margin:16px 0 0; color:#536371; } #status.error { color:#a12d42; } #status.ok { color:#19665f; }
+    .empty { padding:24px 0; color:#71808a; text-align:center; }
+    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } header { align-items:flex-start; flex-direction:column; } .row { align-items:stretch; flex-wrap:wrap; } .row input[type="file"] { min-width:100%; } }
   </style>
 </head>
 <body>
@@ -38,6 +41,7 @@ ADMIN_HTML = r"""<!doctype html>
   </main>
   <script>
     const state = { folder: null };
+    const printUrlBase = 'https://luma-studio.infixman.workers.dev/ibon_print/';
     const status = document.querySelector('#status');
     const setStatus = (text, kind='') => { status.textContent=text; status.className=kind; };
     async function api(path, options={}) {
@@ -47,17 +51,34 @@ ADMIN_HTML = r"""<!doctype html>
       return body;
     }
     function esc(value) { return String(value); }
+    async function copyPrintUrl(folder) {
+      const url = printUrlBase + encodeURIComponent(folder);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const field = document.createElement('textarea'); field.value = url; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0';
+        document.body.append(field); field.select();
+        const copied = document.execCommand('copy'); field.remove();
+        if (!copied) throw new Error('無法複製網址');
+      }
+      setStatus('已複製列印網址。', 'ok');
+    }
     async function loadFolders() {
       const data = await api('/api/admin/folders');
       const root = document.querySelector('#folders'); root.replaceChildren();
       if (!data.folders.length) { root.innerHTML='<li class="empty">沒有資料夾</li>'; return; }
       for (const folder of data.folders) {
-        const li=document.createElement('li'); const select=document.createElement('button'); select.className='folder'; select.textContent='📁 '+esc(folder); select.onclick=()=>selectFolder(folder);
-        li.append(select); root.append(li);
+        const li=document.createElement('li'); li.className='folder-row'+(folder===state.folder ? ' selected' : '');
+        const select=document.createElement('button'); select.className='folder'; select.textContent='📁 '+esc(folder); select.onclick=()=>selectFolder(folder);
+        const copy=document.createElement('button'); copy.className='copy-link'; copy.type='button'; copy.title='複製列印網址'; copy.setAttribute('aria-label','複製 '+folder+' 的列印網址');
+        copy.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="1"></rect><path d="M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4"></path></svg>';
+        copy.onclick=async()=>{ try { await copyPrintUrl(folder); } catch (error) { setStatus(error.message || '無法複製網址','error'); } };
+        li.append(select,copy); root.append(li);
       }
     }
     async function selectFolder(folder) {
       state.folder=folder; document.querySelector('#file-title').textContent='資料夾：'+folder;
+      document.querySelectorAll('.folder-row').forEach(item=>item.classList.toggle('selected',item.querySelector('.folder').textContent==='📁 '+folder));
       document.querySelector('#files').disabled=false; document.querySelector('#upload').disabled=false; document.querySelector('#delete-folder').disabled=false;
       await loadFiles();
     }
