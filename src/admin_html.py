@@ -9,6 +9,7 @@ ADMIN_HTML = r"""<!doctype html>
     * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:#f7f6f2; }
     main { max-width:1080px; margin:0 auto; padding:44px 24px 72px; }
     header { display:flex; justify-content:space-between; gap:16px; align-items:center; border-bottom:1px solid #d8ddd7; padding-bottom:26px; }
+    .brand { display:flex; min-width:0; align-items:center; gap:22px; } .brand-logo { display:block; flex:0 0 auto; width:154px; height:auto; } .brand-copy { min-width:0; padding-left:22px; border-left:1px solid #d8ddd7; }
     h1 { margin:0; font-size:1.75rem; letter-spacing:-.03em; color:#172433; } h2 { font-size:1.125rem; margin:0; color:#1f3343; } p { color:#596775; line-height:1.5; }
     button, input { font:inherit; } button { border:1px solid #247e78; border-radius:7px; padding:9px 13px; background:#287f79; color:#fff; cursor:pointer; font-weight:600; transition:background-color .15s ease, border-color .15s ease; }
     button:hover:not(:disabled) { background:#1f6e69; border-color:#1f6e69; } button:disabled { cursor:not-allowed; opacity:.55; } button.danger { background:#b74355; border-color:#b74355; } button.danger:hover:not(:disabled) { background:#9f3447; border-color:#9f3447; } button.ghost { background:#fff; color:#405160; border-color:#c8d0cc; }
@@ -21,12 +22,12 @@ ADMIN_HTML = r"""<!doctype html>
     .file-name { overflow-wrap:anywhere; font-weight:600; } .muted { color:#697683; font-size:.875rem; }
     #status { min-height:24px; margin:16px 0 0; color:#536371; } #status.error { color:#a12d42; } #status.ok { color:#19665f; }
     .empty { padding:24px 0; color:#71808a; text-align:center; }
-    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } header { align-items:flex-start; flex-direction:column; } .row { align-items:stretch; flex-wrap:wrap; } .row input[type="file"] { min-width:100%; } }
+    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } header { align-items:flex-start; flex-direction:column; } .brand { gap:15px; } .brand-logo { width:126px; } .brand-copy { padding-left:15px; } .row { align-items:stretch; flex-wrap:wrap; } .row input[type="file"] { min-width:100%; } }
   </style>
 </head>
 <body>
   <main>
-    <header><div><h1>ibon 圖檔管理</h1><p>R2 bucket: <code>luma-ibon-images</code></p></div><button id="logout" class="ghost">登出</button></header>
+    <header><div class="brand"><img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌"><div class="brand-copy"><h1>ibon 圖檔管理</h1><p>R2 bucket: <code>luma-ibon-images</code></p></div></div><button id="logout" class="ghost">登出</button></header>
     <div id="status" aria-live="polite"></div>
     <section class="grid">
       <div class="card"><h2>資料夾</h2><p class="muted">資料夾名稱就是列印 API 的 id。</p>

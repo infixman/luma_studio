@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlencode
 import qrcode
 import qrcode.image.svg
 from admin_html import ADMIN_HTML
+from print_html import render_print_page
 from js import Object, Uint8Array, crypto, fetch as js_fetch
 from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint
@@ -239,8 +240,23 @@ def json_response(body: dict, status: int = 200, extra_headers: dict | None = No
     return Response(json.dumps(body, ensure_ascii=False), status=status, headers=headers)
 
 
-def html_response() -> Response:
+def admin_html_response() -> Response:
     return Response(ADMIN_HTML, headers={"content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer"})
+
+
+def print_html_response(result: dict) -> Response:
+    return Response(render_print_page(result), headers={"content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer"})
+
+
+def prefers_html(request, query: dict) -> bool:
+    requested_format = (query.get("format") or [""])[0].lower()
+    if requested_format == "json":
+        return False
+    return requested_format == "html" or "text/html" in (request.headers.get("Accept") or "")
+
+
+def print_result_response(request, query: dict, result: dict) -> Response:
+    return print_html_response(result) if prefers_html(request, query) else json_response(result)
 
 
 def redirect(location: str, headers: dict | None = None) -> Response:
@@ -460,7 +476,7 @@ class Default(WorkerEntrypoint):
         if path == "/admin" and request.method == "GET":
             if not await get_admin_email(self.env, request):
                 return redirect("/auth/login")
-            return html_response()
+            return admin_html_response()
         if path.startswith("/api/admin/"):
             if not await get_admin_email(self.env, request):
                 return json_response({"error": "Authentication required"}, 401)
@@ -477,7 +493,7 @@ class Default(WorkerEntrypoint):
             return json_response({"error": "Invalid id"}, 400)
         cached = await get_cached_result(self.env, identifier)
         if cached:
-            return json_response(cached)
+            return print_result_response(request, query, cached)
 
         try:
             images = await read_images(self.env, identifier)
@@ -488,7 +504,7 @@ class Default(WorkerEntrypoint):
                 await upload_file(self.env, pincode, file_name, content, index, len(images), chunk_size)
             result = {"id": identifier, "pincode": pincode, "deadline": deadline, "qrCodeSvg": qr_code_svg(pincode), "files": [file_name for file_name, _ in images], "cached": False}
             await put_cached_result(self.env, identifier, result)
-            return json_response(result)
+            return print_result_response(request, query, result)
         except ValueError as error:
             return json_response({"error": str(error)}, 400)
         except IbonError as error:
