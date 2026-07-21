@@ -43,11 +43,6 @@ def render_print_page(result: dict) -> str:
     .pincode {{ display:block; margin:7px 0 0; color:#b9925d; font-size:clamp(2rem, 9vw, 3.15rem); font-weight:800; letter-spacing:.08em; line-height:1.1; text-decoration:none; -webkit-text-decoration:none; }}
     .pincode > span {{ display:inline-block; }} .pincode a {{ color:inherit !important; text-decoration:none !important; -webkit-text-decoration:none !important; pointer-events:none; }}
     .details {{ display:grid; gap:5px; margin:14px 0 0; color:#51636c; font-size:.95rem; line-height:1.65; }} .details p {{ margin:0; }} .details strong {{ color:#223d4c; }}
-    .actions {{ display:flex; justify-content:center; padding:12px clamp(24px, 7vw, 56px) 10px; }}
-    .actions > div {{ position:relative; }}
-    button {{ min-height:44px; border:1px solid #247e78; border-radius:6px; padding:10px 16px; color:#fff; background:#287f79; font:inherit; font-weight:700; cursor:pointer; }}
-    button:hover {{ background:#1f6e69; }} button:focus-visible {{ outline:3px solid #a7d5d0; outline-offset:3px; }}
-    #copy-status {{ position:absolute; top:calc(100% + 6px); left:50%; z-index:1; width:max-content; max-width:calc(100vw - 64px); margin:0; color:#2c817b; text-align:center; font-size:.9rem; transform:translateX(-50%); }}
     .tutorial {{ margin:0 clamp(12px, 4vw, 28px) 16px; padding:22px clamp(20px, 6vw, 44px) clamp(30px, 7vw, 46px); background:#f3f6f2; }}
     .tutorial h2 {{ margin:0; color:#223d4c; font-size:1.25rem; text-align:center; }} .tutorial > p {{ margin:8px 0 22px; color:#687780; text-align:center; line-height:1.6; }}
     .tutorial-list {{ display:grid; gap:24px; margin:0; padding:0; list-style:none; counter-reset:steps; }} .tutorial-list li {{ counter-increment:steps; }}
@@ -62,21 +57,8 @@ def render_print_page(result: dict) -> str:
     <section class="panel" aria-label="ibon 取件資訊">
       <div class="qr-wrap"><div class="qr" aria-label="ibon 取件 QR Code">{qr_code_svg}</div></div>
       <div class="code-block"><span class="code-label">取件編號</span><strong id="pincode" class="pincode" data-pincode="{pincode}" aria-label="取件編號 {pincode}">{pincode_digits}</strong><div class="details"><p><strong>列印期限：</strong>{deadline}</p><p><strong>列印規格：</strong>{print_specification}</p><p><strong>圖檔數量：</strong>{file_count} 個</p></div></div>
-      <div class="actions"><div><button type="button" id="copy">複製取件編號</button><p id="copy-status" aria-live="polite"></p></div></div>
       <section class="tutorial" aria-labelledby="tutorial-title"><h2 id="tutorial-title">列印教學</h2><p>前往 7-ELEVEN 的 ibon 機台，依序完成以下步驟。</p><ol class="tutorial-list"><li><div class="tutorial-step">前往 7-ELEVEN 的 ibon 機台。</div></li><li><div class="tutorial-step">在首頁選擇「列印／掃描」，再點選「取件編號列印」。</div><img class="tutorial-image" src="/assets/ibon_step2.png" alt="ibon 首頁的列印掃描選單，取件編號列印已標示"></li><li><div class="tutorial-step">選擇「條碼辨識輸入」，掃描本頁 QR Code 後選擇列印。</div><img class="tutorial-image" src="/assets/ibon_step3.png" alt="ibon 的條碼辨識輸入按鈕已標示"></li></ol></section>
     </section>
   </main>
-  <script>
-    document.querySelector('#copy').addEventListener('click', async () => {{
-      const code = document.querySelector('#pincode').dataset.pincode;
-      const status = document.querySelector('#copy-status');
-      try {{
-        await navigator.clipboard.writeText(code);
-        status.textContent = '已複製取件編號。';
-      }} catch {{
-        status.textContent = '請手動複製取件編號。';
-      }}
-    }});
-  </script>
 </body>
 </html>"""
