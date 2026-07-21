@@ -69,6 +69,26 @@ def random_alpha_numeric(length: int) -> str:
     return "".join(alphabet[value % len(alphabet)] for value in secure_bytes(length))
 
 
+def create_disposable_id() -> str:
+    """Mirror ibon's bI/_I browser functions exactly."""
+
+    values = iter(secure_bytes(30))
+    parts = []
+    for marker in "xxxxx-xxxxx-4xxxx-yxxxx-xxxxx":
+        if marker == "x":
+            parts.append(str(next(values) % 10))
+        elif marker == "y":
+            parts.append(str((next(values) % 10 & 3) | 8))
+        else:
+            parts.append(marker)
+    uuid = "".join(parts)
+    checksum = 0
+    for index in (1, 6, 8, 10):
+        character = uuid[index]
+        checksum += int(character) if character.isdigit() else ord(character) if character.isalpha() else 0
+    return f"{uuid}.{checksum}"
+
+
 def b64_text(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("ascii")
 
@@ -76,12 +96,10 @@ def b64_text(value: str) -> str:
 def create_entry_bootstrap() -> dict[str, str]:
     """Generate the ordinary ibon website's disposableId/key/t1 payload."""
 
-    random_values = secure_bytes(7)
-    disposable_id = "-".join(str(10000 + (value * 89999 // 255)) for value in random_values[:5])
-    disposable_id += f".{10 + (random_values[5] * 89 // 255)}"
+    disposable_id = create_disposable_id()
     nonce = random_alpha_numeric(5)
     first_encoding = b64_text(f"{disposable_id}-{nonce}")
-    mode = 1 + (random_values[6] % 2)
+    mode = 1 + (secure_bytes(1)[0] % 2)
     position = secure_bytes(1)[0] % 10
     inserted = ""
     removed = ""
@@ -157,7 +175,9 @@ async def create_web_entry(env) -> tuple[str, str]:
     token, uuid = entry.get("token"), entry.get("uuid")
     if result.get("code") != 20000 or not token or not uuid:
         raise IbonError("GetEntry", {"code": result.get("code"), "msg": result.get("msg", "missing token or uuid")})
-    return token, uuid
+    # The browser sends its generated disposableId as the Key header. The API
+    # currently echoes it as uuid, but retaining the original value is safer.
+    return token, bootstrap["disposableId"]
 
 
 async def create_pincode(env, token: str, uuid: str) -> tuple[str, str]:
