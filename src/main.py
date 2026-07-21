@@ -196,15 +196,15 @@ async def create_pincode(env, token: str, uuid: str) -> tuple[str, str]:
 
 async def get_chunk_size(env) -> int:
     response = await js_fetch(f"{env.IBON_UPLOAD_API_BASE_URL}/GetChunksize")
+    body = await response.text()
     if not response.ok:
-        body = await response.text()
         raise IbonError("GetChunksize", ibon_error_detail(response, body))
     try:
-        value = int(await response.text())
+        value = int(json.loads(body).get("ChunkSize"))
         if value <= 0:
             raise ValueError()
         return value
-    except (TypeError, ValueError):
+    except (AttributeError, json.JSONDecodeError, TypeError, ValueError):
         raise IbonError("GetChunksize", {"httpStatus": int(response.status), "reason": "invalidChunkSize"})
 
 
