@@ -43,11 +43,12 @@ def render_print_page(result: dict) -> str:
     .pincode {{ display:block; margin:7px 0 0; color:#b9925d; font-size:clamp(2rem, 9vw, 3.15rem); font-weight:800; letter-spacing:.08em; line-height:1.1; text-decoration:none; -webkit-text-decoration:none; }}
     .pincode > span {{ display:inline-block; }} .pincode a {{ color:inherit !important; text-decoration:none !important; -webkit-text-decoration:none !important; pointer-events:none; }}
     .details {{ display:grid; gap:5px; margin:14px 0 0; color:#51636c; font-size:.95rem; line-height:1.65; }} .details p {{ margin:0; }} .details strong {{ color:#223d4c; }}
-    .actions {{ display:flex; justify-content:center; padding:18px clamp(24px, 7vw, 56px) 28px; }}
+    .actions {{ display:flex; justify-content:center; padding:12px clamp(24px, 7vw, 56px) 10px; }}
+    .actions > div {{ position:relative; }}
     button {{ min-height:44px; border:1px solid #247e78; border-radius:6px; padding:10px 16px; color:#fff; background:#287f79; font:inherit; font-weight:700; cursor:pointer; }}
     button:hover {{ background:#1f6e69; }} button:focus-visible {{ outline:3px solid #a7d5d0; outline-offset:3px; }}
-    #copy-status {{ min-height:1.4em; margin:12px 0 0; color:#2c817b; text-align:center; font-size:.9rem; }}
-    .tutorial {{ margin:0 clamp(12px, 4vw, 28px) 20px; padding:28px clamp(20px, 6vw, 44px) clamp(30px, 7vw, 46px); background:#f3f6f2; }}
+    #copy-status {{ position:absolute; top:calc(100% + 6px); left:50%; z-index:1; width:max-content; max-width:calc(100vw - 64px); margin:0; color:#2c817b; text-align:center; font-size:.9rem; transform:translateX(-50%); }}
+    .tutorial {{ margin:0 clamp(12px, 4vw, 28px) 16px; padding:22px clamp(20px, 6vw, 44px) clamp(30px, 7vw, 46px); background:#f3f6f2; }}
     .tutorial h2 {{ margin:0; color:#223d4c; font-size:1.25rem; text-align:center; }} .tutorial > p {{ margin:8px 0 22px; color:#687780; text-align:center; line-height:1.6; }}
     .tutorial-list {{ display:grid; gap:24px; margin:0; padding:0; list-style:none; counter-reset:steps; }} .tutorial-list li {{ counter-increment:steps; }}
     .tutorial-step {{ display:flex; align-items:flex-start; gap:11px; color:#40545f; font-weight:700; line-height:1.6; }} .tutorial-step::before {{ display:grid; flex:0 0 26px; width:26px; height:26px; place-items:center; margin-top:1px; border-radius:50%; background:#e4eee9; color:#226f69; content:counter(steps); font-size:.86rem; }}
