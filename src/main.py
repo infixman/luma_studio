@@ -27,6 +27,14 @@ CACHE_TTL_SECONDS = 24 * 60 * 60
 OAUTH_STATE_TTL_SECONDS = 10 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
 ALLOWED_ADMIN_EMAILS = frozenset({"chiao7912@gmail.com", "infixman@gmail.com"})
+DEFAULT_PRINT_SELECT_TYPE = "FA4CN1"
+PRESET_PRINT_SELECT_TYPES = frozenset(
+    f"F{paper_size}{color_mode}{paper_kind}{sides}"
+    for paper_size in ("A4", "A3")
+    for color_mode in ("C", "B")
+    for paper_kind in ("N", "S")
+    for sides in ("1", "2")
+) | frozenset({"F4X6N1", "F4X6S1"})
 
 
 class IbonError(Exception):
@@ -181,8 +189,8 @@ async def create_web_entry(env) -> tuple[str, str]:
     return token, bootstrap["disposableId"]
 
 
-async def create_pincode(env, token: str, uuid: str) -> tuple[str, str]:
-    payload = {"Data": {"User": "guest", "Email": env.IBON_GUEST_EMAIL, "SelectType": "FNOMAL"}}
+async def create_pincode(env, token: str, uuid: str, select_type: str) -> tuple[str, str]:
+    payload = {"Data": {"User": "guest", "Email": env.IBON_GUEST_EMAIL, "SelectType": select_type}}
     result = await fetch_json(
         f"{env.IBON_PRINT_API_BASE_URL}/IbonUpload/GetPincode",
         {"method": "POST", "headers": ibon_headers(env, authorization=token, key=uuid), "body": json.dumps(payload)},
@@ -275,17 +283,40 @@ async def invalidate_print_cache(env, identifier: str):
     await env.DB.prepare("DELETE FROM ibon_print_cache WHERE id = ?1").bind(identifier).run()
 
 
-async def get_cached_result(env, identifier: str) -> dict | None:
-    rows = await d1_rows(env.DB.prepare("SELECT pincode, deadline, qr_code_svg, files_json, created_at, cache_expires_at FROM ibon_print_cache WHERE id = ?1 AND cache_expires_at > ?2").bind(identifier, utc_timestamp()))
+def print_spec(select_type: str) -> str:
+    if select_type == "F4X6N1":
+        return "4x6、彩色、單面列印、一般用紙"
+    if select_type == "F4X6S1":
+        return "4x6貼紙、彩色、單面列印、一般用紙"
+    match = re.fullmatch(r"F(A[34])(C|B)(N|S)(1|2)", select_type)
+    if not match:
+        return "未預選規格"
+    paper_size, color_mode, paper_kind, sides = match.groups()
+    return "、".join((paper_size, "彩色" if color_mode == "C" else "黑白", "單面列印" if sides == "1" else "雙面列印", "一般用紙" if paper_kind == "N" else "特殊用紙"))
+
+
+def validate_select_type(select_type: str) -> str:
+    if select_type not in PRESET_PRINT_SELECT_TYPES:
+        raise ValueError("Unsupported print setting")
+    return select_type
+
+
+async def get_folder_select_type(env, identifier: str) -> str:
+    rows = await d1_rows(env.DB.prepare("SELECT select_type FROM folder_print_settings WHERE folder_id = ?1").bind(identifier))
+    return rows[0]["select_type"] if rows else DEFAULT_PRINT_SELECT_TYPE
+
+
+async def get_cached_result(env, identifier: str, select_type: str) -> dict | None:
+    rows = await d1_rows(env.DB.prepare("SELECT pincode, deadline, qr_code_svg, files_json, created_at, cache_expires_at FROM ibon_print_cache WHERE id = ?1 AND select_type = ?2 AND cache_expires_at > ?3").bind(identifier, select_type, utc_timestamp()))
     if not rows:
         return None
     row = rows[0]
-    return {"id": identifier, "pincode": row["pincode"], "deadline": row["deadline"], "qrCodeSvg": row["qr_code_svg"], "files": json.loads(row["files_json"]), "cached": True, "cachedAt": row["created_at"], "cacheExpiresAt": row["cache_expires_at"]}
+    return {"id": identifier, "pincode": row["pincode"], "deadline": row["deadline"], "qrCodeSvg": row["qr_code_svg"], "files": json.loads(row["files_json"]), "selectType": select_type, "printSpec": print_spec(select_type), "cached": True, "cachedAt": row["created_at"], "cacheExpiresAt": row["cache_expires_at"]}
 
 
 async def put_cached_result(env, identifier: str, result: dict):
     now, expires = utc_timestamp(), utc_timestamp() + CACHE_TTL_SECONDS
-    await env.DB.prepare("""INSERT INTO ibon_print_cache (id, pincode, deadline, qr_code_svg, files_json, created_at, cache_expires_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(id) DO UPDATE SET pincode = excluded.pincode, deadline = excluded.deadline, qr_code_svg = excluded.qr_code_svg, files_json = excluded.files_json, created_at = excluded.created_at, cache_expires_at = excluded.cache_expires_at""").bind(identifier, result["pincode"], result["deadline"], result["qrCodeSvg"], json.dumps(result["files"]), now, expires).run()
+    await env.DB.prepare("""INSERT INTO ibon_print_cache (id, pincode, deadline, qr_code_svg, files_json, select_type, created_at, cache_expires_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET pincode = excluded.pincode, deadline = excluded.deadline, qr_code_svg = excluded.qr_code_svg, files_json = excluded.files_json, select_type = excluded.select_type, created_at = excluded.created_at, cache_expires_at = excluded.cache_expires_at""").bind(identifier, result["pincode"], result["deadline"], result["qrCodeSvg"], json.dumps(result["files"]), result["selectType"], now, expires).run()
     result["cachedAt"], result["cacheExpiresAt"] = now, expires
 
 
@@ -379,6 +410,28 @@ def validate_file_name(file_name: str) -> str:
 
 
 async def admin_api(env, request, path: str, query: dict) -> Response:
+    if path == "/api/admin/print-settings" and request.method == "GET":
+        try:
+            folder = validate_folder((query.get("folder") or [""])[0])
+        except ValueError:
+            return json_response({"error": "Invalid folder id"}, 400)
+        select_type = await get_folder_select_type(env, folder)
+        return json_response({"folder": folder, "selectType": select_type, "printSpec": print_spec(select_type)})
+
+    if path == "/api/admin/print-settings" and request.method == "PUT":
+        try:
+            body = await request.json()
+            folder = validate_folder(str(body.get("folder") or ""))
+            select_type = validate_select_type(str(body.get("selectType") or ""))
+        except (ValueError, AttributeError):
+            return json_response({"error": "Invalid print setting"}, 400)
+        existing = await d1_rows(env.DB.prepare("SELECT select_type FROM folder_print_settings WHERE folder_id = ?1").bind(folder))
+        changed = not existing or existing[0]["select_type"] != select_type
+        await env.DB.prepare("""INSERT INTO folder_print_settings (folder_id, select_type, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(folder_id) DO UPDATE SET select_type = excluded.select_type, updated_at = excluded.updated_at""").bind(folder, select_type, utc_timestamp()).run()
+        if changed:
+            await invalidate_print_cache(env, folder)
+        return json_response({"folder": folder, "selectType": select_type, "printSpec": print_spec(select_type), "cacheInvalidated": changed})
+
     if path == "/api/admin/folders" and request.method == "GET":
         listing = await env.IBON_IMAGES.list(delimiter="/", limit=1000)
         folders = sorted(prefix.rstrip("/") for prefix in listing.delimitedPrefixes if IDENTIFIER_PATTERN.fullmatch(prefix.rstrip("/")))
@@ -390,6 +443,7 @@ async def admin_api(env, request, path: str, query: dict) -> Response:
         except (ValueError, AttributeError):
             return json_response({"error": "Invalid folder id"}, 400)
         await env.IBON_IMAGES.put(f"{folder}/.keep", "")
+        await env.DB.prepare("INSERT OR IGNORE INTO folder_print_settings (folder_id, select_type, updated_at) VALUES (?1, ?2, ?3)").bind(folder, DEFAULT_PRINT_SELECT_TYPE, utc_timestamp()).run()
         await invalidate_print_cache(env, folder)
         return json_response({"folder": folder}, 201)
 
@@ -402,6 +456,7 @@ async def admin_api(env, request, path: str, query: dict) -> Response:
         if listing.truncated or any(item.key != f"{folder}/.keep" for item in listing.objects):
             return json_response({"error": "Delete the folder's images first"}, 409)
         await env.IBON_IMAGES.delete(f"{folder}/.keep")
+        await env.DB.prepare("DELETE FROM folder_print_settings WHERE folder_id = ?1").bind(folder).run()
         await invalidate_print_cache(env, folder)
         return json_response({"folder": folder, "deleted": True})
 
@@ -491,18 +546,19 @@ class Default(WorkerEntrypoint):
         identifier = path_parts[-1]
         if not IDENTIFIER_PATTERN.fullmatch(identifier):
             return json_response({"error": "Invalid id"}, 400)
-        cached = await get_cached_result(self.env, identifier)
+        select_type = await get_folder_select_type(self.env, identifier)
+        cached = await get_cached_result(self.env, identifier, select_type)
         if cached:
             return print_result_response(request, query, cached)
 
         try:
             images = await read_images(self.env, identifier)
             token, uuid = await create_web_entry(self.env)
-            pincode, deadline = await create_pincode(self.env, token, uuid)
+            pincode, deadline = await create_pincode(self.env, token, uuid, select_type)
             chunk_size = await get_chunk_size(self.env)
             for index, (file_name, content) in enumerate(images, start=1):
                 await upload_file(self.env, pincode, file_name, content, index, len(images), chunk_size)
-            result = {"id": identifier, "pincode": pincode, "deadline": deadline, "qrCodeSvg": qr_code_svg(pincode), "files": [file_name for file_name, _ in images], "cached": False}
+            result = {"id": identifier, "pincode": pincode, "deadline": deadline, "qrCodeSvg": qr_code_svg(pincode), "files": [file_name for file_name, _ in images], "selectType": select_type, "printSpec": print_spec(select_type), "cached": False}
             await put_cached_result(self.env, identifier, result)
             return print_result_response(request, query, result)
         except ValueError as error:

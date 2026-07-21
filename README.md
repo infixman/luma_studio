@@ -59,6 +59,7 @@ scripts/              本機診斷與 R2 同步腳本
    ```powershell
    uv run pywrangler d1 execute luma-ibon-cache --remote --file migrations/0001_create_ibon_print_cache.sql
    uv run pywrangler d1 execute luma-ibon-cache --remote --file migrations/0002_create_admin_auth.sql
+   uv run pywrangler d1 execute luma-ibon-cache --remote --file migrations/0003_add_print_settings.sql
    ```
 
 5. 將本機 `upload_ibon/<id>/` 同步到遠端 R2，然後部署：
@@ -76,7 +77,9 @@ scripts/              本機診斷與 R2 同步腳本
 https://luma-studio.infixman.workers.dev/admin
 ```
 
-僅允許 `chiao7912@gmail.com`、`infixman@gmail.com` 這兩個已驗證 Google 帳號。介面可建立資料夾、上傳/刪除圖片、刪除空資料夾與複製公開取件頁網址。任何圖檔異動都會清除該資料夾的 ibon 24 小時快取。
+僅允許 `chiao7912@gmail.com`、`infixman@gmail.com` 這兩個已驗證 Google 帳號。介面可建立資料夾、上傳/刪除圖片、刪除空資料夾、複製公開取件頁網址，並設定每個資料夾的紙張尺寸、色彩、單/雙面與紙張種類。
+
+預設規格為 **A4／彩色／單面列印／一般用紙**，對應 ibon `SelectType: FA4CN1`。每次規格異動都會清除該資料夾的 ibon 24 小時快取；下一個公開列印請求會以新的 `SelectType` 建立 pincode。
 
 1. 在 [Google Cloud Console](https://console.cloud.google.com/) 建立 **Web application** OAuth 2.0 Client。
 2. 在 Authorized redirect URIs 加入：
@@ -115,7 +118,7 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 
 ## 執行時行為與限制
 
-- D1 快取保存 24 小時；快取命中時不會再上傳至 ibon。
+- D1 快取保存 24 小時，並綁定資料夾的 ibon `SelectType`；快取命中時不會再上傳至 ibon。
 - 快取未命中時，只接受資料夾內 1–8 個 `jpg/jpeg/png/bmp/gif`，總大小不得超過 15 MB。
 - R2 object key 必須為 `<id>/<filename>`。
 - 上傳順序為 `BaseEntry/GetEntry` → `IbonUpload/GetPincode` → `GetChunksize` → `Upload`。上游失敗時 JSON API 會回傳不含 token 的 `stage` 與安全診斷資訊。
