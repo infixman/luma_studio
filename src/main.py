@@ -7,7 +7,7 @@ import json
 import re
 import string
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode
 
 import qrcode
 import qrcode.image.svg
@@ -29,7 +29,12 @@ ALLOWED_ADMIN_EMAILS = frozenset({"chiao7912@gmail.com", "infixman@gmail.com"})
 
 
 class IbonError(Exception):
-    """An ibon request failed after the Worker had accepted a cache miss."""
+    """A safe, request-specific failure from the ordinary ibon web flow."""
+
+    def __init__(self, stage: str, detail: dict):
+        self.stage = stage
+        self.detail = detail
+        super().__init__(f"{stage} failed")
 
 
 class OAuthError(Exception):
@@ -111,14 +116,32 @@ def ibon_headers(env, authorization: str | None = None, key: str | None = None) 
     return headers
 
 
-async def fetch_json(url: str, options: dict, error_type=IbonError) -> dict:
+def ibon_error_detail(response, body: str) -> dict:
+    """Keep useful ibon diagnostics without returning tokens or raw bodies."""
+
+    detail = {"httpStatus": int(response.status)}
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return detail
+    for key in ("code", "msg", "Status", "Message"):
+        if key in payload and isinstance(payload[key], (str, int, float, bool)):
+            detail[key] = payload[key]
+    return detail
+
+
+async def fetch_json(url: str, options: dict, error_type=IbonError, stage: str = "upstream") -> dict:
     response = await js_fetch(url, js_options(options))
     body = await response.text()
     if not response.ok:
+        if error_type is IbonError:
+            raise IbonError(stage, ibon_error_detail(response, body))
         raise error_type(f"upstream returned HTTP {response.status}")
     try:
         return json.loads(body)
     except json.JSONDecodeError as error:
+        if error_type is IbonError:
+            raise IbonError(stage, {"httpStatus": int(response.status), "reason": "nonJsonResponse"}) from error
         raise error_type("upstream returned a non-JSON response") from error
 
 
@@ -128,11 +151,12 @@ async def create_web_entry(env) -> tuple[str, str]:
     result = await fetch_json(
         f"{env.IBON_PRINT_API_BASE_URL}/BaseEntry/GetEntry",
         {"method": "POST", "headers": ibon_headers(env), "body": json.dumps(payload)},
+        stage="GetEntry",
     )
     entry = result.get("result") or {}
     token, uuid = entry.get("token"), entry.get("uuid")
     if result.get("code") != 20000 or not token or not uuid:
-        raise IbonError("GetEntry failed")
+        raise IbonError("GetEntry", {"code": result.get("code"), "msg": result.get("msg", "missing token or uuid")})
     return token, uuid
 
 
@@ -141,23 +165,27 @@ async def create_pincode(env, token: str, uuid: str) -> tuple[str, str]:
     result = await fetch_json(
         f"{env.IBON_PRINT_API_BASE_URL}/IbonUpload/GetPincode",
         {"method": "POST", "headers": ibon_headers(env, authorization=token, key=uuid), "body": json.dumps(payload)},
+        stage="GetPincode",
     )
     pincode = (result.get("result") or {}).get("pincode")
     deadline = (result.get("result") or {}).get("deadLine")
     if result.get("code") != 20000 or not pincode or not deadline:
-        raise IbonError("GetPincode failed")
+        raise IbonError("GetPincode", {"code": result.get("code"), "msg": result.get("msg", "missing pincode or deadline")})
     return pincode, deadline
 
 
 async def get_chunk_size(env) -> int:
     response = await js_fetch(f"{env.IBON_UPLOAD_API_BASE_URL}/GetChunksize")
     if not response.ok:
-        return 2 * 1024 * 1024
+        body = await response.text()
+        raise IbonError("GetChunksize", ibon_error_detail(response, body))
     try:
         value = int(await response.text())
-        return value if value > 0 else 2 * 1024 * 1024
+        if value <= 0:
+            raise ValueError()
+        return value
     except (TypeError, ValueError):
-        return 2 * 1024 * 1024
+        raise IbonError("GetChunksize", {"httpStatus": int(response.status), "reason": "invalidChunkSize"})
 
 
 async def upload_file(env, pincode: str, file_name: str, content: bytes, serial: int, total_files: int, chunk_size: int):
@@ -171,9 +199,10 @@ async def upload_file(env, pincode: str, file_name: str, content: bytes, serial:
         result = await fetch_json(
             f"{env.IBON_UPLOAD_API_BASE_URL}/Upload",
             {"method": "POST", "headers": ibon_headers(env), "body": json.dumps(payload, separators=(",", ":"))},
+            stage="Upload",
         )
         if result.get("Status") not in {"C", "S"}:
-            raise IbonError(f"Upload failed for {file_name}")
+            raise IbonError("Upload", {"file": file_name, "offset": offset, "Status": result.get("Status"), "Message": result.get("Message")})
 
 
 def qr_code_svg(pincode: str) -> str:
@@ -203,7 +232,7 @@ def redirect(location: str, headers: dict | None = None) -> Response:
 
 async def d1_rows(statement) -> list[dict]:
     result = await statement.all()
-    return result.to_py().get("results") or []
+    return result.results or []
 
 
 async def invalidate_print_cache(env, identifier: str):
@@ -387,11 +416,13 @@ async def admin_api(env, request, path: str, query: dict) -> Response:
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        # `request.url` is a JavaScript string proxy in Python Workers;
-        # convert it before passing it to Python's URL parser.
-        url = urlparse(str(request.url))
-        path = url.path.rstrip("/") or "/"
-        query = parse_qs(url.query)
+        request_url = str(request.url)
+        scheme_end = request_url.find("://")
+        path_start = request_url.find("/", scheme_end + 3)
+        path_and_query = request_url[path_start:] if path_start >= 0 else "/"
+        path, _, raw_query = path_and_query.partition("?")
+        path = path.rstrip("/") or "/"
+        query = parse_qs(raw_query)
 
         if path == "/auth/login" and request.method == "GET":
             return await begin_google_login(self.env)
@@ -440,7 +471,7 @@ class Default(WorkerEntrypoint):
             return json_response(result)
         except ValueError as error:
             return json_response({"error": str(error)}, 400)
-        except IbonError:
-            return json_response({"error": "Ibon upload failed"}, 502)
+        except IbonError as error:
+            return json_response({"error": "Ibon upload failed", "stage": error.stage, "detail": error.detail}, 502)
         except Exception:
             return json_response({"error": "Unexpected Worker failure"}, 500)
