@@ -1,54 +1,54 @@
-# luma-studio Python Worker
+# Luma Studio
 
-`GET /ibon_print/:id` reads `:id/` from Cloudflare R2, uses ibon's ordinary browser-upload sequence (`GetEntry` -> `GetPincode` -> `GetChunksize` -> `Upload`), generates an SVG QR code from the pickup number, and stores the result in D1 for 24 hours. It does not use ibon's company-only Open API.
+`GET /ibon_print/:id` 會從 Cloudflare R2 讀取 `:id/` 資料夾，依序執行 ibon 一般網頁上傳流程（`GetEntry` -> `GetPincode` -> `GetChunksize` -> `Upload`），以取件碼產生 SVG QR Code，並將結果快取到 D1 24 小時。本專案不使用 ibon 僅供企業客戶使用的 Open API。
 
-Example:
+範例：
 
 ```text
-https://luma-studio.<your-subdomain>.workers.dev/ibon_print/20260721_soda
+https://luma-studio.infixman.workers.dev/ibon_print/20260721_soda
 ```
 
-The JSON response contains `pincode`, `deadline`, and `qrCodeSvg`. The ordinary `GetPincode` response currently returns `qRcode: null`; the QR graphic on ibon's success page is generated from the pickup number, so this Worker saves an equivalent SVG together with ibon's response.
+JSON 回應包含 `pincode`、`deadline` 與 `qrCodeSvg`。ibon 一般 `GetPincode` 回應目前的 `qRcode` 為 `null`；ibon 成功頁的 QR 圖是由取件碼產生，因此 Worker 會用相同取件碼產生並快取等效的 SVG。
 
-## One-time Cloudflare setup
+## Cloudflare 初次設定
 
-1. Install [uv](https://docs.astral.sh/uv/) and authenticate with Cloudflare:
+1. 安裝 [uv](https://docs.astral.sh/uv/)，並登入 Cloudflare：
 
    ```powershell
    uv sync
    uv run pywrangler login
    ```
 
-2. Create the resources:
+2. 建立資源：
 
    ```powershell
    uv run pywrangler d1 create luma-ibon-cache
    uv run pywrangler r2 bucket create luma-ibon-images
    ```
 
-3. Copy the `database_id` printed by the D1 command into [wrangler.toml](wrangler.toml), replacing `REPLACE_WITH_D1_DATABASE_ID`.
+3. 將 D1 指令輸出的 `database_id` 填入 [wrangler.toml](wrangler.toml)，取代 `REPLACE_WITH_D1_DATABASE_ID`。
 
-4. Apply the D1 migration and upload the current folder to R2:
+4. 套用 D1 migration，並將指定資料夾的圖檔上傳到遠端 R2：
 
    ```powershell
    uv run pywrangler d1 execute luma-ibon-cache --remote --file migrations/0001_create_ibon_print_cache.sql
    .\scripts\sync-r2.ps1 20260721_soda
    ```
 
-5. Deploy:
+5. 部署 Worker：
 
    ```powershell
    uv run pywrangler deploy
    ```
 
-Wrangler prints the public `workers.dev` URL after deployment.
+部署完成後，Wrangler 會輸出公開的 `workers.dev` 網址。
 
 ## R2 管理介面與 Google OAuth
 
 管理介面位於：
 
 ```text
-https://luma-studio.<your-subdomain>.workers.dev/admin
+https://luma-studio.infixman.workers.dev/admin
 ```
 
 它只允許這兩個已驗證的 Google 帳號登入：`chiao7912@gmail.com`、`infixman@gmail.com`。可新增資料夾、上傳／刪除圖檔，以及刪除空資料夾；任何圖檔異動都會刪除該資料夾現有的 ibon 24 小時快取。
@@ -57,7 +57,7 @@ https://luma-studio.<your-subdomain>.workers.dev/admin
 2. 在 Authorized redirect URIs 加入：
 
    ```text
-   https://luma-studio.<your-subdomain>.workers.dev/auth/callback
+   https://luma-studio.infixman.workers.dev/auth/callback
    ```
 
 3. 使用 Cloudflare secret 儲存 OAuth 設定。不要把它們寫進 `wrangler.toml` 或 Git：
@@ -79,7 +79,7 @@ https://luma-studio.<your-subdomain>.workers.dev/admin
 
 ## GitHub 版本控制與自動部署
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 只在 `main` 有新 commit 時部署；PR 合併到 `main` 會產生該 push，所以不額外監聽 `pull_request.closed`，避免合併時重複部署。
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 只在 `main` 有新 commit 時部署；PR 合併到 `main` 會產生該 push，因此不額外監聽 `pull_request.closed`，避免合併時重複部署。
 
 在 GitHub repository 的 **Settings → Secrets and variables → Actions** 建立：
 
@@ -99,12 +99,12 @@ git push -u origin main
 
 Google OAuth secrets 只存在 Cloudflare；GitHub Actions 不需要也不應持有它們。
 
-## Runtime behavior
+## 執行時行為
 
-- Uses D1, not process memory: the 24-hour cache survives Worker isolate changes and is shared across requests.
-- A cache hit returns the saved ibon pickup number and SVG without contacting ibon.
-- A cache miss accepts only image folders with 1–8 `jpg/jpeg/png/bmp/gif` files totaling no more than 15 MB, matching ibon's upload-page limits.
-- R2 keys must be `:id/<filename>`; `scripts/sync-r2.ps1` uploads `upload_ibon/:id` in exactly that layout.
-- The worker follows the current ordinary website sequence: `BaseEntry/GetEntry` -> `IbonUpload/GetPincode` -> `GetChunksize` -> `Upload`. For each cache miss it generates a new web-entry bootstrap payload (`disposableId`, `key`, `t1`), receives a short-lived token plus uuid, then uses the uuid as the `Key` header of `GetPincode`. Tokens are not stored.
-- The original `ThanatosDi/ibonPrinter` is the protocol reference. It cannot run unchanged in a Worker because it reads local files and uses synchronous `requests`; this Worker retains its request sequence while reading R2, using Worker-native async `fetch`, and persisting the result in D1.
-- ibon can change this consumer flow or reject Cloudflare-originated traffic. Test one real request after deployment; this repository has not uploaded any image to ibon during setup.
+- 使用 D1 而非程序記憶體：24 小時快取可跨 Worker isolate 保留，並供所有請求共用。
+- 快取命中時，直接回傳已儲存的 ibon 取件碼與 SVG，不會連線到 ibon。
+- 快取未命中時，只接受資料夾內 1–8 個 `jpg/jpeg/png/bmp/gif` 圖檔，總大小不得超過 15 MB，與 ibon 網頁上傳限制一致。
+- R2 物件鍵必須是 `:id/<filename>`；`scripts/sync-r2.ps1` 會將 `upload_ibon/:id` 以這個結構上傳至遠端 R2。
+- Worker 遵循目前 ibon 一般網頁流程：`BaseEntry/GetEntry` -> `IbonUpload/GetPincode` -> `GetChunksize` -> `Upload`。每個快取未命中請求都會產生新的網頁進入資料（`disposableId`、`key`、`t1`），取得短效 token 與 uuid，並以 uuid 作為 `GetPincode` 的 `Key` header；token 不會儲存。
+- 原始的 `ThanatosDi/ibonPrinter` 是協定參考實作。它需讀取本機檔案並使用同步 `requests`，無法原樣在 Worker 執行；本專案保留其請求順序，改由 R2 讀取圖檔、使用 Worker 原生非同步 `fetch`，並把結果存入 D1。
+- ibon 可能變更一般消費者流程，或拒絕來自 Cloudflare 的請求。部署後請以一筆實際請求驗證；初始設定過程不會自動將圖片上傳給 ibon。

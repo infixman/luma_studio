@@ -19,7 +19,7 @@ if ($images.Count -eq 0) {
 foreach ($image in $images) {
     $r2Key = "$Id/$($image.Name)"
     Write-Host "Uploading $r2Key"
-    uv run pywrangler r2 object put "$Bucket/$r2Key" --file $image.FullName
+    uv run pywrangler r2 object put "$Bucket/$r2Key" --remote --file $image.FullName
     if ($LASTEXITCODE -ne 0) {
         throw "R2 upload failed: $r2Key"
     }
