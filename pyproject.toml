@@ -1,0 +1,16 @@
+[project]
+name = "luma-ibon-print"
+version = "0.1.0"
+description = "Cloudflare Python Worker for cached ibon ordinary web uploads"
+requires-python = ">=3.12"
+dependencies = [
+    "qrcode>=8.2",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py>=0.10.0",
+]
+
+[tool.uv]
+package = false

@@ -1,0 +1,26 @@
+name = "luma-studio"
+main = "src/main.py"
+compatibility_date = "2026-07-21"
+compatibility_flags = ["python_workers"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Replace the database_id after: uv run pywrangler d1 create luma-ibon-cache
+[[d1_databases]]
+binding = "DB"
+database_name = "luma-ibon-cache"
+database_id = "07d2f14a-1cb8-4b0e-bdb7-db76e3ffc98b"
+
+[[r2_buckets]]
+binding = "IBON_IMAGES"
+bucket_name = "luma-ibon-images"
+
+[vars]
+# ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
+# bootstrap payload for every cache miss.
+IBON_PRINT_API_BASE_URL = "https://print-api.ibon.com.tw/api"
+IBON_UPLOAD_API_BASE_URL = "https://www.ibon.com.tw/qwsapi2/api"
+IBON_CLIENT_VERSION = "4.2.4"
+IBON_GUEST_EMAIL = "guest@qware.com.tw"
