@@ -21,6 +21,9 @@ def render_print_page(result: dict) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/assets/luma-studio-favicon.png">
+  <link rel="apple-touch-icon" href="/assets/luma-studio-favicon.png">
   <meta name="format-detection" content="telephone=no, date=no, email=no, address=no, url=no">
   <meta name="robots" content="noindex, nofollow">
   <title>ibon 取件編號 | Luma Studio</title>

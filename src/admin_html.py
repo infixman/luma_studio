@@ -3,6 +3,9 @@ ADMIN_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/assets/luma-studio-favicon.png">
+  <link rel="apple-touch-icon" href="/assets/luma-studio-favicon.png">
   <title>Luma Studio · ibon 圖檔管理</title>
   <style>
     :root { color-scheme:light; font-family:"Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; background:#f7f6f2; color:#1e2938; }
