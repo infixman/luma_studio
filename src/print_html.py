@@ -47,7 +47,8 @@ def render_print_page(result: dict) -> str:
     .tutorial h2 {{ margin:0; color:#223d4c; font-size:1.25rem; text-align:center; }} .tutorial > p {{ margin:8px 0 22px; color:#687780; text-align:center; line-height:1.6; }}
     .tutorial-list {{ display:grid; gap:24px; margin:0; padding:0; list-style:none; counter-reset:steps; }} .tutorial-list li {{ counter-increment:steps; }}
     .tutorial-step {{ display:flex; align-items:flex-start; gap:11px; color:#40545f; font-weight:700; line-height:1.6; }} .tutorial-step::before {{ display:grid; flex:0 0 26px; width:26px; height:26px; place-items:center; margin-top:1px; border-radius:50%; background:#e4eee9; color:#226f69; content:counter(steps); font-size:.86rem; }}
-    .tutorial-image {{ display:block; width:100%; margin:12px 0 0; border:1px solid #d8ded7; }}
+    .tutorial-image {{ display:block; width:100%; margin:12px 0 0; border:1px solid #d8ded7; cursor:zoom-in; }} .tutorial-image:focus-visible {{ outline:3px solid #78aea9; outline-offset:3px; }}
+    .lightbox[hidden] {{ display:none; }} .lightbox {{ position:fixed; z-index:20; inset:0; display:grid; place-items:center; padding:clamp(18px, 5vw, 48px); background:rgba(21, 35, 43, .88); cursor:zoom-out; }} .lightbox img {{ display:block; max-width:100%; max-height:100%; object-fit:contain; box-shadow:0 18px 60px rgba(0, 0, 0, .38); }}
     @media (max-width:420px) {{ main {{ width:min(100% - 24px, 680px); }} .qr-wrap {{ padding-inline:14px; }} .pincode {{ letter-spacing:.04em; }} .tutorial {{ padding-inline:18px; }} }}
   </style>
 </head>
@@ -57,8 +58,21 @@ def render_print_page(result: dict) -> str:
     <section class="panel" aria-label="ibon 取件資訊">
       <div class="qr-wrap"><div class="qr" aria-label="ibon 取件 QR Code">{qr_code_svg}</div></div>
       <div class="code-block"><span class="code-label">取件編號</span><strong id="pincode" class="pincode" data-pincode="{pincode}" aria-label="取件編號 {pincode}">{pincode_digits}</strong><div class="details"><p><strong>列印期限：</strong>{deadline}</p><p><strong>列印規格：</strong>{print_specification}</p><p><strong>圖檔數量：</strong>{file_count} 個</p></div></div>
-      <section class="tutorial" aria-labelledby="tutorial-title"><h2 id="tutorial-title">列印教學</h2><p>前往 7-ELEVEN 的 ibon 機台，依序完成以下步驟。</p><ol class="tutorial-list"><li><div class="tutorial-step">前往 7-ELEVEN 的 ibon 機台。</div></li><li><div class="tutorial-step">在首頁選擇「列印／掃描」，再點選「取件編號列印」。</div><img class="tutorial-image" src="/assets/ibon_step2.png" alt="ibon 首頁的列印掃描選單，取件編號列印已標示"></li><li><div class="tutorial-step">選擇「條碼辨識輸入」，掃描本頁 QR Code 後選擇列印。</div><img class="tutorial-image" src="/assets/ibon_step3.png" alt="ibon 的條碼辨識輸入按鈕已標示"></li></ol></section>
+      <section class="tutorial" aria-labelledby="tutorial-title"><h2 id="tutorial-title">列印教學</h2><p>前往 7-ELEVEN 的 ibon 機台，依序完成以下步驟。</p><ol class="tutorial-list"><li><div class="tutorial-step">在首頁選擇「列印／掃描」，再點選「取件編號列印」。</div><img class="tutorial-image" src="/assets/ibon_step1.png" alt="ibon 首頁的列印掃描選單，取件編號列印已標示" role="button" tabindex="0"></li><li><div class="tutorial-step">選擇「條碼辨識輸入」，掃描本頁 QR Code 後選擇列印。</div><img class="tutorial-image" src="/assets/ibon_step2.png" alt="ibon 的條碼辨識輸入按鈕已標示" role="button" tabindex="0"></li></ol></section>
     </section>
   </main>
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="教學圖片放大瀏覽"><img id="lightbox-image" alt=""></div>
+  <script>
+    const lightbox = document.querySelector('#lightbox');
+    const lightboxImage = document.querySelector('#lightbox-image');
+    const closeLightbox = () => {{ lightbox.hidden = true; lightboxImage.removeAttribute('src'); }};
+    document.querySelectorAll('.tutorial-image').forEach((image) => {{
+      const openLightbox = () => {{ lightboxImage.src = image.currentSrc || image.src; lightboxImage.alt = image.alt; lightbox.hidden = false; }};
+      image.addEventListener('click', openLightbox);
+      image.addEventListener('keydown', (event) => {{ if (event.key === 'Enter' || event.key === ' ') {{ event.preventDefault(); openLightbox(); }} }});
+    }});
+    lightbox.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !lightbox.hidden) closeLightbox(); }});
+  </script>
 </body>
 </html>"""
