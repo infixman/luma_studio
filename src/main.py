@@ -7,7 +7,7 @@ import json
 import re
 import string
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, unquote, urlencode
 
 import qrcode
 import qrcode.image.svg
@@ -421,8 +421,8 @@ async def public_image_response(env, path: str) -> Response:
 
     _, _, folder, file_name = path.split("/", 3)
     try:
-        folder = validate_folder(folder)
-        file_name = validate_file_name(file_name)
+        folder = validate_folder(unquote(folder))
+        file_name = validate_file_name(unquote(file_name))
     except ValueError:
         return json_response({"error": "Invalid image URL"}, 400)
 
