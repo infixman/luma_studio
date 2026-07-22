@@ -21,6 +21,13 @@ from workers import Response, WorkerEntrypoint
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 FILE_NAME_PATTERN = re.compile(r"^[^/\\\x00]{1,180}$")
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
+IMAGE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+}
 MAX_FILE_COUNT = 8
 MAX_TOTAL_BYTES = 15 * 1024 * 1024
 CACHE_TTL_SECONDS = 24 * 60 * 60
@@ -409,6 +416,31 @@ def validate_file_name(file_name: str) -> str:
     return file_name
 
 
+async def public_image_response(env, path: str) -> Response:
+    """Serve one validated R2 image through the intentionally public image URL."""
+
+    _, _, folder, file_name = path.split("/", 3)
+    try:
+        folder = validate_folder(folder)
+        file_name = validate_file_name(file_name)
+    except ValueError:
+        return json_response({"error": "Invalid image URL"}, 400)
+
+    image = await env.IBON_IMAGES.get(f"{folder}/{file_name}")
+    if image is None:
+        return json_response({"error": "Image not found"}, 404)
+    content = bytes(Uint8Array.new(await image.arrayBuffer()).to_py())
+    suffix = file_name[file_name.rfind(".") :].lower()
+    return Response(
+        content,
+        headers={
+            "content-type": IMAGE_CONTENT_TYPES[suffix],
+            "cache-control": "public, max-age=3600",
+            "x-content-type-options": "nosniff",
+        },
+    )
+
+
 async def admin_api(env, request, path: str, query: dict) -> Response:
     if path == "/api/admin/print-settings" and request.method == "GET":
         try:
@@ -485,10 +517,15 @@ async def admin_api(env, request, path: str, query: dict) -> Response:
         except AttributeError:
             return json_response({"error": "Invalid multipart file field"}, 400)
         existing = await env.IBON_IMAGES.list(prefix=f"{folder}/", limit=1000)
-        image_count = sum(any(item.key.lower().endswith(suffix) for suffix in IMAGE_SUFFIXES) for item in existing.objects)
-        if existing.truncated or (image_count >= MAX_FILE_COUNT and f"{folder}/{file_name}" not in [item.key for item in existing.objects]):
-            return json_response({"error": f"A folder can contain at most {MAX_FILE_COUNT} images"}, 409)
+        image_objects = [item for item in existing.objects if any(item.key.lower().endswith(suffix) for suffix in IMAGE_SUFFIXES)]
+        existing_keys = [item.key for item in image_objects]
+        image_count = len(image_objects)
         key = f"{folder}/{file_name}"
+        replaced_size = next((item.size for item in image_objects if item.key == key), 0)
+        if existing.truncated or (image_count >= MAX_FILE_COUNT and key not in existing_keys):
+            return json_response({"error": f"A folder can contain at most {MAX_FILE_COUNT} images"}, 409)
+        if sum(item.size for item in image_objects) - replaced_size + len(file_content) > MAX_TOTAL_BYTES:
+            return json_response({"error": "Images in a folder must total 15 MB or less"}, 409)
         await env.IBON_IMAGES.put(key, file_content)
         await invalidate_print_cache(env, folder)
         return json_response({"key": key}, 201)
@@ -541,6 +578,11 @@ class Default(WorkerEntrypoint):
             if not await get_admin_email(self.env, request):
                 return json_response({"error": "Authentication required"}, 401)
             return await admin_api(self.env, request, path, query)
+
+        if path.startswith("/images/"):
+            if request.method != "GET" or len(path.split("/")) != 4:
+                return json_response({"error": "Use GET /images/{folder}/{file}"}, 404)
+            return await public_image_response(self.env, path)
 
         path_parts = path.split("/")
         if len(path_parts) != 3 or path_parts[-2] != "ibon_print":
