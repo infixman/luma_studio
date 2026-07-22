@@ -471,20 +471,25 @@ async def admin_api(env, request, path: str, query: dict) -> Response:
 
     if path == "/api/admin/upload" and request.method == "POST":
         try:
-            form = await request.formData()
+            form = await request.form_data()
             folder = validate_folder(str(form.get("folder") or ""))
             uploaded_file = form.get("file")
+            if uploaded_file is None:
+                raise ValueError("Missing multipart file field")
             file_name = validate_file_name(str(uploaded_file.name))
-            if int(uploaded_file.size) <= 0 or int(uploaded_file.size) > MAX_TOTAL_BYTES:
+            file_content = await uploaded_file.bytes()
+            if not file_content or len(file_content) > MAX_TOTAL_BYTES:
                 raise ValueError("Image must be between 1 byte and 15 MB")
-        except (ValueError, AttributeError):
-            return json_response({"error": "Invalid upload"}, 400)
+        except ValueError as error:
+            return json_response({"error": str(error) or "Invalid upload"}, 400)
+        except AttributeError:
+            return json_response({"error": "Invalid multipart file field"}, 400)
         existing = await env.IBON_IMAGES.list(prefix=f"{folder}/", limit=1000)
         image_count = sum(any(item.key.lower().endswith(suffix) for suffix in IMAGE_SUFFIXES) for item in existing.objects)
         if existing.truncated or (image_count >= MAX_FILE_COUNT and f"{folder}/{file_name}" not in [item.key for item in existing.objects]):
             return json_response({"error": f"A folder can contain at most {MAX_FILE_COUNT} images"}, 409)
         key = f"{folder}/{file_name}"
-        await env.IBON_IMAGES.put(key, uploaded_file)
+        await env.IBON_IMAGES.put(key, file_content)
         await invalidate_print_cache(env, folder)
         return json_response({"key": key}, 201)
 
