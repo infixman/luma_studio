@@ -53,13 +53,21 @@ jobs:
             exit 1
           }
 
+      - name: Compress
+        # SQL is plain text and the event table repeats itself, so gzip takes
+        # roughly a tenth of the space. Daily snapshots of a table that only
+        # grows would otherwise add up.
+        run: |
+          gzip -9 "$RUNNER_TEMP/backup.sql"
+          ls -lh "$RUNNER_TEMP/backup.sql.gz"
+
       - name: Upload to R2
         working-directory: backend
         # The underscore prefix keeps backups outside IDENTIFIER_PATTERN, so
         # they never appear as an ibon print folder or through /images/.
         run: |
           npx --yes wrangler@4 r2 object put \
-            "luma-ibon-images/_backups/$(date -u +%Y-%m-%d).sql" \
+            "luma-ibon-images/_backups/$(date -u +%Y-%m-%d).sql.gz" \
             --remote \
-            --file "$RUNNER_TEMP/backup.sql" \
-            --content-type "application/sql"
+            --file "$RUNNER_TEMP/backup.sql.gz" \
+            --content-type "application/gzip"

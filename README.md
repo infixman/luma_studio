@@ -109,7 +109,7 @@ R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflar
 
 ### 備份
 
-[.github/workflows/backup.yml](.github/workflows/backup.yml) 每天台北時間清晨三點把 D1 匯出到 R2 的 `_backups/YYYY-MM-DD.sql`。也可以在 Actions 頁面手動觸發。
+[.github/workflows/backup.yml](.github/workflows/backup.yml) 每天台北時間清晨三點把 D1 匯出、壓縮後上傳到 R2 的 `_backups/YYYY-MM-DD.sql.gz`。也可以在 Actions 頁面手動觸發。
 
 只匯出四張表：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`。刻意排除的是：
 
