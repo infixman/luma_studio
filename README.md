@@ -109,7 +109,9 @@ R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflar
 
 ### 備份
 
-[.github/workflows/backup.yml](.github/workflows/backup.yml) 每天台北時間清晨三點把 D1 匯出、壓縮後上傳到 R2 的 `_backups/YYYY-MM-DD.sql.gz`。也可以在 Actions 頁面手動觸發。
+[.github/workflows/backup.yml](.github/workflows/backup.yml) 每天台北時間清晨三點把 D1 匯出、壓縮後上傳到 R2 的 `_backups/YYYY-MM-DD.json.gz`。也可以在 Actions 頁面手動觸發。
+
+用的是 `d1 execute` 逐表查詢而不是 `d1 export`。後者的端點即使 token 有 `D1:Edit` 仍回 `Authentication error [code: 10000]`，而查詢端點是部署本來就在用的那一套。
 
 只匯出四張表：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`。刻意排除的是：
 
@@ -118,11 +120,14 @@ R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflar
 
 匯出後會檢查檔案大小與內容，空檔或缺表就讓工作失敗——否則會安靜地把無用的備份存起來，等到真的要用才發現。
 
-還原：
+還原時先把備份轉成 SQL，再送進 D1：
 
 ```powershell
-uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file backup.sql
+python scripts/restore-d1.py backup.json.gz > restore.sql
+uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file restore.sql
 ```
+
+[scripts/restore-d1.py](scripts/restore-d1.py) 產生的是 `INSERT OR REPLACE`：主鍵相同的列會被覆蓋，備份之後才新增的列保持不動，所以還原不會安靜地刪掉較新的資料。要讓資料庫完全等同備份時加 `--replace-tables`，它會先清空各表。也可以用 `--table` 只還原其中幾張。
 
 備份不會自動清理。要限制數量的話，在 R2 → `luma-ibon-images` → Settings 加一條 lifecycle rule，讓 `_backups/` 前綴的物件在 90 天後過期。
 

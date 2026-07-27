@@ -21,45 +21,53 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # admin_sessions and admin_oauth_states hold live credentials, and
+      # ibon_print_cache expires within a day. Backing any of them up would
+      # store secrets for no recovery value.
+      TABLES: "bio_link_settings bio_link_items bio_link_events folder_print_settings"
     steps:
       - uses: actions/checkout@v4
 
       - name: Export the tables worth keeping
         working-directory: backend
-        # admin_sessions and admin_oauth_states hold live credentials, and
-        # ibon_print_cache expires in a day. Backing any of them up would
-        # store secrets for no recovery value.
+        # `d1 execute` rather than `d1 export`: the export endpoint rejects
+        # this token with an authentication error even at D1:Edit, while the
+        # query endpoint is the same one deploys already rely on.
         run: |
-          npx --yes wrangler@4 d1 export luma-ibon-cache \
-            --remote \
-            --table bio_link_settings \
-            --table bio_link_items \
-            --table bio_link_events \
-            --table folder_print_settings \
-            --output "$RUNNER_TEMP/backup.sql"
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/backup.json"
+          jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{exportedAt: $at, tables: {}}' > "$OUT"
+          for TABLE in $TABLES; do
+            npx --yes wrangler@4 d1 execute luma-ibon-cache \
+              --remote --json --command "SELECT * FROM ${TABLE}" \
+              > "$RUNNER_TEMP/${TABLE}.raw.json"
+            jq --arg table "$TABLE" \
+               --argjson rows "$(jq '.[0].results' "$RUNNER_TEMP/${TABLE}.raw.json")" \
+               '.tables[$table] = $rows' "$OUT" > "$OUT.next"
+            mv "$OUT.next" "$OUT"
+            echo "${TABLE}: $(jq --arg t "$TABLE" '.tables[$t] | length' "$OUT") rows"
+          done
 
-      - name: Confirm the export is not empty
-        # A zero-byte or schema-only file would otherwise be uploaded happily
-        # and only be discovered to be useless on the day it is needed.
+      - name: Confirm the export is usable
+        # A backup that turns out to be empty on the day it is needed is worse
+        # than no backup, because it was trusted in the meantime.
         run: |
-          SIZE=$(stat -c%s "$RUNNER_TEMP/backup.sql")
-          echo "export is ${SIZE} bytes"
-          if [ "$SIZE" -lt 200 ]; then
-            echo "::error::D1 export looks empty (${SIZE} bytes)"
-            exit 1
-          fi
-          grep -q "bio_link_settings" "$RUNNER_TEMP/backup.sql" || {
-            echo "::error::D1 export is missing the bio_link_settings table"
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/backup.json"
+          for TABLE in $TABLES; do
+            jq -e --arg t "$TABLE" '.tables | has($t)' "$OUT" > /dev/null || {
+              echo "::error::${TABLE} is missing from the export"
+              exit 1
+            }
+          done
+          jq -e '.tables.bio_link_items | length > 0' "$OUT" > /dev/null || {
+            echo "::error::bio_link_items came back empty; the export is not trustworthy"
             exit 1
           }
 
       - name: Compress
-        # SQL is plain text and the event table repeats itself, so gzip takes
-        # roughly a tenth of the space. Daily snapshots of a table that only
-        # grows would otherwise add up.
-        run: |
-          gzip -9 "$RUNNER_TEMP/backup.sql"
-          ls -lh "$RUNNER_TEMP/backup.sql.gz"
+        # JSON of a table that only grows compresses to roughly a tenth.
+        run: gzip -9 "$RUNNER_TEMP/backup.json" && ls -lh "$RUNNER_TEMP/backup.json.gz"
 
       - name: Upload to R2
         working-directory: backend
@@ -67,7 +75,7 @@ jobs:
         # they never appear as an ibon print folder or through /images/.
         run: |
           npx --yes wrangler@4 r2 object put \
-            "luma-ibon-images/_backups/$(date -u +%Y-%m-%d).sql.gz" \
+            "luma-ibon-images/_backups/$(date -u +%Y-%m-%d).json.gz" \
             --remote \
-            --file "$RUNNER_TEMP/backup.sql.gz" \
+            --file "$RUNNER_TEMP/backup.json.gz" \
             --content-type "application/gzip"
