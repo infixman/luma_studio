@@ -1,4 +1,5 @@
 import { AdminPage } from './pages/AdminPage'
+import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
@@ -11,9 +12,14 @@ function markBody(page: string): void {
   document.body.className = page
 }
 
-/** Two entry points, no in-app navigation, so a regex on the path is enough. */
+/** A handful of entry points, no in-app navigation, so matching the path is enough. */
 export function App() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
+
+  if (path === '/') {
+    markBody('home')
+    return <HomePage />
+  }
 
   if (path === '/admin') {
     markBody('admin')
@@ -30,7 +36,7 @@ export function App() {
   return (
     <main class="landing">
       <div class="brand">
-        <img src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌" />
+        <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
       </div>
       <p>這個網址沒有對應的頁面。</p>
       <p>

@@ -1,0 +1,53 @@
+body.home {
+  background: radial-gradient(circle at 50% 18%, #eaf1ec 0, transparent 32rem), #f7f6f2;
+}
+
+body.home .home {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(20px, 5vh, 36px);
+  /* dvh keeps the block centred when mobile browser chrome slides away. */
+  min-height: 100dvh;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+body.home .home-mark {
+  display: block;
+  border-radius: 12px;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.home .home-mark:hover {
+  transform: translateY(-3px);
+}
+
+body.home .home-mark:focus-visible {
+  outline: 3px solid #a7d5d0;
+  outline-offset: 8px;
+}
+
+body.home .home-mark img {
+  display: block;
+  width: min(272px, 62vw);
+  height: auto;
+}
+
+body.home .home-greeting {
+  margin: 0;
+  color: #33454f;
+  font-size: clamp(1.05rem, 3.6vw, 1.35rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.home .home-mark {
+    transition: none;
+  }
+
+  body.home .home-mark:hover {
+    transform: none;
+  }
+}

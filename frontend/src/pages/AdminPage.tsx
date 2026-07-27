@@ -216,7 +216,7 @@ export function AdminPage() {
   return (
     <main>
       <header>
-        <img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌" />
+        <img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
         <button class="ghost" onClick={logout}>
           登出
         </button>

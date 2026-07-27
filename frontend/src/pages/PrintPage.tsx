@@ -63,7 +63,7 @@ export function PrintPage({ id }: { id: string }) {
   return (
     <main>
       <div class="brand">
-        <img src="/assets/luma-studio-logo.png" alt="Luma Studio 南光繪誌" />
+        <img src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
       </div>
 
       {error !== null && (
