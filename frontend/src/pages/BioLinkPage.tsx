@@ -55,18 +55,6 @@ export function BioLinkPage() {
         {page.bio && <p class="bio-text">{page.bio}</p>}
       </header>
 
-      {page.links.length > 0 && (
-        <ul class="bio-links">
-          {page.links.map((item) => (
-            <li key={item.id}>
-              <a class="bio-link" href={bioLinkRedirectUrl(item.id)} target="_blank" rel="noopener noreferrer">
-                {item.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-
       {page.socials.length > 0 && (
         <nav class="bio-socials" aria-label="社群連結">
           {page.socials.map((item) => {
@@ -86,6 +74,18 @@ export function BioLinkPage() {
             )
           })}
         </nav>
+      )}
+
+      {page.links.length > 0 && (
+        <ul class="bio-links">
+          {page.links.map((item) => (
+            <li key={item.id}>
+              <a class="bio-link" href={bioLinkRedirectUrl(item.id)} target="_blank" rel="noopener noreferrer">
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
       )}
 
       {hasNothing && <p class="bio-notice-detail">這個頁面還沒有連結。</p>}

@@ -410,8 +410,9 @@ export function BioLinkAdminPage() {
             <p class="muted bio-quota">
               目前 {state.items.length} / {MAX_ITEMS} 筆，還可新增 {Math.max(0, remaining)} 筆。
             </p>
-            {renderGroup('link')}
+            {/* Same order as the public page, so the editor previews itself. */}
             {renderGroup('social')}
+            {renderGroup('link')}
           </div>
 
           <div class="card">
