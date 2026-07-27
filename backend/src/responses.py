@@ -90,6 +90,13 @@ class Ctx:
     def binary(self, content: bytes, headers: dict) -> Response:
         return Response(content, headers=self._headers(headers, None))
 
+    def too_many_requests(self, retry_after: int = 60) -> Response:
+        return self.json(
+            {"error": "Too many requests, please try again shortly"},
+            429,
+            {"retry-after": str(retry_after)},
+        )
+
     def preflight(self) -> Response:
         headers = self._headers(
             {

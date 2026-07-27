@@ -17,6 +17,31 @@ database_id = "07d2f14a-1cb8-4b0e-bdb7-db76e3ffc98b"
 binding = "IBON_IMAGES"
 bucket_name = "luma-ibon-images"
 
+# Per-IP limits on the routes an outsider can reach. Budgets are generous
+# enough that a person clicking around never notices, and small enough that a
+# script cannot spend the shared D1 write quota or the ibon upload path.
+# See backend/src/rate_limit.py for what each one guards.
+
+# Every attempt writes an oauth state row before the visitor has proved
+# anything, so this is the tightest of the three.
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+# A cache miss reads up to 15 MB from R2 and runs the four-step ibon upload.
+[[ratelimits]]
+name = "PRINT_LIMITER"
+namespace_id = "1002"
+simple = { limit = 20, period = 60 }
+
+# The bio link page and its click redirects: two D1 reads and at most one
+# deduplicated write per visitor per day.
+[[ratelimits]]
+name = "PUBLIC_LIMITER"
+namespace_id = "1003"
+simple = { limit = 120, period = 60 }
+
 [vars]
 # ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
 # bootstrap payload for every cache miss.

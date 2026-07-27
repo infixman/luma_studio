@@ -88,6 +88,20 @@ docs/superpowers/specs/  設計文件
 
 `ALLOWED_ORIGINS` 與 `FRONTEND_ORIGIN` 定義在 [backend/wrangler.toml](backend/wrangler.toml) 的 `[vars]`。新增前端網域時要同步更新。
 
+### 公開端點的速率限制
+
+每個不需登入就能打到的端點都有 per-IP 上限，定義在 [backend/wrangler.toml](backend/wrangler.toml) 的 `[[ratelimits]]`：
+
+| 端點 | 上限 | 為什麼 |
+| --- | --- | --- |
+| `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
+| `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
+| `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
+
+以 Cloudflare 自行填入的 `CF-Connecting-IP` 為 key，該標頭無法被用戶端偽造。取不到位址時**不套用限制**，而不是把所有人算成同一個——否則單一來源就能吃光全體額度。
+
+限制是「盡力而為」：綁定不存在或呼叫失敗時一律放行。會讓網站掛掉的速率限制，比它要防的濫用更糟。
+
 ### D1 migration
 
 schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker 每個 isolate 首次收到請求時自動套用，並以 `schema_migrations` 表記錄。所有敘述都必須可重複執行，因為多個 isolate 會同時啟動。手動執行 `wrangler d1 execute` 已不再需要。

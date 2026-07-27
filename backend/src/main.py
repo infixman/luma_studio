@@ -12,6 +12,7 @@ import admin_api
 import auth
 import bio_link
 import bio_link_api
+import rate_limit
 from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, MigrationError, OAuthError, validate_file_name, validate_folder
 from ibon import resolve_print_result
 from js import Uint8Array
@@ -159,6 +160,10 @@ async def dispatch(ctx: Ctx):
     if path == "/auth/login" and method == "GET":
         if not ctx.allowed_origins:
             return ctx.error("Backend is missing ALLOWED_ORIGINS", 500)
+        # Each attempt writes an oauth state row, so this is the one public
+        # endpoint that can spend the D1 write quota without being asked to.
+        if not await rate_limit.allows(ctx.env, rate_limit.LOGIN, ctx.request, "login"):
+            return ctx.too_many_requests()
         return await auth.begin_google_login(ctx)
     if path == "/auth/callback" and method == "GET":
         try:
@@ -182,9 +187,13 @@ async def dispatch(ctx: Ctx):
         return await admin_api.handle(ctx)
 
     if path == "/api/bio-link" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
+            return ctx.too_many_requests()
         return await bio_link_response(ctx)
 
     if path.startswith("/r/") and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
+            return ctx.too_many_requests()
         return await bio_link_redirect_response(ctx, path.removeprefix("/r/"))
 
     if path.startswith(f"{bio_link.AVATAR_URL_PREFIX}/"):
@@ -203,6 +212,10 @@ async def dispatch(ctx: Ctx):
         identifier = path.removeprefix("/api/print/")
         if not IDENTIFIER_PATTERN.fullmatch(identifier):
             return ctx.error("Invalid id", 400)
+        # A cold cache here means 15 MB out of R2 and a four-step upload to
+        # ibon, so this is limited more tightly than the read-only routes.
+        if not await rate_limit.allows(ctx.env, rate_limit.PRINT, ctx.request, "print"):
+            return ctx.too_many_requests()
         return await print_response(ctx, identifier)
 
     # Links shared before the split still point at the old page and JSON URLs.
@@ -211,6 +224,8 @@ async def dispatch(ctx: Ctx):
         if not IDENTIFIER_PATTERN.fullmatch(identifier):
             return ctx.error("Invalid id", 400)
         if wants_json(ctx):
+            if not await rate_limit.allows(ctx.env, rate_limit.PRINT, ctx.request, "print"):
+                return ctx.too_many_requests()
             return await print_response(ctx, identifier)
         return frontend_redirect(ctx, f"/ibon_print/{identifier}")
     if path == "/admin" and method == "GET":
