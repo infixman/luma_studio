@@ -193,16 +193,8 @@ body.admin .bio-item-platform {
 }
 
 body.admin .bio-item-platform .social-icon {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-body.admin .bio-item-platform .social-icon.filled {
+  width: 17px;
+  height: 17px;
   fill: currentColor;
   stroke: none;
 }

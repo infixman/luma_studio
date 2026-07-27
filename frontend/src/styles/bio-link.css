@@ -144,18 +144,11 @@ body.bio .bio-social:focus-visible {
   outline-offset: 3px;
 }
 
+/* Solid marks read heavier than outlines at the same size, so these sit a
+   little smaller than the strokes they replaced. */
 body.bio .social-icon {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* Official brand marks are solid shapes, not outlines. */
-body.bio .social-icon.filled {
+  width: 20px;
+  height: 20px;
   fill: currentColor;
   stroke: none;
 }
