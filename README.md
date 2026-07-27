@@ -8,26 +8,26 @@
 
 | 部署 | 內容 | 網址 |
 | --- | --- | --- |
-| `luma-studio` | Cloudflare Python Worker，純 JSON API 與圖檔 | `https://luma-studio.infixman.workers.dev` |
-| `luma-studio-web` | Vite + Preact 靜態站台，管理介面與公開取件頁 | `https://luma-studio-web.infixman.workers.dev` |
+| `luma-studio` | Cloudflare Python Worker，純 JSON API 與圖檔 | `https://api.luma-studio.tw` |
+| `luma-studio-web` | Vite + Preact 靜態站台，管理介面與公開取件頁 | `https://luma-studio.tw` |
 
 ## 使用方式
 
 公開取件頁（含 QR Code、取件編號與列印期限）：
 
 ```text
-https://luma-studio-web.infixman.workers.dev/ibon_print/20260721_soda
+https://luma-studio.tw/ibon_print/20260721_soda
 ```
 
 給程式或 Postman 使用時直接打 API：
 
 ```text
-https://luma-studio.infixman.workers.dev/api/print/20260721_soda
+https://api.luma-studio.tw/api/print/20260721_soda
 ```
 
 JSON 包含 `pincode`、`deadline`、`qrCodeSvg`、圖檔清單與快取資訊。ibon 的一般 `GetPincode` 回應目前 `qRcode` 為 `null`，因此 Worker 以同一組取件編號產生等效 SVG QR Code。
 
-舊網址仍可用。已經發出去的 `https://luma-studio.infixman.workers.dev/ibon_print/{id}` 預設一律 302 導向前端頁面——包含 LINE、IG 內建瀏覽器與 QR 掃描 app 這類送 `Accept: */*` 的客戶端。只有明確要求 JSON 的呼叫端會拿到資料：`?format=json`，或送出 `Accept: application/json` 且不接受 HTML。
+舊網址仍可用。已經發出去的 `https://api.luma-studio.tw/ibon_print/{id}` 預設一律 302 導向前端頁面——包含 LINE、IG 內建瀏覽器與 QR 掃描 app 這類送 `Accept: */*` 的客戶端。只有明確要求 JSON 的呼叫端會拿到資料：`?format=json`，或送出 `Accept: application/json` 且不接受 HTML。
 
 ## 專案結構
 
@@ -135,7 +135,7 @@ cd frontend
 npm run dev
 ```
 
-前端預設打 `https://luma-studio.infixman.workers.dev`。要改打本機後端，在 `frontend/.env.local` 設定：
+前端預設打 `https://api.luma-studio.tw`。要改打本機後端，在 `frontend/.env.local` 設定：
 
 ```text
 VITE_API_BASE=http://localhost:8787
@@ -150,7 +150,7 @@ VITE_API_BASE=http://localhost:8787
 管理介面：
 
 ```text
-https://luma-studio-web.infixman.workers.dev/admin
+https://luma-studio.tw/admin
 ```
 
 僅允許 `chiao7912@gmail.com`、`infixman@gmail.com` 這兩個已驗證 Google 帳號。介面可建立資料夾、上傳/刪除圖片、刪除空資料夾、複製或開啟公開取件頁與圖檔網址，並設定每個資料夾的紙張尺寸、色彩、單/雙面與紙張種類。
@@ -161,7 +161,7 @@ https://luma-studio-web.infixman.workers.dev/admin
 2. 在 Authorized redirect URIs 加入後端的 callback：
 
    ```text
-   https://luma-studio.infixman.workers.dev/auth/callback
+   https://api.luma-studio.tw/auth/callback
    ```
 
 3. 將 OAuth 值存為 Cloudflare secrets，切勿寫入 Git：

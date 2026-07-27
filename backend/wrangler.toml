@@ -31,7 +31,5 @@ IBON_GUEST_EMAIL = "guest@qware.com.tw"
 # that port would gain credentialed write access to production.
 # For local work, override it in backend/.dev.vars instead.
 ALLOWED_ORIGINS = "https://luma-studio.tw,https://www.luma-studio.tw,https://luma-studio-web.infixman.workers.dev"
-# Where /admin and /ibon_print/{id} send browsers now that pages live elsewhere.
-# Still the workers.dev host: switch to https://luma-studio.tw only once that
-# domain is actually serving the frontend, or every shared link breaks.
-FRONTEND_ORIGIN = "https://luma-studio-web.infixman.workers.dev"
+# Where /admin and the already-shared /ibon_print/{id} links send browsers.
+FRONTEND_ORIGIN = "https://luma-studio.tw"

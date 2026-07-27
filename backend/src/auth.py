@@ -31,13 +31,20 @@ def get_cookie(request, name: str) -> str | None:
 
 
 def session_cookie(session_id: str, max_age: int) -> str:
-    """The frontend is a separate origin, so the cookie must be cross-site.
+    """Session cookie for the admin API.
 
-    SameSite=None removes the browser's CSRF protection; `Ctx.has_csrf_protection`
-    restores it with an Origin allowlist and a preflight-forcing header.
+    The frontend (luma-studio.tw) and this API (api.luma-studio.tw) share a
+    registrable domain, so requests between them are same-site and Lax is
+    enough. Lax also means a cross-site POST cannot carry the cookie at all,
+    which is a stronger position than the SameSite=None this needed while the
+    two halves lived on separate workers.dev hosts.
+
+    `Ctx.has_csrf_protection` still enforces the Origin allowlist and the
+    preflight-forcing header, because the two origins differ even though the
+    site does not.
     """
 
-    return f"{SESSION_COOKIE_NAME}={session_id}; Path=/; Max-Age={max_age}; HttpOnly; Secure; SameSite=None"
+    return f"{SESSION_COOKIE_NAME}={session_id}; Path=/; Max-Age={max_age}; HttpOnly; Secure; SameSite=Lax"
 
 
 async def get_admin_email(env, request) -> str | None:
