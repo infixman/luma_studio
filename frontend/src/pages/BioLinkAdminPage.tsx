@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminNav } from '../components/AdminNav'
+import { BioLinkAppearance } from '../components/BioLinkAppearance'
 import { BioLinkStatsPanel } from '../components/BioLinkStats'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../components/SocialIcon'
@@ -17,6 +18,8 @@ const MAX_TITLE = 80
 const MAX_URL = 2048
 const MAX_ITEMS = 50
 const MAX_AVATAR_MB = 2
+const MAX_CALENDAR_TITLE = 40
+const MAX_CALENDAR_COUNT = 12
 const AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp']
 const AVATAR_ACCEPT = AVATAR_EXTENSIONS.map((extension) => `.${extension}`).join(',')
 const AVATAR_PATTERN = new RegExp(`\\.(${AVATAR_EXTENSIONS.join('|')})$`, 'i')
@@ -69,8 +72,40 @@ export function BioLinkAdminPage() {
     }
   }
 
-  const saveSettings = (displayName: string, bio: string) =>
-    mutate(() => apiJson<BioLinkState>('/api/admin/bio-link', 'PUT', { displayName, bio }), '已儲存。')
+  /**
+   * Sends the whole settings object every time. The server validates all of
+   * it together, so a partial write would need it to merge — which is where
+   * "I changed the theme and my bio reverted" comes from.
+   */
+  const saveSettings = (patch: Partial<BioLinkState>, message = '已儲存。') => {
+    if (!state) return
+    const next = { ...state, ...patch }
+    setState(next)
+    void mutate(
+      () =>
+        apiJson<BioLinkState>('/api/admin/bio-link', 'PUT', {
+          displayName: next.displayName,
+          bio: next.bio,
+          theme: next.theme,
+          buttonShape: next.buttonShape,
+          fontStyle: next.fontStyle,
+          calendarUrl: next.calendarUrl,
+          calendarTitle: next.calendarTitle,
+          calendarCount: next.calendarCount,
+          calendarEnabled: next.calendarEnabled,
+        }),
+      message,
+    )
+  }
+
+  const testCalendar = () => {
+    if (!state) return
+    setBusy(true)
+    apiJson<{ count: number }>('/api/admin/bio-link/calendar/test', 'POST', { calendarUrl: state.calendarUrl })
+      .then((result) => show(`讀到 ${result.count} 場活動。`, 'ok'))
+      .catch(showError)
+      .finally(() => setBusy(false))
+  }
 
   const changeAvatar = async (file: File | undefined) => {
     if (!file) return
@@ -393,7 +428,7 @@ export function BioLinkAdminPage() {
                 maxLength={MAX_DISPLAY_NAME}
                 value={state.displayName}
                 onInput={(event) => setState({ ...state, displayName: event.currentTarget.value })}
-                onChange={(event) => saveSettings(event.currentTarget.value, state.bio)}
+                onChange={(event) => saveSettings({ displayName: event.currentTarget.value })}
               />
             </label>
 
@@ -404,12 +439,82 @@ export function BioLinkAdminPage() {
                 rows={3}
                 value={state.bio}
                 onInput={(event) => setState({ ...state, bio: event.currentTarget.value })}
-                onChange={(event) => saveSettings(state.displayName, event.currentTarget.value)}
+                onChange={(event) => saveSettings({ bio: event.currentTarget.value })}
               />
               <span class="muted">
                 {state.bio.length} / {MAX_BIO}
               </span>
             </label>
+          </div>
+
+          <div class="card">
+            <h2>外觀</h2>
+            <BioLinkAppearance
+              style={state}
+              avatarPath={state.avatarPath ? apiUrl(state.avatarPath) : null}
+              displayName={state.displayName}
+              busy={busy}
+              onChange={(patch) => saveSettings(patch)}
+            />
+          </div>
+
+          <div class="card">
+            <h2>課程行事曆</h2>
+            <p class="muted">
+              在 Google 日曆的「設定 → 這個日曆的設定 → 公開網址 (iCal 格式)」複製網址貼上。日曆必須設為公開。
+            </p>
+            <div class="bio-calendar-settings">
+              <label class="bio-checkbox">
+                <input
+                  type="checkbox"
+                  checked={state.calendarEnabled}
+                  disabled={busy}
+                  onChange={(event) => saveSettings({ calendarEnabled: event.currentTarget.checked })}
+                />
+                <span>在公開頁顯示近期活動</span>
+              </label>
+
+              <div class="bio-calendar-row">
+                <input
+                  type="text"
+                  placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                  maxLength={MAX_URL}
+                  value={state.calendarUrl}
+                  onInput={(event) => setState({ ...state, calendarUrl: event.currentTarget.value })}
+                  onChange={(event) => saveSettings({ calendarUrl: event.currentTarget.value })}
+                />
+                <button type="button" class="ghost" disabled={busy || !state.calendarUrl} onClick={testCalendar}>
+                  測試連線
+                </button>
+              </div>
+
+              <div class="bio-calendar-row">
+                <label class="bio-field">
+                  <span>區塊標題</span>
+                  <input
+                    type="text"
+                    maxLength={MAX_CALENDAR_TITLE}
+                    value={state.calendarTitle}
+                    onInput={(event) => setState({ ...state, calendarTitle: event.currentTarget.value })}
+                    onChange={(event) => saveSettings({ calendarTitle: event.currentTarget.value })}
+                  />
+                </label>
+                <label class="bio-field bio-field-narrow">
+                  <span>最多顯示</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_CALENDAR_COUNT}
+                    value={state.calendarCount}
+                    onChange={(event) => saveSettings({ calendarCount: Number(event.currentTarget.value) })}
+                  />
+                </label>
+              </div>
+
+              <p class="bio-calendar-warning">
+                公開頁會顯示活動的標題、時間、地點與說明。日曆上的說明欄若寫了學員姓名或聯絡方式，任何人都看得到。
+              </p>
+            </div>
           </div>
 
           <div class="card">

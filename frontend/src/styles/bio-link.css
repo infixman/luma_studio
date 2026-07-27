@@ -1,5 +1,83 @@
+/* Five palettes, each with its text and background contrast checked rather
+   than eyeballed — see bio-link.theme.test.ts, which reads this file. The
+   owner picks a name; nothing they type becomes CSS. */
+
+/* Selector-agnostic so the editor's preview can use the same definitions
+   rather than a copy that drifts. */
+body.bio,
+.bio-preview {
+  --bio-page: #f7f6f2;
+  --bio-glow: #eaf1ec;
+  --bio-surface: #fffefa;
+  --bio-border: #d8ded7;
+  --bio-text: #1f3343;
+  --bio-muted: #55676f;
+  --bio-accent: #80aaa4;
+  --bio-shadow: 24 48 52;
+  --bio-radius: 14px;
+  --bio-font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+
+[data-theme="ink"] {
+  --bio-page: #ffffff;
+  --bio-glow: #f3f4f6;
+  --bio-surface: #ffffff;
+  --bio-border: #e0e3e8;
+  --bio-text: #16181d;
+  --bio-muted: #505964;
+  --bio-accent: #16181d;
+  --bio-shadow: 20 22 28;
+}
+
+[data-theme="forest"] {
+  --bio-page: #f1f5f1;
+  --bio-glow: #e0ebe3;
+  --bio-surface: #ffffff;
+  --bio-border: #d1dfd5;
+  --bio-text: #17301f;
+  --bio-muted: #44604c;
+  --bio-accent: #2f6b47;
+  --bio-shadow: 22 46 30;
+}
+
+[data-theme="sand"] {
+  --bio-page: #f6f1e8;
+  --bio-glow: #eee4d2;
+  --bio-surface: #fffdf8;
+  --bio-border: #e3d8c4;
+  --bio-text: #35291c;
+  --bio-muted: #665542;
+  --bio-accent: #a97f45;
+  --bio-shadow: 60 44 22;
+}
+
+[data-theme="night"] {
+  --bio-page: #14171c;
+  --bio-glow: #1e232b;
+  --bio-surface: #1e222a;
+  --bio-border: #333a44;
+  --bio-text: #f4f6f8;
+  --bio-muted: #b0b9c4;
+  --bio-accent: #8fb8ad;
+  --bio-shadow: 0 0 0;
+}
+
+[data-shape="pill"] {
+  --bio-radius: 999px;
+}
+
+[data-shape="square"] {
+  --bio-radius: 4px;
+}
+
+[data-font="serif"] {
+  --bio-font: "Noto Serif TC", "Songti TC", "PMingLiU", Georgia, serif;
+}
+
 body.bio {
-  background: radial-gradient(circle at 50% 0, #eaf1ec 0, transparent 30rem), #f7f6f2;
+  background: radial-gradient(circle at 50% 0, var(--bio-glow) 0, transparent 30rem), var(--bio-page);
+  color: var(--bio-text);
+  font-family: var(--bio-font);
 }
 
 body.bio .bio {
@@ -19,14 +97,14 @@ body.bio .bio-notice {
 
 body.bio .bio-notice-title {
   margin: 0;
-  color: #223d4c;
+  color: var(--bio-text);
   font-size: 1.1rem;
   font-weight: 700;
 }
 
 body.bio .bio-notice-detail {
   margin: 0;
-  color: #687780;
+  color: var(--bio-muted);
   line-height: 1.6;
   text-align: center;
 }
@@ -41,10 +119,10 @@ body.bio .bio-header {
 body.bio .bio-avatar {
   width: clamp(96px, 28vw, 124px);
   height: clamp(96px, 28vw, 124px);
-  border: 3px solid #fffefa;
+  border: 3px solid var(--bio-surface);
   border-radius: 50%;
-  background: #e4eee9;
-  box-shadow: 0 12px 30px rgba(24, 48, 52, 0.14);
+  background: var(--bio-glow);
+  box-shadow: 0 12px 30px rgb(var(--bio-shadow) / 0.14);
   object-fit: cover;
 }
 
@@ -61,7 +139,7 @@ body.bio .bio-avatar-logo {
 
 body.bio .bio-name {
   margin: 0;
-  color: #1f3343;
+  color: var(--bio-text);
   font-size: clamp(1.3rem, 5vw, 1.6rem);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -69,10 +147,8 @@ body.bio .bio-name {
 
 body.bio .bio-text {
   margin: 0;
-  /* Wider than a paragraph would want, because the bio is written as short
-     deliberate lines rather than prose that should wrap. */
   max-width: 34ch;
-  color: #55676f;
+  color: var(--bio-muted);
   font-size: 0.97rem;
   line-height: 2;
   letter-spacing: 0.01em;
@@ -91,11 +167,11 @@ body.bio .bio-links {
 body.bio .bio-link {
   display: block;
   padding: 17px 22px;
-  border: 1px solid #d8ded7;
-  border-radius: 14px;
-  background: #fffefa;
-  box-shadow: 0 8px 20px rgba(24, 48, 52, 0.06);
-  color: #1f3343;
+  border: 1px solid var(--bio-border);
+  border-radius: var(--bio-radius);
+  background: var(--bio-surface);
+  box-shadow: 0 8px 20px rgb(var(--bio-shadow) / 0.06);
+  color: var(--bio-text);
   font-weight: 700;
   text-align: center;
   text-decoration: none;
@@ -105,12 +181,14 @@ body.bio .bio-link {
 
 body.bio .bio-link:hover {
   transform: translateY(-2px);
-  border-color: #80aaa4;
-  box-shadow: 0 14px 28px rgba(24, 48, 52, 0.11);
+  border-color: var(--bio-accent);
+  box-shadow: 0 14px 28px rgb(var(--bio-shadow) / 0.11);
 }
 
-body.bio .bio-link:focus-visible {
-  outline: 3px solid #a7d5d0;
+body.bio .bio-link:focus-visible,
+body.bio .bio-social:focus-visible,
+body.bio .bio-event-action:focus-visible {
+  outline: 3px solid var(--bio-accent);
   outline-offset: 3px;
 }
 
@@ -126,31 +204,126 @@ body.bio .bio-social {
   place-items: center;
   width: 46px;
   height: 46px;
-  border: 1px solid #d8ded7;
+  border: 1px solid var(--bio-border);
   border-radius: 50%;
-  background: #fffefa;
-  color: #3a6c68;
+  background: var(--bio-surface);
+  color: var(--bio-text);
   text-decoration: none;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
 body.bio .bio-social:hover {
   transform: translateY(-2px);
-  border-color: #80aaa4;
+  border-color: var(--bio-accent);
 }
 
-body.bio .bio-social:focus-visible {
-  outline: 3px solid #a7d5d0;
-  outline-offset: 3px;
-}
-
-/* Solid marks read heavier than outlines at the same size, so these sit a
-   little smaller than the strokes they replaced. */
+/* Solid marks read heavier than outlines at the same size. */
 body.bio .social-icon {
   width: 20px;
   height: 20px;
   fill: currentColor;
   stroke: none;
+}
+
+body.bio .bio-calendar {
+  display: grid;
+  gap: 12px;
+}
+
+body.bio .bio-calendar-title {
+  margin: 0;
+  color: var(--bio-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+body.bio .bio-event {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 15px 18px;
+  border: 1px solid var(--bio-border);
+  border-radius: var(--bio-radius);
+  background: var(--bio-surface);
+  box-shadow: 0 8px 20px rgb(var(--bio-shadow) / 0.06);
+}
+
+body.bio .bio-event-date {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 48px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--bio-glow);
+  color: var(--bio-text);
+  line-height: 1.2;
+}
+
+body.bio .bio-event-day {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+body.bio .bio-event-month,
+body.bio .bio-event-weekday {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+body.bio .bio-event-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.bio .bio-event-name {
+  margin: 0;
+  color: var(--bio-text);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+body.bio .bio-event-meta {
+  margin: 0;
+  color: var(--bio-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+body.bio .bio-event-note {
+  margin: 2px 0 0;
+  color: var(--bio-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+body.bio .bio-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+body.bio .bio-event-action {
+  padding: 6px 12px;
+  border: 1px solid var(--bio-border);
+  border-radius: 999px;
+  color: var(--bio-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+body.bio .bio-event-action:hover {
+  border-color: var(--bio-accent);
+  color: var(--bio-text);
 }
 
 body.bio .bio-footer {
@@ -159,14 +332,14 @@ body.bio .bio-footer {
 }
 
 body.bio .bio-footer a {
-  color: #8a9992;
+  color: var(--bio-muted);
   font-size: 0.85rem;
   letter-spacing: 0.1em;
   text-decoration: none;
 }
 
 body.bio .bio-footer a:hover {
-  color: #1e625e;
+  color: var(--bio-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

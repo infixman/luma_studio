@@ -31,7 +31,10 @@ ITEM_KINDS = frozenset({"link", "social"})
 # page needs no loosening of its content security policy.
 THEMES = ("warm", "ink", "forest", "sand", "night")
 BUTTON_SHAPES = ("rounded", "pill", "square")
-FONT_STYLES = ("sans", "serif", "rounded")
+# Only what every device already has a CJK face for. A third "rounded"
+# option would need a shipped webfont, which the page's font-src does not
+# allow and which is not worth loosening it for.
+FONT_STYLES = ("sans", "serif")
 
 # Only Google's own calendar host. The Worker fetches this URL, so accepting
 # an arbitrary host would turn an admin field into a way to reach addresses

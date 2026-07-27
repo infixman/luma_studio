@@ -42,10 +42,34 @@ export interface BioLinkItem {
 }
 
 /** What the editor loads and every mutation returns. */
-export interface BioLinkState {
+export type BioLinkTheme = 'warm' | 'ink' | 'forest' | 'sand' | 'night'
+export type BioLinkShape = 'rounded' | 'pill' | 'square'
+export type BioLinkFont = 'sans' | 'serif'
+
+export interface BioLinkStyle {
+  theme: BioLinkTheme
+  buttonShape: BioLinkShape
+  fontStyle: BioLinkFont
+}
+
+export interface BioLinkEvent {
+  id: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  location: string
+  description: string
+}
+
+export interface BioLinkState extends BioLinkStyle {
   displayName: string
   bio: string
   avatarPath: string | null
+  calendarUrl: string
+  calendarTitle: string
+  calendarCount: number
+  calendarEnabled: boolean
   items: BioLinkItem[]
 }
 
@@ -72,6 +96,8 @@ export interface PublicBioLink {
   displayName: string
   bio: string
   avatarPath: string | null
+  style: BioLinkStyle
+  calendar: { title: string; events: BioLinkEvent[] } | null
   links: { id: string; title: string }[]
   socials: { id: string; title: string; platform: string | null }[]
 }

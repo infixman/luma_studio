@@ -93,6 +93,146 @@ body.admin .bio-field textarea {
   resize: vertical;
 }
 
+body.admin .bio-appearance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 22px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+body.admin .bio-appearance-controls {
+  display: grid;
+  gap: 16px;
+}
+
+/* Paints itself with the same custom properties the public page uses, so the
+   preview cannot drift from what a visitor sees. */
+body.admin .bio-preview {
+  border: 1px solid #e1e5e1;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+body.admin .bio-preview-page {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 20px 16px 22px;
+  background: radial-gradient(circle at 50% 0, var(--bio-glow) 0, transparent 12rem), var(--bio-page);
+  font-family: var(--bio-font);
+}
+
+body.admin .bio-preview-avatar {
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--bio-surface);
+  border-radius: 50%;
+  background: var(--bio-glow);
+  object-fit: cover;
+}
+
+body.admin .bio-preview-name {
+  margin: 2px 0 0;
+  color: var(--bio-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+body.admin .bio-preview-bio {
+  margin: 0 0 4px;
+  color: var(--bio-muted);
+  font-size: 0.72rem;
+}
+
+body.admin .bio-preview-button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--bio-border);
+  border-radius: var(--bio-radius);
+  background: var(--bio-surface);
+  color: var(--bio-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+body.admin .bio-preview-socials {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+body.admin .bio-preview-socials span {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--bio-border);
+  border-radius: 50%;
+  background: var(--bio-surface);
+}
+
+body.admin .bio-calendar-settings {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+  padding: 18px 0 0;
+  border-top: 1px solid #e1e5e1;
+}
+
+body.admin .bio-calendar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+body.admin .bio-calendar-row > input {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #bbc6c1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1e2938;
+  font: inherit;
+}
+
+body.admin .bio-calendar-row .bio-field {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+body.admin .bio-calendar-row .bio-field-narrow {
+  flex: 0 0 120px;
+}
+
+body.admin .bio-checkbox {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: #253746;
+  font-weight: 700;
+}
+
+body.admin .bio-checkbox input {
+  width: 17px;
+  height: 17px;
+  accent-color: #4f7a6f;
+}
+
+body.admin .bio-calendar-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #fdf4f5;
+  color: #8b4150;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
 body.admin .bio-quota {
   margin: 0 0 18px;
 }
@@ -420,7 +560,8 @@ body.admin .stat-bar {
 
 @media (max-width: 720px) {
   body.admin .stat-columns,
-  body.admin .stat-totals {
+  body.admin .stat-totals,
+  body.admin .bio-appearance {
     grid-template-columns: 1fr;
   }
 

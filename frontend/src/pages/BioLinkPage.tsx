@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { BioLinkCalendar } from '../components/BioLinkCalendar'
 import { SocialIcon, platformLabel } from '../components/SocialIcon'
 import { api, apiUrl, bioLinkRedirectUrl } from '../lib/api'
 import type { PublicBioLink } from '../lib/types'
@@ -24,6 +25,22 @@ export function BioLinkPage() {
       cancelled = true
     }
   }, [])
+
+  // The chosen appearance lives on the body so the page background follows it
+  // too, not just the content column.
+  useEffect(() => {
+    const style = page?.style
+    if (!style) return undefined
+    const { body } = document
+    body.dataset.theme = style.theme
+    body.dataset.shape = style.buttonShape
+    body.dataset.font = style.fontStyle
+    return () => {
+      delete body.dataset.theme
+      delete body.dataset.shape
+      delete body.dataset.font
+    }
+  }, [page?.style])
 
   if (error !== null) {
     return (
@@ -88,7 +105,9 @@ export function BioLinkPage() {
         </ul>
       )}
 
-      {hasNothing && <p class="bio-notice-detail">這個頁面還沒有連結。</p>}
+      {page.calendar && <BioLinkCalendar calendar={page.calendar} />}
+
+      {hasNothing && !page.calendar && <p class="bio-notice-detail">這個頁面還沒有連結。</p>}
 
       <footer class="bio-footer">
         <a href="/">苒光繪誌</a>
