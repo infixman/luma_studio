@@ -253,7 +253,7 @@ async def get_settings(env) -> dict:
         "calendarCount": int(row["calendar_count"]),
         "calendarEnabled": bool(row["calendar_enabled"]),
         # Doubles as the cache version for the calendar fetch below.
-        "updatedAt": row["updated_at"] or "",
+        "updatedAt": str(row["updated_at"] or ""),
     }
 
 
@@ -488,6 +488,9 @@ def versioned_calendar_url(url: str, version: str) -> str:
     them has, so the next visitor gets a fresh read.
     """
 
+    # str() both: D1 hands back JavaScript strings, and while an f-string
+    # converts one silently, quote() sees a non-str and assumes bytes.
+    url, version = str(url), str(version)
     if not version:
         return url
     return f"{url}{'&' if '?' in url else '?'}_v={quote(version, safe='')}"

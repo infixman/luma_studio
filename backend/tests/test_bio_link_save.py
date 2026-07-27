@@ -133,7 +133,30 @@ class TestReplaceItems:
         assert database.log == []
 
 
+class JsString:
+    """What D1 actually hands back: a JavaScript string, not a Python one.
+
+    Passing one of these to quote() raised `quote_from_bytes() expected
+    bytes` in production while every test passed, because the tests used real
+    str. Anything that reads a column now gets one of these instead.
+    """
+
+    def __init__(self, value: str):
+        self._value = value
+
+    def __str__(self):
+        return self._value
+
+
 class TestCalendarCacheVersion:
+    def test_survives_a_javascript_string_from_the_database(self, bio_link):
+        url = JsString("https://calendar.google.com/calendar/ical/x/public/basic.ics")
+        version = JsString("2026-07-28T00:12:03Z")
+        assert bio_link.versioned_calendar_url(url, version) == (
+            "https://calendar.google.com/calendar/ical/x/public/basic.ics?_v=2026-07-28T00%3A12%3A03Z"
+        )
+
+
     def test_a_saved_change_produces_a_different_url(self, bio_link):
         url = "https://calendar.google.com/calendar/ical/x/public/basic.ics"
         first = bio_link.versioned_calendar_url(url, "2026-07-27T10:00:00Z")
