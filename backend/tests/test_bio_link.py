@@ -171,17 +171,6 @@ class TestCalendarAddress:
             bio_link.validate_calendar_count("many")
 
 
-class TestEventIds:
-    def test_accepts_a_google_style_uid(self, bio_link):
-        value = "abc123def_ghi@google.com-20260808T100000"
-        assert bio_link.validate_event_id(value) == value
-
-    @pytest.mark.parametrize("value", ["", "../../etc/passwd", "a/b", "a b", "x" * 201])
-    def test_rejects_a_path_or_junk(self, bio_link, value):
-        with pytest.raises(ValueError):
-            bio_link.validate_event_id(value)
-
-
 class TestAvatarPaths:
     def test_maps_a_stored_key_to_a_public_path(self, bio_link):
         key = f"{bio_link.AVATAR_PREFIX}/token.jpg"

@@ -7,7 +7,7 @@ phase. They are recorded from the start so that phase has history to show.
 import hashlib
 import re
 from datetime import datetime
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import ics
 from common import d1_rows, env_var, js_options, secure_bytes, taipei_day, urlsafe_token, utc_timestamp
@@ -15,7 +15,6 @@ from js import fetch as js_fetch
 
 
 ITEM_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
-EVENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_@.\-]{1,200}$")
 
 ALLOWED_URL_SCHEMES = frozenset({"http", "https", "mailto", "tel"})
 MAX_URL_LENGTH = 2048
@@ -106,14 +105,6 @@ def validate_item_id(item_id: str) -> str:
     if not ITEM_ID_PATTERN.fullmatch(item_id):
         raise ValueError("Invalid link id")
     return item_id
-
-
-def validate_event_id(event_id: str) -> str:
-    """Calendar ids come from Google's UIDs, so they are looser than ours."""
-
-    if not EVENT_ID_PATTERN.fullmatch(event_id):
-        raise ValueError("Invalid event id")
-    return event_id
 
 
 def validate_url(url: str) -> str:
@@ -240,6 +231,7 @@ DEFAULT_SETTINGS = {
     "calendarTitle": "近期課程",
     "calendarCount": 5,
     "calendarEnabled": False,
+    "updatedAt": "",
 }
 
 
@@ -260,6 +252,8 @@ async def get_settings(env) -> dict:
         "calendarTitle": row["calendar_title"],
         "calendarCount": int(row["calendar_count"]),
         "calendarEnabled": bool(row["calendar_enabled"]),
+        # Doubles as the cache version for the calendar fetch below.
+        "updatedAt": row["updated_at"] or "",
     }
 
 
@@ -345,6 +339,55 @@ async def delete_item(env, item_id: str) -> bool:
     await env.DB.prepare("DELETE FROM bio_link_items WHERE id = ?1").bind(item_id).run()
     await env.DB.prepare("DELETE FROM bio_link_events WHERE item_id = ?1").bind(item_id).run()
     return True
+
+
+async def replace_items(env, items: list[dict]):
+    """Make the stored links match the list the editor sent, exactly.
+
+    The editor holds the whole page, so it sends the whole page: anything
+    stored but absent here was deleted, anything without an id is new, and
+    position follows the order of the list. Working from the complete set
+    avoids the half-applied states that a sequence of single-item calls
+    leaves behind when one of them fails.
+    """
+
+    if len(items) > MAX_ITEMS:
+        raise ValueError(f"The page can hold at most {MAX_ITEMS} links")
+
+    existing = {item["id"]: item for item in await list_items(env)}
+    now = utc_timestamp()
+    kept: set[str] = set()
+    positions: dict[str, int] = {}
+
+    for item in items:
+        kind = item["kind"]
+        position = positions.get(kind, 0)
+        positions[kind] = position + 1
+        item_id = item.get("id")
+
+        if item_id and item_id in existing and item_id not in kept:
+            kept.add(item_id)
+            await env.DB.prepare(
+                "UPDATE bio_link_items SET title = ?2, url = ?3, platform = ?4, position = ?5,"
+                " enabled = ?6, updated_at = ?7 WHERE id = ?1"
+            ).bind(
+                item_id, item["title"], item["url"], item["platform"], position, 1 if item["enabled"] else 0, now
+            ).run()
+            continue
+
+        # No id, or an id that is not ours: treat it as new rather than
+        # trusting the client to name a row.
+        new_id = urlsafe_token(18)
+        kept.add(new_id)
+        await env.DB.prepare(
+            "INSERT INTO bio_link_items (id, kind, title, url, platform, position, enabled, created_at, updated_at)"
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)"
+        ).bind(new_id, kind, item["title"], item["url"], item["platform"], position, 1 if item["enabled"] else 0, now).run()
+
+    for item_id in existing:
+        if item_id not in kept:
+            await env.DB.prepare("DELETE FROM bio_link_items WHERE id = ?1").bind(item_id).run()
+            await env.DB.prepare("DELETE FROM bio_link_events WHERE item_id = ?1").bind(item_id).run()
 
 
 async def reorder_items(env, ordered_ids: list[str]):
@@ -435,6 +478,49 @@ async def get_stats(env, days: int) -> dict:
     }
 
 
+def versioned_calendar_url(url: str, version: str) -> str:
+    """Fold the settings' version into the URL so a save changes the cache key.
+
+    Cloudflare's edge cache is keyed by URL, and its purge API is per-zone
+    rather than per-subrequest — there is no call that reliably drops one
+    cached subrequest everywhere. Changing the key does the same job without
+    a token to store: after a save, every colo is looking for a URL none of
+    them has, so the next visitor gets a fresh read.
+    """
+
+    if not version:
+        return url
+    return f"{url}{'&' if '?' in url else '?'}_v={quote(version, safe='')}"
+
+
+async def _fetch_calendar_text(url: str, version: str) -> str | None:
+    """The calendar body, or None if it cannot be read.
+
+    Tries the versioned URL first and falls back to the plain one: the extra
+    parameter is what busts the cache, but it is Google's endpoint, not ours,
+    and a schedule must not disappear because they started rejecting it.
+    """
+
+    for candidate in dict.fromkeys([versioned_calendar_url(url, version), url]):
+        try:
+            response = await js_fetch(
+                candidate,
+                js_options(
+                    {
+                        # Visitors arrive in bursts when a link is shared; one
+                        # fetch per quarter hour is plenty, and a schedule that
+                        # is fifteen minutes stale is not wrong.
+                        "cf": {"cacheTtl": CALENDAR_CACHE_SECONDS, "cacheEverything": True},
+                    }
+                ),
+            )
+            if response.ok:
+                return await response.text()
+        except Exception:
+            continue
+    return None
+
+
 async def fetch_calendar(env, settings: dict) -> dict | None:
     """The next few classes, or nothing at all.
 
@@ -445,22 +531,8 @@ async def fetch_calendar(env, settings: dict) -> dict | None:
     if not settings.get("calendarEnabled") or not settings.get("calendarUrl"):
         return None
 
-    try:
-        response = await js_fetch(
-            settings["calendarUrl"],
-            js_options(
-                {
-                    # Visitors arrive in bursts when a link is shared; one
-                    # fetch per quarter hour is plenty, and a schedule that
-                    # is fifteen minutes stale is not wrong.
-                    "cf": {"cacheTtl": CALENDAR_CACHE_SECONDS, "cacheEverything": True},
-                }
-            ),
-        )
-        if not response.ok:
-            return None
-        text = await response.text()
-    except Exception:
+    text = await _fetch_calendar_text(settings["calendarUrl"], settings.get("updatedAt") or "")
+    if text is None:
         return None
 
     try:
@@ -476,13 +548,6 @@ async def fetch_calendar(env, settings: dict) -> dict | None:
     if not events:
         return None
     return {"title": settings.get("calendarTitle") or "近期課程", "events": events}
-
-
-async def find_event(env, settings: dict, event_id: str) -> dict | None:
-    calendar = await fetch_calendar(env, settings)
-    if not calendar:
-        return None
-    return next((event for event in calendar["events"] if event["id"] == event_id), None)
 
 
 def device_from_user_agent(user_agent: str) -> str:

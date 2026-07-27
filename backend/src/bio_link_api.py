@@ -59,6 +59,34 @@ def _settings_from(body: dict, current: dict) -> dict:
     }
 
 
+def _items_from(body: dict) -> list[dict]:
+    """Validate the whole link list, in the order the editor sent it."""
+
+    raw = body.get("items")
+    if not isinstance(raw, list):
+        raise ValueError("Expected an array of links")
+    if len(raw) > bio_link.MAX_ITEMS:
+        raise ValueError(f"The page can hold at most {bio_link.MAX_ITEMS} links")
+
+    items = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValueError("Each link must be an object")
+        kind = bio_link.validate_kind(str(entry.get("kind") or "link"))
+        item_id = entry.get("id")
+        items.append(
+            {
+                "id": bio_link.validate_item_id(str(item_id)) if item_id else None,
+                "kind": kind,
+                "title": bio_link.validate_text(str(entry.get("title") or ""), bio_link.MAX_TITLE, "Title"),
+                "url": bio_link.validate_url(str(entry.get("url") or "")),
+                "platform": bio_link.validate_platform(kind, entry.get("platform")),
+                "enabled": bool(entry.get("enabled", True)),
+            }
+        )
+    return items
+
+
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
@@ -74,12 +102,17 @@ async def handle(ctx: Ctx):
         return ctx.json(await bio_link.get_stats(env, days))
 
     if path == "/api/admin/bio-link" and method == "PUT":
+        # One save for the whole page. Validate all of it before writing any
+        # of it, so a rejected link cannot leave the settings half-changed.
         try:
             body = await _read_json(ctx)
             settings = _settings_from(body, await bio_link.get_settings(env))
+            items = _items_from(body) if "items" in body else None
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid settings", 400)
         await bio_link.save_settings(env, settings)
+        if items is not None:
+            await bio_link.replace_items(env, items)
         return ctx.json(await _state(ctx))
 
     if path == "/api/admin/bio-link/calendar/test" and method == "POST":

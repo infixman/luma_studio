@@ -225,37 +225,6 @@ def parse_events(text: str, now: datetime, horizon_days: int = 60, limit: int = 
     return results[:limit]
 
 
-def escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
-
-
-def to_ics(event: dict) -> str:
-    """One event as a file a phone will offer to add to its calendar."""
-
-    def stamp(value: str) -> str:
-        return datetime.fromisoformat(value).astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Luma Studio//bio link//ZH",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{escape(event['id'])}",
-        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
-        f"DTSTART:{stamp(event['start'])}",
-        f"DTEND:{stamp(event['end'])}",
-        f"SUMMARY:{escape(event['title'])}",
-    ]
-    if event.get("location"):
-        lines.append(f"LOCATION:{escape(event['location'])}")
-    if event.get("description"):
-        lines.append(f"DESCRIPTION:{escape(event['description'])}")
-    lines += ["END:VEVENT", "END:VCALENDAR"]
-    return "\r\n".join(lines) + "\r\n"
-
-
 def _occurrences(event: dict, now: datetime, horizon: datetime) -> list[dict]:
     start = event.get("start")
     if not start or event.get("is_override"):

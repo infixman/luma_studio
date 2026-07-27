@@ -93,6 +93,43 @@ body.admin .bio-field textarea {
   resize: vertical;
 }
 
+body.admin .bio-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 14px 18px;
+  border: 1px solid #dfe4e0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 -6px 18px rgb(24 48 52 / 0.08);
+}
+
+body.admin .bio-savebar.dirty {
+  border-color: #c9a227;
+  background: #fffdf3;
+}
+
+body.admin .bio-savebar-state {
+  color: #55676f;
+  font-size: 0.9rem;
+}
+
+body.admin .bio-savebar.dirty .bio-savebar-state {
+  color: #7a5c00;
+  font-weight: 700;
+}
+
+body.admin .bio-savebar-actions {
+  display: flex;
+  gap: 8px;
+}
+
 body.admin .bio-appearance {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;

@@ -1,4 +1,4 @@
-import { eventDate, eventFileUrl, eventTime, googleCalendarUrl } from '../lib/calendar'
+import { eventDate, eventTime } from '../lib/calendar'
 import type { BioLinkEvent } from '../lib/types'
 
 function Event({ event }: { event: BioLinkEvent }) {
@@ -18,21 +18,6 @@ function Event({ event }: { event: BioLinkEvent }) {
           {event.location ? `・${event.location}` : ''}
         </p>
         {event.description && <p class="bio-event-note">{event.description}</p>}
-        <div class="bio-event-actions">
-          <a
-            class="bio-event-action"
-            href={googleCalendarUrl(event)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            加入 Google 行事曆
-          </a>
-          {/* Everything that is not Google: iPhone, Outlook, and the rest.
-              Named for what it does, not for the file format it uses. */}
-          <a class="bio-event-action" href={eventFileUrl(event)}>
-            加入手機行事曆
-          </a>
-        </div>
       </div>
     </li>
   )

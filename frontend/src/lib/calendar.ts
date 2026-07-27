@@ -1,6 +1,5 @@
-/** Formatting and add-to-calendar links for the schedule section. */
+/** Date and time formatting for the schedule section. */
 
-import { API_BASE } from './api'
 import type { BioLinkEvent } from './types'
 
 /**
@@ -37,28 +36,4 @@ export function eventTime(event: BioLinkEvent): string {
   const start = timeFormat.format(new Date(event.start))
   const end = timeFormat.format(new Date(event.end))
   return start === end ? start : `${start}–${end}`
-}
-
-/** The compact UTC stamp Google's template URL expects. */
-function stamp(iso: string): string {
-  return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
-}
-
-export function googleCalendarUrl(event: BioLinkEvent): string {
-  const parameters = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: event.title,
-    dates: `${stamp(event.start)}/${stamp(event.end)}`,
-  })
-  if (event.location) parameters.set('location', event.location)
-  if (event.description) parameters.set('details', event.description)
-  return `https://calendar.google.com/calendar/render?${parameters}`
-}
-
-/**
- * The file comes from the API rather than a blob built here: the page's
- * content security policy has no reason to allow blob: URLs.
- */
-export function eventFileUrl(event: BioLinkEvent): string {
-  return `${API_BASE}/api/bio-link/events/${encodeURIComponent(event.id)}.ics`
 }

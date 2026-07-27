@@ -37,8 +37,9 @@ export interface BioLinkItem {
   title: string
   url: string
   platform: string | null
-  position: number
   enabled: boolean
+  // No `position`: the array's order is the page's order, and a second
+  // representation of the same thing is one that can disagree with it.
 }
 
 /** What the editor loads and every mutation returns. */
