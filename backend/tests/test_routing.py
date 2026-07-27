@@ -79,29 +79,27 @@ class TestCrossOriginGate:
         assert stranger.headers["vary"] == "Origin"
 
 
-class TestLegacyAdminRoutes:
-    """TEMPORARY, and deleted along with `main.legacy_admin_response`.
+class TestAdministrationIsElsewhere:
+    """The bridge that carried /api/admin/* through the split is gone.
 
-    The admin interface still lives at luma-studio.tw and still calls these
-    paths on this host, so they keep answering until it moves. What matters
-    meanwhile is that the bridge did not become a way in: the same session
-    check applies through it as on the admin Worker.
+    404 rather than 401 is the assertion that matters. A 401 would mean the
+    handler is still wired up here and only a session check stands between
+    the public internet and the back office.
     """
 
-    @pytest.mark.parametrize("path", ["/api/session", "/api/admin/folders", "/api/admin/bio-link"])
-    def test_the_bridge_still_requires_a_session(self, call, path):
-        assert call(browser(path)).status == 401
+    @pytest.mark.parametrize(
+        "path",
+        ["/api/admin/folders", "/api/admin/bio-link", "/api/folders", "/api/print-settings", "/api/objects", "/admin"],
+    )
+    def test_admin_paths_are_not_found(self, call, path):
+        assert call(browser(path)).status == 404
 
-    def test_admin_is_redirected_to_the_frontend(self, call):
-        response = call(FakeRequest("/admin"))
-        assert response.status == 302
-        assert response.headers["location"] == f"{ORIGIN}/admin"
+    def test_the_customer_session_route_is_not_the_admins(self, call):
+        """Same path as the admin host, different meaning, different cookie."""
 
-    def test_the_new_prefixless_paths_are_not_exposed_here(self, call):
-        """Only the old shape is bridged; the new one belongs to the admin host."""
-
-        assert call(browser("/api/folders")).status == 404
-        assert call(browser("/api/print-settings")).status == 404
+        database = FakeDatabase()
+        assert call(browser("/api/session"), make_env(database)).status == 401
+        assert not any("FROM admin_sessions" in statement for statement in database.statements)
 
 
 class TestHealth:

@@ -2,11 +2,15 @@ import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 import { CartPage } from './pages/CartPage'
+import { CheckoutPage } from './pages/CheckoutPage'
 import { ProductPage } from './pages/ProductPage'
+import { OrderPage } from './pages/OrderPage'
+import { OrdersPage } from './pages/OrdersPage'
 import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
 const PRODUCT_PATH = /^\/shop\/([^/]+)$/
+const ORDER_PATH = /^\/orders\/([^/]+)$/
 
 /**
  * Every page's stylesheet ends up in one bundle, so each page's rules are
@@ -38,6 +42,22 @@ export function App() {
   if (path === '/cart') {
     markBody('cart')
     return <CartPage />
+  }
+
+  if (path === '/checkout') {
+    markBody('checkout')
+    return <CheckoutPage />
+  }
+
+  if (path === '/orders') {
+    markBody('orders')
+    return <OrdersPage />
+  }
+
+  const order = ORDER_PATH.exec(path)
+  if (order) {
+    markBody('order')
+    return <OrderPage id={decodeURIComponent(order[1]!)} />
   }
 
   const product = PRODUCT_PATH.exec(path)

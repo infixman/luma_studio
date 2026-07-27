@@ -591,8 +591,21 @@ PAYUNi 的 Form Post 既沒有 `x-luma-app: 1`，Origin 也不在允許清單，
 3. ~~**商城後台**：`products` / `product_variants` / `product_images` 與後台 CRUD~~ 完成
 4. ~~**商城前台**：`/shop` 列表與 `/shop/{slug}` 商品頁~~ 完成
 5. ~~**購物車**：localStorage、`/api/cart/validate`、購物車頁、運費設定~~ 完成
-6. **假結帳**：顧客 Google 登入、結帳頁、建立訂單與扣庫存、以 stub 取代 PAYUNi
+6. ~~**假結帳**：顧客 Google 登入、結帳頁、建立訂單與扣庫存、以 stub 取代 PAYUNi~~ 完成
 7. 之後：PAYUNi spike → UPP 串接 → Notify → 通知信 → 會員管理
+
+假結帳這批的四件事：
+
+- **`auth_core.py` 這時候才抽出來**，因為到這時才真的有兩個使用者。批 1 刻意沒抽，
+  當時抽出來的形狀會是憑空猜的。
+- **批 1 留下的 `/api/admin/*` 轉接層在這批移除**，因為顧客登入要用的 `/auth/*` 和
+  `/api/session` 正好被它佔著。測試改成斷言那些路徑回 **404 而不是 401**——401 代表
+  處理器還接著，只差一道 session 檢查。
+- **`ALLOW_FAKE_PAYMENT` 預設關閉**，未開啟時 `fake-payment` 路由回 404 而不是 403。
+  一個只在測試環境存在的付款捷徑，不該在正式環境留下「這裡有東西但你不能用」的痕跡。
+- **`orders.take_stock` 的影響列數是唯一的防超賣機制**，所以只寫在一處，並且有測試
+  直接針對「回報 0 列」與「driver 根本不回報」兩種情況。後者被當成失敗處理，因為
+  假設它成功的代價是超賣。
 
 購物車實作時定下的兩條：
 

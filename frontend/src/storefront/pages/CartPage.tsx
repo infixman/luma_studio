@@ -167,7 +167,10 @@ export function CartPage() {
               </div>
             </dl>
 
-            <p class="pending">結帳功能還在開發中。</p>
+            <a class="to-checkout" href="/checkout">
+              前往結帳
+            </a>
+            <p class="pending">結帳需要以 Google 登入。</p>
           </section>
         </>
       )}

@@ -191,6 +191,112 @@ MIGRATIONS = [
                  VALUES ('home', '宅配到府', 1, 120, NULL, 1, 0)""",
         ],
     },
+    {
+        # Customers and their orders. Kept apart from the admin's tables in
+        # every way that matters: its own session table, its own oauth states,
+        # its own cookie name. An admin session and a customer session leaking
+        # are not the same size of event.
+        "name": "0009_create_customers_and_orders",
+        "statements": [
+            # Keyed on Google's `sub`, not on the address. An account can
+            # change its email; using that as the identity loses the order
+            # history the moment somebody does.
+            """CREATE TABLE IF NOT EXISTS customers (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 google_sub TEXT NOT NULL,
+                 email TEXT NOT NULL,
+                 display_name TEXT NOT NULL DEFAULT '',
+                 default_recipient_name TEXT NOT NULL DEFAULT '',
+                 default_recipient_phone TEXT NOT NULL DEFAULT '',
+                 default_address TEXT NOT NULL DEFAULT '',
+                 blocked INTEGER NOT NULL DEFAULT 0,
+                 anonymized_at INTEGER,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_google_sub ON customers (google_sub)",
+            "CREATE INDEX IF NOT EXISTS idx_customers_email ON customers (email)",
+            """CREATE TABLE IF NOT EXISTS customer_sessions (
+                 session_id TEXT PRIMARY KEY NOT NULL,
+                 customer_id TEXT NOT NULL,
+                 expires_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_customer_sessions_expires_at ON customer_sessions (expires_at)",
+            """CREATE TABLE IF NOT EXISTS customer_oauth_states (
+                 state TEXT PRIMARY KEY NOT NULL,
+                 code_verifier TEXT NOT NULL,
+                 next_url TEXT NOT NULL DEFAULT '',
+                 expires_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_customer_oauth_states_expires_at ON customer_oauth_states (expires_at)",
+            # `id` is what the customer sees. What goes to the payment gateway
+            # is a per-attempt number in payment_attempts, because a failed
+            # payment cannot be retried under the same one.
+            """CREATE TABLE IF NOT EXISTS orders (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 customer_id TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 subtotal INTEGER NOT NULL,
+                 shipping_fee INTEGER NOT NULL,
+                 total INTEGER NOT NULL,
+                 shipping_method TEXT NOT NULL,
+                 recipient_name TEXT NOT NULL,
+                 recipient_phone TEXT NOT NULL,
+                 recipient_email TEXT NOT NULL,
+                 shipping_address TEXT NOT NULL DEFAULT '',
+                 store_id TEXT,
+                 store_name TEXT,
+                 store_addr TEXT,
+                 trade_no TEXT,
+                 ship_trade_no TEXT,
+                 payment_type INTEGER,
+                 invoice_no TEXT,
+                 invoice_status TEXT,
+                 reserved_until INTEGER,
+                 paid_at INTEGER,
+                 cancelled_at INTEGER,
+                 admin_note TEXT NOT NULL DEFAULT '',
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status, reserved_until)",
+            # Titles and prices are snapshots. Renaming a product or changing
+            # its price must not rewrite what a receipt from March says.
+            """CREATE TABLE IF NOT EXISTS order_items (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 order_id TEXT NOT NULL,
+                 variant_id TEXT NOT NULL,
+                 product_title TEXT NOT NULL,
+                 variant_title TEXT NOT NULL,
+                 unit_price INTEGER NOT NULL,
+                 quantity INTEGER NOT NULL,
+                 subtotal INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id)",
+            """CREATE TABLE IF NOT EXISTS payment_attempts (
+                 mer_trade_no TEXT PRIMARY KEY NOT NULL,
+                 order_id TEXT NOT NULL,
+                 amount INTEGER NOT NULL,
+                 status TEXT NOT NULL,
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_payment_attempts_order ON payment_attempts (order_id, created_at)",
+            # Who changed an order to what, and when. Needed the day a payment
+            # is disputed, which is not a day to start collecting evidence.
+            """CREATE TABLE IF NOT EXISTS order_audit_log (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 order_id TEXT NOT NULL,
+                 actor TEXT NOT NULL,
+                 action TEXT NOT NULL,
+                 from_status TEXT,
+                 to_status TEXT,
+                 detail TEXT NOT NULL DEFAULT '',
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_order_audit_log_order ON order_audit_log (order_id, created_at)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

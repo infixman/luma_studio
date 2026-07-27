@@ -19,7 +19,7 @@
 
 管理 Worker 是**唯一會套用 D1 migration 的部署**。公開 Worker 只讀取 `schema_migrations` 回報狀態，不修改 schema：結帳是熱路徑，不該為 schema 檢查付出冷啟動成本，而公開得到的 Worker 也沒有理由具備 `ALTER TABLE` 的能力。因此部署順序固定為管理端先、公開端後。
 
-管理介面搬到 `admin.luma-studio.tw` 之後，前台 Worker 會把舊的 `/admin` 與 `/admin/bio-link` 以 301 永久轉向新網址（去掉 `/admin` 這一段，因為新主機上每一頁都是管理頁）。公開 Worker 上的 `/api/admin/*` 轉接層（[main.py](backend/src/main.py) 的 `legacy_admin_response`）仍在，等新後台實際驗證過再移除。
+管理介面搬到 `admin.luma-studio.tw` 之後，前台 Worker 會把舊的 `/admin` 與 `/admin/bio-link` 以 301 永久轉向新網址（去掉 `/admin` 這一段，因為新主機上每一頁都是管理頁）。搬遷期間公開 Worker 上曾有一層 `/api/admin/*` 轉接，現已移除——那些路徑在公開 Worker 上回 404 而不是 401，因為 401 代表處理器還接著，只差一道 session 檢查。
 
 ## 使用方式
 
@@ -103,7 +103,15 @@ docs/superpowers/specs/  設計文件
 | POST | `/api/cart/validate` | 依購物車內容重算價格、庫存與運費 |
 | GET | `/api/shipping-methods` | 啟用中的配送方式與運費 |
 | GET | `/shop-assets/{file}` | 商品照片 |
-| — | `/api/admin/*`、`/auth/*`、`/api/session` | **暫時的轉接層**，等管理前台搬家後移除 |
+| GET | `/auth/login?next=`、`/auth/callback` | **顧客**的 Google 登入 |
+| POST | `/auth/logout` | 清除顧客 session |
+| GET | `/api/session` | 已登入回顧客資料，否則 401 |
+| GET / PATCH | `/api/profile` | 顧客的預設收件資料 |
+| POST | `/api/checkout` | 建立訂單並保留庫存 |
+| GET | `/api/orders`、`/api/orders/{id}` | 自己的訂單 |
+| POST | `/api/orders/{id}/fake-payment` | **開發用**，未開啟時一律 404 |
+
+`/auth/*` 與 `/api/session` 在兩台主機上同名但意義不同：這裡是顧客，管理主機上是店主。兩邊的 cookie 名稱不同且都是 host-only，所以拿錯只會得到 401，不會意外升權。
 
 ### 管理 Worker — `admin-api.luma-studio.tw`
 
@@ -149,6 +157,9 @@ docs/superpowers/specs/  設計文件
 | --- | --- | --- | --- |
 | 管理 | `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
 | 公開 | `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
+| 公開 | `/auth/login` | 20 次／分 | 同上，但商店的顧客比後台的一位店主多，所以放寬 |
+| 公開 | `/api/checkout` | 10 次／分 | 會扣庫存並寫四張表。沒有人一分鐘正當地下十張單，而嘗試這麼做的腳本等於每次把商品從架上拿走十五分鐘 |
+| 公開 | `/api/products`、`/api/cart/validate` | 180 次／分 | 商品頁是好幾次 D1 讀取，而逛商店的人點擊遠多於看 bio link 的人 |
 | 公開 | `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
 | 公開 | `/images/{folder}/{file}`、`/bio-link-assets/{file}`、`/shop-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
 
@@ -181,9 +192,9 @@ Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `p
 
 **錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
 
-匯出清單在 workflow 的 `TABLES`：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`、`products`、`product_variants`、`product_images`、`shipping_methods`。刻意排除的是：
+匯出清單在 workflow 的 `TABLES`：bio link 三張、`folder_print_settings`、商城的 `products`／`product_variants`／`product_images`／`shipping_methods`，以及交易相關的 `customers`／`orders`／`order_items`／`payment_attempts`／`order_audit_log`。刻意排除的是：
 
-- `admin_sessions`、`admin_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
+- `admin_sessions`、`admin_oauth_states`、`customer_sessions`、`customer_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
 - `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
 
 **新增資料表時要同步加進 `TABLES`。** 缺表檢查是照同一個變數迭代的，所以漏掉的表不會被抓到——備份會照常成功，直到真的要用的那天才發現裡面沒有它。
@@ -314,7 +325,19 @@ uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wr
 uv --directory backend run pywrangler secret put VISITOR_SALT -c wrangler.admin.toml
 ```
 
-`GOOGLE_OAUTH_REDIRECT_URI` 在公開 Worker 上是 `https://api.luma-studio.tw/auth/callback`，在管理 Worker 上是 `https://admin-api.luma-studio.tw/auth/callback`。兩個網址都要加進 Google Cloud Console 的授權重新導向 URI 清單。`VISITOR_SALT` 填任意隨機字串。
+公開 Worker 另外需要**顧客用的那一組**，與店主的那組分開申請：
+
+```powershell
+uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_ID
+uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_SECRET
+uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI
+```
+
+分成兩組 OAuth client 而不是一組配兩個 redirect URI：店主那組可以在 Google Cloud Console 上設得更嚴，而顧客那組的 client secret 外洩也不會影響後台。
+
+重新導向網址：管理 Worker 是 `https://admin-api.luma-studio.tw/auth/callback`，顧客是 `https://api.luma-studio.tw/auth/callback`。各自加進對應 client 的授權清單。`VISITOR_SALT` 填任意隨機字串。
+
+公開 Worker 上的 `GOOGLE_CLIENT_ID` 等三個已不再使用（管理登入搬走了），可以移除。
 
 ### 速率限制規則
 
@@ -470,6 +493,8 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 | 商品列表 | `luma-studio.tw/shop` |
 | 單一商品 | `luma-studio.tw/shop/{slug}` |
 | 購物車 | `luma-studio.tw/cart` |
+| 結帳 | `luma-studio.tw/checkout` |
+| 我的訂單 | `luma-studio.tw/orders` |
 | 商品管理 | `admin.luma-studio.tw/products` |
 | 運費設定 | `admin.luma-studio.tw/shipping` |
 
@@ -490,6 +515,28 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 | 庫存不足以滿足數量 | `reduced`，數量下修並附上實際可買數 |
 
 免運門檻是**每種配送方式各自設定**。宅配與超商的成本差很多，共用一個門檻會逼你把它訂在最貴的那個。門檻是「達到就免運」而不是「超過才免運」——宣傳滿 1,000 免運卻對剛好 1,000 元的訂單收費，那不是規則，是客訴。
+
+### 結帳與庫存
+
+逛商品和加購物車**不需要登入**，按下結帳才要求 Google 登入。顧客的登入與店主的登入是兩套完全獨立的東西：不同的 OAuth client、不同的資料表、不同的 cookie 名稱，而且兩邊的 cookie 都是 host-only。
+
+**庫存在建立訂單時就扣，不是付款成功才扣。** 等付款代表兩個人可以同時買到最後一件；永遠保留代表沒完成的購物車會讓商品永久離架。所以保留有期限：訂單建立時扣庫存並記下 `reserved_until`（15 分鐘），Cron Trigger 每 5 分鐘把逾期未付款的訂單轉成 `expired` 並把庫存放回去。
+
+D1 **沒有互動式交易**，所以防超賣靠的是條件式更新與它的影響列數：
+
+```sql
+UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
+```
+
+檢查寫在 `WHERE` 裡，所以兩個請求搶最後一件時，不可能兩邊都讀到「剩 1」然後都成功——後到的那個 UPDATE match 不到任何列。這是這家店和超賣之間唯一的防線，所以只寫在 `orders.take_stock` 一個地方。
+
+訂單建立途中若有一行賣完，**先前已扣的庫存會被放回去**。少了這一步，某個顧客結帳失敗會安靜地把其他商品從架上拿走。
+
+### 金流還沒串
+
+`POST /api/orders/{id}/fake-payment` 可以把訂單標記成已付款，不經過任何金流。它存在的目的是在 PAYUNi 接上之前先驗證庫存、狀態機與稽核軌跡。
+
+**它預設是關閉的**，只有在部署明確設定 `ALLOW_FAKE_PAYMENT = "1"` 時才存在，其餘情況一律回 404。正式環境永遠不要設定它。
 
 ### 幾個刻意的決定
 

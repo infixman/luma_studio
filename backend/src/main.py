@@ -7,9 +7,9 @@ Administration lives in `admin_main.py` on its own hostname, which is what
 keeps the admin session cookie out of reach of anything served here. This
 deployment also never applies a migration — see `router.serve`.
 
-One exception, and it is temporary: the admin interface has not moved hosts
-yet, so the old /api/admin/* routes are still bridged from here. See
-`legacy_admin_response`.
+The /auth and /api/session routes below are the *customer's*. The back
+office's live on the other host under the same names, and neither cookie is
+ever sent to the other — see `auth_core.session_cookie`.
 """
 
 from urllib.parse import unquote
@@ -17,14 +17,25 @@ from urllib.parse import unquote
 import workers
 from workers import WorkerEntrypoint
 
-import admin_main
+import auth_customer
 import bio_link
 import cart
+import orders
 import rate_limit
 import router
 import shipping
 import shop
-from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, validate_file_name, validate_folder
+from common import (
+    IDENTIFIER_PATTERN,
+    IMAGE_CONTENT_TYPES,
+    IbonError,
+    OAuthError,
+    d1_rows,
+    env_var,
+    taipei_day,
+    validate_file_name,
+    validate_folder,
+)
 from ibon import resolve_print_result
 from js import Uint8Array
 from migrations import applied_migration_names
@@ -231,6 +242,129 @@ async def cart_validate_response(ctx: Ctx):
     return ctx.json({**priced, "shipping": shipping.quote(methods, priced["subtotal"])})
 
 
+async def profile_response(ctx: Ctx, customer: dict):
+    return ctx.json({"customer": customer})
+
+
+async def update_profile_response(ctx: Ctx, customer: dict):
+    try:
+        body = await ctx.request.json()
+        if not isinstance(body, dict):
+            raise ValueError
+        name = orders.validate_recipient_name(body.get("recipientName") or "")
+        phone = orders.validate_phone(body.get("recipientPhone") or "")
+        address = orders.validate_address(body.get("address") or "", required=False)
+    except orders.OrderError as error:
+        return ctx.error(str(error), 400)
+    except (ValueError, AttributeError):
+        return ctx.error("Invalid profile", 400)
+
+    await auth_customer.update_profile(ctx.env, customer["id"], name=name, phone=phone, address=address)
+    return ctx.json({"customer": await auth_customer.current_customer(ctx.env, ctx.request)})
+
+
+async def checkout_response(ctx: Ctx, customer: dict):
+    """Turn a validated cart into an order, holding its stock.
+
+    The cart is repriced here rather than trusted, using the very same
+    function the cart page called. Whatever a customer was shown and whatever
+    they are charged come out of one piece of code, so the two cannot drift.
+    """
+
+    if customer["blocked"]:
+        return ctx.error("這個帳號目前無法下單，請與我們聯絡。", 403)
+
+    try:
+        body = await ctx.request.json()
+        if not isinstance(body, dict):
+            raise ValueError
+        lines = cart.parse_lines(body.get("lines"))
+        method_name = str(body.get("shippingMethod") or "")
+        recipient = {
+            "name": orders.validate_recipient_name(body.get("recipientName") or ""),
+            "phone": orders.validate_phone(body.get("recipientPhone") or ""),
+            "email": orders.validate_email(body.get("recipientEmail") or customer["email"]),
+            "address": "",
+        }
+    except cart.CartError as error:
+        return ctx.error(str(error), 400)
+    except orders.OrderError as error:
+        return ctx.error(str(error), 400)
+    except (ValueError, AttributeError):
+        return ctx.error("Invalid checkout", 400)
+
+    method = await shipping.get_method(ctx.env, method_name)
+    if method is None or not method["enabled"]:
+        return ctx.error("請選擇一個可用的配送方式", 400)
+
+    if method["method"] == "home":
+        try:
+            recipient["address"] = orders.validate_address(body.get("address") or "", required=True)
+        except orders.OrderError as error:
+            return ctx.error(str(error), 400)
+
+    priced = await cart.price_lines(ctx.env, lines)
+    if priced["problems"]:
+        # Sending them back to the cart is deliberate: the alternative is
+        # charging for something other than what they agreed to.
+        return ctx.json(
+            {"error": "購物車內容已經變動，請回到購物車確認後再結帳", "problems": priced["problems"]}, 409
+        )
+
+    try:
+        order = await orders.create_order(
+            ctx.env, customer, priced=priced, method=method, recipient=recipient, day=taipei_day().replace("-", "")
+        )
+    except orders.OrderError as error:
+        return ctx.error(str(error), 409)
+
+    return ctx.json({"order": order, "items": await orders.list_items(ctx.env, order["id"])}, 201)
+
+
+async def order_response(ctx: Ctx, customer: dict, order_id: str):
+    try:
+        order_id = orders.validate_order_id(order_id)
+    except orders.OrderError as error:
+        return ctx.error(str(error), 400)
+
+    # Scoped to the caller: an order id is short enough to guess at, and
+    # somebody else's delivery address is not ours to hand out.
+    rows = await d1_rows(
+        ctx.env.DB.prepare("SELECT * FROM orders WHERE id = ?1 AND customer_id = ?2").bind(order_id, customer["id"])
+    )
+    if not rows:
+        return ctx.error("Order not found", 404)
+
+    order = orders.order_row(rows[0])
+    return ctx.json({"order": order, "items": await orders.list_items(ctx.env, order_id)})
+
+
+async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
+    """Mark an order paid without a gateway. Development only.
+
+    PAYUNi is not wired up yet, and the rest of the flow — stock, statuses,
+    the audit trail — needs exercising before it is. This exists to do that
+    and nothing else, so it answers 404 unless a deployment has explicitly
+    switched it on. The default is off, and production never sets it.
+    """
+
+    if env_var(ctx.env, "ALLOW_FAKE_PAYMENT") != "1":
+        return ctx.error("Unknown endpoint", 404)
+
+    try:
+        order_id = orders.validate_order_id(order_id)
+    except orders.OrderError as error:
+        return ctx.error(str(error), 400)
+
+    order = await orders.get_order(ctx.env, order_id)
+    if order is None:
+        return ctx.error("Order not found", 404)
+
+    if not await orders.mark_paid(ctx.env, order_id, f"fake-payment:{customer['id']}", detail="no gateway involved"):
+        return ctx.error("這筆訂單不在等待付款的狀態", 409)
+    return ctx.json({"order": await orders.get_order(ctx.env, order_id)})
+
+
 async def shop_image_response(ctx: Ctx, file_name: str):
     """Serve one product photo.
 
@@ -274,25 +408,6 @@ async def print_response(ctx: Ctx, identifier: str):
         return ctx.error("Unexpected Worker failure", 500)
 
 
-async def legacy_admin_response(ctx: Ctx):
-    """Serve the pre-split admin routes until the back office changes host.
-
-    TEMPORARY. The admin interface is still deployed at luma-studio.tw and
-    still calls /api/admin/* here, so removing these in the same change as
-    the split would take the back office down between two deploys. They are
-    deleted in one piece once admin.luma-studio.tw is live — along with this
-    function, the `admin_main` import above, and the routes below.
-
-    The old prefix is rewritten to the new shape and handed to the admin
-    Worker's own dispatcher, so there is one routing table rather than two
-    that can disagree about who is allowed in.
-    """
-
-    if ctx.path.startswith("/api/admin/"):
-        ctx.path = "/api/" + ctx.path.removeprefix("/api/admin/")
-    return await admin_main.dispatch(ctx)
-
-
 def frontend_redirect(ctx: Ctx, path: str):
     origin = frontend_origin(ctx.env)
     if not origin:
@@ -307,12 +422,6 @@ async def dispatch(ctx: Ctx):
         # Read-only: the admin deployment owns the schema, so a shortfall here
         # is a deploy-order problem to report rather than one to fix in place.
         return ctx.json({"ok": True, "migrations": await applied_migration_names(ctx.env)})
-
-    # TEMPORARY, removed with the frontend split. See legacy_admin_response.
-    if path.startswith("/api/admin") or path.startswith("/auth/") or path == "/api/session":
-        return await legacy_admin_response(ctx)
-    if path == "/admin" and method == "GET":
-        return frontend_redirect(ctx, "/admin")
 
     if path == "/api/bio-link" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
@@ -335,6 +444,51 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
             return ctx.too_many_requests()
         return await bio_link_avatar_response(ctx, path.removeprefix(f"{bio_link.AVATAR_URL_PREFIX}/"))
+
+    if path == "/auth/login" and method == "GET":
+        if not ctx.allowed_origins:
+            return ctx.error("Backend is missing ALLOWED_ORIGINS", 500)
+        # Every attempt writes an oauth state row before the visitor has
+        # proved anything, which is the one way a stranger can spend the D1
+        # write quota that orders also depend on.
+        if not await rate_limit.allows(ctx.env, rate_limit.CUSTOMER_LOGIN, ctx.request, "login"):
+            return ctx.too_many_requests()
+        return await auth_customer.begin_google_login(ctx)
+
+    if path == "/auth/callback" and method == "GET":
+        try:
+            return await auth_customer.complete_google_login(ctx)
+        except OAuthError:
+            return ctx.error("Google login failed", 502)
+
+    if path == "/auth/logout" and method == "POST":
+        return await auth_customer.logout(ctx)
+
+    # Everything below needs to know who is asking, if anyone is.
+    if path == "/api/session" or path == "/api/profile" or path == "/api/checkout" or path.startswith("/api/orders"):
+        customer = await auth_customer.current_customer(ctx.env, ctx.request)
+        if customer is None:
+            return ctx.error("Authentication required", 401)
+
+        if path == "/api/session" and method == "GET":
+            return ctx.json({"customer": customer})
+        if path == "/api/profile" and method == "GET":
+            return await profile_response(ctx, customer)
+        if path == "/api/profile" and method == "PATCH":
+            return await update_profile_response(ctx, customer)
+        if path == "/api/checkout" and method == "POST":
+            if not await rate_limit.allows(ctx.env, rate_limit.CHECKOUT, ctx.request, "checkout"):
+                return ctx.too_many_requests()
+            return await checkout_response(ctx, customer)
+        if path == "/api/orders" and method == "GET":
+            return ctx.json({"orders": await orders.list_for_customer(ctx.env, customer["id"])})
+        if path.endswith("/fake-payment") and method == "POST":
+            return await fake_payment_response(
+                ctx, customer, path.removeprefix("/api/orders/").removesuffix("/fake-payment")
+            )
+        if path.startswith("/api/orders/") and method == "GET":
+            return await order_response(ctx, customer, path.removeprefix("/api/orders/"))
+        return ctx.error("Unknown endpoint", 404)
 
     if path == "/api/cart/validate" and method == "POST":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
@@ -399,3 +553,14 @@ async def dispatch(ctx: Ctx):
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await router.serve(self.env, request, dispatch, owns_schema=False)
+
+    async def scheduled(self, event):
+        """Put back the stock of orders nobody finished paying for.
+
+        Held stock has to expire or an abandoned cart takes the last item off
+        the shelf permanently. It lives here rather than on the admin Worker
+        because this is where the order lifecycle is; the admin deployment
+        owns the schema, not the orders.
+        """
+
+        await orders.expire_unpaid(self.env)

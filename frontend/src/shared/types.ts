@@ -237,3 +237,47 @@ export interface ShippingMethod {
   freeThreshold: number | null
   position: number
 }
+
+export interface Customer {
+  id: string
+  email: string
+  displayName: string
+  recipientName: string
+  recipientPhone: string
+  address: string
+  blocked: boolean
+}
+
+export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'completed' | 'cancelled' | 'expired'
+
+export interface Order {
+  id: string
+  status: OrderStatus
+  subtotal: number
+  shippingFee: number
+  total: number
+  shippingMethod: string
+  recipientName: string
+  recipientPhone: string
+  recipientEmail: string
+  shippingAddress: string
+  storeName: string | null
+  storeAddr: string | null
+  reservedUntil: number | null
+  paidAt: number | null
+  createdAt: number
+}
+
+/** Titles and prices are snapshots taken when the order was placed. */
+export interface OrderItem {
+  productTitle: string
+  variantTitle: string
+  unitPrice: number
+  quantity: number
+  subtotal: number
+}
+
+export interface OrderDetail {
+  order: Order
+  items: OrderItem[]
+}

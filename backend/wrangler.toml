@@ -54,7 +54,33 @@ name = "SHOP_LIMITER"
 namespace_id = "1006"
 simple = { limit = 180, period = 60 }
 
+# Same reasoning as the admin's sign-in limit: every attempt writes an oauth
+# state row before the visitor has proved anything. Looser, because a shop has
+# many customers where the back office has one owner.
+[[ratelimits]]
+name = "CUSTOMER_LOGIN_LIMITER"
+namespace_id = "1005"
+simple = { limit = 20, period = 60 }
+
+# Checkout decrements stock and writes to four tables. Nobody legitimately
+# places ten orders a minute, and a script that tries would be taking items
+# off the shelf for fifteen minutes at a time.
+[[ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
+
+# Unpaid orders hold their stock for fifteen minutes. Sweeping every five
+# means an abandoned checkout frees the item within twenty at worst, which is
+# short enough that the last one in stock is not lost for an afternoon.
+[triggers]
+crons = ["*/5 * * * *"]
+
 [vars]
+# Marks an order paid with no gateway involved. Development only — the route
+# answers 404 unless this is exactly "1", and production must never set it.
+# It exists so the order lifecycle can be exercised before PAYUNi is wired up.
+ALLOW_FAKE_PAYMENT = "0"
 # ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
 # bootstrap payload for every cache miss.
 IBON_PRINT_API_BASE_URL = "https://print-api.ibon.com.tw/api"

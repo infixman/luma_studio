@@ -87,9 +87,10 @@ ADMIN_ORIGIN = "https://admin.luma-studio.tw"
 
 
 class FakeStatement:
-    def __init__(self, sql: str, rows_for):
+    def __init__(self, sql: str, rows_for, changes_for):
         self.sql = sql
         self._rows_for = rows_for
+        self._changes_for = changes_for
         self.bindings: tuple = ()
 
     def bind(self, *values):
@@ -97,28 +98,58 @@ class FakeStatement:
         return self
 
     async def run(self):
-        return types.SimpleNamespace(success=True)
+        # D1 reports affected rows as meta.changes, which is how the shop
+        # tells "took the last one" from "somebody else got there first".
+        return types.SimpleNamespace(
+            success=True, meta=types.SimpleNamespace(changes=self._changes_for(self.sql))
+        )
 
     async def all(self):
         return types.SimpleNamespace(results=self._rows_for(self.sql, self.bindings))
 
 
 class FakeDatabase:
-    """Answers with whatever the test declared for a matching statement."""
+    """Answers with whatever the test declared for a matching statement.
 
-    def __init__(self, answers: dict[str, list] | None = None):
+    `answers` maps a fragment of SQL to the rows it should return; `changes`
+    maps one to the affected-row count a write should report. Both match on
+    substring, so a test names only the part it cares about.
+    """
+
+    def __init__(self, answers: dict[str, list] | None = None, changes: dict[str, int] | None = None):
         self.answers = answers or {}
+        self.changes = changes or {}
         self.statements: list[str] = []
+        self.writes: list[tuple[str, tuple]] = []
 
     def prepare(self, sql: str):
-        self.statements.append(" ".join(sql.split()))
-        return FakeStatement(sql, self._rows_for)
+        flat = " ".join(sql.split())
+        self.statements.append(flat)
+        statement = FakeStatement(sql, self._rows_for, self._changes_for)
+        self._record(statement, flat)
+        return statement
+
+    def _record(self, statement, flat: str):
+        original_run = statement.run
+
+        async def run():
+            self.writes.append((flat, statement.bindings))
+            return await original_run()
+
+        statement.run = run
 
     def _rows_for(self, sql: str, _bindings):
         for fragment, rows in self.answers.items():
             if fragment in " ".join(sql.split()):
                 return rows
         return []
+
+    def _changes_for(self, sql: str) -> int:
+        flat = " ".join(sql.split())
+        for fragment, count in self.changes.items():
+            if fragment in flat:
+                return count
+        return 1
 
 
 class FakeBucket:
