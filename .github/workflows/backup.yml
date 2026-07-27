@@ -34,15 +34,32 @@ jobs:
         # this token with an authentication error even at D1:Edit, while the
         # query endpoint is the same one deploys already rely on.
         run: |
-          set -euo pipefail
+          set -uo pipefail
           OUT="$RUNNER_TEMP/backup.json"
           jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{exportedAt: $at, tables: {}}' > "$OUT"
+
           for TABLE in $TABLES; do
-            npx --yes wrangler@4 d1 execute luma-ibon-cache \
-              --remote --json --command "SELECT * FROM ${TABLE}" \
-              > "$RUNNER_TEMP/${TABLE}.raw.json"
+            RAW="$RUNNER_TEMP/${TABLE}.raw"
+            # Both streams to one file: wrangler prints its banner and some
+            # errors on stdout, and swallowing either leaves a failure with
+            # nothing to diagnose.
+            if ! npx --yes wrangler@4 d1 execute luma-ibon-cache \
+                   --remote --json --command "SELECT * FROM ${TABLE}" > "$RAW" 2>&1; then
+              echo "::error::wrangler failed while reading ${TABLE}"
+              cat "$RAW"
+              exit 1
+            fi
+
+            # Skip anything printed before the JSON payload.
+            sed -n '/^[[{]/,$p' "$RAW" > "$RAW.json"
+            if ! jq -e '.' "$RAW.json" > /dev/null 2>&1; then
+              echo "::error::${TABLE} did not come back as JSON"
+              cat "$RAW"
+              exit 1
+            fi
+
             jq --arg table "$TABLE" \
-               --argjson rows "$(jq '.[0].results' "$RUNNER_TEMP/${TABLE}.raw.json")" \
+               --argjson rows "$(jq '[.[].results] | add // []' "$RAW.json")" \
                '.tables[$table] = $rows' "$OUT" > "$OUT.next"
             mv "$OUT.next" "$OUT"
             echo "${TABLE}: $(jq --arg t "$TABLE" '.tables[$t] | length' "$OUT") rows"
