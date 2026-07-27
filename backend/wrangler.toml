@@ -3,9 +3,6 @@ main = "src/main.py"
 compatibility_date = "2026-07-21"
 compatibility_flags = ["python_workers"]
 
-[assets]
-directory = "./public"
-
 [observability]
 enabled = true
 head_sampling_rate = 1
@@ -27,3 +24,12 @@ IBON_PRINT_API_BASE_URL = "https://print-api.ibon.com.tw/api"
 IBON_UPLOAD_API_BASE_URL = "https://www.ibon.com.tw/qwsapi2/api"
 IBON_CLIENT_VERSION = "4.2.4"
 IBON_GUEST_EMAIL = "guest@qware.com.tw"
+
+# Browser origins allowed to send credentialed requests to this API. The admin
+# session cookie is SameSite=None, so this list is the CSRF defence and the
+# OAuth redirect allowlist. Never add a localhost origin here: any process on
+# that port would gain credentialed write access to production.
+# For local work, override it in backend/.dev.vars instead.
+ALLOWED_ORIGINS = "https://luma-studio-web.infixman.workers.dev"
+# Where /admin and /ibon_print/{id} send browsers now that pages live elsewhere.
+FRONTEND_ORIGIN = "https://luma-studio-web.infixman.workers.dev"

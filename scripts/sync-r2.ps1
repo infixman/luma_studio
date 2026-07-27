@@ -7,6 +7,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# The Python project now lives under backend/, so uv needs to be pointed at it.
+$backend = Join-Path $PSScriptRoot '..\backend'
 $source = Join-Path $PSScriptRoot "..\upload_ibon\$Id"
 $resolvedSource = Resolve-Path -LiteralPath $source -ErrorAction Stop
 $images = Get-ChildItem -LiteralPath $resolvedSource -File |
@@ -19,7 +21,7 @@ if ($images.Count -eq 0) {
 foreach ($image in $images) {
     $r2Key = "$Id/$($image.Name)"
     Write-Host "Uploading $r2Key"
-    uv run pywrangler r2 object put "$Bucket/$r2Key" --remote --file $image.FullName
+    uv --directory $backend run pywrangler r2 object put "$Bucket/$r2Key" --remote --file $image.FullName
     if ($LASTEXITCODE -ne 0) {
         throw "R2 upload failed: $r2Key"
     }

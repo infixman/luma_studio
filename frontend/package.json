@@ -1,0 +1,21 @@
+{
+  "name": "luma-studio-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "preact": "^10.29.7"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "wrangler": "^4.114.0"
+  }
+}

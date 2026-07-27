@@ -1,0 +1,4 @@
+# Copy to backend/.dev.vars for local development. Never commit the real file.
+# Localhost origins belong here, never in wrangler.toml: [vars] ships to production.
+ALLOWED_ORIGINS="http://localhost:5173"
+FRONTEND_ORIGIN="http://localhost:5173"
