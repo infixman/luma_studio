@@ -102,33 +102,68 @@ class TestAllowsBehaviour:
         assert limiter.keys == []
 
 
-def test_every_binding_name_is_configured(rate_limit):
-    """The names in code must match the [[ratelimits]] blocks in wrangler.toml."""
-
+def _config(file_name: str) -> str:
     from pathlib import Path
 
-    config = (Path(__file__).resolve().parents[1] / "wrangler.toml").read_text(encoding="utf-8")
-    for name in (rate_limit.LOGIN, rate_limit.PRINT, rate_limit.PUBLIC):
-        assert f'name = "{name}"' in config, f"{name} has no [[ratelimits]] block"
+    return (Path(__file__).resolve().parents[1] / file_name).read_text(encoding="utf-8")
+
+
+PUBLIC_CONFIG = "wrangler.toml"
+ADMIN_CONFIG = "wrangler.admin.toml"
+
+
+def test_every_binding_name_is_configured(rate_limit):
+    """Each limiter is declared by whichever Worker owns the route it guards."""
+
+    owners = {
+        rate_limit.LOGIN: ADMIN_CONFIG,
+        rate_limit.PRINT: PUBLIC_CONFIG,
+        rate_limit.PUBLIC: PUBLIC_CONFIG,
+        rate_limit.ASSET: PUBLIC_CONFIG,
+    }
+    for name, owner in owners.items():
+        assert f'name = "{name}"' in _config(owner), f"{name} has no [[ratelimits]] block in {owner}"
+
+
+def test_a_worker_declares_only_the_limiters_it_uses(rate_limit):
+    """Otherwise a flood at the storefront could spend the owner's login budget."""
+
+    assert f'name = "{rate_limit.LOGIN}"' not in _config(PUBLIC_CONFIG)
+    for name in (rate_limit.PRINT, rate_limit.PUBLIC, rate_limit.ASSET):
+        assert f'name = "{name}"' not in _config(ADMIN_CONFIG)
 
 
 def test_namespace_ids_are_unique():
-    """Two limiters sharing a namespace would share one budget."""
+    """Two limiters sharing a namespace would share one budget.
+
+    Namespaces are scoped to a Worker, so this checks within each config
+    rather than across them.
+    """
 
     import re
-    from pathlib import Path
 
-    config = (Path(__file__).resolve().parents[1] / "wrangler.toml").read_text(encoding="utf-8")
-    ids = re.findall(r'namespace_id = "(\d+)"', config)
-    assert len(ids) == len(set(ids)), f"duplicate rate limit namespace_id: {ids}"
+    for file_name in (PUBLIC_CONFIG, ADMIN_CONFIG):
+        ids = re.findall(r'namespace_id = "(\d+)"', _config(file_name))
+        assert len(ids) == len(set(ids)), f"duplicate rate limit namespace_id in {file_name}: {ids}"
 
 
 def test_periods_are_supported_values():
     """Cloudflare accepts only 10 or 60 seconds; anything else fails to deploy."""
 
     import re
-    from pathlib import Path
 
-    config = (Path(__file__).resolve().parents[1] / "wrangler.toml").read_text(encoding="utf-8")
-    for period in re.findall(r"period = (\d+)", config):
-        assert period in {"10", "60"}, f"unsupported rate limit period: {period}"
+    for file_name in (PUBLIC_CONFIG, ADMIN_CONFIG):
+        for period in re.findall(r"period = (\d+)", _config(file_name)):
+            assert period in {"10", "60"}, f"unsupported rate limit period in {file_name}: {period}"
+
+
+def test_both_workers_target_the_same_database():
+    """They share one D1; a typo here would silently split the data in two."""
+
+    import re
+
+    ids = {
+        file_name: re.search(r'database_id = "([^"]+)"', _config(file_name)).group(1)
+        for file_name in (PUBLIC_CONFIG, ADMIN_CONFIG)
+    }
+    assert len(set(ids.values())) == 1, f"the two Workers point at different databases: {ids}"

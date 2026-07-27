@@ -4,12 +4,21 @@
 
 本專案不使用 ibon 僅供企業客戶使用的 Open API。
 
-前後端為兩個獨立部署：
+公開端與管理端是各自獨立的部署：
 
 | 部署 | 內容 | 網址 |
 | --- | --- | --- |
-| `luma-studio` | Cloudflare Python Worker，純 JSON API 與圖檔 | `https://api.luma-studio.tw` |
+| `luma-studio` | Cloudflare Python Worker，公開 JSON API 與圖檔 | `https://api.luma-studio.tw` |
+| `luma-studio-admin-api` | Cloudflare Python Worker，管理 API | `https://admin-api.luma-studio.tw` |
 | `luma-studio-web` | Vite + Preact 靜態站台，管理介面與公開取件頁 | `https://luma-studio.tw` |
+
+兩個 Worker 共用 `backend/src/` 的程式碼，只是進入點不同（[main.py](backend/src/main.py) 與 [admin_main.py](backend/src/admin_main.py)），設定檔分別是 [wrangler.toml](backend/wrangler.toml) 與 [wrangler.admin.toml](backend/wrangler.admin.toml)。
+
+拆開的理由是 cookie 隔離。兩邊的 session cookie 都沒有設 `Domain`，所以是 host-only —— 管理者的 session 只會被送到 `admin-api.luma-studio.tw`，公開站台上的任何腳本都碰不到它。四個網域仍同屬 `luma-studio.tw`，因此 `SameSite=Lax` 不受影響。
+
+管理 Worker 是**唯一會套用 D1 migration 的部署**。公開 Worker 只讀取 `schema_migrations` 回報狀態，不修改 schema：結帳是熱路徑，不該為 schema 檢查付出冷啟動成本，而公開得到的 Worker 也沒有理由具備 `ALTER TABLE` 的能力。因此部署順序固定為管理端先、公開端後。
+
+管理介面目前仍部署在 `luma-studio.tw/admin`，還在呼叫公開 Worker 上的 `/api/admin/*`。那些路由暫時保留為轉接層（[main.py](backend/src/main.py) 的 `legacy_admin_response`），等管理前台搬到 `admin.luma-studio.tw` 之後一次移除。
 
 ## 使用方式
 
@@ -43,8 +52,8 @@ backend/
     admin_api.py      /api/admin/* 端點
     ibon.py           ibon 上傳流程、D1 快取、列印規格
     bio_link.py       Bio link 的設定、連結、匿名點擊記錄
-    bio_link_api.py   /api/admin/bio-link* 端點
-    migrations.py     啟動時套用的 D1 schema
+    bio_link_api.py   管理端 /api/bio-link* 端點
+    migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
 frontend/
   wrangler.jsonc      Worker 與靜態資產設定
@@ -65,41 +74,59 @@ docs/superpowers/specs/  設計文件
 
 ## 後端 API
 
+### 公開 Worker — `api.luma-studio.tw`
+
 | Method | Path | 說明 |
 | --- | --- | --- |
-| GET | `/api/health` | 存活檢查，回報已套用的 migration |
+| GET | `/api/health` | 存活檢查，唯讀回報資料庫中已套用的 migration |
+| GET | `/api/print/{id}` | 取件編號 JSON |
+| GET | `/images/{folder}/{file}` | 公開圖檔 |
+| GET | `/api/bio-link` | Bio link 公開內容，順帶記一筆瀏覽 |
+| GET | `/api/bio-link/calendar` | 課程表，獨立一次請求 |
+| GET | `/r/{id}` | 記一筆點擊後 302 到目標網址 |
+| GET | `/bio-link-assets/{file}` | Bio link 頭像 |
+| — | `/api/admin/*`、`/auth/*`、`/api/session` | **暫時的轉接層**，等管理前台搬家後移除 |
+
+### 管理 Worker — `admin-api.luma-studio.tw`
+
+路徑上沒有 `/api/admin` 前綴。這台主機上每一支都是管理端點，所以登入檢查是靠近頂端的單一閘門（[admin_main.py](backend/src/admin_main.py)），不是每條路由各自記得要做的事。
+
+| Method | Path | 說明 |
+| --- | --- | --- |
+| GET | `/api/health` | 存活檢查，並套用 migration |
 | GET | `/api/session` | 已登入回 `{email}`，否則 401 |
 | GET | `/auth/login?next=` | 導向 Google OAuth，`next` 必須在允許來源內 |
 | GET | `/auth/callback` | 建立 session 後導回 `next` |
 | POST | `/auth/logout` | 清除 session |
-| GET | `/api/print/{id}` | 取件編號 JSON |
-| GET | `/images/{folder}/{file}` | 公開圖檔 |
-| GET | `/api/bio-link` | Bio link 公開內容，順帶記一筆瀏覽 |
-| GET | `/r/{id}` | 記一筆點擊後 302 到目標網址 |
-| GET | `/bio-link-assets/{file}` | Bio link 頭像 |
-| — | `/api/admin/*` | 管理端點，需登入 |
-| — | `/api/admin/bio-link*` | Bio link 編輯端點，需登入 |
-| GET | `/api/admin/bio-link/stats?days=` | 造訪統計，需登入 |
+| — | `/api/folders`、`/api/objects`、`/api/upload`、`/api/print-settings` | 圖檔與列印設定管理 |
+| — | `/api/bio-link*` | Bio link 編輯 |
+| GET | `/api/bio-link/stats?days=` | 造訪統計 |
+
+`/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
 ### 跨來源與 CSRF
 
-前端是不同來源，session cookie 因此為 `SameSite=None; Secure; HttpOnly`。少掉的 SameSite 保護由兩件事補上：
+前端與 API 是不同來源（雖然同屬一個站台），session cookie 為 `SameSite=Lax; Secure; HttpOnly`。跨來源的部分由兩件事補上：
 
 1. 所有非 GET 請求必須帶 `x-luma-app: 1`。自訂標頭會強制觸發 CORS 預檢，跨站表單無法偽造。
 2. 同時檢查 `Origin` 在 `ALLOWED_ORIGINS` 清單內，否則 403。
 
-`ALLOWED_ORIGINS` 與 `FRONTEND_ORIGIN` 定義在 [backend/wrangler.toml](backend/wrangler.toml) 的 `[vars]`。新增前端網域時要同步更新。
+兩個閘門都在 [router.py](backend/src/router.py) 的 `serve` 裡，兩個 Worker 共用同一份 —— 各留一份副本會漂移，而會漂移的那一份就是沒人在看的那一份。
 
-### 公開端點的速率限制
+`ALLOWED_ORIGINS` 與 `FRONTEND_ORIGIN` 各自定義在該 Worker 的設定檔 `[vars]`。兩份清單刻意不重疊：公開 API 不接受管理網域的來源，管理 API 也不接受公開站台的來源。
 
-每個不需登入就能打到的端點都有 per-IP 上限，定義在 [backend/wrangler.toml](backend/wrangler.toml) 的 `[[ratelimits]]`：
+### 速率限制
 
-| 端點 | 上限 | 為什麼 |
-| --- | --- | --- |
-| `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
-| `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
-| `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
-| `/images/{folder}/{file}`、`/bio-link-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
+限制器宣告在**擁有該路由的那個 Worker** 的設定檔裡：
+
+| Worker | 端點 | 上限 | 為什麼 |
+| --- | --- | --- | --- |
+| 管理 | `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
+| 公開 | `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
+| 公開 | `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
+| 公開 | `/images/{folder}/{file}`、`/bio-link-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
+
+分開宣告不只是整理：公開站台被打爆時，不會連帶吃掉管理者的登入額度。
 
 以 Cloudflare 自行填入的 `CF-Connecting-IP` 為 key，該標頭無法被用戶端偽造。取不到位址時**不套用限制**，而不是把所有人算成同一個——否則單一來源就能吃光全體額度。
 
@@ -166,7 +193,9 @@ uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file
 
 ### D1 migration
 
-schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker 每個 isolate 首次收到請求時自動套用，並以 `schema_migrations` 表記錄。所有敘述都必須可重複執行，因為多個 isolate 會同時啟動。手動執行 `wrangler d1 execute` 已不再需要。
+schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，由**管理 Worker** 在每個 isolate 首次收到請求時自動套用，並以 `schema_migrations` 表記錄。所有敘述都必須可重複執行，因為多個 isolate 會同時啟動。手動執行 `wrangler d1 execute` 已不再需要。
+
+公開 Worker 不套用任何 migration，`/api/health` 只讀取 `schema_migrations` 回報現況。因此部署順序是管理端先、公開端後；公開端回報的清單短少，代表部署順序出了問題，該被看見而不是被隨手修掉。
 
 ## Cloudflare 初次設定
 
@@ -184,13 +213,16 @@ schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker
    uv --directory backend run pywrangler r2 bucket create luma-ibon-images
    ```
 
-3. 把 D1 輸出的 `database_id` 填入 [backend/wrangler.toml](backend/wrangler.toml)。
+3. 把 D1 輸出的 `database_id` 同時填入 [backend/wrangler.toml](backend/wrangler.toml) 與 [backend/wrangler.admin.toml](backend/wrangler.admin.toml)。兩個 Worker 必須指向同一個資料庫，填錯會安靜地把資料切成兩份。
 
-4. 部署後端（schema 會在第一個請求時自動建立）：
+4. 部署後端。**管理 Worker 要先部署**，因為只有它會套用 migration，公開 Worker 只讀不寫：
 
    ```powershell
+   uv --directory backend run pywrangler deploy -c wrangler.admin.toml
    uv --directory backend run pywrangler deploy
    ```
+
+   secret 是 per-Worker 的，`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GOOGLE_OAUTH_REDIRECT_URI` 要在兩個 Worker 上各設一次，不會互相共用。
 
 5. 部署前端：
 
@@ -224,12 +256,15 @@ Workers & Pages → 選 Worker → Settings → Domains & Routes → Add → Cus
 | `luma-studio-web` | `luma-studio.tw` |
 | `luma-studio-web` | `www.luma-studio.tw` |
 | `luma-studio` | `api.luma-studio.tw` |
+| `luma-studio-admin-api` | `admin-api.luma-studio.tw` |
 
 DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CNAME**，已存在的記錄會讓綁定失敗。
 
 ### Worker secrets
 
 只有後端 Worker 需要。用指令設定，不要寫進 `wrangler.toml` 的 `[vars]`——那份設定會進版控。
+
+**secret 是 per-Worker 的，兩個後端 Worker 各要設一次。** 公開 Worker：
 
 ```powershell
 uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID
@@ -238,7 +273,16 @@ uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI
 uv --directory backend run pywrangler secret put VISITOR_SALT
 ```
 
-`GOOGLE_OAUTH_REDIRECT_URI` 是 `https://api.luma-studio.tw/auth/callback`。`VISITOR_SALT` 填任意隨機字串。
+管理 Worker（同樣四個，加上 `-c wrangler.admin.toml`）：
+
+```powershell
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put VISITOR_SALT -c wrangler.admin.toml
+```
+
+`GOOGLE_OAUTH_REDIRECT_URI` 在公開 Worker 上是 `https://api.luma-studio.tw/auth/callback`，在管理 Worker 上是 `https://admin-api.luma-studio.tw/auth/callback`。兩個網址都要加進 Google Cloud Console 的授權重新導向 URI 清單。`VISITOR_SALT` 填任意隨機字串。
 
 ### 速率限制規則
 
@@ -347,9 +391,11 @@ https://luma-studio.tw/admin
 
 ## GitHub 自動部署
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時先部署後端 Worker，成功後再建置並部署前端。
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時依序部署：**管理 Worker → 公開 Worker → 前端**。
 
-兩個 job 都綁在名為 `production` 的 GitHub Environment，請先建立該 environment，再於 repository 的 **Settings → Secrets and variables → Actions**（或該 environment）設定：
+順序不是任意的。管理 Worker 是唯一會套用 migration 的部署，所以它必須先於任何會讀取那些表的東西；前端則必須後於它要呼叫的 API。測試只在第一個 job 跑一次，後續 job 靠 `needs` 串接，失敗就不會往下走。
+
+所有 job 都綁在名為 `production` 的 GitHub Environment，請先建立該 environment，再於 repository 的 **Settings → Secrets and variables → Actions**（或該 environment）設定：
 
 - `CLOUDFLARE_API_TOKEN`：具此帳號 Workers 部署權限的 API token。
 - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare Account ID。

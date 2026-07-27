@@ -1,4 +1,9 @@
-"""Authenticated bio-link editing under /api/admin/bio-link."""
+"""Bio-link editing on the admin deployment, under /api/bio-link.
+
+The public API serves a read-only /api/bio-link of its own. Same path, other
+hostname, and no way to confuse the two: the cookies that authorise this one
+are never sent to the other.
+"""
 
 import bio_link
 from responses import Ctx
@@ -90,10 +95,10 @@ def _items_from(body: dict) -> list[dict]:
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
-    if path == "/api/admin/bio-link" and method == "GET":
+    if path == "/api/bio-link" and method == "GET":
         return ctx.json(await _state(ctx))
 
-    if path == "/api/admin/bio-link/stats" and method == "GET":
+    if path == "/api/bio-link/stats" and method == "GET":
         raw_days = (ctx.query.get("days") or [""])[0]
         try:
             days = int(raw_days) if raw_days else bio_link.DEFAULT_STATS_DAYS
@@ -101,7 +106,7 @@ async def handle(ctx: Ctx):
             return ctx.error("days must be a number", 400)
         return ctx.json(await bio_link.get_stats(env, days))
 
-    if path == "/api/admin/bio-link" and method == "PUT":
+    if path == "/api/bio-link" and method == "PUT":
         # One save for the whole page. Validate all of it before writing any
         # of it, so a rejected link cannot leave the settings half-changed.
         try:
@@ -115,7 +120,7 @@ async def handle(ctx: Ctx):
             await bio_link.replace_items(env, items)
         return ctx.json(await _state(ctx))
 
-    if path == "/api/admin/bio-link/calendar/test" and method == "POST":
+    if path == "/api/bio-link/calendar/test" and method == "POST":
         # The owner cannot tell a wrong address from an empty calendar, so
         # say which it is instead of leaving the section silently blank.
         try:
@@ -133,7 +138,7 @@ async def handle(ctx: Ctx):
             return ctx.error("讀不到這個行事曆。確認網址正確，且該行事曆已設為公開。", 400)
         return ctx.json({"count": len(calendar["events"]), "events": calendar["events"][:3]})
 
-    if path == "/api/admin/bio-link/avatar" and method == "POST":
+    if path == "/api/bio-link/avatar" and method == "POST":
         try:
             form = await ctx.request.form_data()
             uploaded = form.get("file")
@@ -159,14 +164,14 @@ async def handle(ctx: Ctx):
             await env.IBON_IMAGES.delete(previous)
         return ctx.json(await _state(ctx), 201)
 
-    if path == "/api/admin/bio-link/avatar" and method == "DELETE":
+    if path == "/api/bio-link/avatar" and method == "DELETE":
         previous = (await bio_link.get_settings(env))["avatarKey"]
         await bio_link.set_avatar_key(env, None)
         if previous:
             await env.IBON_IMAGES.delete(previous)
         return ctx.json(await _state(ctx))
 
-    if path == "/api/admin/bio-link/items" and method == "POST":
+    if path == "/api/bio-link/items" and method == "POST":
         try:
             body = await _read_json(ctx)
             kind = bio_link.validate_kind(str(body.get("kind") or "link"))
@@ -180,7 +185,7 @@ async def handle(ctx: Ctx):
         await bio_link.create_item(env, kind, title, url, platform)
         return ctx.json(await _state(ctx), 201)
 
-    if path == "/api/admin/bio-link/items/order" and method == "PUT":
+    if path == "/api/bio-link/items/order" and method == "PUT":
         try:
             body = await _read_json(ctx)
             raw_ids = body.get("ids")
@@ -192,9 +197,9 @@ async def handle(ctx: Ctx):
             return ctx.error(str(error) or "Invalid ordering", 400)
         return ctx.json(await _state(ctx))
 
-    if path.startswith("/api/admin/bio-link/items/") and method in {"PUT", "DELETE"}:
+    if path.startswith("/api/bio-link/items/") and method in {"PUT", "DELETE"}:
         try:
-            item_id = bio_link.validate_item_id(path.removeprefix("/api/admin/bio-link/items/"))
+            item_id = bio_link.validate_item_id(path.removeprefix("/api/bio-link/items/"))
         except ValueError as error:
             return ctx.error(str(error), 400)
 
@@ -212,5 +217,9 @@ async def handle(ctx: Ctx):
         if not await bio_link.update_item(env, item_id, title, url, bool(body.get("enabled", True))):
             return ctx.error("Link not found", 404)
         return ctx.json(await _state(ctx))
+
+    # Falling off the end used to hand the runtime a None response, which
+    # surfaces as an opaque 500 rather than as the wrong URL it actually is.
+    return ctx.error("Unknown bio-link endpoint", 404)
 
     return ctx.error("Unknown bio link endpoint", 404)

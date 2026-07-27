@@ -78,6 +78,88 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
+# Stand-ins for the bindings, shared by the two routing suites. They live here
+# rather than in either suite because both Workers are driven the same way and
+# a second copy would drift from the first.
+
+STOREFRONT_ORIGIN = "https://luma-studio.tw"
+ADMIN_ORIGIN = "https://admin.luma-studio.tw"
+
+
+class FakeStatement:
+    def __init__(self, sql: str, rows_for):
+        self.sql = sql
+        self._rows_for = rows_for
+        self.bindings: tuple = ()
+
+    def bind(self, *values):
+        self.bindings = values
+        return self
+
+    async def run(self):
+        return types.SimpleNamespace(success=True)
+
+    async def all(self):
+        return types.SimpleNamespace(results=self._rows_for(self.sql, self.bindings))
+
+
+class FakeDatabase:
+    """Answers with whatever the test declared for a matching statement."""
+
+    def __init__(self, answers: dict[str, list] | None = None):
+        self.answers = answers or {}
+        self.statements: list[str] = []
+
+    def prepare(self, sql: str):
+        self.statements.append(" ".join(sql.split()))
+        return FakeStatement(sql, self._rows_for)
+
+    def _rows_for(self, sql: str, _bindings):
+        for fragment, rows in self.answers.items():
+            if fragment in " ".join(sql.split()):
+                return rows
+        return []
+
+
+class FakeBucket:
+    def __init__(self, objects: dict | None = None):
+        self.objects = objects or {}
+
+    async def get(self, key):
+        return self.objects.get(key)
+
+
+class FakeHeaders:
+    def __init__(self, values: dict):
+        self._values = {key.lower(): value for key, value in values.items()}
+
+    def get(self, name):
+        return self._values.get(name.lower())
+
+
+class FakeRequest:
+    def __init__(self, path: str, method: str = "GET", headers: dict | None = None, host: str = "api.luma-studio.tw"):
+        self.url = f"https://{host}{path}"
+        self.method = method
+        self.headers = FakeHeaders(headers or {})
+        self.cf = None
+
+
+class DenyingLimiter:
+    async def limit(self, _options):
+        return types.SimpleNamespace(success=False)
+
+
+def make_env(database=None, bucket=None, *, origins: str | None = None, frontend: str | None = None, **extra):
+    return types.SimpleNamespace(
+        DB=database or FakeDatabase(),
+        IBON_IMAGES=bucket or FakeBucket(),
+        ALLOWED_ORIGINS=origins if origins is not None else f"{STOREFRONT_ORIGIN},https://www.luma-studio.tw",
+        FRONTEND_ORIGIN=frontend if frontend is not None else STOREFRONT_ORIGIN,
+        **extra,
+    )
+
+
 @pytest.fixture
 def bio_link():
     import bio_link as module

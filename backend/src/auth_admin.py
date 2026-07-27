@@ -1,4 +1,10 @@
-"""Google OAuth login and the admin session cookie."""
+"""Google OAuth login and the admin session cookie.
+
+Only the admin Worker imports this. The storefront's customer login is a
+separate module with its own table and its own cookie name, so that neither
+one can be mistaken for the other by a handler that forgot to check which it
+was holding.
+"""
 
 import base64
 import hashlib

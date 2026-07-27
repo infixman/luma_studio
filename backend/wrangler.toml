@@ -21,13 +21,10 @@ bucket_name = "luma-ibon-images"
 # enough that a person clicking around never notices, and small enough that a
 # script cannot spend the shared D1 write quota or the ibon upload path.
 # See backend/src/rate_limit.py for what each one guards.
-
-# Every attempt writes an oauth state row before the visitor has proved
-# anything, so this is the tightest of the three.
-[[ratelimits]]
-name = "LOGIN_LIMITER"
-namespace_id = "1001"
-simple = { limit = 10, period = 60 }
+#
+# The admin sign-in limiter is not here: /auth/login moved to
+# backend/wrangler.admin.toml along with the rest of administration, so a
+# flood aimed at the storefront can no longer eat the owner's login budget.
 
 # A cache miss reads up to 15 MB from R2 and runs the four-step ibon upload.
 [[ratelimits]]
@@ -62,6 +59,10 @@ IBON_GUEST_EMAIL = "guest@qware.com.tw"
 # so this list is the CSRF defence and the OAuth redirect allowlist. Never add
 # a localhost origin here: any process on that port would gain credentialed
 # write access to production. For local work, use backend/.dev.vars instead.
+#
+# The admin origin is deliberately absent. It talks to the admin Worker, and
+# listing it here would let the back office send credentialed requests to the
+# public API for no reason anyone needs.
 ALLOWED_ORIGINS = "https://luma-studio.tw,https://www.luma-studio.tw"
-# Where /admin and the already-shared /ibon_print/{id} links send browsers.
+# Where the already-shared /ibon_print/{id} links send browsers.
 FRONTEND_ORIGIN = "https://luma-studio.tw"

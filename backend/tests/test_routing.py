@@ -1,104 +1,33 @@
-"""The routing table, the CSRF gate and the rate limits, exercised end to end.
+"""The public Worker's routing table, CSRF gate and rate limits, end to end.
 
 Only the pure functions were covered before, so a wrong branch order or a
 missing guard would have reached production the way the frontend's redirect
 did. D1 and R2 are replaced, because a fake of those tests the fake — but
 which path reaches which handler, and what an unauthenticated caller gets
 back, is exactly what belongs here.
+
+Administration is not reachable from this deployment at all. What used to be
+asserted here about `/api/admin/*` now lives in test_admin_routing.py.
 """
 
 import asyncio
-import types
 
 import pytest
 
-
-ORIGIN = "https://luma-studio.tw"
-
-
-class FakeStatement:
-    def __init__(self, sql: str, rows_for):
-        self.sql = sql
-        self._rows_for = rows_for
-        self.bindings: tuple = ()
-
-    def bind(self, *values):
-        self.bindings = values
-        return self
-
-    async def run(self):
-        return types.SimpleNamespace(success=True)
-
-    async def all(self):
-        return types.SimpleNamespace(results=self._rows_for(self.sql, self.bindings))
+from conftest import STOREFRONT_ORIGIN, DenyingLimiter, FakeDatabase, FakeRequest, make_env
 
 
-class FakeDatabase:
-    """Answers with whatever the test declared for a matching statement."""
-
-    def __init__(self, answers: dict[str, list] | None = None):
-        self.answers = answers or {}
-        self.statements: list[str] = []
-
-    def prepare(self, sql: str):
-        self.statements.append(" ".join(sql.split()))
-        return FakeStatement(sql, self._rows_for)
-
-    def _rows_for(self, sql: str, _bindings):
-        for fragment, rows in self.answers.items():
-            if fragment in " ".join(sql.split()):
-                return rows
-        return []
-
-
-class FakeBucket:
-    def __init__(self, objects: dict | None = None):
-        self.objects = objects or {}
-
-    async def get(self, key):
-        return self.objects.get(key)
-
-
-class FakeHeaders:
-    def __init__(self, values: dict):
-        self._values = {key.lower(): value for key, value in values.items()}
-
-    def get(self, name):
-        return self._values.get(name.lower())
-
-
-class FakeRequest:
-    def __init__(self, path: str, method: str = "GET", headers: dict | None = None):
-        self.url = f"https://api.luma-studio.tw{path}"
-        self.method = method
-        self.headers = FakeHeaders(headers or {})
-        self.cf = None
-
-
-class DenyingLimiter:
-    async def limit(self, _options):
-        return types.SimpleNamespace(success=False)
-
-
-def make_env(database=None, bucket=None, **extra):
-    return types.SimpleNamespace(
-        DB=database or FakeDatabase(),
-        IBON_IMAGES=bucket or FakeBucket(),
-        ALLOWED_ORIGINS=f"{ORIGIN},https://www.luma-studio.tw",
-        FRONTEND_ORIGIN=ORIGIN,
-        **extra,
-    )
+ORIGIN = STOREFRONT_ORIGIN
 
 
 @pytest.fixture
 def call():
-    """Run one request through the Worker's entry point."""
+    """Run one request through the public Worker's entry point."""
 
     import main
     import migrations
 
     def run(request, env=None):
-        # Each test starts from a database that has not been migrated yet.
         migrations._applied_names = None
         worker = main.Default()
         worker.env = env or make_env()
@@ -108,7 +37,7 @@ def call():
 
 
 def browser(path: str, method: str = "GET", **headers):
-    """A request shaped the way the frontend sends them."""
+    """A request shaped the way the storefront sends them."""
 
     base = {"Origin": ORIGIN, "x-luma-app": "1"}
     base.update(headers)
@@ -117,7 +46,7 @@ def browser(path: str, method: str = "GET", **headers):
 
 class TestCrossOriginGate:
     def test_preflight_is_answered_before_anything_else(self, call):
-        response = call(FakeRequest("/api/admin/folders", "OPTIONS", {"Origin": ORIGIN}))
+        response = call(FakeRequest("/api/bio-link", "OPTIONS", {"Origin": ORIGIN}))
         assert response.status == 204
         assert response.headers["access-control-allow-origin"] == ORIGIN
         assert "x-luma-app" in response.headers["access-control-allow-headers"]
@@ -125,12 +54,18 @@ class TestCrossOriginGate:
     def test_a_write_without_the_app_header_is_refused(self, call):
         """A plain HTML form cannot set a custom header, which is the point."""
 
-        response = call(FakeRequest("/auth/logout", "POST", {"Origin": ORIGIN}))
+        response = call(FakeRequest("/api/bio-link", "POST", {"Origin": ORIGIN}))
         assert response.status == 403
 
     def test_a_write_from_an_unlisted_origin_is_refused(self, call):
-        response = call(FakeRequest("/auth/logout", "POST", {"Origin": "https://evil.example", "x-luma-app": "1"}))
+        response = call(FakeRequest("/api/bio-link", "POST", {"Origin": "https://evil.example", "x-luma-app": "1"}))
         assert response.status == 403
+
+    def test_the_admin_origin_is_not_trusted_here(self, call):
+        """The back office has its own API; it has no business writing to this one."""
+
+        request = FakeRequest("/api/bio-link", "POST", {"Origin": "https://admin.luma-studio.tw", "x-luma-app": "1"})
+        assert call(request).status == 403
 
     def test_reads_are_not_gated(self, call):
         assert call(FakeRequest("/api/health")).status == 200
@@ -144,52 +79,60 @@ class TestCrossOriginGate:
         assert stranger.headers["vary"] == "Origin"
 
 
-class TestAuthentication:
-    def test_session_without_a_cookie_is_unauthorised(self, call):
-        assert call(browser("/api/session")).status == 401
+class TestLegacyAdminRoutes:
+    """TEMPORARY, and deleted along with `main.legacy_admin_response`.
 
-    def test_admin_endpoints_are_closed(self, call):
-        assert call(browser("/api/admin/folders")).status == 401
-        assert call(browser("/api/admin/bio-link")).status == 401
+    The admin interface still lives at luma-studio.tw and still calls these
+    paths on this host, so they keep answering until it moves. What matters
+    meanwhile is that the bridge did not become a way in: the same session
+    check applies through it as on the admin Worker.
+    """
 
-    def test_a_shaped_but_unknown_cookie_is_still_unauthorised(self, call):
-        request = browser("/api/session", Cookie="luma_admin_session=" + "a" * 40)
-        assert call(request).status == 401
-
-    def test_no_cookie_means_no_session_lookup(self, call):
-        """Rejecting on shape alone keeps an unauthenticated flood off D1.
-
-        The migrations create the table, so this looks for the read rather
-        than for any mention of it.
-        """
-
-        database = FakeDatabase()
-        call(browser("/api/session"), make_env(database))
-        lookups = [s for s in database.statements if s.startswith("SELECT email FROM admin_sessions")]
-        assert lookups == []
-
-    def test_a_shaped_cookie_does_reach_the_database(self, call):
-        """The opposite case, so the test above cannot pass by accident."""
-
-        database = FakeDatabase()
-        call(browser("/api/session", Cookie="luma_admin_session=" + "a" * 40), make_env(database))
-        lookups = [s for s in database.statements if s.startswith("SELECT email FROM admin_sessions")]
-        assert len(lookups) == 1
-
-
-class TestRoutingTable:
-    def test_health_reports_the_applied_migrations(self, call):
-        body = call(FakeRequest("/api/health")).json()
-        assert body["ok"] is True
-        assert "0005_create_bio_link" in body["migrations"]
-
-    def test_unknown_paths_are_not_found(self, call):
-        assert call(FakeRequest("/nope")).status == 404
+    @pytest.mark.parametrize("path", ["/api/session", "/api/admin/folders", "/api/admin/bio-link"])
+    def test_the_bridge_still_requires_a_session(self, call, path):
+        assert call(browser(path)).status == 401
 
     def test_admin_is_redirected_to_the_frontend(self, call):
         response = call(FakeRequest("/admin"))
         assert response.status == 302
         assert response.headers["location"] == f"{ORIGIN}/admin"
+
+    def test_the_new_prefixless_paths_are_not_exposed_here(self, call):
+        """Only the old shape is bridged; the new one belongs to the admin host."""
+
+        assert call(browser("/api/folders")).status == 404
+        assert call(browser("/api/print-settings")).status == 404
+
+
+class TestHealth:
+    def test_health_reports_what_the_database_says_is_applied(self, call):
+        database = FakeDatabase({"FROM schema_migrations": [{"name": "0005_create_bio_link"}]})
+        body = call(FakeRequest("/api/health"), make_env(database)).json()
+        assert body["ok"] is True
+        assert body["migrations"] == ["0005_create_bio_link"]
+
+    def test_health_does_not_apply_anything(self, call):
+        """Schema changes belong to the admin Worker; this one only reports."""
+
+        database = FakeDatabase()
+        call(FakeRequest("/api/health"), make_env(database))
+        assert not any("CREATE TABLE" in statement for statement in database.statements)
+        assert not any("INSERT" in statement for statement in database.statements)
+
+    def test_a_database_that_cannot_be_read_is_not_fatal(self, call):
+        """An empty list is a visible shortfall; a 500 on /api/health is not."""
+
+        class Unreachable:
+            def prepare(self, _sql):
+                raise RuntimeError("D1 is down")
+
+        body = call(FakeRequest("/api/health"), make_env(Unreachable())).json()
+        assert body["migrations"] == []
+
+
+class TestRoutingTable:
+    def test_unknown_paths_are_not_found(self, call):
+        assert call(FakeRequest("/nope")).status == 404
 
     def test_a_shared_print_link_goes_to_the_page(self, call):
         response = call(FakeRequest("/ibon_print/20260721_soda", headers={"Accept": "text/html"}))
@@ -218,38 +161,12 @@ class TestRoutingTable:
         assert call(FakeRequest("/images/_bio-link/a.jpg")).status == 400
 
 
-class TestDatabaseDependence:
-    def test_serving_an_object_does_not_need_the_database(self):
-        import main
-
-        assert main.needs_database("/images/a/b.jpg") is False
-        assert main.needs_database("/bio-link-assets/a.jpg") is False
-        assert main.needs_database("/api/bio-link") is True
-
-    def test_a_broken_migration_stops_the_request(self, call, monkeypatch):
-        import main
-        from common import MigrationError
-
-        async def explode(_env):
-            raise MigrationError("0005_create_bio_link")
-
-        monkeypatch.setattr(main, "apply_migrations", explode)
-        response = call(FakeRequest("/api/bio-link"))
-        assert response.status == 503
-        assert response.json()["migration"] == "0005_create_bio_link"
-
-
 class TestRateLimits:
     def test_a_denied_caller_gets_429_with_retry_after(self, call):
         env = make_env(PUBLIC_LIMITER=DenyingLimiter())
         response = call(FakeRequest("/api/bio-link", headers={"CF-Connecting-IP": "203.0.113.7"}), env)
         assert response.status == 429
         assert response.headers["retry-after"] == "60"
-
-    def test_login_is_limited_separately(self, call):
-        env = make_env(LOGIN_LIMITER=DenyingLimiter())
-        response = call(FakeRequest("/auth/login", headers={"CF-Connecting-IP": "203.0.113.7"}), env)
-        assert response.status == 429
 
     def test_a_missing_binding_lets_the_request_through(self, call):
         """A limiter that can take the site down is worse than the abuse."""

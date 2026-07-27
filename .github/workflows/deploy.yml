@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Deploy API Worker
+  admin-backend:
+    name: Deploy admin API Worker
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -24,6 +24,28 @@ jobs:
         working-directory: backend
       - name: Test
         run: uv run pytest
+        working-directory: backend
+      # First of the four. This deployment owns the D1 schema, so the
+      # migrations it applies have to be in place before anything that reads
+      # them goes live.
+      - name: Deploy Worker
+        run: uv run pywrangler deploy -c wrangler.admin.toml
+        working-directory: backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  backend:
+    name: Deploy API Worker
+    runs-on: ubuntu-latest
+    environment: production
+    # The public Worker never applies a migration, so it must not be the first
+    # thing to meet a database the admin Worker has not brought up to date.
+    needs: admin-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --frozen
         working-directory: backend
       - name: Deploy Worker
         run: uv run pywrangler deploy

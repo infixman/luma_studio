@@ -1,14 +1,20 @@
 """Per-IP limits on the endpoints an outsider can reach.
 
-Three of the public routes cost real resources when hit repeatedly:
+Routes that cost real resources when hit repeatedly:
 
-* `/auth/login` writes a row to `admin_oauth_states` on every request, with no
-  authentication and nothing to deduplicate against. The D1 write quota is
-  shared with the session table, so hammering it locks the admin out.
 * `/api/print/{id}` and `/ibon_print/{id}` read up to 15 MB from R2 and run a
   four-step upload to ibon whenever the 24-hour cache is cold.
 * The bio link page and its redirects read D1 on every visit.
 * `/images/` and `/bio-link-assets/` read an object from R2 per request.
+* `/auth/login`, on the admin deployment, writes a row to `admin_oauth_states`
+  on every request with no authentication and nothing to deduplicate against.
+  The D1 write quota is shared with the session table, so hammering it locks
+  the owner out.
+
+The bindings live in whichever wrangler config owns the route, so LOGIN is
+declared only on the admin Worker and the rest only on the public one. Asking
+for a binding that the running deployment does not declare is not an error;
+see `allows`.
 
 Limits are advisory: if the binding is missing or the call fails, requests are
 allowed through. A rate limiter that can take the site down is worse than the

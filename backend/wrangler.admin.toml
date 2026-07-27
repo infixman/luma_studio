@@ -1,0 +1,47 @@
+# The administration API, deployed apart from the public one.
+#
+# Same source tree, different entry point. The reason for a second Worker is
+# the session cookie: neither deployment sets a Domain on its cookie, so the
+# admin session only ever travels to admin-api.luma-studio.tw and a script
+# running on the storefront cannot reach it.
+#
+# Deploy with:  uv run pywrangler deploy -c wrangler.admin.toml
+# Secrets are per-Worker. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and
+# GOOGLE_OAUTH_REDIRECT_URI have to be set on this Worker too; the copies on
+# the public Worker are not shared with it.
+
+name = "luma-studio-admin-api"
+main = "src/admin_main.py"
+compatibility_date = "2026-07-21"
+compatibility_flags = ["python_workers"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# The same database as the public Worker. This deployment is the only one that
+# applies migrations — see router.serve — so deploy it before the other.
+[[d1_databases]]
+binding = "DB"
+database_name = "luma-ibon-cache"
+database_id = "07d2f14a-1cb8-4b0e-bdb7-db76e3ffc98b"
+
+# Uploads, folder management and bio-link avatars all write here.
+[[r2_buckets]]
+binding = "IBON_IMAGES"
+bucket_name = "luma-ibon-images"
+
+# Every attempt writes an oauth state row before the visitor has proved
+# anything, and the D1 write quota is shared with the session table: hammering
+# this endpoint is how you lock the owner out of their own back office.
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+[vars]
+# Only the back office talks to this Worker. The storefront origins are
+# deliberately absent: nothing served from luma-studio.tw has any business
+# sending a credentialed request here.
+ALLOWED_ORIGINS = "https://admin.luma-studio.tw"
+FRONTEND_ORIGIN = "https://admin.luma-studio.tw"

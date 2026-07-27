@@ -57,9 +57,11 @@ class Ctx:
     def has_csrf_protection(self) -> bool:
         """Reject cross-site writes that a plain HTML form could forge.
 
-        The session cookie must be SameSite=None so the separately deployed
-        frontend can authenticate, so the custom header (which forces a
-        preflight) and the Origin allowlist carry the CSRF defence instead.
+        The frontend is a different origin from this API even though they
+        share a site, so requests between them are cross-origin and need this
+        on top of the cookie's SameSite=Lax: the custom header forces a
+        preflight, which a cross-site form cannot send, and the Origin has to
+        be one we published.
         """
 
         if self.method in SAFE_METHODS:

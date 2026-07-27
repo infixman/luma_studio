@@ -1,30 +1,31 @@
-"""Cloudflare Python Worker: JSON API for ibon uploads and R2 administration.
+"""Cloudflare Python Worker: the public JSON API.
 
 This Worker renders no HTML. The browser interface is a separate deployment
 that talks to these endpoints cross-origin.
+
+Administration lives in `admin_main.py` on its own hostname, which is what
+keeps the admin session cookie out of reach of anything served here. This
+deployment also never applies a migration — see `router.serve`.
+
+One exception, and it is temporary: the admin interface has not moved hosts
+yet, so the old /api/admin/* routes are still bridged from here. See
+`legacy_admin_response`.
 """
 
-from urllib.parse import parse_qs, unquote
+from urllib.parse import unquote
 
 import workers
 from workers import WorkerEntrypoint
 
-import admin_api
-import auth
+import admin_main
 import bio_link
-import bio_link_api
 import rate_limit
-from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, MigrationError, OAuthError, validate_file_name, validate_folder
+import router
+from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, validate_file_name, validate_folder
 from ibon import resolve_print_result
 from js import Uint8Array
-from migrations import apply_migrations
+from migrations import applied_migration_names
 from responses import Ctx, frontend_origin
-
-
-def needs_database(path: str) -> bool:
-    """Serving an R2 object must not depend on D1 being reachable."""
-
-    return not path.startswith("/images/") and not path.startswith(f"{bio_link.AVATAR_URL_PREFIX}/")
 
 
 def wants_json(ctx: Ctx) -> bool:
@@ -173,6 +174,25 @@ async def print_response(ctx: Ctx, identifier: str):
         return ctx.error("Unexpected Worker failure", 500)
 
 
+async def legacy_admin_response(ctx: Ctx):
+    """Serve the pre-split admin routes until the back office changes host.
+
+    TEMPORARY. The admin interface is still deployed at luma-studio.tw and
+    still calls /api/admin/* here, so removing these in the same change as
+    the split would take the back office down between two deploys. They are
+    deleted in one piece once admin.luma-studio.tw is live — along with this
+    function, the `admin_main` import above, and the routes below.
+
+    The old prefix is rewritten to the new shape and handed to the admin
+    Worker's own dispatcher, so there is one routing table rather than two
+    that can disagree about who is allowed in.
+    """
+
+    if ctx.path.startswith("/api/admin/"):
+        ctx.path = "/api/" + ctx.path.removeprefix("/api/admin/")
+    return await admin_main.dispatch(ctx)
+
+
 def frontend_redirect(ctx: Ctx, path: str):
     origin = frontend_origin(ctx.env)
     if not origin:
@@ -184,36 +204,15 @@ async def dispatch(ctx: Ctx):
     path, method = ctx.path, ctx.method
 
     if path == "/api/health" and method == "GET":
-        return ctx.json({"ok": True, "migrations": await apply_migrations(ctx.env)})
+        # Read-only: the admin deployment owns the schema, so a shortfall here
+        # is a deploy-order problem to report rather than one to fix in place.
+        return ctx.json({"ok": True, "migrations": await applied_migration_names(ctx.env)})
 
-    if path == "/auth/login" and method == "GET":
-        if not ctx.allowed_origins:
-            return ctx.error("Backend is missing ALLOWED_ORIGINS", 500)
-        # Each attempt writes an oauth state row, so this is the one public
-        # endpoint that can spend the D1 write quota without being asked to.
-        if not await rate_limit.allows(ctx.env, rate_limit.LOGIN, ctx.request, "login"):
-            return ctx.too_many_requests()
-        return await auth.begin_google_login(ctx)
-    if path == "/auth/callback" and method == "GET":
-        try:
-            return await auth.complete_google_login(ctx)
-        except OAuthError:
-            return ctx.error("Google login failed", 502)
-    if path == "/auth/logout" and method == "POST":
-        return await auth.logout(ctx)
-
-    if path == "/api/session" and method == "GET":
-        email = await auth.get_admin_email(ctx.env, ctx.request)
-        if not email:
-            return ctx.error("Authentication required", 401)
-        return ctx.json({"email": email})
-
-    if path.startswith("/api/admin/"):
-        if not await auth.get_admin_email(ctx.env, ctx.request):
-            return ctx.error("Authentication required", 401)
-        if path == "/api/admin/bio-link" or path.startswith("/api/admin/bio-link/"):
-            return await bio_link_api.handle(ctx)
-        return await admin_api.handle(ctx)
+    # TEMPORARY, removed with the frontend split. See legacy_admin_response.
+    if path.startswith("/api/admin") or path.startswith("/auth/") or path == "/api/session":
+        return await legacy_admin_response(ctx)
+    if path == "/admin" and method == "GET":
+        return frontend_redirect(ctx, "/admin")
 
     if path == "/api/bio-link" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
@@ -266,34 +265,10 @@ async def dispatch(ctx: Ctx):
                 return ctx.too_many_requests()
             return await print_response(ctx, identifier)
         return frontend_redirect(ctx, f"/ibon_print/{identifier}")
-    if path == "/admin" and method == "GET":
-        return frontend_redirect(ctx, "/admin")
 
     return ctx.error("Unknown endpoint", 404)
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        request_url = str(request.url)
-        scheme_end = request_url.find("://")
-        path_start = request_url.find("/", scheme_end + 3)
-        path_and_query = request_url[path_start:] if path_start >= 0 else "/"
-        path, _, raw_query = path_and_query.partition("?")
-        path = path.rstrip("/") or "/"
-        ctx = Ctx(self.env, request, path, parse_qs(raw_query))
-
-        if ctx.method == "OPTIONS":
-            return ctx.preflight()
-
-        if not ctx.has_csrf_protection():
-            if not ctx.allowed_origins:
-                return ctx.error("Backend is missing ALLOWED_ORIGINS", 500)
-            return ctx.error("Cross-site request rejected", 403)
-
-        if needs_database(path):
-            try:
-                await apply_migrations(self.env)
-            except MigrationError as error:
-                return ctx.json({"error": "Database migration failed", "migration": error.name}, 503)
-
-        return await dispatch(ctx)
+        return await router.serve(self.env, request, dispatch, owns_schema=False)

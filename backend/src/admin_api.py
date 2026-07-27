@@ -1,4 +1,9 @@
-"""Authenticated R2/D1 management endpoints under /api/admin."""
+"""R2/D1 management endpoints on the admin deployment.
+
+The paths carry no `/api/admin` prefix because every route on
+admin-api.luma-studio.tw is administration; `admin_main.dispatch` has already
+established that the caller is signed in before anything here runs.
+"""
 
 from common import (
     DEFAULT_PRINT_SELECT_TYPE,
@@ -18,7 +23,7 @@ from responses import Ctx
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
-    if path == "/api/admin/print-settings" and method == "GET":
+    if path == "/api/print-settings" and method == "GET":
         try:
             folder = validate_folder((ctx.query.get("folder") or [""])[0])
         except ValueError:
@@ -26,7 +31,7 @@ async def handle(ctx: Ctx):
         select_type = await get_folder_select_type(env, folder)
         return ctx.json({"folder": folder, "selectType": select_type, "printSpec": print_spec(select_type)})
 
-    if path == "/api/admin/print-settings" and method == "PUT":
+    if path == "/api/print-settings" and method == "PUT":
         try:
             body = await ctx.request.json()
             folder = validate_folder(str(body.get("folder") or ""))
@@ -40,12 +45,12 @@ async def handle(ctx: Ctx):
             await invalidate_print_cache(env, folder)
         return ctx.json({"folder": folder, "selectType": select_type, "printSpec": print_spec(select_type), "cacheInvalidated": changed})
 
-    if path == "/api/admin/folders" and method == "GET":
+    if path == "/api/folders" and method == "GET":
         listing = await env.IBON_IMAGES.list(delimiter="/", limit=1000)
         folders = sorted(prefix.rstrip("/") for prefix in listing.delimitedPrefixes if IDENTIFIER_PATTERN.fullmatch(prefix.rstrip("/")))
         return ctx.json({"folders": folders, "truncated": bool(listing.truncated)})
 
-    if path == "/api/admin/folders" and method == "POST":
+    if path == "/api/folders" and method == "POST":
         try:
             folder = validate_folder(str((await ctx.request.json()).get("folder") or ""))
         except (ValueError, AttributeError):
@@ -55,9 +60,9 @@ async def handle(ctx: Ctx):
         await invalidate_print_cache(env, folder)
         return ctx.json({"folder": folder}, 201)
 
-    if path.startswith("/api/admin/folders/") and method == "DELETE":
+    if path.startswith("/api/folders/") and method == "DELETE":
         try:
-            folder = validate_folder(path.removeprefix("/api/admin/folders/"))
+            folder = validate_folder(path.removeprefix("/api/folders/"))
         except ValueError:
             return ctx.error("Invalid folder id", 400)
         listing = await env.IBON_IMAGES.list(prefix=f"{folder}/", limit=1000)
@@ -68,7 +73,7 @@ async def handle(ctx: Ctx):
         await invalidate_print_cache(env, folder)
         return ctx.json({"folder": folder, "deleted": True})
 
-    if path == "/api/admin/objects" and method == "GET":
+    if path == "/api/objects" and method == "GET":
         try:
             folder = validate_folder((ctx.query.get("folder") or [""])[0])
         except ValueError:
@@ -77,7 +82,7 @@ async def handle(ctx: Ctx):
         objects = [{"key": item.key, "name": item.key.split("/")[-1], "size": item.size} for item in listing.objects if item.key != f"{folder}/.keep" and any(item.key.lower().endswith(suffix) for suffix in IMAGE_SUFFIXES)]
         return ctx.json({"folder": folder, "objects": objects, "truncated": bool(listing.truncated)})
 
-    if path == "/api/admin/upload" and method == "POST":
+    if path == "/api/upload" and method == "POST":
         try:
             form = await ctx.request.form_data()
             folder = validate_folder(str(form.get("folder") or ""))
@@ -106,7 +111,7 @@ async def handle(ctx: Ctx):
         await invalidate_print_cache(env, folder)
         return ctx.json({"key": key}, 201)
 
-    if path == "/api/admin/objects" and method == "DELETE":
+    if path == "/api/objects" and method == "DELETE":
         key = (ctx.query.get("key") or [""])[0]
         folder, separator, file_name = key.partition("/")
         try:

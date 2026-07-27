@@ -91,10 +91,12 @@ UPP 有「固定」版本的參數（`UPP02120` 收件人姓名(固定)、`UPP02
 
 | 部署 | 內容 | 網域 |
 | --- | --- | --- |
-| `luma-studio-api` | 公開 API（Python Worker） | `api.luma-studio.tw` |
+| `luma-studio` | 公開 API（Python Worker） | `api.luma-studio.tw` |
 | `luma-studio-admin-api` | 管理 API（Python Worker） | `admin-api.luma-studio.tw` |
 | `luma-studio-web` | 商店前台（Vite + Preact） | `luma-studio.tw` |
 | `luma-studio-admin` | 管理後台（Vite + Preact） | `admin.luma-studio.tw` |
+
+公開 Worker 沿用既有的 `luma-studio` 名稱而不改成 `luma-studio-api`：改名會建出一個新 Worker、留下一個孤兒，還要把 custom domain 搬過去，換來的只是名字好看一點。
 
 拆分的理由是 cookie 隔離。現有 cookie 沒有設 `Domain`，是 host-only，
 所以拆開後管理者 session cookie 只會送到 `admin-api`，前台任何 XSS 都碰不到它。
@@ -106,13 +108,12 @@ UPP 有「固定」版本的參數（`UPP02120` 收件人姓名(固定)、`UPP02
 
 ```text
 backend/
-  wrangler.toml         luma-studio-api        main=src/main.py
+  wrangler.toml         luma-studio            main=src/main.py
   wrangler.admin.toml   luma-studio-admin-api  main=src/admin_main.py
   src/
     router.py         共用 entrypoint（OPTIONS / CSRF / migration / dispatch）
     main.py           公開入口
     admin_main.py     管理入口
-    auth_core.py      PKCE、cookie、Google token 交換、safe_return_url
     auth_admin.py     admin session + ALLOWED_ADMIN_EMAILS
     auth_customer.py  customer session + customers upsert
     shop.py           商品、購物車驗算、庫存
@@ -122,6 +123,8 @@ backend/
     mailer.py         Cloudflare Email
     shop_admin_api.py 管理端商品／訂單／會員
 ```
+
+原先規劃再抽一個 `auth_core.py` 給兩種登入共用。實作時沒有抽：目前只有一個使用者，抽出來的共用層會是憑空猜測的形狀。等 `auth_customer.py` 真的存在時再抽，那時才知道哪些東西真的共用。
 
 ### 前端：一個專案，兩個建置
 
@@ -568,6 +571,11 @@ PAYUNi 的 Form Post 既沒有 `x-luma-app: 1`，Origin 也不在允許清單，
 4. 確認無誤後，`main.py` 移除 admin 路由、加入 shop 路由，部署 api
 5. storefront 加 `/admin*` → 301，部署
 6. 更新 Google OAuth 的 redirect URI
+
+第 2 步和第 4 步之間，公開 Worker 上的 `main.legacy_admin_response` 把舊的
+`/api/admin/*` 改寫成新形狀後交給 `admin_main.dispatch`。用同一張路由表而不是
+另寫一份，兩者才不會對「誰可以進來」有不同意見。這段程式碼連同 `admin_main`
+的 import 一起，在第 4 步整塊刪除。
 
 CI 部署順序固定為 **admin-api → api → admin → storefront**，schema 永遠先於
 使用它的程式。

@@ -154,6 +154,22 @@ async def _apply_one(env, migration: dict):
         await env.DB.prepare(statement).run()
 
 
+async def applied_migration_names(env) -> list[str]:
+    """Report what the database says is applied, without changing anything.
+
+    The public Worker answers /api/health with this. It never applies a
+    migration: schema changes belong to the admin deployment, so a mismatch
+    here is a deploy-order problem to be seen rather than silently repaired
+    by whichever Worker happened to get the request.
+    """
+
+    try:
+        rows = await d1_rows(env.DB.prepare("SELECT name FROM schema_migrations ORDER BY name"))
+    except Exception:
+        return []
+    return [row["name"] for row in rows]
+
+
 async def apply_migrations(env) -> list[str]:
     """Bring the database up to date, at most once per isolate."""
 
