@@ -48,7 +48,7 @@ jobs:
         run: npm run build
         working-directory: frontend
         env:
-          VITE_API_BASE: ${{ vars.API_BASE_URL || 'https://luma-studio.infixman.workers.dev' }}
+          VITE_API_BASE: ${{ vars.API_BASE_URL || 'https://api.luma-studio.tw' }}
       - name: Deploy static assets
         run: npx wrangler deploy
         working-directory: frontend

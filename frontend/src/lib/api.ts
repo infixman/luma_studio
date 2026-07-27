@@ -1,6 +1,6 @@
 /** The single place that knows where the backend lives and how to talk to it. */
 
-export const API_BASE = (import.meta.env.VITE_API_BASE ?? 'https://luma-studio.infixman.workers.dev').replace(/\/+$/, '')
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? 'https://api.luma-studio.tw').replace(/\/+$/, '')
 
 /** Forces a CORS preflight, which is what stops cross-site forgery of writes. */
 const APP_HEADER = { 'x-luma-app': '1' }
