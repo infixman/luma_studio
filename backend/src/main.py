@@ -164,6 +164,48 @@ async def bio_link_avatar_response(ctx: Ctx, file_name: str):
     )
 
 
+async def shop_index_response(ctx: Ctx):
+    """Every product a customer is allowed to see, as cards."""
+
+    products = await shop.list_products(ctx.env, only_active=True)
+    cards = []
+    for product in products:
+        cards.append(
+            shop.public_summary(
+                product,
+                await shop.list_variants(ctx.env, product["id"]),
+                await shop.list_images(ctx.env, product["id"]),
+            )
+        )
+    return ctx.json({"products": cards})
+
+
+async def shop_product_response(ctx: Ctx, slug: str):
+    """One product page, addressed by the slug rather than the id.
+
+    Only `active` products resolve. A draft is reachable by anyone who guesses
+    its slug otherwise, and an archived one would keep selling after it was
+    meant to stop.
+    """
+
+    try:
+        slug = shop.validate_slug(unquote(slug))
+    except ValueError:
+        return ctx.error("Product not found", 404)
+
+    product = await shop.get_product_by_slug(ctx.env, slug)
+    if product is None or product["status"] != "active":
+        return ctx.error("Product not found", 404)
+
+    return ctx.json(
+        shop.public_detail(
+            product,
+            await shop.list_variants(ctx.env, product["id"]),
+            await shop.list_images(ctx.env, product["id"]),
+        )
+    )
+
+
 async def shop_image_response(ctx: Ctx, file_name: str):
     """Serve one product photo.
 
@@ -268,6 +310,16 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
             return ctx.too_many_requests()
         return await bio_link_avatar_response(ctx, path.removeprefix(f"{bio_link.AVATAR_URL_PREFIX}/"))
+
+    if path == "/api/products" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await shop_index_response(ctx)
+
+    if path.startswith("/api/products/") and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await shop_product_response(ctx, path.removeprefix("/api/products/"))
 
     if path.startswith(f"{shop.IMAGE_URL_PREFIX}/"):
         if method != "GET":

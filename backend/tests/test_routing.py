@@ -161,6 +161,64 @@ class TestRoutingTable:
         assert call(FakeRequest("/images/_bio-link/a.jpg")).status == 400
 
 
+class TestPublicCatalogue:
+    def test_the_index_lists_only_active_products(self, call):
+        database = FakeDatabase()
+        response = call(FakeRequest("/api/products"), make_env(database))
+        assert response.status == 200
+        listing = [s for s in database.statements if s.startswith("SELECT * FROM products")]
+        assert listing and "status = 'active'" in listing[0]
+
+    def test_a_draft_is_not_reachable_by_guessing_its_slug(self, call):
+        database = FakeDatabase(
+            {
+                "SELECT * FROM products WHERE slug": [
+                    {
+                        "id": "p1",
+                        "slug": "secret-tote",
+                        "title": "未上架",
+                        "description": "",
+                        "status": "draft",
+                        "position": 0,
+                        "created_at": 1,
+                        "updated_at": 1,
+                    }
+                ]
+            }
+        )
+        assert call(FakeRequest("/api/products/secret-tote"), make_env(database)).status == 404
+
+    def test_an_archived_product_stops_selling(self, call):
+        database = FakeDatabase(
+            {
+                "SELECT * FROM products WHERE slug": [
+                    {
+                        "id": "p1",
+                        "slug": "old-tote",
+                        "title": "已下架",
+                        "description": "",
+                        "status": "archived",
+                        "position": 0,
+                        "created_at": 1,
+                        "updated_at": 1,
+                    }
+                ]
+            }
+        )
+        assert call(FakeRequest("/api/products/old-tote"), make_env(database)).status == 404
+
+    def test_a_malformed_slug_is_refused_before_the_lookup(self, call):
+        database = FakeDatabase()
+        assert call(FakeRequest("/api/products/Not_A_Slug")).status == 404
+        call(FakeRequest("/api/products/Not_A_Slug"), make_env(database))
+        assert not any("FROM products WHERE slug" in s for s in database.statements)
+
+    def test_the_catalogue_is_limited_separately_from_the_bio_link(self, call):
+        env = make_env(SHOP_LIMITER=DenyingLimiter())
+        response = call(FakeRequest("/api/products", headers={"CF-Connecting-IP": "203.0.113.7"}), env)
+        assert response.status == 429
+
+
 class TestProductPhotos:
     def test_a_photo_no_product_references_is_not_served(self, call):
         """The key comes from the table, not from the URL.

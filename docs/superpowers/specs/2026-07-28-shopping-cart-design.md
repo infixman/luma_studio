@@ -586,11 +586,20 @@ PAYUNi 的 Form Post 既沒有 `x-luma-app: 1`，Origin 也不在允許清單，
 
 金流先不串，以假結帳驗證整條流程。
 
-1. **拆分**：四個部署、`router.py`、`auth_*` 拆分、migration 歸屬、路徑改名
-2. **商城**：`products` / `product_variants` / `product_images`、後台 CRUD、前台列表與商品頁
-3. **購物車**：localStorage、`/api/cart/validate`、購物車頁
-4. **假結帳**：顧客 Google 登入、結帳頁、建立訂單與扣庫存、以 stub 取代 PAYUNi
-5. 之後：PAYUNi spike → UPP 串接 → Notify → 通知信 → 會員管理 → 運費後台
+1. ~~**後端拆分**：兩個 Worker、`router.py`、migration 歸屬、路徑去前綴~~ 完成
+2. ~~**前端拆分**：兩個部署、`storefront` / `admin` / `shared`、舊 `/admin` 轉址~~ 完成
+3. ~~**商城後台**：`products` / `product_variants` / `product_images` 與後台 CRUD~~ 完成
+4. ~~**商城前台**：`/shop` 列表與 `/shop/{slug}` 商品頁~~ 完成
+5. **購物車**：localStorage、`/api/cart/validate`、購物車頁、運費
+6. **假結帳**：顧客 Google 登入、結帳頁、建立訂單與扣庫存、以 stub 取代 PAYUNi
+7. 之後：PAYUNi spike → UPP 串接 → Notify → 通知信 → 會員管理
+
+前台的兩條規則：**只有 `active` 解得開**（草稿被人猜中 slug 也是 404，已下架的
+停止販售，對顧客而言兩者是同一件事），以及**停用的規格完全不出現在 payload 裡**
+——不是灰掉，是不存在。
+
+新增資料表時要同步加進 `.github/workflows/backup.yml` 的 `TABLES`。缺表檢查是照
+同一個變數迭代的，漏掉的表不會被抓到，備份照常成功。
 
 ### 遷移順序（不停機）
 

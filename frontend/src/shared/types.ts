@@ -165,3 +165,30 @@ export interface ProductListing {
   variants: Record<string, ProductVariant[]>
   images: Record<string, ProductImage[]>
 }
+
+/** What an anonymous visitor is told about a variant. Stock is deliberately vague above the low-stock threshold. */
+export interface PublicVariant {
+  id: string
+  title: string
+  price: number
+  inStock: boolean
+  stockLeft: number | null
+}
+
+/** One card on the shop index. */
+export interface PublicProductCard {
+  slug: string
+  title: string
+  coverPath: string | null
+  priceFrom: number | null
+  priceTo: number | null
+  inStock: boolean
+}
+
+export interface PublicProductDetail {
+  slug: string
+  title: string
+  description: string
+  images: { path: string | null; alt: string }[]
+  variants: PublicVariant[]
+}

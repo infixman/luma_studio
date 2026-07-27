@@ -1,8 +1,11 @@
 import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
+import { ProductPage } from './pages/ProductPage'
+import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
+const PRODUCT_PATH = /^\/shop\/([^/]+)$/
 
 /**
  * Every page's stylesheet ends up in one bundle, so each page's rules are
@@ -24,6 +27,17 @@ export function App() {
   if (path === '/bio_link') {
     markBody('bio')
     return <BioLinkPage />
+  }
+
+  if (path === '/shop') {
+    markBody('shop')
+    return <ShopPage />
+  }
+
+  const product = PRODUCT_PATH.exec(path)
+  if (product) {
+    markBody('product')
+    return <ProductPage slug={decodeURIComponent(product[1]!)} />
   }
 
   const print = PRINT_PATH.exec(path)

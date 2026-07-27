@@ -46,6 +46,14 @@ name = "ASSET_LIMITER"
 namespace_id = "1004"
 simple = { limit = 240, period = 60 }
 
+# The catalogue. A product page is several D1 reads rather than one, and
+# someone browsing a shop clicks far more often than someone reading a bio
+# link page, so this sits between the two.
+[[ratelimits]]
+name = "SHOP_LIMITER"
+namespace_id = "1006"
+simple = { limit = 180, period = 60 }
+
 [vars]
 # ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
 # bootstrap payload for every cache miss.

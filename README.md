@@ -45,15 +45,20 @@ JSON 包含 `pincode`、`deadline`、`qrCodeSvg`、圖檔清單與快取資訊�
 
 ```text
 backend/
-  wrangler.toml       Worker 設定與 [vars]
+  wrangler.toml       公開 Worker 的設定與 [vars]
+  wrangler.admin.toml 管理 Worker 的同上
   src/
-    main.py           路由與 Worker 入口
+    router.py         兩個 Worker 共用的 entrypoint：預檢、CSRF、migration、分派
+    main.py           公開路由
+    admin_main.py     管理路由
     responses.py      Ctx、CORS 與回應建構
-    auth.py           Google OAuth 與 session
-    admin_api.py      /api/admin/* 端點
+    auth_admin.py     Google OAuth 與管理者 session
+    admin_api.py      圖檔與列印設定管理
     ibon.py           ibon 上傳流程、D1 快取、列印規格
     bio_link.py       Bio link 的設定、連結、匿名點擊記錄
     bio_link_api.py   管理端 /api/bio-link* 端點
+    shop.py           商品、規格、庫存與照片
+    shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
 frontend/
@@ -93,6 +98,8 @@ docs/superpowers/specs/  設計文件
 | GET | `/api/bio-link/calendar` | 課程表，獨立一次請求 |
 | GET | `/r/{id}` | 記一筆點擊後 302 到目標網址 |
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
+| GET | `/api/products` | 上架商品列表 |
+| GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
 | GET | `/shop-assets/{file}` | 商品照片 |
 | — | `/api/admin/*`、`/auth/*`、`/api/session` | **暫時的轉接層**，等管理前台搬家後移除 |
 
@@ -140,7 +147,7 @@ docs/superpowers/specs/  設計文件
 | 管理 | `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
 | 公開 | `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
 | 公開 | `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
-| 公開 | `/images/{folder}/{file}`、`/bio-link-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
+| 公開 | `/images/{folder}/{file}`、`/bio-link-assets/{file}`、`/shop-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
 
 分開宣告不只是整理：公開站台被打爆時，不會連帶吃掉管理者的登入額度。
 
@@ -171,10 +178,12 @@ Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `p
 
 **錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
 
-只匯出四張表：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`。刻意排除的是：
+匯出清單在 workflow 的 `TABLES`：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`、`products`、`product_variants`、`product_images`。刻意排除的是：
 
 - `admin_sessions`、`admin_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
 - `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
+
+**新增資料表時要同步加進 `TABLES`。** 缺表檢查是照同一個變數迭代的，所以漏掉的表不會被抓到——備份會照常成功，直到真的要用的那天才發現裡面沒有它。
 
 匯出後會檢查檔案大小與內容，空檔或缺表就讓工作失敗——否則會安靜地把無用的備份存起來，等到真的要用才發現。
 
@@ -451,9 +460,17 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 
 ## 商城
 
-設計文件在 [docs/superpowers/specs/2026-07-28-shopping-cart-design.md](docs/superpowers/specs/2026-07-28-shopping-cart-design.md)。目前完成的是**目錄與後台管理**；購物車、結帳與金流是後續階段。
+設計文件在 [docs/superpowers/specs/2026-07-28-shopping-cart-design.md](docs/superpowers/specs/2026-07-28-shopping-cart-design.md)。目前完成的是**目錄、後台管理與前台展示**；購物車、結帳與金流是後續階段。
 
-後台在 `admin.luma-studio.tw/products`：新增商品、編輯規格與庫存、上傳照片、切換上架狀態。
+| 位置 | 網址 |
+| --- | --- |
+| 商品列表 | `luma-studio.tw/shop` |
+| 單一商品 | `luma-studio.tw/shop/{slug}` |
+| 後台管理 | `admin.luma-studio.tw/products` |
+
+後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態。
+
+前台**只看得到 `active` 的商品**。草稿即使有人猜中 slug 也解不開，已下架的則會停止販售——兩者都回 404，因為對顧客而言那就是同一件事。
 
 ### 幾個刻意的決定
 

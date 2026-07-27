@@ -27,7 +27,14 @@ jobs:
       # admin_sessions and admin_oauth_states hold live credentials, and
       # ibon_print_cache expires within a day. Backing any of them up would
       # store secrets for no recovery value.
-      TABLES: "bio_link_settings bio_link_items bio_link_events folder_print_settings"
+      #
+      # Everything else the shop owns has to be listed here as it arrives. The
+      # completeness check below iterates this same variable, so a table left
+      # out is not caught — the backup simply succeeds without it, and nobody
+      # finds out until they need it.
+      TABLES: >-
+        bio_link_settings bio_link_items bio_link_events folder_print_settings
+        products product_variants product_images
     steps:
       - uses: actions/checkout@v4
 

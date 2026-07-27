@@ -1,0 +1,237 @@
+/* The customer-facing shop: index cards and one product page. */
+
+body.shop,
+body.product {
+  background: #faf7f2;
+  color: #2b2622;
+}
+
+.shop,
+.product {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.1rem 4rem;
+}
+
+.shop .empty,
+.product .empty {
+  padding: 2.5rem 0;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.shop-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.6rem;
+}
+
+.shop-head .brand img {
+  height: 44px;
+  width: auto;
+  display: block;
+}
+
+.shop-head h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.product .crumb {
+  margin: 0 0 1.2rem;
+  font-size: 0.9rem;
+}
+
+/* --- index --- */
+
+.product-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1.4rem 1.1rem;
+}
+
+.product-grid a {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+.product-grid .cover {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.05);
+}
+
+.product-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 240ms ease;
+}
+
+.product-grid a:hover img {
+  transform: scale(1.03);
+}
+
+/* Sold out stays browsable rather than hidden: it tells a returning customer
+   the thing exists, and a restock is worth waiting for. */
+.card.sold-out .cover img {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
+
+.ribbon {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 0.3rem;
+  text-align: center;
+  font-size: 0.8rem;
+  background: rgb(0 0 0 / 0.62);
+  color: #fff;
+}
+
+.product-grid h2 {
+  margin: 0.6rem 0 0.15rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.product-grid .price {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.8;
+}
+
+/* --- product page --- */
+
+.product .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.gallery .cover {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.05);
+}
+
+.gallery .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbs {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 0.5rem;
+}
+
+.thumbs button {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.thumbs button.current {
+  border-color: #2b2622;
+}
+
+.thumbs img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.info h1 {
+  margin: 0 0 1rem;
+  font-size: 1.6rem;
+  font-weight: 650;
+}
+
+.variants {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.variant {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgb(0 0 0 / 0.18);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.variant.current {
+  border-color: #2b2622;
+  box-shadow: inset 0 0 0 1px #2b2622;
+}
+
+.variant:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.variant .name {
+  flex: 1;
+}
+
+.variant .price {
+  font-variant-numeric: tabular-nums;
+}
+
+.variant .note {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+.variant .note.low {
+  background: rgb(160 90 0 / 0.14);
+  color: #a05a00;
+}
+
+.variant .note.out {
+  background: rgb(0 0 0 / 0.08);
+}
+
+.description p {
+  margin: 0 0 0.9rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .product .layout {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+  }
+}

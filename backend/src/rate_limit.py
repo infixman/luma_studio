@@ -5,7 +5,10 @@ Routes that cost real resources when hit repeatedly:
 * `/api/print/{id}` and `/ibon_print/{id}` read up to 15 MB from R2 and run a
   four-step upload to ibon whenever the 24-hour cache is cold.
 * The bio link page and its redirects read D1 on every visit.
-* `/images/` and `/bio-link-assets/` read an object from R2 per request.
+* `/images/`, `/bio-link-assets/` and `/shop-assets/` read an object from R2
+  per request.
+* The shop's catalogue routes read D1 on every visit, and a product page is
+  several rows rather than one.
 * `/auth/login`, on the admin deployment, writes a row to `admin_oauth_states`
   on every request with no authentication and nothing to deduplicate against.
   The D1 write quota is shared with the session table, so hammering it locks
@@ -28,6 +31,7 @@ LOGIN = "LOGIN_LIMITER"
 PRINT = "PRINT_LIMITER"
 PUBLIC = "PUBLIC_LIMITER"
 ASSET = "ASSET_LIMITER"
+SHOP = "SHOP_LIMITER"
 
 
 def client_key(request, scope: str) -> str:

@@ -183,6 +183,38 @@ def image_row(row: dict) -> dict:
     }
 
 
+def public_summary(product: dict, variants: list[dict], images: list[dict]) -> dict:
+    """One card on the shop's index.
+
+    A product whose variants are all disabled has no price and cannot be
+    bought, so it reports itself as unavailable rather than showing a blank
+    where the price goes.
+    """
+
+    sellable = [variant for variant in variants if variant["enabled"]]
+    prices = [variant["price"] for variant in sellable]
+    return {
+        "slug": product["slug"],
+        "title": product["title"],
+        "coverPath": images[0]["path"] if images else None,
+        "priceFrom": min(prices) if prices else None,
+        "priceTo": max(prices) if prices else None,
+        "inStock": any(variant["stock"] > 0 for variant in sellable),
+    }
+
+
+def public_detail(product: dict, variants: list[dict], images: list[dict]) -> dict:
+    """One product page. Disabled variants are withheld entirely."""
+
+    return {
+        "slug": product["slug"],
+        "title": product["title"],
+        "description": product["description"],
+        "images": [{"path": image["path"], "alt": image["alt"]} for image in images],
+        "variants": [public_variant(variant) for variant in variants if variant["enabled"]],
+    }
+
+
 def public_variant(variant: dict) -> dict:
     """What a customer is allowed to know about a variant.
 
