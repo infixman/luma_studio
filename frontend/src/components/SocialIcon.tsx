@@ -19,9 +19,12 @@ const glyphs: Record<string, JSX.Element> = {
       <path d="M14.5 8.5h-1.2a1.3 1.3 0 0 0-1.3 1.3V12m-1.6 0h3.3M12 12v5" />
     </>
   ),
+  // An @-like loop read as Threads. Not the official mark: reproducing a
+  // brand path exactly needs the vendor's own asset, not an approximation.
   threads: (
     <>
-      <path d="M15.6 8.4C14.7 7.2 13.4 6.6 12 6.6c-3 0-5 2.3-5 5.4s2 5.4 5 5.4c2.6 0 4.2-1.5 4.2-3.2 0-1.6-1.3-2.7-3.4-2.7-1.5 0-2.5.7-2.5 1.7 0 .8.6 1.3 1.5 1.3 1.2 0 1.9-.9 1.9-2.4" />
+      <path d="M16.3 7.9C15.2 6.4 13.7 5.6 12 5.6c-3.6 0-6 2.7-6 6.4s2.4 6.4 6 6.4c3.1 0 5-1.8 5-3.9 0-2-1.6-3.3-4.1-3.3-1.8 0-3 .9-3 2.1 0 1 .8 1.6 1.8 1.6 1.5 0 2.4-1.1 2.4-3" />
+      <path d="M12.1 8.7c1.4 0 2.4.5 3 1.5" />
     </>
   ),
   youtube: (
