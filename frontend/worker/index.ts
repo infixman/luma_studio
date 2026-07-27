@@ -22,7 +22,7 @@ const BIO_LINK_PATH = '/bio_link'
 const SITE_NAME = '苒光繪誌'
 const PROFILE_CACHE_SECONDS = 300
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -31,7 +31,7 @@ function escapeHtml(value: string): string {
 }
 
 /** Collapses the bio to one line: a preview card cannot show line breaks. */
-function oneLine(value: string, limit = 160): string {
+export function oneLine(value: string, limit = 160): string {
   const flat = value.replace(/\s+/g, ' ').trim()
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat
 }
@@ -51,7 +51,7 @@ async function loadBioLink(env: Env): Promise<BioLink | null> {
 }
 
 /** Avoids "… | 苒光繪誌 | 苒光繪誌" when the name already carries the studio. */
-function pageTitle(displayName: string): string {
+export function pageTitle(displayName: string): string {
   if (!displayName) return SITE_NAME
   return displayName.includes(SITE_NAME) ? displayName : `${displayName} | ${SITE_NAME}`
 }

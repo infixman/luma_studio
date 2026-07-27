@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "vitest run",
     "build": "tsc --noEmit && tsc -p worker/tsconfig.json && vite build",
     "preview": "vite preview",
     "deploy": "wrangler deploy"
@@ -17,6 +18,7 @@
     "@preact/preset-vite": "^2.10.6",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
+    "vitest": "^4.1.10",
     "wrangler": "^4.114.0"
   }
 }
