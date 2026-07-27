@@ -154,6 +154,12 @@ body.bio .social-icon {
   stroke-linejoin: round;
 }
 
+/* Official brand marks are solid shapes, not outlines. */
+body.bio .social-icon.filled {
+  fill: currentColor;
+  stroke: none;
+}
+
 body.bio .bio-footer {
   margin-top: 10px;
   text-align: center;

@@ -1,5 +1,13 @@
+# Applied to every asset response, and inherited by the SPA shell the Worker
+# builds from index.html.
+#
+# Two deliberate loosenings:
+#   'unsafe-inline' in style-src — the progress bar and the statistics bars
+#     set their width through a style attribute, which this covers.
+#   static.cloudflareinsights.com — Cloudflare injects its analytics beacon
+#     into pages on this zone; without it the console fills with violations.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://api.luma-studio.tw data:; connect-src 'self' https://api.luma-studio.tw https://static.cloudflareinsights.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'

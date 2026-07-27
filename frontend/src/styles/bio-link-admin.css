@@ -202,6 +202,11 @@ body.admin .bio-item-platform .social-icon {
   stroke-linejoin: round;
 }
 
+body.admin .bio-item-platform .social-icon.filled {
+  fill: currentColor;
+  stroke: none;
+}
+
 body.admin .bio-item-fields {
   display: grid;
   flex: 1 1 240px;
