@@ -27,9 +27,10 @@ function Event({ event }: { event: BioLinkEvent }) {
           >
             加入 Google 行事曆
           </a>
-          {/* Everything that is not Google: iPhone, Outlook, and the rest. */}
+          {/* Everything that is not Google: iPhone, Outlook, and the rest.
+              Named for what it does, not for the file format it uses. */}
           <a class="bio-event-action" href={eventFileUrl(event)}>
-            下載 .ics
+            加入手機行事曆
           </a>
         </div>
       </div>

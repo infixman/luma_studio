@@ -121,7 +121,10 @@ async def bio_link_event_response(ctx: Ctx, file_name: str):
         ics.to_ics(event).encode("utf-8"),
         {
             "content-type": "text/calendar; charset=utf-8",
-            "content-disposition": 'attachment; filename="event.ics"',
+            # inline, not attachment: `attachment` tells the phone to save a
+            # file, so iOS shows a download instead of opening the calendar's
+            # add-event sheet — which is the whole point of the button.
+            "content-disposition": 'inline; filename="event.ics"',
             "cache-control": "public, max-age=900",
         },
     )
