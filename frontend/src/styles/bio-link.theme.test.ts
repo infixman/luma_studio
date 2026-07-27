@@ -11,6 +11,8 @@ import { describe, expect, it } from 'vitest'
  * itself rather than a copy of the values, so a palette cannot drift past the
  * check by being edited in one place only.
  */
+// Read from disk rather than imported: under vitest a `?raw` import of a
+// stylesheet still goes through the CSS pipeline and arrives empty.
 const css = readFileSync(fileURLToPath(new URL('./bio-link.css', import.meta.url)), 'utf8')
 
 type Palette = Record<string, string>
