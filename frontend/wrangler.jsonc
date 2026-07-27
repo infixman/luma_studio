@@ -3,11 +3,16 @@
   "name": "luma-studio-web",
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-21",
-  // The Worker serves the SPA shell for unknown paths and injects link-preview
-  // tags into /bio_link; the JSON API lives in the separate `luma-studio` Worker.
+  // The Worker owns routing: it serves the SPA shell for unknown paths and
+  // injects link-preview tags into /bio_link. Both handling modes are off so
+  // the asset router never rewrites or redirects a path behind its back —
+  // with the defaults, fetching /index.html for the shell answers with a
+  // redirect to /, which sent every SPA route back to the home page.
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none"
   },
   "vars": {
     "API_BASE": "https://api.luma-studio.tw"

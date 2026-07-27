@@ -50,8 +50,14 @@ async function loadBioLink(env: Env): Promise<BioLink | null> {
   }
 }
 
+/** Avoids "… | 苒光繪誌 | 苒光繪誌" when the name already carries the studio. */
+function pageTitle(displayName: string): string {
+  if (!displayName) return SITE_NAME
+  return displayName.includes(SITE_NAME) ? displayName : `${displayName} | ${SITE_NAME}`
+}
+
 function previewTags(profile: BioLink, origin: string, apiBase: string): string {
-  const title = profile.displayName ? `${profile.displayName} | ${SITE_NAME}` : SITE_NAME
+  const title = pageTitle(profile.displayName)
   const description = oneLine(profile.bio) || `${SITE_NAME}的連結彙整`
   const image = profile.avatarPath ? `${apiBase}${profile.avatarPath}` : `${origin}/assets/luma-studio-logo.png`
   const url = `${origin}${BIO_LINK_PATH}`
@@ -87,7 +93,9 @@ export default {
     if (asset.status !== 404) return asset
 
     const shell = await env.ASSETS.fetch(new Request(new URL('/index.html', url), request))
-    if (!shell.ok) return shell
+    // Anything but a served document here means the build is broken; passing
+    // the response through would send the visitor somewhere unexpected.
+    if (shell.status !== 200) return new Response('Not found', { status: 404 })
 
     const path = url.pathname.replace(/\/+$/, '') || '/'
     if (path !== BIO_LINK_PATH) return shellResponse(await shell.text(), shell)
@@ -97,7 +105,10 @@ export default {
     if (!profile) return shellResponse(html, shell)
 
     const apiBase = env.API_BASE.replace(/\/+$/, '')
-    const injected = html.replace('</head>', `  ${previewTags(profile, url.origin, apiBase)}\n  </head>`)
+    // Some previewers ignore og:title and read <title>, so set both.
+    const injected = html
+      .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(pageTitle(profile.displayName))}</title>`)
+      .replace('</head>', `  ${previewTags(profile, url.origin, apiBase)}\n  </head>`)
     return shellResponse(injected, shell)
   },
 }
