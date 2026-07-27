@@ -1,6 +1,7 @@
 import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
+import { CartPage } from './pages/CartPage'
 import { ProductPage } from './pages/ProductPage'
 import { ShopPage } from './pages/ShopPage'
 
@@ -32,6 +33,11 @@ export function App() {
   if (path === '/shop') {
     markBody('shop')
     return <ShopPage />
+  }
+
+  if (path === '/cart') {
+    markBody('cart')
+    return <CartPage />
   }
 
   const product = PRODUCT_PATH.exec(path)

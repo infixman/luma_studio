@@ -6,6 +6,7 @@ the way in: these rows end up in customer-facing pages and, before long, in
 the amount charged to a card.
 """
 
+import shipping
 import shop
 from responses import Ctx
 
@@ -49,6 +50,32 @@ def _variant_fields(body: dict) -> dict:
 
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
+
+    if path == "/api/shipping-methods" and method == "GET":
+        return ctx.json({"methods": await shipping.list_methods(env)})
+
+    if path == "/api/shipping-methods" and method == "PUT":
+        try:
+            raw = (await _read_json(ctx)).get("methods")
+            if not isinstance(raw, list):
+                raise ValueError("Expected an array of delivery methods")
+            updates = [
+                {
+                    "method": shipping.validate_method(str(entry.get("method") or "")),
+                    "label": shop.validate_text(str(entry.get("label") or ""), shipping.MAX_LABEL, "Label"),
+                    "enabled": bool(entry.get("enabled", True)),
+                    "fee": shipping.validate_fee(entry.get("fee")),
+                    "free_threshold": shipping.validate_free_threshold(entry.get("freeThreshold")),
+                }
+                for entry in raw
+            ]
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid delivery settings", 400)
+        # Validate all of them before writing any, so a rejected fee cannot
+        # leave the shop half-configured.
+        for update in updates:
+            await shipping.save_method(env, update.pop("method"), **update)
+        return ctx.json({"methods": await shipping.list_methods(env)})
 
     if path == "/api/products" and method == "GET":
         products = await shop.list_products(env)

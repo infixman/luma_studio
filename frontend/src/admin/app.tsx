@@ -2,6 +2,7 @@ import { AdminPage } from './pages/AdminPage'
 import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
 import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
+import { ShippingPage } from './pages/ShippingPage'
 
 const PRODUCT_PATH = /^\/products\/([^/]+)$/
 
@@ -19,6 +20,7 @@ export function App() {
 
   if (path === '/bio-link') return <BioLinkAdminPage />
   if (path === '/products') return <ProductsPage />
+  if (path === '/shipping') return <ShippingPage />
 
   const product = PRODUCT_PATH.exec(path)
   if (product) return <ProductEditPage id={decodeURIComponent(product[1]!)} />

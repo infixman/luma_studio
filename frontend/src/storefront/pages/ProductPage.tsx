@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { CartLink } from '../components/CartLink'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { PublicProductDetail, PublicVariant } from '../../shared/types'
+import * as cart from '../lib/cart'
 import '../styles/shop.css'
 
 /** What the visitor is told about a variant's supply, if anything. */
@@ -17,6 +19,7 @@ export function ProductPage({ slug }: { slug: string }) {
   const [failed, setFailed] = useState(false)
   const [chosen, setChosen] = useState<string | null>(null)
   const [shown, setShown] = useState(0)
+  const [added, setAdded] = useState<string | null>(null)
 
   useEffect(() => {
     api<PublicProductDetail>(`/api/products/${encodeURIComponent(slug)}`)
@@ -47,6 +50,15 @@ export function ProductPage({ slug }: { slug: string }) {
   if (failed) return <main class="product"><p class="empty">商品載入失敗，請稍後再試一次。</p></main>
   if (product === null) return <main class="product"><p class="empty">載入中…</p></main>
 
+  function addToCart() {
+    if (!chosen) return
+    if (!cart.add(chosen, 1)) {
+      setAdded(`購物車最多放 ${cart.MAX_LINES} 種商品，先結帳或移除一些再加。`)
+      return
+    }
+    setAdded('已加入購物車。')
+  }
+
   const images = product.images.filter((image) => image.path)
   const cover = images[Math.min(shown, images.length - 1)]
 
@@ -54,6 +66,7 @@ export function ProductPage({ slug }: { slug: string }) {
     <main class="product">
       <p class="crumb">
         <a href="/shop">← 商品列表</a>
+        <CartLink />
       </p>
 
       <div class="layout">
@@ -103,6 +116,19 @@ export function ProductPage({ slug }: { slug: string }) {
                 )
               })}
             </ul>
+          )}
+
+          {product.variants.length > 0 && (
+            <div class="buy">
+              <button type="button" class="add" disabled={!chosen} onClick={addToCart}>
+                {chosen ? '加入購物車' : '請先選擇規格'}
+              </button>
+              {added && (
+                <p class="added" aria-live="polite">
+                  {added} <a href="/cart">查看購物車</a>
+                </p>
+              )}
+            </div>
           )}
 
           {product.description && (

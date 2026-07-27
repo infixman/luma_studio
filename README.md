@@ -100,6 +100,8 @@ docs/superpowers/specs/  設計文件
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
 | GET | `/api/products` | 上架商品列表 |
 | GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
+| POST | `/api/cart/validate` | 依購物車內容重算價格、庫存與運費 |
+| GET | `/api/shipping-methods` | 啟用中的配送方式與運費 |
 | GET | `/shop-assets/{file}` | 商品照片 |
 | — | `/api/admin/*`、`/auth/*`、`/api/session` | **暫時的轉接層**，等管理前台搬家後移除 |
 
@@ -124,6 +126,7 @@ docs/superpowers/specs/  設計文件
 | POST | `/api/products/{id}/images` | 上傳照片（multipart） |
 | PUT / DELETE | `/api/variants/{id}` | 規格 |
 | DELETE | `/api/images/{id}` | 照片 |
+| GET / PUT | `/api/shipping-methods` | 運費與免運門檻 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -178,7 +181,7 @@ Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `p
 
 **錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
 
-匯出清單在 workflow 的 `TABLES`：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`、`products`、`product_variants`、`product_images`。刻意排除的是：
+匯出清單在 workflow 的 `TABLES`：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`、`products`、`product_variants`、`product_images`、`shipping_methods`。刻意排除的是：
 
 - `admin_sessions`、`admin_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
 - `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
@@ -466,11 +469,27 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 | --- | --- |
 | 商品列表 | `luma-studio.tw/shop` |
 | 單一商品 | `luma-studio.tw/shop/{slug}` |
-| 後台管理 | `admin.luma-studio.tw/products` |
+| 購物車 | `luma-studio.tw/cart` |
+| 商品管理 | `admin.luma-studio.tw/products` |
+| 運費設定 | `admin.luma-studio.tw/shipping` |
 
-後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態。
+後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態，以及設定每種配送方式的運費與免運門檻。
 
 前台**只看得到 `active` 的商品**。草稿即使有人猜中 slug 也解不開，已下架的則會停止販售——兩者都回 404，因為對顧客而言那就是同一件事。
+
+### 購物車
+
+購物車只存在瀏覽器的 localStorage，內容只有 `variantId` 和數量。**價格、名稱與是否還買得到，每次都由伺服器從資料庫重算**（`POST /api/cart/validate`）。放了一週的分頁不會顯示過期價格，手動改 localStorage 也只換得到一個被拒絕的請求。
+
+重算的結果分三種，都會回報給顧客而不是默默處理掉：
+
+| 情況 | 回報 |
+| --- | --- |
+| 商品下架、規格停用、資料列消失 | `unavailable`，整行移除 |
+| 庫存為 0 | `out_of_stock`，整行移除 |
+| 庫存不足以滿足數量 | `reduced`，數量下修並附上實際可買數 |
+
+免運門檻是**每種配送方式各自設定**。宅配與超商的成本差很多，共用一個門檻會逼你把它訂在最貴的那個。門檻是「達到就免運」而不是「超過才免運」——宣傳滿 1,000 免運卻對剛好 1,000 元的訂單收費，那不是規則，是客訴。
 
 ### 幾個刻意的決定
 

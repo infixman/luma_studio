@@ -192,3 +192,48 @@ export interface PublicProductDetail {
   images: { path: string | null; alt: string }[]
   variants: PublicVariant[]
 }
+
+/** One cart line as the server rebuilt it. Prices never come from the browser. */
+export interface CartLine {
+  variantId: string
+  productSlug: string
+  productTitle: string
+  variantTitle: string
+  imagePath: string | null
+  unitPrice: number
+  quantity: number
+  lineTotal: number
+  stockLeft: number | null
+}
+
+/** Why a line the browser remembered did not survive repricing. */
+export interface CartProblem {
+  variantId: string
+  title?: string
+  reason: 'unavailable' | 'out_of_stock' | 'reduced'
+  available?: number
+}
+
+export interface ShippingQuote {
+  method: string
+  label: string
+  fee: number
+  freeThreshold: number | null
+}
+
+export interface CartQuote {
+  lines: CartLine[]
+  problems: CartProblem[]
+  subtotal: number
+  shipping: ShippingQuote[]
+}
+
+/** The editable shape the back office uses. */
+export interface ShippingMethod {
+  method: string
+  label: string
+  enabled: boolean
+  fee: number
+  freeThreshold: number | null
+  position: number
+}

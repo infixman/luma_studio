@@ -168,6 +168,29 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images (product_id, position)",
         ],
     },
+    {
+        # Delivery options and what they cost. One row per method, seeded so
+        # the shop has something coherent before anyone opens the settings.
+        "name": "0008_create_shipping_methods",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS shipping_methods (
+                 method TEXT PRIMARY KEY NOT NULL,
+                 label TEXT NOT NULL,
+                 enabled INTEGER NOT NULL DEFAULT 1,
+                 fee INTEGER NOT NULL,
+                 free_threshold INTEGER,
+                 position INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            # INSERT OR IGNORE, so re-running this never overwrites the fees
+            # the owner has since set. `free_threshold` starts NULL: a free
+            # shipping offer is a decision, not a default.
+            """INSERT OR IGNORE INTO shipping_methods (method, label, enabled, fee, free_threshold, position, updated_at)
+                 VALUES ('cvs_c2c', '7-11 店到店', 1, 60, NULL, 0, 0)""",
+            """INSERT OR IGNORE INTO shipping_methods (method, label, enabled, fee, free_threshold, position, updated_at)
+                 VALUES ('home', '宅配到府', 1, 120, NULL, 1, 0)""",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

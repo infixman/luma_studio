@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { CartLink } from '../components/CartLink'
 import { api, apiUrl } from '../../shared/api'
 import type { PublicProductCard } from '../../shared/types'
 import '../styles/shop.css'
@@ -27,6 +28,7 @@ export function ShopPage() {
           <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
         </a>
         <h1>商品</h1>
+        <CartLink />
       </header>
 
       {failed ? (

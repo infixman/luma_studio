@@ -34,7 +34,7 @@ jobs:
       # finds out until they need it.
       TABLES: >-
         bio_link_settings bio_link_items bio_link_events folder_print_settings
-        products product_variants product_images
+        products product_variants product_images shipping_methods
     steps:
       - uses: actions/checkout@v4
 

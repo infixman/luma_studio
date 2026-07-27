@@ -225,3 +225,42 @@
     justify-content: flex-end;
   }
 }
+
+/* --- delivery settings --- */
+
+.shipping-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 40rem;
+}
+
+.shipping-form .method {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 8px;
+  padding: 0.8rem 1rem 1rem;
+}
+
+/* A method that is switched off keeps its numbers visible: they are what the
+   owner comes back to when turning it on again. */
+.shipping-form .method.off {
+  opacity: 0.6;
+}
+
+.shipping-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.shipping-form .toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.shipping-form input[type='number'] {
+  width: 8rem;
+}

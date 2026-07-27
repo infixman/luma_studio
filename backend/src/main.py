@@ -19,8 +19,10 @@ from workers import WorkerEntrypoint
 
 import admin_main
 import bio_link
+import cart
 import rate_limit
 import router
+import shipping
 import shop
 from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, validate_file_name, validate_folder
 from ibon import resolve_print_result
@@ -206,6 +208,29 @@ async def shop_product_response(ctx: Ctx, slug: str):
     )
 
 
+async def cart_validate_response(ctx: Ctx):
+    """Recompute a browser's cart from the database and price it.
+
+    Everything the client sent is treated as a request rather than a fact.
+    The delivery quotes come back with it so the cart page can show a total
+    without a second round trip.
+    """
+
+    try:
+        body = await ctx.request.json()
+        if not isinstance(body, dict):
+            raise ValueError("Expected a JSON object")
+        lines = cart.parse_lines(body.get("lines"))
+    except cart.CartError as error:
+        return ctx.error(str(error), 400)
+    except (ValueError, AttributeError):
+        return ctx.error("Invalid cart", 400)
+
+    priced = await cart.price_lines(ctx.env, lines)
+    methods = await shipping.list_methods(ctx.env, only_enabled=True)
+    return ctx.json({**priced, "shipping": shipping.quote(methods, priced["subtotal"])})
+
+
 async def shop_image_response(ctx: Ctx, file_name: str):
     """Serve one product photo.
 
@@ -310,6 +335,16 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
             return ctx.too_many_requests()
         return await bio_link_avatar_response(ctx, path.removeprefix(f"{bio_link.AVATAR_URL_PREFIX}/"))
+
+    if path == "/api/cart/validate" and method == "POST":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await cart_validate_response(ctx)
+
+    if path == "/api/shipping-methods" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return ctx.json({"methods": await shipping.list_methods(ctx.env, only_enabled=True)})
 
     if path == "/api/products" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

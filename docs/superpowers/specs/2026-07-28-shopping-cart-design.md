@@ -590,9 +590,21 @@ PAYUNi 的 Form Post 既沒有 `x-luma-app: 1`，Origin 也不在允許清單，
 2. ~~**前端拆分**：兩個部署、`storefront` / `admin` / `shared`、舊 `/admin` 轉址~~ 完成
 3. ~~**商城後台**：`products` / `product_variants` / `product_images` 與後台 CRUD~~ 完成
 4. ~~**商城前台**：`/shop` 列表與 `/shop/{slug}` 商品頁~~ 完成
-5. **購物車**：localStorage、`/api/cart/validate`、購物車頁、運費
+5. ~~**購物車**：localStorage、`/api/cart/validate`、購物車頁、運費設定~~ 完成
 6. **假結帳**：顧客 Google 登入、結帳頁、建立訂單與扣庫存、以 stub 取代 PAYUNi
 7. 之後：PAYUNi spike → UPP 串接 → Notify → 通知信 → 會員管理
+
+購物車實作時定下的兩條：
+
+- **重算的三種結果都要回報給顧客**，不能默默處理。下架／停用／消失一律是
+  `unavailable`（對顧客而言是同一件事），庫存為 0 是 `out_of_stock`，數量不足是
+  `reduced` 並附上實際可買數。被移除的行也要從 localStorage 刪掉，否則同一則警告
+  每次載入都會再出現一次。
+- **免運門檻是「達到就免運」**。宣傳滿 1,000 免運卻對剛好 1,000 元的訂單收費，
+  那不是規則，是客訴。
+
+`cart.price_lines` 之後會被結帳直接沿用，這樣顧客看到的總額和實際被收的金額不會
+由兩段可能不一致的程式各算一次。
 
 前台的兩條規則：**只有 `active` 解得開**（草稿被人猜中 slug 也是 404，已下架的
 停止販售，對顧客而言兩者是同一件事），以及**停用的規格完全不出現在 payload 裡**
