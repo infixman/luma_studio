@@ -62,7 +62,21 @@ BOT_MARKERS = (
 # Without a configured salt, a per-isolate random value keeps visitor hashes
 # unlinkable to an IP. Dedupe then only works within one isolate, which is a
 # fair trade against shipping a known salt in the source.
-_FALLBACK_SALT = secure_bytes(32).hex()
+#
+# Generated on first use, never at import: the Workers runtime forbids
+# random generation (and any I/O) in global scope, and a module-level call
+# stops the whole Worker from loading.
+_fallback_salt: str | None = None
+
+
+def _visitor_salt(env) -> str:
+    global _fallback_salt
+    configured = env_var(env, "VISITOR_SALT")
+    if configured:
+        return configured
+    if _fallback_salt is None:
+        _fallback_salt = secure_bytes(32).hex()
+    return _fallback_salt
 
 
 def validate_item_id(item_id: str) -> str:
@@ -283,7 +297,7 @@ def visitor_hash(env, request, day: str) -> str:
 
     ip = request.headers.get("CF-Connecting-IP") or ""
     agent = request.headers.get("User-Agent") or ""
-    salt = env_var(env, "VISITOR_SALT") or _FALLBACK_SALT
+    salt = _visitor_salt(env)
     return hashlib.sha256(f"{ip}|{agent}|{day}|{salt}".encode("utf-8")).hexdigest()[:32]
 
 
