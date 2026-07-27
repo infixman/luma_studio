@@ -27,6 +27,14 @@ async def handle(ctx: Ctx):
     if path == "/api/admin/bio-link" and method == "GET":
         return ctx.json(await _state(ctx))
 
+    if path == "/api/admin/bio-link/stats" and method == "GET":
+        raw_days = (ctx.query.get("days") or [""])[0]
+        try:
+            days = int(raw_days) if raw_days else bio_link.DEFAULT_STATS_DAYS
+        except ValueError:
+            return ctx.error("days must be a number", 400)
+        return ctx.json(await bio_link.get_stats(env, days))
+
     if path == "/api/admin/bio-link" and method == "PUT":
         try:
             body = await _read_json(ctx)

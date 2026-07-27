@@ -1,5 +1,11 @@
 # 前後端分離設計（2026-07-27）
 
+> **這份文件描述的是分離當下的狀態，之後沒有隨功能更新。** 後續加入的 bio
+> link 頁改變了幾件事：前端從純靜態資產變成 Worker 加資產（為了替 `/bio_link`
+> 注入分享預覽標籤）、後端多了 `bio_link.py` 與 `bio_link_api.py`、路由表多了
+> `/api/bio-link`、`/r/{id}`、`/bio-link-assets/{file}`，前端也有了站內導覽。
+> 現況以 [README](../../../README.md) 為準。
+
 把目前單一 Cloudflare Python Worker（HTML 寫在 Python 字串裡）拆成兩個獨立部署：純 JSON API 後端，以及 Vite 建置的靜態前端。範圍限於現有功能——admin 管理介面與公開 ibon 取件頁。Link tree 功能不在本次範圍。
 
 ## 目標

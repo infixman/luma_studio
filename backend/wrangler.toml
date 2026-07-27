@@ -25,11 +25,11 @@ IBON_UPLOAD_API_BASE_URL = "https://www.ibon.com.tw/qwsapi2/api"
 IBON_CLIENT_VERSION = "4.2.4"
 IBON_GUEST_EMAIL = "guest@qware.com.tw"
 
-# Browser origins allowed to send credentialed requests to this API. The admin
-# session cookie is SameSite=None, so this list is the CSRF defence and the
-# OAuth redirect allowlist. Never add a localhost origin here: any process on
-# that port would gain credentialed write access to production.
-# For local work, override it in backend/.dev.vars instead.
-ALLOWED_ORIGINS = "https://luma-studio.tw,https://www.luma-studio.tw,https://luma-studio-web.infixman.workers.dev"
+# Browser origins allowed to send credentialed requests to this API. The
+# session cookie is SameSite=Lax and these origins share a site with the API,
+# so this list is the CSRF defence and the OAuth redirect allowlist. Never add
+# a localhost origin here: any process on that port would gain credentialed
+# write access to production. For local work, use backend/.dev.vars instead.
+ALLOWED_ORIGINS = "https://luma-studio.tw,https://www.luma-studio.tw"
 # Where /admin and the already-shared /ibon_print/{id} links send browsers.
 FRONTEND_ORIGIN = "https://luma-studio.tw"

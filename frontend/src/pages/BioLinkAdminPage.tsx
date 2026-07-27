@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminNav } from '../components/AdminNav'
+import { BioLinkStatsPanel } from '../components/BioLinkStats'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../components/SocialIcon'
 import { StatusBar, useStatus } from '../components/StatusBar'
@@ -143,14 +144,13 @@ export function BioLinkAdminPage() {
   }
 
   /** Moves within one kind, then sends every id so nothing half-applies. */
-  const moveItem = (kind: BioLinkKind, index: number, delta: number) => {
+  const reorderTo = (kind: BioLinkKind, from: number, to: number) => {
     if (!state) return
     const group = state.items.filter((item) => item.kind === kind)
-    const target = index + delta
-    if (target < 0 || target >= group.length) return
+    if (from === to || to < 0 || to >= group.length) return
     const reordered = [...group]
-    const [moved] = reordered.splice(index, 1)
-    reordered.splice(target, 0, moved!)
+    const [moved] = reordered.splice(from, 1)
+    reordered.splice(to, 0, moved!)
     const others = state.items.filter((item) => item.kind !== kind)
     void mutate(
       () =>
@@ -159,6 +159,22 @@ export function BioLinkAdminPage() {
         }),
       '順序已更新。',
     )
+  }
+
+  const moveItem = (kind: BioLinkKind, index: number, delta: number) => reorderTo(kind, index, index + delta)
+
+  /**
+   * Dragging is the faster gesture, but the arrow buttons stay: dragging is
+   * unusable with a keyboard and awkward on a phone.
+   */
+  const dragged = useRef<{ kind: BioLinkKind; index: number } | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+
+  const onDrop = (kind: BioLinkKind, index: number) => {
+    const source = dragged.current
+    dragged.current = null
+    setDropTarget(null)
+    if (source && source.kind === kind) reorderTo(kind, source.index, index)
   }
 
   const logout = async () => {
@@ -221,7 +237,37 @@ export function BioLinkAdminPage() {
         ) : (
           <ul class="bio-items">
             {group.map((item, index) => (
-              <li key={item.id} class={item.enabled ? 'bio-item' : 'bio-item disabled'}>
+              <li
+                key={item.id}
+                class={[
+                  'bio-item',
+                  item.enabled ? '' : 'disabled',
+                  dropTarget === item.id ? 'drop-target' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                draggable
+                onDragStart={() => {
+                  dragged.current = { kind, index }
+                }}
+                onDragOver={(event) => {
+                  if (dragged.current?.kind !== kind) return
+                  event.preventDefault()
+                  setDropTarget(item.id)
+                }}
+                onDragLeave={() => setDropTarget((current) => (current === item.id ? null : current))}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  onDrop(kind, index)
+                }}
+                onDragEnd={() => {
+                  dragged.current = null
+                  setDropTarget(null)
+                }}
+              >
+                <span class="bio-item-grip" aria-hidden="true" title="拖曳排序">
+                  ⠿
+                </span>
                 {kind === 'social' && (
                   <span class="bio-item-platform" title={platformLabel(item.platform)}>
                     <SocialIcon platform={item.platform} />
@@ -366,6 +412,10 @@ export function BioLinkAdminPage() {
             </p>
             {renderGroup('link')}
             {renderGroup('social')}
+          </div>
+
+          <div class="card">
+            <BioLinkStatsPanel onError={showError} />
           </div>
         </section>
       )}

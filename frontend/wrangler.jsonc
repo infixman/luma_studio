@@ -1,11 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "luma-studio-web",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-07-21",
-  // Static-only deployment: the JSON API lives in the separate `luma-studio` Worker.
+  // The Worker serves the SPA shell for unknown paths and injects link-preview
+  // tags into /bio_link; the JSON API lives in the separate `luma-studio` Worker.
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "API_BASE": "https://api.luma-studio.tw"
   },
   "observability": {
     "enabled": true

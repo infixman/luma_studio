@@ -49,6 +49,24 @@ export interface BioLinkState {
   items: BioLinkItem[]
 }
 
+export interface LabelledTotal {
+  label: string
+  total: number
+}
+
+/** Distinct visitors, not raw hits: events are deduped per visitor per day. */
+export interface BioLinkStats {
+  days: number
+  since: string
+  views: number
+  clicks: number
+  daily: { day: string; views: number; clicks: number }[]
+  items: { id: string; title: string; total: number }[]
+  countries: LabelledTotal[]
+  referrers: LabelledTotal[]
+  devices: LabelledTotal[]
+}
+
 /** The trimmed shape anonymous visitors receive. */
 export interface PublicBioLink {
   displayName: string

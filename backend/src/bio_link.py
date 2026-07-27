@@ -266,6 +266,71 @@ async def reorder_items(env, ordered_ids: list[str]):
         ).run()
 
 
+MAX_STATS_DAYS = 90
+DEFAULT_STATS_DAYS = 30
+
+
+def _window_start(days: int) -> str:
+    from datetime import datetime, timedelta, timezone
+
+    taipei_now = datetime.now(timezone.utc) + timedelta(hours=8)
+    return (taipei_now - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+
+async def _grouped(env, column: str, since: str, limit: int = 6) -> list[dict]:
+    rows = await d1_rows(
+        env.DB.prepare(
+            f"SELECT {column} AS label, COUNT(*) AS total FROM bio_link_events"
+            f" WHERE day >= ?1 AND {column} IS NOT NULL AND {column} != ''"
+            f" GROUP BY {column} ORDER BY total DESC LIMIT ?2"
+        ).bind(since, limit)
+    )
+    return [{"label": row["label"], "total": int(row["total"])} for row in rows]
+
+
+async def get_stats(env, days: int) -> dict:
+    """Counts over the last `days` Taipei days.
+
+    Every figure is distinct visitors, not raw hits: `record_event` keeps one
+    row per visitor, per day, per target, so a refresh cannot inflate them.
+    """
+
+    days = max(1, min(days, MAX_STATS_DAYS))
+    since = _window_start(days)
+
+    daily_rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT day, event_type, COUNT(*) AS total FROM bio_link_events"
+            " WHERE day >= ?1 GROUP BY day, event_type ORDER BY day"
+        ).bind(since)
+    )
+    daily: dict[str, dict[str, int]] = {}
+    for row in daily_rows:
+        entry = daily.setdefault(row["day"], {"day": row["day"], "views": 0, "clicks": 0})
+        entry["views" if row["event_type"] == "view" else "clicks"] = int(row["total"])
+
+    item_rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT e.item_id AS id, COALESCE(i.title, '（已刪除）') AS title, COUNT(*) AS total"
+            " FROM bio_link_events e LEFT JOIN bio_link_items i ON i.id = e.item_id"
+            " WHERE e.day >= ?1 AND e.event_type = 'click' AND e.item_id IS NOT NULL"
+            " GROUP BY e.item_id, i.title ORDER BY total DESC"
+        ).bind(since)
+    )
+
+    return {
+        "days": days,
+        "since": since,
+        "views": sum(entry["views"] for entry in daily.values()),
+        "clicks": sum(entry["clicks"] for entry in daily.values()),
+        "daily": sorted(daily.values(), key=lambda entry: entry["day"]),
+        "items": [{"id": row["id"], "title": row["title"], "total": int(row["total"])} for row in item_rows],
+        "countries": await _grouped(env, "country", since),
+        "referrers": await _grouped(env, "referrer_host", since),
+        "devices": await _grouped(env, "device", since, limit=3),
+    }
+
+
 def device_from_user_agent(user_agent: str) -> str:
     agent = user_agent.lower()
     if "ipad" in agent or "tablet" in agent:

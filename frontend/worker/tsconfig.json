@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    // Workers types redefine Request/Response, so this stays out of the
+    // browser tsconfig rather than fighting the DOM lib over the same names.
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["."]
+}
