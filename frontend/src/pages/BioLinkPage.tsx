@@ -3,11 +3,12 @@ import { useEffect, useState } from 'preact/hooks'
 import { BioLinkCalendar } from '../components/BioLinkCalendar'
 import { SocialIcon, platformLabel } from '../components/SocialIcon'
 import { api, apiUrl, bioLinkRedirectUrl } from '../lib/api'
-import type { PublicBioLink } from '../lib/types'
+import type { BioLinkCalendarData, PublicBioLink } from '../lib/types'
 import '../styles/bio-link.css'
 
 export function BioLinkPage() {
   const [page, setPage] = useState<PublicBioLink | null>(null)
+  const [calendar, setCalendar] = useState<BioLinkCalendarData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -25,6 +26,26 @@ export function BioLinkPage() {
       cancelled = true
     }
   }, [])
+
+  /**
+   * The schedule arrives separately because reading it costs a fetch to
+   * Google. A slow calendar delays a section near the foot of the page
+   * instead of the links, and a broken one leaves the rest working.
+   */
+  useEffect(() => {
+    if (!page?.hasCalendar) return undefined
+    let cancelled = false
+    api<{ calendar: BioLinkCalendarData | null }>('/api/bio-link/calendar')
+      .then((data) => {
+        if (!cancelled) setCalendar(data.calendar)
+      })
+      .catch(() => {
+        // Nothing to say: the page is complete without a schedule.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [page?.hasCalendar])
 
   // The chosen appearance lives on the body so the page background follows it
   // too, not just the content column.
@@ -105,9 +126,9 @@ export function BioLinkPage() {
         </ul>
       )}
 
-      {page.calendar && <BioLinkCalendar calendar={page.calendar} />}
+      {calendar && <BioLinkCalendar calendar={calendar} />}
 
-      {hasNothing && !page.calendar && <p class="bio-notice-detail">這個頁面還沒有連結。</p>}
+      {hasNothing && !page.hasCalendar && <p class="bio-notice-detail">這個頁面還沒有連結。</p>}
 
       <footer class="bio-footer">
         <a href="/">苒光繪誌</a>

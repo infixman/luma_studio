@@ -63,6 +63,11 @@ export interface BioLinkEvent {
   description: string
 }
 
+export interface BioLinkCalendarData {
+  title: string
+  events: BioLinkEvent[]
+}
+
 export interface BioLinkState extends BioLinkStyle {
   displayName: string
   bio: string
@@ -98,7 +103,9 @@ export interface PublicBioLink {
   bio: string
   avatarPath: string | null
   style: BioLinkStyle
-  calendar: { title: string; events: BioLinkEvent[] } | null
+  // Whether to ask for one, not the schedule itself: it is fetched separately
+  // so a slow calendar cannot hold up the links.
+  hasCalendar: boolean
   links: { id: string; title: string }[]
   socials: { id: string; title: string; platform: string | null }[]
 }

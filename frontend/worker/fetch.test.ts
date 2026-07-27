@@ -33,14 +33,21 @@ function env(files: Record<string, Asset> = { '/index.html': { status: 200, body
   return { ASSETS: assetsBinding(files), API_BASE: 'https://api.example.test' } as never
 }
 
-function get(path: string): Request {
-  return new Request(`https://luma-studio.tw${path}`)
+function get(path: string, userAgent?: string): Request {
+  return new Request(`https://luma-studio.tw${path}`, userAgent ? { headers: { 'user-agent': userAgent } } : undefined)
 }
+
+/** A user agent that asks for preview tags, so those tests get them. */
+const CRAWLER = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+const BROWSER =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
 
 /** Replaces global fetch for the profile lookup the Worker makes. */
 function stubApi(response: unknown | Error) {
   const original = globalThis.fetch
-  globalThis.fetch = (async () => {
+  calls.length = 0
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input))
     if (response instanceof Error) throw response
     return new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } })
   }) as typeof fetch
@@ -48,6 +55,9 @@ function stubApi(response: unknown | Error) {
     globalThis.fetch = original
   }
 }
+
+/** Every API URL the Worker asked for since the last stubApi call. */
+const calls: string[] = []
 
 const profile = { displayName: '喬喬老師', bio: '台中開課\n兒童美術', avatarPath: '/bio-link-assets/a.jpg' }
 
@@ -98,7 +108,7 @@ describe('link previews on /bio_link', () => {
   it('writes the profile into the head', async () => {
     const restore = stubApi(profile)
     try {
-      const html = await (await worker.fetch(get('/bio_link'), env())).text()
+      const html = await (await worker.fetch(get('/bio_link', CRAWLER), env())).text()
       expect(html).toContain('<meta property="og:title" content="喬喬老師 | 苒光繪誌">')
       expect(html).toContain('property="og:image" content="https://luma-studio.tw/assets/share-card.png"')
       expect(html).toContain('<title>喬喬老師 | 苒光繪誌</title>')
@@ -112,7 +122,7 @@ describe('link previews on /bio_link', () => {
   it('escapes what it injects', async () => {
     const restore = stubApi({ displayName: '"><script>alert(1)</script>', bio: 'a & b', avatarPath: null })
     try {
-      const html = await (await worker.fetch(get('/bio_link'), env())).text()
+      const html = await (await worker.fetch(get('/bio_link', CRAWLER), env())).text()
       expect(html).not.toContain('<script>alert(1)</script>')
       expect(html).toContain('&quot;&gt;&lt;script&gt;')
       expect(html).toContain('content="a &amp; b"')
@@ -125,8 +135,22 @@ describe('link previews on /bio_link', () => {
     // A preview is worth less than the page working.
     const restore = stubApi(new Error('network down'))
     try {
-      const response = await worker.fetch(get('/bio_link'), env())
+      const response = await worker.fetch(get('/bio_link', CRAWLER), env())
       expect(response.status).toBe(200)
+      expect(await response.text()).not.toContain('og:title')
+    } finally {
+      restore()
+    }
+  })
+
+  it('does not make a person wait for the API', async () => {
+    // The browser fetches the profile itself; blocking the HTML on a second
+    // round trip only delays the first paint.
+    const restore = stubApi(profile)
+    try {
+      const response = await worker.fetch(get('/bio_link', BROWSER), env())
+      expect(response.status).toBe(200)
+      expect(calls).toEqual([])
       expect(await response.text()).not.toContain('og:title')
     } finally {
       restore()
@@ -136,7 +160,7 @@ describe('link previews on /bio_link', () => {
   it('leaves other routes without preview tags', async () => {
     const restore = stubApi(profile)
     try {
-      const html = await (await worker.fetch(get('/admin'), env())).text()
+      const html = await (await worker.fetch(get('/admin', CRAWLER), env())).text()
       expect(html).not.toContain('og:title')
     } finally {
       restore()

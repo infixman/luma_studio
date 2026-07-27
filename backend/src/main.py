@@ -6,6 +6,7 @@ that talks to these endpoints cross-origin.
 
 from urllib.parse import parse_qs, unquote
 
+import workers
 from workers import WorkerEntrypoint
 
 import admin_api
@@ -70,11 +71,25 @@ async def public_image_response(ctx: Ctx, path: str):
 
 
 async def bio_link_response(ctx: Ctx):
-    """The public bio link page's content, plus one view event per visitor."""
+    """The public bio link page's content, plus one view event per visitor.
+
+    The schedule is not here: it costs a fetch to Google, and the page has
+    nothing to show until this response arrives. It is a second request, so
+    the links render without waiting for a calendar.
+    """
 
     settings = await bio_link.get_settings(ctx.env)
     items = await bio_link.list_items(ctx.env, only_enabled=True)
-    await bio_link.record_event(ctx.env, ctx.request, "view")
+    # Counting a visit must not delay showing them the page. Resolved here
+    # rather than imported at module scope: if the runtime ever stops
+    # offering it, this must fall back to a slower visit, not a Worker that
+    # fails to start.
+    record = bio_link.record_event(ctx.env, ctx.request, "view")
+    try:
+        workers.wait_until(record)
+    except Exception:
+        await record
+
     return ctx.json(
         {
             "displayName": settings["displayName"],
@@ -85,7 +100,7 @@ async def bio_link_response(ctx: Ctx):
                 "buttonShape": settings["buttonShape"],
                 "fontStyle": settings["fontStyle"],
             },
-            "calendar": await bio_link.fetch_calendar(ctx.env, settings),
+            "hasCalendar": bool(settings["calendarEnabled"] and settings["calendarUrl"]),
             # Anonymous visitors get only what the page renders.
             "links": [{"id": item["id"], "title": item["title"]} for item in items if item["kind"] == "link"],
             "socials": [
@@ -95,6 +110,14 @@ async def bio_link_response(ctx: Ctx):
             ],
         }
     )
+
+
+async def bio_link_calendar_response(ctx: Ctx):
+    """The schedule on its own, so the page does not wait for Google."""
+
+    settings = await bio_link.get_settings(ctx.env)
+    calendar = await bio_link.fetch_calendar(ctx.env, settings)
+    return ctx.json({"calendar": calendar})
 
 
 async def bio_link_redirect_response(ctx: Ctx, item_id: str):
@@ -196,6 +219,11 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
             return ctx.too_many_requests()
         return await bio_link_response(ctx)
+
+    if path == "/api/bio-link/calendar" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
+            return ctx.too_many_requests()
+        return await bio_link_calendar_response(ctx)
 
     if path.startswith("/r/") and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):

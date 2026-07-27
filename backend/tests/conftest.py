@@ -6,6 +6,7 @@ modules here. Only the pieces the pure functions actually touch are faked;
 anything that reaches D1, R2 or the network is not covered by these tests.
 """
 
+import asyncio
 import json
 import sys
 import types
@@ -65,6 +66,10 @@ def _install_runtime_stubs() -> None:
     workers = types.ModuleType("workers")
     workers.Response = FakeResponse
     workers.WorkerEntrypoint = object
+    # The real one hands the coroutine to the runtime to finish after the
+    # response is sent. Scheduling it on the running loop is the closest
+    # equivalent a test can offer: the handler does not wait for it either.
+    workers.wait_until = asyncio.ensure_future
     sys.modules["workers"] = workers
 
 

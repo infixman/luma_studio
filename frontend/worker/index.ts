@@ -83,6 +83,25 @@ function previewTags(profile: BioLink, origin: string): string {
   ].join('\n    ')
 }
 
+/**
+ * Whether this request is a link previewer rather than a person.
+ *
+ * Only previewers need the profile injected into the HTML — a browser runs
+ * the app and fetches it anyway — and fetching it costs a round trip to the
+ * API before a single byte reaches the visitor. So the wait is spent only on
+ * requests that cannot do without it.
+ *
+ * The list errs towards matching: a browser wrongly treated as a crawler is
+ * a slow page, but a crawler wrongly treated as a browser is a shared link
+ * with no preview card. None of these substrings appear in the user agents
+ * of Safari, Chrome, Firefox, or the in-app browsers of LINE and Instagram.
+ */
+export function isLinkPreviewer(userAgent: string): boolean {
+  return /bot\b|bot\/|crawler|spider|facebookexternalhit|slack|discord|whatsapp|telegram|twitter|linkedin|pinterest|embedly|quora|skype|vkshare|preview|snapchat|line-?poker|yeti|naver|daum|petal|yandex|curl|wget/i.test(
+    userAgent,
+  )
+}
+
 /** The shell is served for any unknown path, so the SPA can route it. */
 function shellResponse(html: string, source: Response): Response {
   const headers = new Headers(source.headers)
@@ -105,6 +124,9 @@ export default {
 
     const path = url.pathname.replace(/\/+$/, '') || '/'
     if (path !== BIO_LINK_PATH) return shellResponse(await shell.text(), shell)
+    if (!isLinkPreviewer(request.headers.get('user-agent') ?? '')) {
+      return shellResponse(await shell.text(), shell)
+    }
 
     const profile = await loadBioLink(env)
     const html = await shell.text()
