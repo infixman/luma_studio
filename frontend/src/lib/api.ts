@@ -68,6 +68,18 @@ export function publicImageUrl(key: string): string {
   return `${API_BASE}/images/${key.split('/').map(encodeURIComponent).join('/')}`
 }
 
+/**
+ * The same image, but keyed to this version of the file.
+ *
+ * Replacing an image reuses its filename, so the edge cache would keep
+ * serving the previous one for up to an hour. The size changes whenever the
+ * bytes do, which is enough to make the admin's thumbnail follow the upload.
+ * Links handed to customers stay clean and use `publicImageUrl`.
+ */
+export function thumbnailUrl(key: string, size: number): string {
+  return `${publicImageUrl(key)}?v=${size}`
+}
+
 export function printPageUrl(folder: string): string {
   return `${location.origin}/ibon_print/${encodeURIComponent(folder)}`
 }

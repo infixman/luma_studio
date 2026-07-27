@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { AdminNav } from '../components/AdminNav'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { StatusBar, useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, clearLoginAttempt, publicImageUrl, printPageUrl, uploadImage } from '../lib/api'
+import { ApiError, api, apiJson, clearLoginAttempt, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../lib/api'
 import {
   applyChoice,
   defaultPrintChoice,
@@ -365,7 +365,7 @@ export function AdminPage() {
               files.map((item) => (
                 <li key={item.key}>
                   <div class="file-main">
-                    <img class="file-thumb" src={publicImageUrl(item.key)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
+                    <img class="file-thumb" src={thumbnailUrl(item.key, item.size)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
                     <span class="file-name">{`${item.name} (${Math.ceil(item.size / 1024)} KB)`}</span>
                   </div>
                   <div class="file-actions">
