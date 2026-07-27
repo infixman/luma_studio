@@ -1,5 +1,7 @@
 /** The single place that knows where the backend lives and how to talk to it. */
 
+import type { BioLinkState } from './types'
+
 export const API_BASE = (import.meta.env.VITE_API_BASE ?? 'https://api.luma-studio.tw').replace(/\/+$/, '')
 
 /** Forces a CORS preflight, which is what stops cross-site forgery of writes. */
@@ -68,6 +70,26 @@ export function publicImageUrl(key: string): string {
 
 export function printPageUrl(folder: string): string {
   return `${location.origin}/ibon_print/${encodeURIComponent(folder)}`
+}
+
+/** Avatars and click-counted redirects are served by the API, not the site. */
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`
+}
+
+export function bioLinkRedirectUrl(itemId: string): string {
+  return `${API_BASE}/r/${encodeURIComponent(itemId)}`
+}
+
+export function bioLinkPageUrl(): string {
+  return `${location.origin}/bio_link`
+}
+
+export async function uploadBioLinkAvatar(file: File): Promise<BioLinkState> {
+  const form = new FormData()
+  form.append('file', file)
+  // No content-type header: the browser has to set the multipart boundary.
+  return api<BioLinkState>('/api/admin/bio-link/avatar', { method: 'POST', body: form })
 }
 
 async function readBody(response: Response): Promise<Record<string, unknown>> {

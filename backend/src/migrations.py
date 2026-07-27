@@ -62,6 +62,53 @@ MIGRATIONS = [
         "add_columns": [("admin_oauth_states", "next_url", "TEXT NOT NULL DEFAULT ''")],
         "statements": [],
     },
+    {
+        "name": "0005_create_bio_link",
+        "statements": [
+            # One row, always id = 1. The site has a single bio link page, so a
+            # settings row is simpler than a table of profiles nobody creates.
+            """CREATE TABLE IF NOT EXISTS bio_link_settings (
+                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                 display_name TEXT NOT NULL DEFAULT '',
+                 bio TEXT NOT NULL DEFAULT '',
+                 avatar_key TEXT,
+                 updated_at INTEGER NOT NULL
+               )""",
+            # Buttons and social icons share this table; `kind` tells them
+            # apart. Their fields and ordering logic are identical.
+            """CREATE TABLE IF NOT EXISTS bio_link_items (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 kind TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 url TEXT NOT NULL,
+                 platform TEXT,
+                 position INTEGER NOT NULL,
+                 enabled INTEGER NOT NULL DEFAULT 1,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_bio_link_items_kind ON bio_link_items (kind, position)",
+            # One row per visitor, per day, per target. The unique index below
+            # turns repeat requests into no-op inserts, which is what keeps a
+            # public endpoint from being able to burn the D1 write quota that
+            # admin sessions also depend on.
+            """CREATE TABLE IF NOT EXISTS bio_link_events (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 item_id TEXT,
+                 event_type TEXT NOT NULL,
+                 day TEXT NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 country TEXT,
+                 city TEXT,
+                 referrer_host TEXT,
+                 device TEXT,
+                 visitor_hash TEXT NOT NULL
+               )""",
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_bio_link_events_unique
+                 ON bio_link_events (day, event_type, COALESCE(item_id, ''), visitor_hash)""",
+            "CREATE INDEX IF NOT EXISTS idx_bio_link_events_day ON bio_link_events (day, event_type)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

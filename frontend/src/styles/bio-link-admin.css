@@ -1,0 +1,223 @@
+body.admin .bio-loading {
+  margin-top: 32px;
+  text-align: center;
+}
+
+body.admin .bio-admin {
+  display: grid;
+  gap: 24px;
+  margin-top: 28px;
+}
+
+body.admin .bio-admin-head {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+body.admin .bio-admin-head p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+body.admin .bio-admin-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+body.admin .bio-avatar-field {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin: 22px 0 20px;
+  padding: 18px 0 20px;
+  border-top: 1px solid #e1e5e1;
+  border-bottom: 1px solid #e1e5e1;
+}
+
+body.admin .bio-avatar-field p {
+  margin: 8px 0 0;
+}
+
+body.admin .bio-avatar-preview {
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+  border: 1px solid #d8ded7;
+  border-radius: 50%;
+  background: #f3f5f2;
+  object-fit: cover;
+}
+
+/* The logo placeholder is a wordmark: show it whole, not cropped to a circle. */
+body.admin .bio-avatar-preview.is-logo {
+  flex-basis: 92px;
+  width: 92px;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  object-fit: contain;
+  opacity: 0.85;
+}
+
+body.admin .bio-avatar-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.admin .bio-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+body.admin .bio-field > span:first-child {
+  color: #253746;
+  font-weight: 700;
+}
+
+body.admin .bio-field input,
+body.admin .bio-field textarea {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #bbc6c1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1e2938;
+  font: inherit;
+  resize: vertical;
+}
+
+body.admin .bio-quota {
+  margin: 0 0 18px;
+}
+
+body.admin .bio-group {
+  margin: 0 0 26px;
+}
+
+body.admin .bio-group:last-child {
+  margin-bottom: 0;
+}
+
+body.admin .bio-group h3 {
+  margin: 0 0 10px;
+  color: #1f3343;
+  font-size: 1rem;
+}
+
+body.admin .bio-draft {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+body.admin .bio-draft input {
+  flex: 1 1 170px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #bbc6c1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1e2938;
+}
+
+body.admin .bio-draft select {
+  padding: 10px 11px;
+  border: 1px solid #bbc6c1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1e2938;
+  font: inherit;
+}
+
+body.admin .bio-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.admin .bio-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e1e5e1;
+  border-radius: 9px;
+  background: #fff;
+}
+
+body.admin .bio-item.disabled {
+  background: #f7f8f6;
+  opacity: 0.72;
+}
+
+body.admin .bio-item-platform {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d8ded7;
+  border-radius: 50%;
+  color: #3a6c68;
+}
+
+body.admin .bio-item-platform .social-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.admin .bio-item-fields {
+  display: grid;
+  flex: 1 1 240px;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.admin .bio-item-fields input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d5ddd8;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e2938;
+}
+
+body.admin .bio-item-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+}
+
+body.admin .bio-item-actions button {
+  padding: 8px 10px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 720px) {
+  body.admin .bio-avatar-field {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  body.admin .bio-item-actions button {
+    min-height: 40px;
+  }
+}

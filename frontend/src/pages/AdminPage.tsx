@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
+import { AdminNav } from '../components/AdminNav'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { StatusBar, useStatus } from '../components/StatusBar'
 import { ApiError, api, apiJson, clearLoginAttempt, publicImageUrl, printPageUrl, uploadImage } from '../lib/api'
@@ -221,6 +222,7 @@ export function AdminPage() {
           登出
         </button>
       </header>
+      <AdminNav current="/admin" />
       <StatusBar message={message} />
 
       <section class="grid">

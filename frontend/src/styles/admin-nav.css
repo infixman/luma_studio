@@ -1,0 +1,33 @@
+body.admin .admin-nav {
+  display: flex;
+  gap: 8px;
+  margin: 22px 0 0;
+  border-bottom: 1px solid #e1e5e1;
+}
+
+body.admin .admin-tab {
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  color: #55676f;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(1px);
+}
+
+body.admin .admin-tab:hover {
+  background: #edf5f3;
+  color: #1e625e;
+}
+
+body.admin .admin-tab.current {
+  border-color: #e1e5e1;
+  background: #fff;
+  color: #1f3343;
+}
+
+body.admin .admin-tab:focus-visible {
+  outline: 3px solid #a7d5d0;
+  outline-offset: 2px;
+}

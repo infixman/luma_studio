@@ -1,12 +1,14 @@
 import { AdminPage } from './pages/AdminPage'
+import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
+import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
 
 /**
- * Both pages' stylesheets end up in one bundle, so each page's rules are
- * scoped to a body class rather than bleeding into the other page.
+ * Every page's stylesheet ends up in one bundle, so each page's rules are
+ * scoped to a body class rather than bleeding into the others.
  */
 function markBody(page: string): void {
   document.body.className = page
@@ -24,6 +26,16 @@ export function App() {
   if (path === '/admin') {
     markBody('admin')
     return <AdminPage />
+  }
+
+  if (path === '/admin/bio-link') {
+    markBody('admin')
+    return <BioLinkAdminPage />
+  }
+
+  if (path === '/bio_link') {
+    markBody('bio')
+    return <BioLinkPage />
   }
 
   const print = PRINT_PATH.exec(path)

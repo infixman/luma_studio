@@ -85,6 +85,12 @@ def urlsafe_token(length: int = 32) -> str:
     return base64.urlsafe_b64encode(secure_bytes(length)).rstrip(b"=").decode("ascii")
 
 
+def taipei_day() -> str:
+    """The calendar date in Taipei, used to bucket bio-link analytics."""
+
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+
+
 def taipei_upload_time() -> str:
     taipei_now = datetime.now(timezone.utc) + timedelta(hours=8)
     return taipei_now.strftime("%Y%m%d%H%M%S") + f"{taipei_now.microsecond // 1000:03d}"

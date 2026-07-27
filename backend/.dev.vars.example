@@ -2,3 +2,10 @@
 # Localhost origins belong here, never in wrangler.toml: [vars] ships to production.
 ALLOWED_ORIGINS="http://localhost:5173"
 FRONTEND_ORIGIN="http://localhost:5173"
+
+# Salt for the bio link page's per-day anonymous visitor hash. In production
+# set it as a secret, never as a [vars] entry: a salt committed to the repo
+# would let anyone recompute a visitor's hash from their IP. Unset, the code
+# falls back to a random per-isolate value, which stays private but makes the
+# once-per-visitor-per-day de-duplication only hold within one isolate.
+VISITOR_SALT="a-random-value-for-local-work"

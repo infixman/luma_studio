@@ -1,0 +1,179 @@
+body.bio {
+  background: radial-gradient(circle at 50% 0, #eaf1ec 0, transparent 30rem), #f7f6f2;
+}
+
+body.bio .bio {
+  display: grid;
+  gap: clamp(20px, 4vh, 30px);
+  width: min(100% - 32px, 540px);
+  margin: 0 auto;
+  padding: clamp(32px, 8vh, 64px) 0 52px;
+}
+
+body.bio .bio-notice {
+  place-content: center;
+  justify-items: center;
+  min-height: 70dvh;
+  text-align: center;
+}
+
+body.bio .bio-notice-title {
+  margin: 0;
+  color: #223d4c;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+body.bio .bio-notice-detail {
+  margin: 0;
+  color: #687780;
+  line-height: 1.6;
+  text-align: center;
+}
+
+body.bio .bio-header {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+body.bio .bio-avatar {
+  width: clamp(96px, 28vw, 124px);
+  height: clamp(96px, 28vw, 124px);
+  border: 3px solid #fffefa;
+  border-radius: 50%;
+  background: #e4eee9;
+  box-shadow: 0 12px 30px rgba(24, 48, 52, 0.14);
+  object-fit: cover;
+}
+
+/* The logo is a wordmark, not a portrait: show it whole rather than cropped. */
+body.bio .bio-avatar-logo {
+  width: min(210px, 56vw);
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  object-fit: contain;
+}
+
+body.bio .bio-name {
+  margin: 0;
+  color: #1f3343;
+  font-size: clamp(1.3rem, 5vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+body.bio .bio-text {
+  margin: 0;
+  max-width: 40ch;
+  color: #55676f;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+body.bio .bio-links {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.bio .bio-link {
+  display: block;
+  padding: 17px 22px;
+  border: 1px solid #d8ded7;
+  border-radius: 14px;
+  background: #fffefa;
+  box-shadow: 0 8px 20px rgba(24, 48, 52, 0.06);
+  color: #1f3343;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+body.bio .bio-link:hover {
+  transform: translateY(-2px);
+  border-color: #80aaa4;
+  box-shadow: 0 14px 28px rgba(24, 48, 52, 0.11);
+}
+
+body.bio .bio-link:focus-visible {
+  outline: 3px solid #a7d5d0;
+  outline-offset: 3px;
+}
+
+body.bio .bio-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+body.bio .bio-social {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid #d8ded7;
+  border-radius: 50%;
+  background: #fffefa;
+  color: #3a6c68;
+  text-decoration: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+body.bio .bio-social:hover {
+  transform: translateY(-2px);
+  border-color: #80aaa4;
+}
+
+body.bio .bio-social:focus-visible {
+  outline: 3px solid #a7d5d0;
+  outline-offset: 3px;
+}
+
+body.bio .social-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.bio .bio-footer {
+  margin-top: 10px;
+  text-align: center;
+}
+
+body.bio .bio-footer a {
+  color: #8a9992;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+}
+
+body.bio .bio-footer a:hover {
+  color: #1e625e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.bio .bio-link,
+  body.bio .bio-social {
+    transition: none;
+  }
+
+  body.bio .bio-link:hover,
+  body.bio .bio-social:hover {
+    transform: none;
+  }
+}

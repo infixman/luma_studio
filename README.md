@@ -40,6 +40,8 @@ backend/
     auth.py           Google OAuth 與 session
     admin_api.py      /api/admin/* 端點
     ibon.py           ibon 上傳流程、D1 快取、列印規格
+    bio_link.py       Bio link 的設定、連結、匿名點擊記錄
+    bio_link_api.py   /api/admin/bio-link* 端點
     migrations.py     啟動時套用的 D1 schema
     common.py         共用常數與小工具
 frontend/
@@ -48,9 +50,10 @@ frontend/
   public/assets/      logo 與教學圖
   src/
     app.tsx           路徑對應
-    pages/            AdminPage、PrintPage
+    pages/            HomePage、AdminPage、PrintPage、BioLinkPage、BioLinkAdminPage
+    components/       StatusBar、IconButtons、AdminNav、SocialIcon
     lib/              api、型別、列印規格轉換
-    styles/           base、admin、print
+    styles/           base、home、admin、admin-nav、print、bio-link、bio-link-admin
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
 docs/superpowers/specs/  設計文件
@@ -68,7 +71,11 @@ docs/superpowers/specs/  設計文件
 | POST | `/auth/logout` | 清除 session |
 | GET | `/api/print/{id}` | 取件編號 JSON |
 | GET | `/images/{folder}/{file}` | 公開圖檔 |
+| GET | `/api/bio-link` | Bio link 公開內容，順帶記一筆瀏覽 |
+| GET | `/r/{id}` | 記一筆點擊後 302 到目標網址 |
+| GET | `/bio-link-assets/{file}` | Bio link 頭像 |
 | — | `/api/admin/*` | 管理端點，需登入 |
+| — | `/api/admin/bio-link*` | Bio link 編輯端點，需登入 |
 
 ### 跨來源與 CSRF
 
@@ -172,6 +179,14 @@ https://luma-studio.tw/admin
    uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI
    ```
 
+4. Bio link 的訪客雜湊需要一組隨機鹽值，同樣以 secret 保存：
+
+   ```powershell
+   uv --directory backend run pywrangler secret put VISITOR_SALT
+   ```
+
+   值填任意隨機字串。**不要**寫進 `wrangler.toml` 的 `[vars]`——那份設定會進版控，鹽值一旦公開，任何人都能從 IP 反推訪客雜湊。未設定時程式會退回每個 isolate 隨機產生的鹽值，雜湊仍然安全，但「同一訪客每日只記一次」的去重只在單一 isolate 內成立。
+
 `GOOGLE_OAUTH_REDIRECT_URI` 的值是上面的完整 callback URL。
 
 ## GitHub 自動部署
@@ -186,11 +201,32 @@ https://luma-studio.tw/admin
 
 Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持有它們。
 
+## Bio Link
+
+公開頁：
+
+```text
+https://luma-studio.tw/bio_link
+```
+
+編輯介面在 admin 的第二個分頁：
+
+```text
+https://luma-studio.tw/admin/bio-link
+```
+
+可設定頭像、顯示名稱、簡介，以及兩組連結：主要的連結按鈕，和一排社群 icon。兩者都可排序、可個別停用。頭像未設定時公開頁改用 logo。
+
+限制：連結合計最多 50 筆、標題 80 字、網址 2048 字且只接受 `http`、`https`、`mailto`、`tel`；頭像 2 MB 以內的 jpg、png、gif、webp。頭像存在同一個 R2 bucket 的 `_bio-link/` 前綴下，該前綴刻意不符合 ibon 的資料夾規則，因此不會出現在資料夾清單，`/images/` 也取不到。
+
+公開頁上的每個連結都指向 `/r/{id}`，由後端記錄後再轉出。記錄的是每位訪客每天每個目標一筆，內容包含國家、城市、來源網站、裝置類別與一組每日輪替的匿名雜湊，**無法識別個人，也無法跨日追蹤**。User-Agent 看起來是機器人或連結預覽器時完全不記錄。統計報表尚未實作，目前只寫入不讀取。
+
 ## 執行時行為與限制
 
 - D1 快取保存 24 小時，並綁定資料夾的 ibon `SelectType`；快取命中時不會再上傳至 ibon。
 - 快取未命中時，只接受資料夾內 1–8 個 `jpg/jpeg/png/bmp/gif`，總大小不得超過 15 MB。
-- R2 object key 必須為 `<id>/<filename>`。
+- ibon 的 R2 object key 必須為 `<id>/<filename>`。Bio link 頭像是例外，放在 `_bio-link/` 前綴下。
+- Bio link 的事件記錄採用「每位訪客每天每個目標最多一筆」，靠唯一索引與 `INSERT OR IGNORE` 達成。這不只是為了數字準確：這兩個端點是公開的，而 D1 的每日寫入額度與 admin session 共用，沒有上限的計數器等於讓任何人都能把你鎖在自己的後台外面。
 - 上傳順序為 `BaseEntry/GetEntry` → `IbonUpload/GetPincode` → `GetChunksize` → `Upload`。上游失敗時 JSON API 會回傳不含 token 的 `stage` 與安全診斷資訊。
 - ibon 可能變更一般消費者流程或拒絕 Cloudflare 流量；每次部署後應以一個實際資料夾驗證。
 - 管理登入依賴跨站 cookie。若瀏覽器封鎖第三方 cookie 導致登入失效，退路是讓前後端共用同一個網域的兩個子網域。
