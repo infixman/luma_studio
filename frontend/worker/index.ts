@@ -70,6 +70,7 @@ function previewTags(profile: BioLink, origin: string): string {
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:image" content="${escapeHtml(image)}">`,
+    `<meta property="og:image:alt" content="${escapeHtml(SITE_NAME)}">`,
     // Stated so a crawler can lay out the card before it fetches the image.
     `<meta property="og:image:width" content="1200">`,
     `<meta property="og:image:height" content="630">`,
