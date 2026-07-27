@@ -8,6 +8,7 @@ Three of the public routes cost real resources when hit repeatedly:
 * `/api/print/{id}` and `/ibon_print/{id}` read up to 15 MB from R2 and run a
   four-step upload to ibon whenever the 24-hour cache is cold.
 * The bio link page and its redirects read D1 on every visit.
+* `/images/` and `/bio-link-assets/` read an object from R2 per request.
 
 Limits are advisory: if the binding is missing or the call fails, requests are
 allowed through. A rate limiter that can take the site down is worse than the
@@ -20,6 +21,7 @@ from common import js_options
 LOGIN = "LOGIN_LIMITER"
 PRINT = "PRINT_LIMITER"
 PUBLIC = "PUBLIC_LIMITER"
+ASSET = "ASSET_LIMITER"
 
 
 def client_key(request, scope: str) -> str:

@@ -42,6 +42,13 @@ name = "PUBLIC_LIMITER"
 namespace_id = "1003"
 simple = { limit = 120, period = 60 }
 
+# One R2 read per request. Generous, because a classroom shares one address
+# and the admin's thumbnail grid fetches eight images at once.
+[[ratelimits]]
+name = "ASSET_LIMITER"
+namespace_id = "1004"
+simple = { limit = 240, period = 60 }
+
 [vars]
 # ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
 # bootstrap payload for every cache miss.

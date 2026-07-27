@@ -199,11 +199,15 @@ async def dispatch(ctx: Ctx):
     if path.startswith(f"{bio_link.AVATAR_URL_PREFIX}/"):
         if method != "GET":
             return ctx.error(f"Use GET {bio_link.AVATAR_URL_PREFIX}/{{file}}", 404)
+        if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
+            return ctx.too_many_requests()
         return await bio_link_avatar_response(ctx, path.removeprefix(f"{bio_link.AVATAR_URL_PREFIX}/"))
 
     if path.startswith("/images/"):
         if method != "GET" or len(path.split("/")) != 4:
             return ctx.error("Use GET /images/{folder}/{file}", 404)
+        if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
+            return ctx.too_many_requests()
         return await public_image_response(ctx, path)
 
     if path.startswith("/api/print/"):

@@ -97,10 +97,15 @@ docs/superpowers/specs/  設計文件
 | `/auth/login` | 10 次／分 | 每次嘗試都會在訪客還沒證明任何事之前寫一列 `admin_oauth_states`。D1 寫入額度與 session 表共用，打爆它就等於把管理者鎖在自己的後台外面 |
 | `/api/print/{id}`、`/ibon_print/{id}` | 20 次／分 | 快取未命中時要從 R2 讀最多 15 MB，再跑四步驟的 ibon 上傳 |
 | `/api/bio-link`、`/r/{id}` | 120 次／分 | 兩次 D1 讀取，加上每位訪客每天最多一次的去重寫入 |
+| `/images/{folder}/{file}`、`/bio-link-assets/{file}` | 240 次／分 | 每次一筆 R2 讀取。額度較寬，因為一間教室共用一個對外位址，而 admin 的縮圖一次就抓八張 |
 
 以 Cloudflare 自行填入的 `CF-Connecting-IP` 為 key，該標頭無法被用戶端偽造。取不到位址時**不套用限制**，而不是把所有人算成同一個——否則單一來源就能吃光全體額度。
 
 限制是「盡力而為」：綁定不存在或呼叫失敗時一律放行。會讓網站掛掉的速率限制，比它要防的濫用更糟。
+
+這一層保護的是 D1 寫入額度、R2 讀取與 ibon 上傳。**它保護不了 Worker 自己的每日請求額度**——限制器要執行，Worker 就已經被叫起來了。那一層需要 Cloudflare 的 WAF 速率限制規則，在 Worker 之前攔下請求；目前設定的是 `luma-studio.tw` zone 上一條涵蓋所有 API 路徑、每 10 秒 50 次、封鎖 10 秒的規則。
+
+R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflare 預設不會快取 Worker 產生的回應**。要讓重複請求不進 R2，需在儀表板加一條 Cache Rule：符合 `/images/*` 或 `/bio-link-assets/*` 時設為 Eligible for cache。目前沒有設，所以每一次請求都是一筆 R2 讀取。
 
 ### D1 migration
 
