@@ -21,6 +21,8 @@ ADMIN_HTML = r"""<!doctype html>
     .folders, .files { list-style:none; padding:0; margin:16px 0 0; } li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid #e1e5e1; }
     .folder { flex:1; text-align:left; border:0; background:transparent; padding:6px 4px; color:#253746; font-weight:600; } .folder:hover:not(:disabled) { background:#edf5f3; color:#1e625e; } .folder-row.selected { margin:0 -8px; padding:11px 8px; border-radius:7px; background:#edf5f3; border-bottom-color:transparent; }
     .copy-link { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; padding:0; border:1px solid #c7d2cd; border-radius:7px; background:#fff; color:#3a6c68; } .copy-link:hover:not(:disabled) { background:#edf5f3; border-color:#80aaa4; } .copy-link svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; } .copy-link.copied { border-color:#287f79; background:#e6f2ef; color:#19665f; animation:copy-success .45s cubic-bezier(.16,1,.3,1); } @keyframes copy-success { 50% { transform:translateY(-3px) scale(1.08); } }
+    a.copy-link { text-decoration:none; }
+    .file-main { display:flex; flex:1; min-width:0; gap:11px; align-items:center; } .file-thumb { flex:0 0 46px; width:46px; height:46px; border:1px solid #e1e5e1; border-radius:6px; background:#f3f5f2; object-fit:cover; }
     .file-name { min-width:0; overflow-wrap:anywhere; font-weight:600; } .file-actions { display:flex; flex:0 0 auto; gap:8px; align-items:center; } .muted { color:#697683; font-size:.875rem; }
     #status { position:fixed; z-index:10; left:50%; bottom:28px; width:max-content; max-width:calc(100vw - 32px); margin:0; padding:12px 16px; border-radius:8px; background:#263b47; color:#fff; box-shadow:0 12px 30px rgba(23,44,60,.22); font-weight:600; line-height:1.45; opacity:0; pointer-events:none; transform:translate(-50%, 16px); transition:opacity .2s ease, transform .2s ease; } #status.visible { opacity:1; transform:translate(-50%, 0); } #status.error { background:#9f3447; } #status.ok { background:#216c66; }
     .empty { padding:24px 0; color:#71808a; text-align:center; }
@@ -29,7 +31,7 @@ ADMIN_HTML = r"""<!doctype html>
     button.choice { min-height:38px; border-color:#d1d9d4; background:#f3f5f2; color:#45545d; font-size:.875rem; } button.choice:hover:not(:disabled) { border-color:#80aaa4; background:#edf5f3; color:#1e625e; } button.choice.selected { border-color:#247e78; background:#287f79; color:#fff; } button.choice:disabled { border-color:#e1e5e1; background:#f7f8f6; color:#a4afaa; opacity:1; }
     .print-summary { margin:17px 0 0; color:#536371; font-size:.92rem; } .print-summary strong { color:#1f3343; } .cache-notice { margin:12px 0 0; padding:10px 12px; border-radius:7px; background:#f3f6f2; color:#596775; font-size:.875rem; line-height:1.55; }
     .upload-area { margin:22px 0 0; } .drop-zone { display:grid; width:100%; min-height:142px; place-items:center; gap:7px; padding:22px; border:1.5px dashed #90b9b3; border-radius:9px; background:#f5faf8; color:#245f5b; text-align:center; cursor:pointer; } button.drop-zone { border-color:#90b9b3; background:#f5faf8; color:#245f5b; } button.drop-zone:hover:not(:disabled), button.drop-zone.drag-over { border-color:#287f79; background:#e8f4f1; } button.drop-zone:disabled { border-color:#d9e1dd; background:#f6f7f5; color:#8a9992; } .drop-zone-icon { font-size:1.65rem; line-height:1; } .drop-zone-title { font-weight:700; line-height:1.55; } .drop-zone-hint { color:#687780; font-size:.875rem; font-weight:400; } .upload-progress { display:grid; gap:7px; margin-top:12px; } .upload-progress[hidden] { display:none; } .upload-progress-label { color:#52636e; font-size:.875rem; } .progress-track { height:7px; overflow:hidden; border-radius:99px; background:#e0e8e4; } .progress-bar { width:0; height:100%; border-radius:inherit; background:#287f79; transition:width .2s ease-out; } .upload-limit { margin:22px 0 0; padding:16px; border:1px solid #d7e1dc; border-radius:8px; background:#f3f6f2; color:#536371; line-height:1.55; } .folder-actions { display:flex; justify-content:flex-end; margin-top:14px; }
-    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } .brand-logo { width:126px; } .row { align-items:stretch; flex-wrap:wrap; } .setting-grid { grid-template-columns:1fr; gap:15px; } button.choice { min-height:44px; } button.drop-zone { min-height:154px; } .file-actions button { min-height:44px; } }
+    @media (max-width:720px) { main { padding:28px 16px 48px; } .grid { grid-template-columns:1fr; gap:18px; } .brand-logo { width:126px; } .row { align-items:stretch; flex-wrap:wrap; } .setting-grid { grid-template-columns:1fr; gap:15px; } button.choice { min-height:44px; } button.drop-zone { min-height:154px; } .file-actions button { min-height:44px; } .file-actions .copy-link, .folder-row .copy-link { flex-basis:44px; width:44px; height:44px; } .file-thumb { flex:0 0 40px; width:40px; height:40px; } }
   </style>
 </head>
 <body>
@@ -133,6 +135,11 @@ ADMIN_HTML = r"""<!doctype html>
     async function copyPrintUrl(folder, button) {
       await copyUrl(printUrlBase + encodeURIComponent(folder), button, folder+' 的列印頁');
     }
+    const openIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4 12 12"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>';
+    function openLinkButton(url, label) {
+      const link=document.createElement('a'); link.className='copy-link'; link.href=url; link.target='_blank'; link.rel='noopener noreferrer';
+      link.title='開新分頁：'+label; link.setAttribute('aria-label','開新分頁檢視 '+label); link.innerHTML=openIconSvg; return link;
+    }
     function publicImageUrl(key) {
       return location.origin + '/images/' + key.split('/').map(encodeURIComponent).join('/');
     }
@@ -158,7 +165,8 @@ ADMIN_HTML = r"""<!doctype html>
         const copy=document.createElement('button'); copy.className='copy-link'; copy.type='button'; copy.title='複製列印網址'; copy.setAttribute('aria-label','複製 '+folder+' 的列印網址');
         copy.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="1"></rect><path d="M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4"></path></svg>';
         copy.onclick=async()=>{ try { await copyPrintUrl(folder, copy); } catch (error) { setStatus(error.message || '無法複製網址','error'); } };
-        li.append(select,copy); root.append(li);
+        const open=openLinkButton(printUrlBase+encodeURIComponent(folder), folder+' 的列印 QR Code 頁');
+        li.append(select,open,copy); root.append(li);
       }
     }
     async function selectFolder(folder) {
@@ -176,12 +184,17 @@ ADMIN_HTML = r"""<!doctype html>
       if (!data.objects.length) { root.innerHTML='<li class="empty">沒有圖檔</li>'; return; }
       for (const item of data.objects) {
         const li=document.createElement('li'); const name=document.createElement('span'); name.className='file-name'; name.textContent=item.name+' ('+Math.ceil(item.size/1024)+' KB)';
+        const imageUrl=publicImageUrl(item.key);
+        const main=document.createElement('div'); main.className='file-main';
+        const thumb=document.createElement('img'); thumb.className='file-thumb'; thumb.src=imageUrl; thumb.alt=item.name+' 縮圖'; thumb.loading='lazy'; thumb.decoding='async';
+        main.append(thumb,name);
         const actions=document.createElement('div'); actions.className='file-actions';
+        const open=openLinkButton(imageUrl, item.name);
         const copy=document.createElement('button'); copy.className='copy-link'; copy.type='button'; copy.title='複製公開圖檔網址'; copy.setAttribute('aria-label','複製 '+item.name+' 的公開網址');
         copy.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="1"></rect><path d="M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4"></path></svg>';
         copy.onclick=async()=>{ try { await copyUrl(publicImageUrl(item.key), copy, item.name+' 的公開圖檔'); } catch (error) { setStatus(error.message || '無法複製網址','error'); } };
         const remove=document.createElement('button'); remove.className='danger'; remove.textContent='刪除'; remove.onclick=async()=>{ if(confirm('刪除 '+item.name+'？')) { await api('/api/admin/objects?key='+encodeURIComponent(item.key),{method:'DELETE'}); setStatus('已刪除圖片，pincode 快取已清除；下次公開列印會建立新的取件編號。','ok'); await loadFiles(); }};
-        actions.append(copy,remove); li.append(name,actions); root.append(li);
+        actions.append(open,copy,remove); li.append(main,actions); root.append(li);
       }
     }
     document.querySelector('#create-folder').onclick=async()=>{ const input=document.querySelector('#new-folder'); const folder=input.value.trim(); if(!folder)return; await api('/api/admin/folders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({folder})}); input.value=''; setStatus('資料夾已建立。','ok'); await loadFolders(); await selectFolder(folder); };
