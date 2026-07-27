@@ -1,0 +1,118 @@
+name: Canary
+
+on:
+  schedule:
+    # 23:20 UTC is 07:20 in Taipei — a failure is waiting to be read at the
+    # start of the day rather than discovered by a customer in a store.
+    - cron: "20 23 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: luma-studio-canary
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  API: https://api.luma-studio.tw
+  SITE: https://luma-studio.tw
+  # A folder of its own, holding one small image. Not a customer's, because
+  # this runs a real ibon upload every day.
+  CANARY_ID: zz_canary
+
+jobs:
+  ibon:
+    name: ibon collection flow
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BACKUP_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clear the cached collection code
+        working-directory: backend
+        # Results are cached in D1 for 24 hours. Without this the canary
+        # reads its own database and never touches ibon at all — it would
+        # pass every day while the thing it exists to watch is broken.
+        run: |
+          npx --yes wrangler@4 d1 execute luma-ibon-cache --remote \
+            --command "DELETE FROM ibon_print_cache WHERE id = '${CANARY_ID}'" \
+            > /dev/null 2>&1 || {
+              echo "::warning::could not clear the cache; a pass may be reading stale data"
+            }
+
+      - name: Request a collection code
+        run: |
+          set -uo pipefail
+          BODY=$(mktemp)
+          CODE=$(curl -sS -o "$BODY" -w "%{http_code}" "$API/api/print/$CANARY_ID")
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::ibon flow returned HTTP $CODE"
+            cat "$BODY"
+            exit 1
+          fi
+
+          PINCODE=$(jq -r '.pincode // ""' "$BODY")
+          DEADLINE=$(jq -r '.deadline // ""' "$BODY")
+          FILES=$(jq -r '.files | length' "$BODY")
+          CACHED=$(jq -r '.cached' "$BODY")
+
+          echo "pincode=${PINCODE} deadline=${DEADLINE} files=${FILES} cached=${CACHED}"
+
+          if ! printf '%s' "$PINCODE" | grep -Eq '^[0-9]{8,12}$'; then
+            echo "::error::pincode does not look like a collection code: '${PINCODE}'"
+            cat "$BODY"
+            exit 1
+          fi
+          if [ -z "$DEADLINE" ] || [ "$FILES" -lt 1 ]; then
+            echo "::error::response is missing a deadline or the file list"
+            cat "$BODY"
+            exit 1
+          fi
+          if [ "$CACHED" = "true" ]; then
+            echo "::warning::served from cache, so ibon itself was not exercised this run"
+          fi
+
+  surface:
+    name: Public surface
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every public page answers, and answers itself
+        # A route that 200s at the API but redirects at the edge still looks
+        # broken to a visitor, so check the final status and that the first
+        # response was not a redirect away from the path that was asked for.
+        run: |
+          set -uo pipefail
+          FAILED=0
+          check() {
+            local url=$1 expected=$2
+            local status
+            status=$(curl -sS -o /dev/null -w "%{http_code}" -H "Accept: text/html" "$url")
+            if [ "$status" != "$expected" ]; then
+              echo "::error::${url} returned ${status}, expected ${expected}"
+              FAILED=1
+            else
+              echo "ok  ${url} -> ${status}"
+            fi
+          }
+
+          check "$API/api/health" 200
+          check "$API/api/bio-link" 200
+          check "$SITE/" 200
+          check "$SITE/admin" 200
+          check "$SITE/bio_link" 200
+          check "$SITE/ibon_print/$CANARY_ID" 200
+
+          # The share link people actually paste must carry its preview tags.
+          if ! curl -sS "$SITE/bio_link" | grep -q 'property="og:image"'; then
+            echo "::error::/bio_link is missing its link-preview tags"
+            FAILED=1
+          else
+            echo "ok  /bio_link carries og tags"
+          fi
+
+          exit $FAILED

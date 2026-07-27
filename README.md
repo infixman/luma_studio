@@ -146,6 +146,22 @@ uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file
 
 **R2 裡的圖檔本身沒有備份。** 客人的作品圖只有一份，這是已知的缺口。
 
+### 監測
+
+[.github/workflows/canary.yml](.github/workflows/canary.yml) 每天台北時間早上七點半跑兩件事。失敗時 GitHub 會寄信給 repo 擁有者。
+
+**ibon 取件流程**：向 `zz_canary` 這個資料夾請求取件編號，確認拿到的 pincode 真的是 8–12 位數字、有列印期限、有圖檔清單。
+
+這條流程走的是 ibon 的一般消費者網頁介面，不是官方 API——ibon 隨時可能改欄位或開始擋 Cloudflare 的流量。沒有這個監測的話，你會在客人站在超商裡打不開連結時才知道。
+
+執行前會先刪掉該資料夾的 24 小時快取。少了這步，canary 第二天起就只是在讀自己的資料庫，會在真正的流程壞掉時天天顯示正常。
+
+**公開路徑**：確認 `/`、`/admin`、`/bio_link`、`/ibon_print/{id}`、`/api/health`、`/api/bio-link` 都回 200，而且 `/bio_link` 帶著分享預覽標籤。`/admin` 曾經因為前端 Worker 的一行錯誤而 307 導回首頁，這類檢查就是為了讓那種問題自己現形。
+
+建立 `zz_canary` 資料夾時放一張小圖即可。它會出現在 admin 的資料夾清單裡（底線開頭的 id 無法通過 `IDENTIFIER_PATTERN`，所以不能藏起來），排在最後。
+
+**這會每天在 ibon 產生一組真實的取件編號。** 量很小，但那是真的在使用 ibon 的服務。
+
 ### D1 migration
 
 schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker 每個 isolate 首次收到請求時自動套用，並以 `schema_migrations` 表記錄。所有敘述都必須可重複執行，因為多個 isolate 會同時啟動。手動執行 `wrangler d1 execute` 已不再需要。
