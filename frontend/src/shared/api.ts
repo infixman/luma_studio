@@ -2,7 +2,37 @@
 
 import type { BioLinkState } from './types'
 
-export const API_BASE = (import.meta.env.VITE_API_BASE ?? 'https://api.luma-studio.tw').replace(/\/+$/, '')
+function origin(value: string | undefined, fallback: string): string {
+  return (value ?? fallback).replace(/\/+$/, '')
+}
+
+/**
+ * Where this build sends its authenticated calls.
+ *
+ * The storefront talks to the public API; the back office talks to the admin
+ * API. They are separate Workers with separate session cookies, so this is
+ * per-build rather than per-call.
+ */
+export const API_BASE = origin(import.meta.env.VITE_API_BASE, 'https://api.luma-studio.tw')
+
+/**
+ * Images, avatars and click-counted redirects, which the public API serves
+ * for both builds.
+ *
+ * The back office needs these too — its thumbnail grid and its avatar preview
+ * are the same public URLs a customer sees — so it cannot simply use
+ * API_BASE, which for that build points at the admin Worker.
+ */
+export const PUBLIC_API_BASE = origin(import.meta.env.VITE_PUBLIC_API_BASE, 'https://api.luma-studio.tw')
+
+/**
+ * The customer-facing site, for links the back office hands out.
+ *
+ * A print page or bio link URL built from `location.origin` would read
+ * https://admin.luma-studio.tw/... inside the back office — a link that works
+ * for nobody but the owner, and only while signed in.
+ */
+export const STOREFRONT_ORIGIN = origin(import.meta.env.VITE_STOREFRONT_ORIGIN, 'https://luma-studio.tw')
 
 /** Forces a CORS preflight, which is what stops cross-site forgery of writes. */
 const APP_HEADER = { 'x-luma-app': '1' }
@@ -65,7 +95,7 @@ function handleUnauthorized(): ApiError {
 }
 
 export function publicImageUrl(key: string): string {
-  return `${API_BASE}/images/${key.split('/').map(encodeURIComponent).join('/')}`
+  return `${PUBLIC_API_BASE}/images/${key.split('/').map(encodeURIComponent).join('/')}`
 }
 
 /**
@@ -81,27 +111,27 @@ export function thumbnailUrl(key: string, size: number): string {
 }
 
 export function printPageUrl(folder: string): string {
-  return `${location.origin}/ibon_print/${encodeURIComponent(folder)}`
+  return `${STOREFRONT_ORIGIN}/ibon_print/${encodeURIComponent(folder)}`
 }
 
 /** Avatars and click-counted redirects are served by the API, not the site. */
 export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`
+  return `${PUBLIC_API_BASE}${path}`
 }
 
 export function bioLinkRedirectUrl(itemId: string): string {
-  return `${API_BASE}/r/${encodeURIComponent(itemId)}`
+  return `${PUBLIC_API_BASE}/r/${encodeURIComponent(itemId)}`
 }
 
 export function bioLinkPageUrl(): string {
-  return `${location.origin}/bio_link`
+  return `${STOREFRONT_ORIGIN}/bio_link`
 }
 
 export async function uploadBioLinkAvatar(file: File): Promise<BioLinkState> {
   const form = new FormData()
   form.append('file', file)
   // No content-type header: the browser has to set the multipart boundary.
-  return api<BioLinkState>('/api/admin/bio-link/avatar', { method: 'POST', body: form })
+  return api<BioLinkState>('/api/bio-link/avatar', { method: 'POST', body: form })
 }
 
 async function readBody(response: Response): Promise<Record<string, unknown>> {
@@ -140,7 +170,7 @@ export async function apiJson<T>(path: string, method: string, payload: unknown)
 export function uploadImage(folder: string, file: File, onProgress: (loaded: number) => void): Promise<{ key: string }> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
-    request.open('POST', `${API_BASE}/api/admin/upload`)
+    request.open('POST', `${API_BASE}/api/upload`)
     request.withCredentials = true
     request.setRequestHeader('x-luma-app', '1')
     request.responseType = 'json'

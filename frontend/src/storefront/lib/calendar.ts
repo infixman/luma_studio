@@ -1,6 +1,6 @@
 /** Date and time formatting for the schedule section. */
 
-import type { BioLinkEvent } from './types'
+import type { BioLinkEvent } from '../../shared/types'
 
 /**
  * Classes happen in Taipei, so they are shown in Taipei time whoever is

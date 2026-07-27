@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:admin": "vite --mode admin",
     "test": "vitest run",
-    "build": "tsc --noEmit && tsc -p worker/tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p worker/tsconfig.json",
+    "build": "npm run typecheck && npm run build:storefront && npm run build:admin",
+    "build:storefront": "vite build",
+    "build:admin": "vite build --mode admin",
     "preview": "vite preview",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "deploy:admin": "wrangler deploy -c wrangler.admin.jsonc"
   },
   "dependencies": {
     "preact": "^10.29.7"

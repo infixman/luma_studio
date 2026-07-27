@@ -10,6 +10,7 @@
 interface Env {
   ASSETS: Fetcher
   API_BASE: string
+  ADMIN_ORIGIN: string
 }
 
 interface BioLink {
@@ -102,6 +103,21 @@ export function isLinkPreviewer(userAgent: string): boolean {
   )
 }
 
+/**
+ * The back office moved to its own hostname, so its old URLs are forwarded.
+ *
+ * Permanent rather than temporary: these paths are not coming back, and the
+ * owner's bookmarks and browser history should learn the new address rather
+ * than route through here forever. The /admin segment is dropped because
+ * every path on the admin host is administration — /admin/bio-link becomes
+ * /bio-link.
+ */
+function adminRedirect(path: string, env: Env): Response | null {
+  if (path !== '/admin' && !path.startsWith('/admin/')) return null
+  const rest = path.slice('/admin'.length) || '/'
+  return Response.redirect(`${env.ADMIN_ORIGIN.replace(/\/+$/, '')}${rest}`, 301)
+}
+
 /** The shell is served for any unknown path, so the SPA can route it. */
 function shellResponse(html: string, source: Response): Response {
   const headers = new Headers(source.headers)
@@ -114,6 +130,9 @@ function shellResponse(html: string, source: Response): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    const moved = adminRedirect(url.pathname.replace(/\/+$/, '') || '/', env)
+    if (moved) return moved
+
     const asset = await env.ASSETS.fetch(request)
     if (asset.status !== 404) return asset
 

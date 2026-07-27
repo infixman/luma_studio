@@ -1,8 +1,8 @@
 import '../styles/admin-nav.css'
 
 const tabs = [
-  { href: '/admin', label: 'ibon 列印' },
-  { href: '/admin/bio-link', label: 'Bio Link' },
+  { href: '/', label: 'ibon 列印' },
+  { href: '/bio-link', label: 'Bio Link' },
 ]
 
 export function AdminNav({ current }: { current: string }) {

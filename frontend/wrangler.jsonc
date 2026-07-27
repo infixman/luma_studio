@@ -1,21 +1,23 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "luma-studio-web",
-  "main": "worker/index.ts",
+  "main": "worker/storefront.ts",
   "compatibility_date": "2026-07-21",
-  // The Worker owns routing: it serves the SPA shell for unknown paths and
-  // injects link-preview tags into /bio_link. Both handling modes are off so
-  // the asset router never rewrites or redirects a path behind its back —
-  // with the defaults, fetching /index.html for the shell answers with a
-  // redirect to /, which sent every SPA route back to the home page.
+  // The Worker owns routing: it forwards the back office's old /admin URLs to
+  // its new host, serves the SPA shell for unknown paths, and injects
+  // link-preview tags into /bio_link. Both handling modes are off so the asset
+  // router never rewrites or redirects a path behind its back — with the
+  // defaults, fetching /index.html for the shell answers with a redirect to /,
+  // which sent every SPA route back to the home page.
   "assets": {
-    "directory": "./dist",
+    "directory": "./dist/storefront",
     "binding": "ASSETS",
     "html_handling": "none",
     "not_found_handling": "none"
   },
   "vars": {
-    "API_BASE": "https://api.luma-studio.tw"
+    "API_BASE": "https://api.luma-studio.tw",
+    "ADMIN_ORIGIN": "https://admin.luma-studio.tw"
   },
   "observability": {
     "enabled": true

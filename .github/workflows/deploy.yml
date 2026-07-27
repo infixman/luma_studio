@@ -54,12 +54,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  frontend:
-    name: Deploy web interface
+  admin-frontend:
+    name: Deploy back office
     runs-on: ubuntu-latest
     environment: production
-    # The API must exist before the pages that call it go live.
-    needs: backend
+    # The admin API must exist before the pages that call it go live.
+    needs: admin-backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,11 +72,38 @@ jobs:
       - name: Test
         run: npm test
         working-directory: frontend
+      # The API URLs come from frontend/.env.admin, not from here. The two
+      # builds need different values, and a shell variable feeding both is how
+      # the back office would end up pointed at the public API.
       - name: Build
-        run: npm run build
+        run: npm run typecheck && npm run build:admin
+        working-directory: frontend
+      - name: Deploy static assets
+        run: npx wrangler deploy -c wrangler.admin.jsonc
         working-directory: frontend
         env:
-          VITE_API_BASE: ${{ vars.API_BASE_URL || 'https://api.luma-studio.tw' }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  frontend:
+    name: Deploy storefront
+    runs-on: ubuntu-latest
+    environment: production
+    # Last: it forwards /admin to the back office, which should already be
+    # answering by the time anyone follows that redirect.
+    needs: [backend, admin-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Build
+        run: npm run typecheck && npm run build:storefront
+        working-directory: frontend
       - name: Deploy static assets
         run: npx wrangler deploy
         working-directory: frontend

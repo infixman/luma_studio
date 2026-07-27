@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "luma-studio-admin",
+  "main": "worker/admin.ts",
+  "compatibility_date": "2026-07-21",
+  // Built by `npm run build:admin`. The shell is emitted as admin.html, not
+  // index.html — see the SHELL constant in worker/admin.ts.
+  //
+  // Both handling modes are off for the same reason as the storefront: with
+  // the defaults, fetching the shell answers with a redirect to /, which
+  // sends every SPA route back to the home page.
+  "assets": {
+    "directory": "./dist/admin",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

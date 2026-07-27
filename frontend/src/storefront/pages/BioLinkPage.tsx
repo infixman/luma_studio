@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 
 import { BioLinkCalendar } from '../components/BioLinkCalendar'
-import { SocialIcon, platformLabel } from '../components/SocialIcon'
-import { api, apiUrl, bioLinkRedirectUrl } from '../lib/api'
-import type { BioLinkCalendarData, PublicBioLink } from '../lib/types'
+import { SocialIcon, platformLabel } from '../../shared/components/SocialIcon'
+import { api, apiUrl, bioLinkRedirectUrl } from '../../shared/api'
+import type { BioLinkCalendarData, PublicBioLink } from '../../shared/types'
 import '../styles/bio-link.css'
 
 export function BioLinkPage() {

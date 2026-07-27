@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { escapeHtml, isLinkPreviewer, oneLine, pageTitle } from './index'
+import { escapeHtml, isLinkPreviewer, oneLine, pageTitle } from './storefront'
 
 describe('escapeHtml', () => {
   it('neutralises the characters that would break out of an attribute', () => {

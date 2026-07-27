@@ -132,13 +132,31 @@ backend/
 frontend/
   wrangler.jsonc        luma-studio-web    assets ./dist/storefront  main worker/storefront.ts
   wrangler.admin.jsonc  luma-studio-admin  assets ./dist/admin       main worker/admin.ts
+  index.html  admin.html
+  .env.production  .env.admin
   src/
     storefront/  admin/  shared/
 ```
 
-`vite build --mode storefront` 與 `--mode admin`。兩邊都要沿用現有
-`html_handling: "none"` 與 `not_found_handling: "none"`——預設值會讓 SPA
-路由被導回首頁。
+`vite build` 與 `vite build --mode admin`（前台就是預設的 production 模式，
+不另立 storefront 模式）。兩邊都要沿用現有 `html_handling: "none"` 與
+`not_found_handling: "none"`——預設值會讓 SPA 路由被導回首頁。
+
+三件實作時才浮現的事：
+
+**Vite 依來源檔名命名輸出的 HTML**，所以後台的 shell 是 `dist/admin/admin.html`
+而不是 `index.html`。改用建置後重新命名或第二個 Vite root 都不值得，後台
+Worker 直接知道自己的 shell 叫什麼（`worker/admin.ts` 的 `SHELL`）。
+
+**API 網址放在 `.env.production` 與 `.env.admin`，不放 CI 環境變數。** 兩份建置
+需要不同的值，一個 shell 變數同時餵兩邊，後台就會安靜地連到公開 API——那是
+一種不會報錯的壞法。這些是公開網址，本來就會內嵌進 bundle，沒有機密問題。
+
+**前端有三個 base 而不是一個。** `API_BASE` 是這份建置驗證的對象（前台是公開
+API，後台是管理 API）；`PUBLIC_API_BASE` 是圖檔、頭像與點擊轉址，後台也要用，
+因為那些永遠由公開 Worker 提供；`STOREFRONT_ORIGIN` 是後台複製給客人的連結，
+用 `location.origin` 會產生 `https://admin.luma-studio.tw/bio_link` 這種只有
+擁有者登入時才打得開的網址。
 
 ### 路徑不再有 admin/ 與 shop/ 前綴
 

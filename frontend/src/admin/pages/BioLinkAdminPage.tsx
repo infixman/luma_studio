@@ -4,10 +4,10 @@ import { AdminNav } from '../components/AdminNav'
 import { BioLinkAppearance } from '../components/BioLinkAppearance'
 import { BioLinkStatsPanel } from '../components/BioLinkStats'
 import { CopyButton, OpenButton } from '../components/IconButtons'
-import { SocialIcon, platformLabel, socialPlatforms } from '../components/SocialIcon'
+import { SocialIcon, platformLabel, socialPlatforms } from '../../shared/components/SocialIcon'
 import { StatusBar, useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, apiUrl, bioLinkPageUrl, clearLoginAttempt, uploadBioLinkAvatar } from '../lib/api'
-import type { BioLinkItem, BioLinkKind, BioLinkState } from '../lib/types'
+import { ApiError, api, apiJson, apiUrl, bioLinkPageUrl, clearLoginAttempt, uploadBioLinkAvatar } from '../../shared/api'
+import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/bio-link-admin.css'
 
@@ -59,7 +59,7 @@ export function BioLinkAdminPage() {
 
   useEffect(() => {
     let cancelled = false
-    api<BioLinkState>('/api/admin/bio-link')
+    api<BioLinkState>('/api/bio-link')
       .then((data) => {
         if (!cancelled) adopt(data)
       })
@@ -110,7 +110,7 @@ export function BioLinkAdminPage() {
 
     void mutate(
       () =>
-        apiJson<BioLinkState>('/api/admin/bio-link', 'PUT', {
+        apiJson<BioLinkState>('/api/bio-link', 'PUT', {
           displayName: page.displayName,
           bio: page.bio,
           theme: page.theme,
@@ -145,7 +145,7 @@ export function BioLinkAdminPage() {
   const testCalendar = () => {
     if (!page) return
     setBusy(true)
-    apiJson<{ count: number }>('/api/admin/bio-link/calendar/test', 'POST', { calendarUrl: page.calendarUrl })
+    apiJson<{ count: number }>('/api/bio-link/calendar/test', 'POST', { calendarUrl: page.calendarUrl })
       .then((result) => show(`讀到 ${result.count} 場活動。`, 'ok'))
       .catch(showError)
       .finally(() => setBusy(false))
@@ -173,7 +173,7 @@ export function BioLinkAdminPage() {
 
   const removeAvatar = () => {
     if (!confirm('移除頭像？公開頁會改用 logo。')) return
-    void mutate(() => api<BioLinkState>('/api/admin/bio-link/avatar', { method: 'DELETE' }), '頭像已移除。')
+    void mutate(() => api<BioLinkState>('/api/bio-link/avatar', { method: 'DELETE' }), '頭像已移除。')
   }
 
   const addItem = (kind: BioLinkKind) => {

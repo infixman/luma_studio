@@ -10,7 +10,8 @@
 | --- | --- | --- |
 | `luma-studio` | Cloudflare Python Worker，公開 JSON API 與圖檔 | `https://api.luma-studio.tw` |
 | `luma-studio-admin-api` | Cloudflare Python Worker，管理 API | `https://admin-api.luma-studio.tw` |
-| `luma-studio-web` | Vite + Preact 靜態站台，管理介面與公開取件頁 | `https://luma-studio.tw` |
+| `luma-studio-web` | Vite + Preact 靜態站台，公開取件頁與 bio link | `https://luma-studio.tw` |
+| `luma-studio-admin` | Vite + Preact 靜態站台，管理介面 | `https://admin.luma-studio.tw` |
 
 兩個 Worker 共用 `backend/src/` 的程式碼，只是進入點不同（[main.py](backend/src/main.py) 與 [admin_main.py](backend/src/admin_main.py)），設定檔分別是 [wrangler.toml](backend/wrangler.toml) 與 [wrangler.admin.toml](backend/wrangler.admin.toml)。
 
@@ -18,7 +19,7 @@
 
 管理 Worker 是**唯一會套用 D1 migration 的部署**。公開 Worker 只讀取 `schema_migrations` 回報狀態，不修改 schema：結帳是熱路徑，不該為 schema 檢查付出冷啟動成本，而公開得到的 Worker 也沒有理由具備 `ALTER TABLE` 的能力。因此部署順序固定為管理端先、公開端後。
 
-管理介面目前仍部署在 `luma-studio.tw/admin`，還在呼叫公開 Worker 上的 `/api/admin/*`。那些路由暫時保留為轉接層（[main.py](backend/src/main.py) 的 `legacy_admin_response`），等管理前台搬到 `admin.luma-studio.tw` 之後一次移除。
+管理介面搬到 `admin.luma-studio.tw` 之後，前台 Worker 會把舊的 `/admin` 與 `/admin/bio-link` 以 301 永久轉向新網址（去掉 `/admin` 這一段，因為新主機上每一頁都是管理頁）。公開 Worker 上的 `/api/admin/*` 轉接層（[main.py](backend/src/main.py) 的 `legacy_admin_response`）仍在，等新後台實際驗證過再移除。
 
 ## 使用方式
 
@@ -56,21 +57,28 @@ backend/
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
 frontend/
-  wrangler.jsonc      Worker 與靜態資產設定
-  worker/index.ts     供應 SPA、為 /bio_link 注入分享預覽標籤
-  vite.config.ts
+  wrangler.jsonc      商店前台的 Worker 與靜態資產設定
+  wrangler.admin.jsonc 管理後台的同上
+  index.html          前台 shell
+  admin.html          後台 shell
+  .env.production     前台建置的 API 網址
+  .env.admin          後台建置的 API 網址
+  vite.config.ts      依 --mode 切換進入點與輸出目錄
+  worker/
+    storefront.ts     供應前台 SPA、為 /bio_link 注入分享預覽標籤、轉走舊的 /admin
+    admin.ts          供應後台 SPA
   public/assets/      logo 與教學圖
   src/
-    app.tsx           路徑對應
-    pages/            HomePage、AdminPage、PrintPage、BioLinkPage、BioLinkAdminPage
-    components/       StatusBar、IconButtons、AdminNav、SocialIcon
-    lib/              api、型別、列印規格轉換
-    styles/           base、home、admin、admin-nav、print、bio-link、bio-link-admin
+    shared/           兩邊共用：api、types、SocialIcon、base.css
+    storefront/       main、app、HomePage、PrintPage、BioLinkPage、行事曆
+    admin/            main、app、AdminPage、BioLinkAdminPage、列印規格
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
 docs/superpowers/specs/  設計文件
-.github/workflows/    main branch 自動部署（後端先、前端後）
+.github/workflows/    main branch 自動部署
 ```
+
+`src/` 底下只有三個目錄，規則很簡單：東西放在**用到它的那一邊**，兩邊都用到才進 `shared/`。目前 `shared/` 只有 API client、型別、社群圖示與基礎樣式。
 
 ## 後端 API
 
@@ -224,14 +232,17 @@ schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，由**�
 
    secret 是 per-Worker 的，`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GOOGLE_OAUTH_REDIRECT_URI` 要在兩個 Worker 上各設一次，不會互相共用。
 
-5. 部署前端：
+5. 部署前端。兩個站台各自建置、各自部署：
 
    ```powershell
    cd frontend
    npm ci
    npm run build
+   npx wrangler deploy -c wrangler.admin.jsonc
    npx wrangler deploy
    ```
+
+   `npm run build` 會跑型別檢查再依序建置兩份。API 網址來自 [.env.production](frontend/.env.production) 與 [.env.admin](frontend/.env.admin)，不是環境變數——兩份建置需要不同的值，用同一個 shell 變數餵兩邊，後台就會安靜地連到公開 API。
 
 6. 將本機 `upload_ibon/<id>/` 同步到遠端 R2：
 
@@ -255,6 +266,7 @@ Workers & Pages → 選 Worker → Settings → Domains & Routes → Add → Cus
 | --- | --- |
 | `luma-studio-web` | `luma-studio.tw` |
 | `luma-studio-web` | `www.luma-studio.tw` |
+| `luma-studio-admin` | `admin.luma-studio.tw` |
 | `luma-studio` | `api.luma-studio.tw` |
 | `luma-studio-admin-api` | `admin-api.luma-studio.tw` |
 
@@ -331,22 +343,34 @@ Cloudflare **預設不會快取 Worker 產生的回應**，所以沒有這條規
 
 ## 本機開發
 
-兩個服務要同時跑：
+後端兩個 Worker、前端兩個站台，各自獨立啟動，只跑正在改的那些就好：
 
 ```powershell
 uv --directory backend run pywrangler dev
+uv --directory backend run pywrangler dev -c wrangler.admin.toml
 ```
 
 ```powershell
 cd frontend
-npm run dev
+npm run dev          # 商店前台，port 5173
+npm run dev:admin    # 管理後台，port 5174
 ```
 
-前端預設打 `https://api.luma-studio.tw`。要改打本機後端，在 `frontend/.env.local` 設定：
+前端預設打正式環境的 API。要改打本機後端，寫進 gitignore 過的本機覆寫檔：
 
 ```text
+# frontend/.env.local — 商店前台（npm run dev 是 development 模式）
 VITE_API_BASE=http://localhost:8787
+VITE_PUBLIC_API_BASE=http://localhost:8787
 ```
+
+```text
+# frontend/.env.admin.local — 管理後台
+VITE_API_BASE=http://localhost:8788
+VITE_PUBLIC_API_BASE=http://localhost:8787
+```
+
+後台要用 `.env.admin.local` 而不是 `.env.local`：Vite 的優先序是 `.env` < `.env.local` < `.env.[mode]` < `.env.[mode].local`，所以 `.env.admin` 會蓋掉 `.env.local`。
 
 後端的本機來源設定放在 `backend/.dev.vars`（見 [backend/.dev.vars.example](backend/.dev.vars.example)），**不要**把 localhost 寫進 `wrangler.toml` 的 `[vars]`——那份設定會上到 production，等於讓任何在該埠上的程式取得正式環境的寫入權。
 
@@ -357,8 +381,10 @@ VITE_API_BASE=http://localhost:8787
 管理介面：
 
 ```text
-https://luma-studio.tw/admin
+https://admin.luma-studio.tw
 ```
+
+舊網址 `https://luma-studio.tw/admin` 會 301 轉過來。
 
 僅允許 `chiao7912@gmail.com`、`infixman@gmail.com` 這兩個已驗證 Google 帳號。介面可建立資料夾、上傳/刪除圖片、刪除空資料夾、複製或開啟公開取件頁與圖檔網址，並設定每個資料夾的紙張尺寸、色彩、單/雙面與紙張種類。
 
@@ -391,15 +417,27 @@ https://luma-studio.tw/admin
 
 ## GitHub 自動部署
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時依序部署：**管理 Worker → 公開 Worker → 前端**。
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時依序部署四個站台：
 
-順序不是任意的。管理 Worker 是唯一會套用 migration 的部署，所以它必須先於任何會讀取那些表的東西；前端則必須後於它要呼叫的 API。測試只在第一個 job 跑一次，後續 job 靠 `needs` 串接，失敗就不會往下走。
+```text
+管理 Worker ──> 管理後台
+     └───────> 公開 Worker ──┐
+                             ├──> 商店前台
+        管理後台 ────────────┘
+```
+
+順序不是任意的：
+
+- **管理 Worker 最先**，它是唯一會套用 migration 的部署，必須先於任何會讀取那些表的東西
+- **前端後於它要呼叫的 API**
+- **商店前台最後**，因為它會把 `/admin` 轉向管理後台；轉過去的時候對方要已經在服務了
 
 所有 job 都綁在名為 `production` 的 GitHub Environment，請先建立該 environment，再於 repository 的 **Settings → Secrets and variables → Actions**（或該 environment）設定：
 
 - `CLOUDFLARE_API_TOKEN`：具此帳號 Workers 部署權限的 API token。
 - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare Account ID。
-- `API_BASE_URL`（variable，選用）：前端建置時要打的後端網址，未設定時使用預設值。
+
+前端的 API 網址不再由 CI 變數提供，改放在 [frontend/.env.production](frontend/.env.production) 與 [frontend/.env.admin](frontend/.env.admin)。兩份建置需要不同的值，一個 shell 變數同時餵兩邊會讓後台連錯 API，而那是一種不會報錯的壞法。
 
 Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持有它們。
 

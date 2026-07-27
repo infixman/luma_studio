@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { api } from '../lib/api'
-import type { BioLinkStats as Stats, LabelledTotal } from '../lib/types'
+import { api } from '../../shared/api'
+import type { BioLinkStats as Stats, LabelledTotal } from '../../shared/types'
 
 const RANGES = [7, 30, 90]
 
@@ -36,7 +36,7 @@ export function BioLinkStatsPanel({ onError }: { onError: (error: unknown) => vo
   useEffect(() => {
     let cancelled = false
     setStats(null)
-    api<Stats>(`/api/admin/bio-link/stats?days=${days}`)
+    api<Stats>(`/api/bio-link/stats?days=${days}`)
       .then((data) => {
         if (!cancelled) setStats(data)
       })

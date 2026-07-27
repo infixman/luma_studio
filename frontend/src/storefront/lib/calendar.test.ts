@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { eventDate, eventTime } from './calendar'
-import type { BioLinkEvent } from './types'
+import type { BioLinkEvent } from '../../shared/types'
 
 function makeEvent(overrides: Partial<BioLinkEvent> = {}): BioLinkEvent {
   return {

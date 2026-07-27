@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { api } from '../lib/api'
-import type { PrintResult } from '../lib/types'
+import { api } from '../../shared/api'
+import type { PrintResult } from '../../shared/types'
 import '../styles/print.css'
 
 interface TutorialStep {

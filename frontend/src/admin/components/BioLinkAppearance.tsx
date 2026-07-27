@@ -1,4 +1,4 @@
-import type { BioLinkFont, BioLinkShape, BioLinkStyle, BioLinkTheme } from '../lib/types'
+import type { BioLinkFont, BioLinkShape, BioLinkStyle, BioLinkTheme } from '../../shared/types'
 
 /**
  * Appearance is chosen from named options, never typed.

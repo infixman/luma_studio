@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { AdminNav } from '../components/AdminNav'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { StatusBar, useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, clearLoginAttempt, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../lib/api'
+import { ApiError, api, apiJson, clearLoginAttempt, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
 import {
   applyChoice,
   defaultPrintChoice,
@@ -13,7 +13,7 @@ import {
   toSelectType,
   type PrintChoice,
 } from '../lib/printSpec'
-import type { FolderListing, ObjectListing, PrintSettingsResponse, StoredObject } from '../lib/types'
+import type { FolderListing, ObjectListing, PrintSettingsResponse, StoredObject } from '../../shared/types'
 import '../styles/admin.css'
 
 const MAX_FILE_COUNT = 8
@@ -44,12 +44,12 @@ export function AdminPage() {
   const uploadDisabled = folder === null || uploading || full
 
   const loadFolders = useCallback(async () => {
-    const data = await api<FolderListing>('/api/admin/folders')
+    const data = await api<FolderListing>('/api/folders')
     setFolders(data.folders)
   }, [])
 
   const loadFiles = useCallback(async (target: string) => {
-    const data = await api<ObjectListing>(`/api/admin/objects?folder=${encodeURIComponent(target)}`)
+    const data = await api<ObjectListing>(`/api/objects?folder=${encodeURIComponent(target)}`)
     setFiles(data.objects)
   }, [])
 
@@ -66,8 +66,8 @@ export function AdminPage() {
       setFiles([])
       try {
         const [listing, settings] = await Promise.all([
-          api<ObjectListing>(`/api/admin/objects?folder=${encodeURIComponent(target)}`),
-          api<PrintSettingsResponse>(`/api/admin/print-settings?folder=${encodeURIComponent(target)}`),
+          api<ObjectListing>(`/api/objects?folder=${encodeURIComponent(target)}`),
+          api<PrintSettingsResponse>(`/api/print-settings?folder=${encodeURIComponent(target)}`),
         ])
         if (token !== selectionToken.current) return
         setFiles(listing.objects)
@@ -103,7 +103,7 @@ export function AdminPage() {
     const name = newFolder.trim()
     if (!name) return
     try {
-      await apiJson('/api/admin/folders', 'POST', { folder: name })
+      await apiJson('/api/folders', 'POST', { folder: name })
       setNewFolder('')
       show('資料夾已建立。', 'ok')
       await loadFolders()
@@ -116,7 +116,7 @@ export function AdminPage() {
   const deleteFolder = async () => {
     if (folder === null || !confirm('只可刪除沒有圖檔的資料夾。要繼續？')) return
     try {
-      await api(`/api/admin/folders/${encodeURIComponent(folder)}`, { method: 'DELETE' })
+      await api(`/api/folders/${encodeURIComponent(folder)}`, { method: 'DELETE' })
       show('資料夾已刪除。', 'ok')
       setFolder(null)
       setFiles([])
@@ -131,7 +131,7 @@ export function AdminPage() {
   const deleteFile = async (item: StoredObject) => {
     if (folder === null || !confirm(`刪除 ${item.name}？`)) return
     try {
-      await api(`/api/admin/objects?key=${encodeURIComponent(item.key)}`, { method: 'DELETE' })
+      await api(`/api/objects?key=${encodeURIComponent(item.key)}`, { method: 'DELETE' })
       show('已刪除圖片，pincode 快取已清除；下次公開列印會建立新的取件編號。', 'ok')
       await loadFiles(folder)
     } catch (error) {
@@ -146,7 +146,7 @@ export function AdminPage() {
     setChoice(next)
     setSummary(`下一次列印將使用：${toSelectType(next)}`)
     try {
-      const data = await apiJson<PrintSettingsResponse>('/api/admin/print-settings', 'PUT', {
+      const data = await apiJson<PrintSettingsResponse>('/api/print-settings', 'PUT', {
         folder,
         selectType: toSelectType(next),
       })

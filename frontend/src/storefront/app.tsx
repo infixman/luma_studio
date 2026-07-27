@@ -1,5 +1,3 @@
-import { AdminPage } from './pages/AdminPage'
-import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
 import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
@@ -23,16 +21,6 @@ export function App() {
     return <HomePage />
   }
 
-  if (path === '/admin') {
-    markBody('admin')
-    return <AdminPage />
-  }
-
-  if (path === '/admin/bio-link') {
-    markBody('admin')
-    return <BioLinkAdminPage />
-  }
-
   if (path === '/bio_link') {
     markBody('bio')
     return <BioLinkPage />
@@ -51,9 +39,6 @@ export function App() {
         <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
       </div>
       <p>這個網址沒有對應的頁面。</p>
-      <p>
-        <a href="/admin">前往管理介面</a>
-      </p>
     </main>
   )
 }

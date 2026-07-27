@@ -1,5 +1,5 @@
 import { eventDate, eventTime } from '../lib/calendar'
-import type { BioLinkEvent } from '../lib/types'
+import type { BioLinkEvent } from '../../shared/types'
 
 function Event({ event }: { event: BioLinkEvent }) {
   const date = eventDate(event.start)

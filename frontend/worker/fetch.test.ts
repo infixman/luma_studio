@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import worker from './index'
+import worker from './storefront'
 
 interface Asset {
   status: number
@@ -30,7 +30,11 @@ function assetsBinding(files: Record<string, Asset>) {
 const SHELL = '<!doctype html><html><head><title>Luma Studio</title></head><body><div id="app"></div></body></html>'
 
 function env(files: Record<string, Asset> = { '/index.html': { status: 200, body: SHELL } }) {
-  return { ASSETS: assetsBinding(files), API_BASE: 'https://api.example.test' } as never
+  return {
+    ASSETS: assetsBinding(files),
+    API_BASE: 'https://api.example.test',
+    ADMIN_ORIGIN: 'https://admin.luma-studio.tw',
+  } as never
 }
 
 function get(path: string, userAgent?: string): Request {
@@ -72,15 +76,15 @@ describe('serving the built site', () => {
   })
 
   it('serves the shell for a client-side route instead of redirecting', async () => {
-    // /admin shipped as a 307 back to the home page: the asset router answers
+    // These shipped as a 307 back to the home page: the asset router answers
     // a request for /index.html with a redirect, and the Worker passed it on.
-    const response = await worker.fetch(get('/admin'), env())
+    const response = await worker.fetch(get('/ibon_print/20260721_soda'), env())
     expect(response.status).toBe(200)
     expect(response.headers.get('location')).toBeNull()
     expect(await response.text()).toContain('<div id="app">')
   })
 
-  it.each(['/admin', '/admin/bio-link', '/ibon_print/20260721_soda', '/anything-else'])(
+  it.each(['/ibon_print/20260721_soda', '/bio_link', '/anything-else'])(
     'serves the shell for %s',
     async (path) => {
       const response = await worker.fetch(get(path), env())
@@ -90,17 +94,37 @@ describe('serving the built site', () => {
   )
 
   it('refuses to pass a redirect through as the shell', async () => {
-    const response = await worker.fetch(get('/admin'), env({ '/index.html': { status: 307, headers: { location: '/' } } }))
+    const response = await worker.fetch(
+      get('/anything-else'),
+      env({ '/index.html': { status: 307, headers: { location: '/' } } }),
+    )
     expect(response.status).toBe(404)
     expect(response.headers.get('location')).toBeNull()
   })
 
   it('keeps the security headers the asset layer sets', async () => {
     const response = await worker.fetch(
-      get('/admin'),
+      get('/anything-else'),
       env({ '/index.html': { status: 200, body: SHELL, headers: { 'x-frame-options': 'DENY' } } }),
     )
     expect(response.headers.get('x-frame-options')).toBe('DENY')
+  })
+})
+
+describe('the back office moved hosts', () => {
+  it.each([
+    ['/admin', 'https://admin.luma-studio.tw/'],
+    ['/admin/', 'https://admin.luma-studio.tw/'],
+    ['/admin/bio-link', 'https://admin.luma-studio.tw/bio-link'],
+  ])('forwards %s permanently', async (path, destination) => {
+    const response = await worker.fetch(get(path), env())
+    expect(response.status).toBe(301)
+    expect(response.headers.get('location')).toBe(destination)
+  })
+
+  it('does not catch paths that merely start with the same letters', async () => {
+    const response = await worker.fetch(get('/administrivia'), env())
+    expect(response.status).toBe(200)
   })
 })
 
@@ -160,7 +184,7 @@ describe('link previews on /bio_link', () => {
   it('leaves other routes without preview tags', async () => {
     const restore = stubApi(profile)
     try {
-      const html = await (await worker.fetch(get('/admin', CRAWLER), env())).text()
+      const html = await (await worker.fetch(get('/anything-else', CRAWLER), env())).text()
       expect(html).not.toContain('og:title')
     } finally {
       restore()
