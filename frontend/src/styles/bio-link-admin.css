@@ -230,6 +230,55 @@ body.admin .bio-item-actions button {
   font-size: 0.875rem;
 }
 
+/* Explicit rather than relying on where .ghost falls in the cascade: these
+   states have to read correctly whatever else is styling buttons. */
+body.admin .bio-item-actions button.ghost,
+body.admin .bio-item-actions button.ghost:disabled {
+  background: #fff;
+  color: #405160;
+  border-color: #c8d0cc;
+  opacity: 1;
+}
+
+body.admin .bio-item-actions button.ghost:disabled {
+  color: #bcc5c0;
+  border-color: #e6eae7;
+}
+
+body.admin .bio-item-actions button.ghost:hover:not(:disabled) {
+  background: #edf5f3;
+  border-color: #80aaa4;
+  color: #1e625e;
+}
+
+/* A state, not an action: it reports whether the link is live and toggles it. */
+body.admin .bio-toggle {
+  min-width: 66px;
+  border-width: 1px;
+  border-style: solid;
+  font-weight: 700;
+}
+
+body.admin .bio-toggle.on {
+  background: #e6f2ef;
+  border-color: #9cc4be;
+  color: #1a6a64;
+}
+
+body.admin .bio-toggle.off {
+  background: #f3f5f2;
+  border-color: #d1d9d4;
+  color: #7c8a88;
+}
+
+body.admin .bio-toggle:hover:not(:disabled) {
+  border-color: #80aaa4;
+}
+
+body.admin .bio-toggle:disabled {
+  opacity: 0.6;
+}
+
 body.admin .stats {
   margin-top: 4px;
 }

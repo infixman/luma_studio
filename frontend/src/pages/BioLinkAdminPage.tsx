@@ -302,8 +302,14 @@ export function BioLinkAdminPage() {
                   >
                     ↓
                   </button>
-                  <button class="ghost" disabled={busy} onClick={() => saveItem(item, { enabled: !item.enabled })}>
-                    {item.enabled ? '停用' : '啟用'}
+                  <button
+                    class={item.enabled ? 'bio-toggle on' : 'bio-toggle off'}
+                    disabled={busy}
+                    aria-pressed={item.enabled}
+                    title={item.enabled ? '目前顯示中，點擊隱藏' : '目前已隱藏，點擊顯示'}
+                    onClick={() => saveItem(item, { enabled: !item.enabled })}
+                  >
+                    {item.enabled ? '顯示中' : '已隱藏'}
                   </button>
                   <button class="danger" disabled={busy} onClick={() => removeItem(item)}>
                     刪除
