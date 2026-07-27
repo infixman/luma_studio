@@ -109,6 +109,21 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_bio_link_events_day ON bio_link_events (day, event_type)",
         ],
     },
+    {
+        # Appearance, and the class schedule read from a public Google
+        # Calendar. Both belong to the single settings row.
+        "name": "0006_add_bio_link_style_and_calendar",
+        "add_columns": [
+            ("bio_link_settings", "theme", "TEXT NOT NULL DEFAULT 'warm'"),
+            ("bio_link_settings", "button_shape", "TEXT NOT NULL DEFAULT 'rounded'"),
+            ("bio_link_settings", "font_style", "TEXT NOT NULL DEFAULT 'sans'"),
+            ("bio_link_settings", "calendar_url", "TEXT NOT NULL DEFAULT ''"),
+            ("bio_link_settings", "calendar_title", "TEXT NOT NULL DEFAULT '近期課程'"),
+            ("bio_link_settings", "calendar_count", "INTEGER NOT NULL DEFAULT 5"),
+            ("bio_link_settings", "calendar_enabled", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

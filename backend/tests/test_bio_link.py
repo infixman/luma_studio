@@ -114,6 +114,74 @@ class TestItemId:
             bio_link.validate_item_id(value)
 
 
+class TestAppearanceChoices:
+    """Appearance is picked from fixed sets, never typed, so nothing an
+    owner enters can become CSS."""
+
+    def test_accepts_every_offered_value(self, bio_link):
+        for value in bio_link.THEMES:
+            assert bio_link.validate_choice(value, bio_link.THEMES, "Theme") == value
+        for value in bio_link.BUTTON_SHAPES:
+            assert bio_link.validate_choice(value, bio_link.BUTTON_SHAPES, "Shape") == value
+
+    @pytest.mark.parametrize("value", ["", "rainbow", None, "warm; color:red", 1])
+    def test_rejects_anything_else(self, bio_link, value):
+        with pytest.raises(ValueError):
+            bio_link.validate_choice(value, bio_link.THEMES, "Theme")
+
+
+class TestCalendarAddress:
+    def test_accepts_a_google_calendar_address(self, bio_link):
+        url = "https://calendar.google.com/calendar/ical/abc%40group.calendar.google.com/public/basic.ics"
+        assert bio_link.validate_calendar_url(url) == url
+
+    def test_empty_means_not_configured(self, bio_link):
+        assert bio_link.validate_calendar_url("") == ""
+        assert bio_link.validate_calendar_url("   ") == ""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://calendar.google.com/x.ics",
+            "https://evil.example/x.ics",
+            "https://calendar.google.com.evil.example/x.ics",
+            "https://192.168.0.1/x.ics",
+            "https://localhost/x.ics",
+            "https://[::1]/x.ics",
+            "file:///etc/passwd",
+        ],
+    )
+    def test_refuses_any_other_destination(self, bio_link, url):
+        """The Worker fetches this URL, so an open host field would let an
+        admin field reach addresses the caller cannot."""
+
+        with pytest.raises(ValueError):
+            bio_link.validate_calendar_url(url)
+
+    def test_refuses_control_characters(self, bio_link):
+        with pytest.raises(ValueError):
+            bio_link.validate_calendar_url("https://calendar.google.com/x.ics\r\nHost: evil")
+
+    @pytest.mark.parametrize("given,expected", [(0, 1), (1, 1), (5, 5), (99, 12), (-3, 1)])
+    def test_event_count_is_clamped(self, bio_link, given, expected):
+        assert bio_link.validate_calendar_count(given) == expected
+
+    def test_event_count_must_be_a_number(self, bio_link):
+        with pytest.raises(ValueError):
+            bio_link.validate_calendar_count("many")
+
+
+class TestEventIds:
+    def test_accepts_a_google_style_uid(self, bio_link):
+        value = "abc123def_ghi@google.com-20260808T100000"
+        assert bio_link.validate_event_id(value) == value
+
+    @pytest.mark.parametrize("value", ["", "../../etc/passwd", "a/b", "a b", "x" * 201])
+    def test_rejects_a_path_or_junk(self, bio_link, value):
+        with pytest.raises(ValueError):
+            bio_link.validate_event_id(value)
+
+
 class TestAvatarPaths:
     def test_maps_a_stored_key_to_a_public_path(self, bio_link):
         key = f"{bio_link.AVATAR_PREFIX}/token.jpg"

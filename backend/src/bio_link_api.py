@@ -13,11 +13,49 @@ async def _read_json(ctx: Ctx) -> dict:
 
 async def _state(ctx: Ctx) -> dict:
     settings = await bio_link.get_settings(ctx.env)
+    # avatarKey is the storage detail behind avatarPath; the editor never
+    # needs it, so it stays out of the payload.
     return {
         "displayName": settings["displayName"],
         "bio": settings["bio"],
         "avatarPath": settings["avatarPath"],
+        "theme": settings["theme"],
+        "buttonShape": settings["buttonShape"],
+        "fontStyle": settings["fontStyle"],
+        "calendarUrl": settings["calendarUrl"],
+        "calendarTitle": settings["calendarTitle"],
+        "calendarCount": settings["calendarCount"],
+        "calendarEnabled": settings["calendarEnabled"],
         "items": await bio_link.list_items(ctx.env),
+    }
+
+
+def _settings_from(body: dict, current: dict) -> dict:
+    """Validate everything the editor sent, falling back to what is stored."""
+
+    def given(key, fallback):
+        return body[key] if key in body else fallback
+
+    return {
+        "displayName": bio_link.validate_text(
+            str(given("displayName", current["displayName"]) or ""), bio_link.MAX_DISPLAY_NAME, "Display name", required=False
+        ),
+        "bio": bio_link.validate_text(str(given("bio", current["bio"]) or ""), bio_link.MAX_BIO, "Bio", required=False),
+        "theme": bio_link.validate_choice(given("theme", current["theme"]), bio_link.THEMES, "Theme"),
+        "buttonShape": bio_link.validate_choice(
+            given("buttonShape", current["buttonShape"]), bio_link.BUTTON_SHAPES, "Button shape"
+        ),
+        "fontStyle": bio_link.validate_choice(given("fontStyle", current["fontStyle"]), bio_link.FONT_STYLES, "Font style"),
+        "calendarUrl": bio_link.validate_calendar_url(str(given("calendarUrl", current["calendarUrl"]) or "")),
+        "calendarTitle": bio_link.validate_text(
+            str(given("calendarTitle", current["calendarTitle"]) or "近期課程"),
+            bio_link.MAX_CALENDAR_TITLE,
+            "Calendar title",
+            required=False,
+        )
+        or "近期課程",
+        "calendarCount": bio_link.validate_calendar_count(given("calendarCount", current["calendarCount"])),
+        "calendarEnabled": bool(given("calendarEnabled", current["calendarEnabled"])),
     }
 
 
@@ -38,14 +76,29 @@ async def handle(ctx: Ctx):
     if path == "/api/admin/bio-link" and method == "PUT":
         try:
             body = await _read_json(ctx)
-            display_name = bio_link.validate_text(
-                str(body.get("displayName") or ""), bio_link.MAX_DISPLAY_NAME, "Display name", required=False
-            )
-            bio = bio_link.validate_text(str(body.get("bio") or ""), bio_link.MAX_BIO, "Bio", required=False)
+            settings = _settings_from(body, await bio_link.get_settings(env))
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid settings", 400)
-        await bio_link.save_settings(env, display_name, bio)
+        await bio_link.save_settings(env, settings)
         return ctx.json(await _state(ctx))
+
+    if path == "/api/admin/bio-link/calendar/test" and method == "POST":
+        # The owner cannot tell a wrong address from an empty calendar, so
+        # say which it is instead of leaving the section silently blank.
+        try:
+            body = await _read_json(ctx)
+            url = bio_link.validate_calendar_url(str(body.get("calendarUrl") or ""))
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid calendar address", 400)
+        if not url:
+            return ctx.error("請先填入行事曆網址", 400)
+
+        current = await bio_link.get_settings(env)
+        probe = {**current, "calendarUrl": url, "calendarEnabled": True, "calendarCount": bio_link.MAX_CALENDAR_COUNT}
+        calendar = await bio_link.fetch_calendar(env, probe)
+        if calendar is None:
+            return ctx.error("讀不到這個行事曆。確認網址正確，且該行事曆已設為公開。", 400)
+        return ctx.json({"count": len(calendar["events"]), "events": calendar["events"][:3]})
 
     if path == "/api/admin/bio-link/avatar" and method == "POST":
         try:

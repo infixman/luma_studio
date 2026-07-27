@@ -6,12 +6,16 @@ phase. They are recorded from the start so that phase has history to show.
 
 import hashlib
 import re
+from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 
-from common import d1_rows, env_var, secure_bytes, taipei_day, urlsafe_token, utc_timestamp
+import ics
+from common import d1_rows, env_var, js_options, secure_bytes, taipei_day, urlsafe_token, utc_timestamp
+from js import fetch as js_fetch
 
 
 ITEM_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
+EVENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_@.\-]{1,200}$")
 
 ALLOWED_URL_SCHEMES = frozenset({"http", "https", "mailto", "tel"})
 MAX_URL_LENGTH = 2048
@@ -21,6 +25,22 @@ MAX_TITLE = 80
 MAX_ITEMS = 50
 
 ITEM_KINDS = frozenset({"link", "social"})
+
+# Appearance is chosen from fixed sets, never typed. Nothing an owner enters
+# becomes CSS, so a curated palette can guarantee readable contrast and the
+# page needs no loosening of its content security policy.
+THEMES = ("warm", "ink", "forest", "sand", "night")
+BUTTON_SHAPES = ("rounded", "pill", "square")
+FONT_STYLES = ("sans", "serif", "rounded")
+
+# Only Google's own calendar host. The Worker fetches this URL, so accepting
+# an arbitrary host would turn an admin field into a way to reach addresses
+# the Worker can see and the caller cannot.
+CALENDAR_HOST = "calendar.google.com"
+MAX_CALENDAR_TITLE = 40
+MAX_CALENDAR_COUNT = 12
+CALENDAR_HORIZON_DAYS = 120
+CALENDAR_CACHE_SECONDS = 900
 SOCIAL_PLATFORMS = frozenset(
     {"instagram", "facebook", "threads", "youtube", "x", "tiktok", "line", "pixnet", "email", "website"}
 )
@@ -85,6 +105,14 @@ def validate_item_id(item_id: str) -> str:
     return item_id
 
 
+def validate_event_id(event_id: str) -> str:
+    """Calendar ids come from Google's UIDs, so they are looser than ours."""
+
+    if not EVENT_ID_PATTERN.fullmatch(event_id):
+        raise ValueError("Invalid event id")
+    return event_id
+
+
 def validate_url(url: str) -> str:
     """Return a URL that is safe to put in a Location header.
 
@@ -116,6 +144,38 @@ def validate_text(value: str, limit: int, label: str, required: bool = True) -> 
     if len(value) > limit:
         raise ValueError(f"{label} must be {limit} characters or fewer")
     return value
+
+
+def validate_choice(value, allowed: tuple[str, ...], label: str) -> str:
+    if value not in allowed:
+        raise ValueError(f"{label} must be one of: {', '.join(allowed)}")
+    return str(value)
+
+
+def validate_calendar_url(url: str) -> str:
+    """Accept only an https Google Calendar address, or nothing at all."""
+
+    url = url.strip()
+    if not url:
+        return ""
+    if len(url) > MAX_URL_LENGTH:
+        raise ValueError(f"The calendar address must be {MAX_URL_LENGTH} characters or fewer")
+    if any(character < " " or character == "\x7f" for character in url):
+        raise ValueError("The calendar address must not contain control characters")
+    parts = urlsplit(url)
+    if parts.scheme.lower() != "https":
+        raise ValueError("The calendar address must start with https")
+    if (parts.hostname or "").lower() != CALENDAR_HOST:
+        raise ValueError(f"The calendar address must be on {CALENDAR_HOST}")
+    return urlunsplit(parts)
+
+
+def validate_calendar_count(value) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("The number of events must be a number")
+    return max(1, min(count, MAX_CALENDAR_COUNT))
 
 
 def validate_kind(kind: str) -> str:
@@ -165,25 +225,66 @@ def item_row(row: dict) -> dict:
     }
 
 
+DEFAULT_SETTINGS = {
+    "displayName": "",
+    "bio": "",
+    "avatarKey": None,
+    "avatarPath": None,
+    "theme": "warm",
+    "buttonShape": "rounded",
+    "fontStyle": "sans",
+    "calendarUrl": "",
+    "calendarTitle": "近期課程",
+    "calendarCount": 5,
+    "calendarEnabled": False,
+}
+
+
 async def get_settings(env) -> dict:
     rows = await d1_rows(env.DB.prepare("SELECT * FROM bio_link_settings WHERE id = 1"))
     if not rows:
-        return {"displayName": "", "bio": "", "avatarKey": None, "avatarPath": None}
+        return dict(DEFAULT_SETTINGS)
     row = rows[0]
     return {
         "displayName": row["display_name"],
         "bio": row["bio"],
         "avatarKey": row["avatar_key"],
         "avatarPath": avatar_path(row["avatar_key"]),
+        "theme": row["theme"],
+        "buttonShape": row["button_shape"],
+        "fontStyle": row["font_style"],
+        "calendarUrl": row["calendar_url"],
+        "calendarTitle": row["calendar_title"],
+        "calendarCount": int(row["calendar_count"]),
+        "calendarEnabled": bool(row["calendar_enabled"]),
     }
 
 
-async def save_settings(env, display_name: str, bio: str):
+async def save_settings(env, settings: dict):
+    """Write the whole settings row; the editor always holds all of it."""
+
     await env.DB.prepare(
-        "INSERT INTO bio_link_settings (id, display_name, bio, updated_at) VALUES (1, ?1, ?2, ?3)"
+        "INSERT INTO bio_link_settings"
+        " (id, display_name, bio, theme, button_shape, font_style,"
+        "  calendar_url, calendar_title, calendar_count, calendar_enabled, updated_at)"
+        " VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
         " ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, bio = excluded.bio,"
+        " theme = excluded.theme, button_shape = excluded.button_shape, font_style = excluded.font_style,"
+        " calendar_url = excluded.calendar_url, calendar_title = excluded.calendar_title,"
+        " calendar_count = excluded.calendar_count, calendar_enabled = excluded.calendar_enabled,"
         " updated_at = excluded.updated_at"
-    ).bind(display_name, bio, utc_timestamp()).run()
+    ).bind(
+        settings["displayName"],
+        settings["bio"],
+        settings["theme"],
+        settings["buttonShape"],
+        settings["fontStyle"],
+        settings["calendarUrl"],
+        settings["calendarTitle"],
+        settings["calendarCount"],
+        1 if settings["calendarEnabled"] else 0,
+        utc_timestamp(),
+    ).run()
 
 
 async def set_avatar_key(env, key: str | None):
@@ -329,6 +430,56 @@ async def get_stats(env, days: int) -> dict:
         "referrers": await _grouped(env, "referrer_host", since),
         "devices": await _grouped(env, "device", since, limit=3),
     }
+
+
+async def fetch_calendar(env, settings: dict) -> dict | None:
+    """The next few classes, or nothing at all.
+
+    Every failure here returns None: the schedule is an addition to the page,
+    and a calendar that cannot be reached must not stop the links working.
+    """
+
+    if not settings.get("calendarEnabled") or not settings.get("calendarUrl"):
+        return None
+
+    try:
+        response = await js_fetch(
+            settings["calendarUrl"],
+            js_options(
+                {
+                    # Visitors arrive in bursts when a link is shared; one
+                    # fetch per quarter hour is plenty, and a schedule that
+                    # is fifteen minutes stale is not wrong.
+                    "cf": {"cacheTtl": CALENDAR_CACHE_SECONDS, "cacheEverything": True},
+                }
+            ),
+        )
+        if not response.ok:
+            return None
+        text = await response.text()
+    except Exception:
+        return None
+
+    try:
+        events = ics.parse_events(
+            text,
+            datetime.now(ics.TAIPEI),
+            horizon_days=CALENDAR_HORIZON_DAYS,
+            limit=settings.get("calendarCount") or 5,
+        )
+    except Exception:
+        return None
+
+    if not events:
+        return None
+    return {"title": settings.get("calendarTitle") or "近期課程", "events": events}
+
+
+async def find_event(env, settings: dict, event_id: str) -> dict | None:
+    calendar = await fetch_calendar(env, settings)
+    if not calendar:
+        return None
+    return next((event for event in calendar["events"] if event["id"] == event_id), None)
 
 
 def device_from_user_agent(user_agent: str) -> str:

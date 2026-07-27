@@ -12,6 +12,7 @@ import admin_api
 import auth
 import bio_link
 import bio_link_api
+import ics
 import rate_limit
 from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, MigrationError, OAuthError, validate_file_name, validate_folder
 from ibon import resolve_print_result
@@ -80,6 +81,12 @@ async def bio_link_response(ctx: Ctx):
             "displayName": settings["displayName"],
             "bio": settings["bio"],
             "avatarPath": settings["avatarPath"],
+            "style": {
+                "theme": settings["theme"],
+                "buttonShape": settings["buttonShape"],
+                "fontStyle": settings["fontStyle"],
+            },
+            "calendar": await bio_link.fetch_calendar(ctx.env, settings),
             # Anonymous visitors get only what the page renders.
             "links": [{"id": item["id"], "title": item["title"]} for item in items if item["kind"] == "link"],
             "socials": [
@@ -88,6 +95,35 @@ async def bio_link_response(ctx: Ctx):
                 if item["kind"] == "social"
             ],
         }
+    )
+
+
+async def bio_link_event_response(ctx: Ctx, file_name: str):
+    """One event as a downloadable file, for calendars that are not Google.
+
+    Built here rather than in the browser because the page's content security
+    policy has no reason to allow blob: URLs.
+    """
+
+    if not file_name.endswith(".ics"):
+        return ctx.error("Use GET /api/bio-link/events/{id}.ics", 404)
+    try:
+        event_id = bio_link.validate_event_id(unquote(file_name[: -len(".ics")]))
+    except ValueError:
+        return ctx.error("Invalid event id", 400)
+
+    settings = await bio_link.get_settings(ctx.env)
+    event = await bio_link.find_event(ctx.env, settings, event_id)
+    if event is None:
+        return ctx.error("Event not found", 404)
+
+    return ctx.binary(
+        ics.to_ics(event).encode("utf-8"),
+        {
+            "content-type": "text/calendar; charset=utf-8",
+            "content-disposition": 'attachment; filename="event.ics"',
+            "cache-control": "public, max-age=900",
+        },
     )
 
 
@@ -190,6 +226,11 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
             return ctx.too_many_requests()
         return await bio_link_response(ctx)
+
+    if path.startswith("/api/bio-link/events/") and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
+            return ctx.too_many_requests()
+        return await bio_link_event_response(ctx, path.removeprefix("/api/bio-link/events/"))
 
     if path.startswith("/r/") and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "bio"):
