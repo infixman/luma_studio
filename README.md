@@ -93,6 +93,7 @@ docs/superpowers/specs/  設計文件
 | GET | `/api/bio-link/calendar` | 課程表，獨立一次請求 |
 | GET | `/r/{id}` | 記一筆點擊後 302 到目標網址 |
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
+| GET | `/shop-assets/{file}` | 商品照片 |
 | — | `/api/admin/*`、`/auth/*`、`/api/session` | **暫時的轉接層**，等管理前台搬家後移除 |
 
 ### 管理 Worker — `admin-api.luma-studio.tw`
@@ -109,6 +110,13 @@ docs/superpowers/specs/  設計文件
 | — | `/api/folders`、`/api/objects`、`/api/upload`、`/api/print-settings` | 圖檔與列印設定管理 |
 | — | `/api/bio-link*` | Bio link 編輯 |
 | GET | `/api/bio-link/stats?days=` | 造訪統計 |
+| GET / POST | `/api/products` | 商品列表與新增 |
+| PUT | `/api/products/order` | 排序，必須排在 `{id}` 路由之前 |
+| GET / PUT / DELETE | `/api/products/{id}` | 單一商品 |
+| POST | `/api/products/{id}/variants` | 新增規格 |
+| POST | `/api/products/{id}/images` | 上傳照片（multipart） |
+| PUT / DELETE | `/api/variants/{id}` | 規格 |
+| DELETE | `/api/images/{id}` | 照片 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -440,6 +448,24 @@ https://admin.luma-studio.tw
 前端的 API 網址不再由 CI 變數提供，改放在 [frontend/.env.production](frontend/.env.production) 與 [frontend/.env.admin](frontend/.env.admin)。兩份建置需要不同的值，一個 shell 變數同時餵兩邊會讓後台連錯 API，而那是一種不會報錯的壞法。
 
 Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持有它們。
+
+## 商城
+
+設計文件在 [docs/superpowers/specs/2026-07-28-shopping-cart-design.md](docs/superpowers/specs/2026-07-28-shopping-cart-design.md)。目前完成的是**目錄與後台管理**；購物車、結帳與金流是後續階段。
+
+後台在 `admin.luma-studio.tw/products`：新增商品、編輯規格與庫存、上傳照片、切換上架狀態。
+
+### 幾個刻意的決定
+
+**金額是整數新台幣元。** PAYUNi 的 `TradeAmt` 是整數，台幣零售也沒有小數。多一層換算只會多一個讓四捨五入出錯的地方。
+
+**價格驗證拒絕型別不對的值，而不是轉型。** `int("0300")` 和 `int(300.7)` 都會成功，而兩者都代表某個人即將被收取一個沒有人輸入過的金額。價格上限 20,000 對齊 PAYUNi 的單筆上限，所以單一品項不可能自己超過閘道能接受的範圍；下限是 1 而不是 0，免費品項不是這家店在賣的東西。
+
+**庫存數字不完整公開。** 剩 5 件以下才顯示確切數量，其餘只回「有貨」。「剩 2 件」在結帳頁有用，但把完整庫存公開等於讓任何人靠輪詢算出銷量。這條規則在 `shop.public_variant`。
+
+**商品照片的 key 從資料表查，不從網址組。** `/shop-assets/{file}` 會先在 `product_images` 找到對應的列才去 R2 取物件，所以一個舊連結沒辦法拿來探測 bucket 裡還有什麼。R2 前綴是 `_shop/`，底線讓它落在 `IDENTIFIER_PATTERN` 之外，因此永遠不會被當成 ibon 資料夾，`/images/` 也搆不到。
+
+**沒有用 D1 的 `batch` API。** 這個 codebase 還沒有從 Python 呼叫過它，而一串 prepared statement 要跨進 JavaScript 才到得了那裡。排序寫到一半是外觀問題，下次儲存就會自己修正；在寫入目錄的路徑上賭一個沒驗證過的綁定不值得。真正需要原子性的是之後的庫存扣減，那時會用實際部署驗證過再用。
 
 ## Bio Link
 

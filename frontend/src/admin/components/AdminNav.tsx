@@ -3,6 +3,7 @@ import '../styles/admin-nav.css'
 const tabs = [
   { href: '/', label: 'ibon 列印' },
   { href: '/bio-link', label: 'Bio Link' },
+  { href: '/products', label: '商城' },
 ]
 
 export function AdminNav({ current }: { current: string }) {

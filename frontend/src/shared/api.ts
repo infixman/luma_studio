@@ -1,6 +1,6 @@
 /** The single place that knows where the backend lives and how to talk to it. */
 
-import type { BioLinkState } from './types'
+import type { BioLinkState, ProductDetail } from './types'
 
 function origin(value: string | undefined, fallback: string): string {
   return (value ?? fallback).replace(/\/+$/, '')
@@ -125,6 +125,14 @@ export function bioLinkRedirectUrl(itemId: string): string {
 
 export function bioLinkPageUrl(): string {
   return `${STOREFRONT_ORIGIN}/bio_link`
+}
+
+export async function uploadProductImage(productId: string, file: File, alt: string): Promise<ProductDetail> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('alt', alt)
+  // No content-type header: the browser has to set the multipart boundary.
+  return api<ProductDetail>(`/api/products/${encodeURIComponent(productId)}/images`, { method: 'POST', body: form })
 }
 
 export async function uploadBioLinkAvatar(file: File): Promise<BioLinkState> {

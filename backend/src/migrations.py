@@ -124,6 +124,50 @@ MIGRATIONS = [
         ],
         "statements": [],
     },
+    {
+        # The shop's catalogue. Orders, customers and shipping arrive in later
+        # migrations, when there is something that reads them.
+        "name": "0007_create_shop",
+        "statements": [
+            # `slug` is what appears in a customer-facing URL, so it is unique
+            # and separate from the id: renaming a product must not have to
+            # mean breaking every link anyone saved.
+            """CREATE TABLE IF NOT EXISTS products (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 slug TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 description TEXT NOT NULL DEFAULT '',
+                 status TEXT NOT NULL DEFAULT 'draft',
+                 position INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_products_slug ON products (slug)",
+            "CREATE INDEX IF NOT EXISTS idx_products_status ON products (status, position)",
+            # Prices are whole New Taiwan dollars. PAYUNi's TradeAmt is an
+            # integer and retail here has no sub-dollar amounts, so a smaller
+            # unit would only add a conversion for rounding to go wrong in.
+            """CREATE TABLE IF NOT EXISTS product_variants (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 product_id TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 sku TEXT NOT NULL DEFAULT '',
+                 price INTEGER NOT NULL,
+                 stock INTEGER NOT NULL DEFAULT 0,
+                 position INTEGER NOT NULL,
+                 enabled INTEGER NOT NULL DEFAULT 1
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants (product_id, position)",
+            """CREATE TABLE IF NOT EXISTS product_images (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 product_id TEXT NOT NULL,
+                 r2_key TEXT NOT NULL,
+                 alt TEXT NOT NULL DEFAULT '',
+                 position INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images (product_id, position)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

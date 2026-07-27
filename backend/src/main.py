@@ -21,6 +21,7 @@ import admin_main
 import bio_link
 import rate_limit
 import router
+import shop
 from common import IDENTIFIER_PATTERN, IMAGE_CONTENT_TYPES, IbonError, validate_file_name, validate_folder
 from ibon import resolve_print_result
 from js import Uint8Array
@@ -163,6 +164,38 @@ async def bio_link_avatar_response(ctx: Ctx, file_name: str):
     )
 
 
+async def shop_image_response(ctx: Ctx, file_name: str):
+    """Serve one product photo.
+
+    The key is resolved through `product_images` rather than assembled from
+    the URL, so a request can only reach an object some product actually
+    references — a stale link cannot be used to enumerate the bucket.
+    """
+
+    file_name = unquote(file_name)
+    try:
+        shop.validate_image_suffix(file_name)
+    except ValueError:
+        return ctx.error("Invalid photo URL", 400)
+
+    key = await shop.image_key_for_file(ctx.env, file_name)
+    if key is None:
+        return ctx.error("Photo not found", 404)
+    stored = await ctx.env.IBON_IMAGES.get(key)
+    if stored is None:
+        return ctx.error("Photo not found", 404)
+    content = bytes(Uint8Array.new(await stored.arrayBuffer()).to_py())
+    suffix = file_name[file_name.rfind(".") :].lower()
+    return ctx.binary(
+        content,
+        {
+            "content-type": shop.IMAGE_CONTENT_TYPES[suffix],
+            "cache-control": "public, max-age=3600",
+            "x-content-type-options": "nosniff",
+        },
+    )
+
+
 async def print_response(ctx: Ctx, identifier: str):
     try:
         return ctx.json(await resolve_print_result(ctx.env, identifier))
@@ -235,6 +268,13 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
             return ctx.too_many_requests()
         return await bio_link_avatar_response(ctx, path.removeprefix(f"{bio_link.AVATAR_URL_PREFIX}/"))
+
+    if path.startswith(f"{shop.IMAGE_URL_PREFIX}/"):
+        if method != "GET":
+            return ctx.error(f"Use GET {shop.IMAGE_URL_PREFIX}/{{file}}", 404)
+        if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
+            return ctx.too_many_requests()
+        return await shop_image_response(ctx, path.removeprefix(f"{shop.IMAGE_URL_PREFIX}/"))
 
     if path.startswith("/images/"):
         if method != "GET" or len(path.split("/")) != 4:

@@ -161,6 +161,31 @@ class TestRoutingTable:
         assert call(FakeRequest("/images/_bio-link/a.jpg")).status == 400
 
 
+class TestProductPhotos:
+    def test_a_photo_no_product_references_is_not_served(self, call):
+        """The key comes from the table, not from the URL.
+
+        Serving whatever `_shop/<name>` the caller asks for would turn this
+        route into a way to probe the bucket for objects that are no longer
+        attached to anything.
+        """
+
+        database = FakeDatabase()
+        response = call(FakeRequest("/shop-assets/whatever.jpg"), make_env(database))
+        assert response.status == 404
+        assert any("FROM product_images" in statement for statement in database.statements)
+
+    @pytest.mark.parametrize("name", ["a.gif", "a.svg", "..%2Fa.jpg"])
+    def test_a_format_the_shop_does_not_store_is_refused_before_the_lookup(self, call, name):
+        database = FakeDatabase()
+        response = call(FakeRequest(f"/shop-assets/{name}"), make_env(database))
+        assert response.status == 400
+        assert not any("FROM product_images" in statement for statement in database.statements)
+
+    def test_only_get_reaches_it(self, call):
+        assert call(browser("/shop-assets/a.jpg", "POST")).status == 404
+
+
 class TestRateLimits:
     def test_a_denied_caller_gets_429_with_retry_after(self, call):
         env = make_env(PUBLIC_LIMITER=DenyingLimiter())

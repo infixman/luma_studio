@@ -116,3 +116,52 @@ export interface PrintSettingsResponse {
   printSpec: string
   cacheInvalidated?: boolean
 }
+
+// --- shop ---------------------------------------------------------------
+
+export type ProductStatus = 'draft' | 'active' | 'archived'
+
+export interface Product {
+  id: string
+  slug: string
+  title: string
+  description: string
+  status: ProductStatus
+  position: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** Prices and stock are whole New Taiwan dollars and whole units. */
+export interface ProductVariant {
+  id: string
+  productId: string
+  title: string
+  sku: string
+  price: number
+  stock: number
+  position: number
+  enabled: boolean
+}
+
+export interface ProductImage {
+  id: string
+  productId: string
+  path: string | null
+  alt: string
+  position: number
+}
+
+/** One product with everything the editor needs to render it. */
+export interface ProductDetail {
+  product: Product
+  variants: ProductVariant[]
+  images: ProductImage[]
+}
+
+/** The catalogue list, with children keyed by product id. */
+export interface ProductListing {
+  products: Product[]
+  variants: Record<string, ProductVariant[]>
+  images: Record<string, ProductImage[]>
+}

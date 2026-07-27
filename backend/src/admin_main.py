@@ -19,6 +19,7 @@ import auth_admin
 import bio_link_api
 import rate_limit
 import router
+import shop_admin_api
 from common import OAuthError
 from migrations import apply_migrations
 from responses import Ctx
@@ -58,6 +59,14 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):
         return await bio_link_api.handle(ctx)
+
+    if (
+        path == "/api/products"
+        or path.startswith("/api/products/")
+        or path.startswith("/api/variants/")
+        or path.startswith("/api/images/")
+    ):
+        return await shop_admin_api.handle(ctx)
 
     return await admin_api.handle(ctx)
 
