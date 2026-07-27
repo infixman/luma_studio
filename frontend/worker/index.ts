@@ -56,10 +56,12 @@ export function pageTitle(displayName: string): string {
   return displayName.includes(SITE_NAME) ? displayName : `${displayName} | ${SITE_NAME}`
 }
 
-function previewTags(profile: BioLink, origin: string, apiBase: string): string {
+function previewTags(profile: BioLink, origin: string): string {
   const title = pageTitle(profile.displayName)
   const description = oneLine(profile.bio) || `${SITE_NAME}的連結彙整`
-  const image = profile.avatarPath ? `${apiBase}${profile.avatarPath}` : `${origin}/assets/luma-studio-logo.png`
+  // The branded landscape card rather than the avatar: preview cards crop to
+  // roughly 1.91:1, which turns a square portrait into a slice of a face.
+  const image = `${origin}/assets/share-card.png`
   const url = `${origin}${BIO_LINK_PATH}`
 
   return [
@@ -68,8 +70,11 @@ function previewTags(profile: BioLink, origin: string, apiBase: string): string 
     `<meta property="og:title" content="${escapeHtml(title)}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:image" content="${escapeHtml(image)}">`,
+    // Stated so a crawler can lay out the card before it fetches the image.
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
     `<meta property="og:url" content="${escapeHtml(url)}">`,
-    `<meta name="twitter:card" content="summary">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escapeHtml(title)}">`,
     `<meta name="twitter:description" content="${escapeHtml(description)}">`,
     `<meta name="twitter:image" content="${escapeHtml(image)}">`,
@@ -104,11 +109,10 @@ export default {
     const html = await shell.text()
     if (!profile) return shellResponse(html, shell)
 
-    const apiBase = env.API_BASE.replace(/\/+$/, '')
     // Some previewers ignore og:title and read <title>, so set both.
     const injected = html
       .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(pageTitle(profile.displayName))}</title>`)
-      .replace('</head>', `  ${previewTags(profile, url.origin, apiBase)}\n  </head>`)
+      .replace('</head>', `  ${previewTags(profile, url.origin)}\n  </head>`)
     return shellResponse(injected, shell)
   },
 }

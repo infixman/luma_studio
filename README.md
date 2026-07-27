@@ -233,7 +233,13 @@ https://luma-studio.tw/admin/bio-link
 
 ### 分享預覽
 
-`/bio_link` 被貼到 LINE、Facebook、Slack 時會顯示標題、簡介與頭像。SPA 在爬蟲眼中是空白的 HTML，所以前端 Worker（[frontend/worker/index.ts](frontend/worker/index.ts)）會在回傳頁面前，向 API 取得目前內容並把 Open Graph 標籤寫進 `<head>`。爬蟲來得又急又密集，因此那次 API 呼叫在邊緣快取五分鐘。
+`/bio_link` 被貼到 LINE、Facebook、Slack 時會顯示標題、簡介與品牌卡片。SPA 在爬蟲眼中是空白的 HTML，所以前端 Worker（[frontend/worker/index.ts](frontend/worker/index.ts)）會在回傳頁面前，向 API 取得目前內容並把 Open Graph 標籤寫進 `<head>`。爬蟲來得又急又密集，因此那次 API 呼叫在邊緣快取五分鐘。
+
+預覽圖是 `public/assets/share-card.png`（1200×630），不是頭像——預覽卡片會裁切成約 1.91:1，方形頭像進去只會剩下一條。換 logo 之後重新產生：
+
+```powershell
+uv run --with pillow python scripts/build-share-card.py
+```
 
 ## 執行時行為與限制
 
