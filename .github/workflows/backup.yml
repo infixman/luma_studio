@@ -19,7 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # A token of its own: this job reads the whole database, which the
+      # deploy token has no reason to be able to do, and the deploy token's
+      # ability to publish Workers is no use here.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BACKUP_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # admin_sessions and admin_oauth_states hold live credentials, and
       # ibon_print_cache expires within a day. Backing any of them up would
@@ -27,6 +30,18 @@ jobs:
       TABLES: "bio_link_settings bio_link_items bio_link_events folder_print_settings"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check the credentials before doing anything
+        # A wrong token and a wrong account id fail identically deep inside a
+        # later step, so establish which one is at fault up front.
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_BACKUP_TOKEN is not set on the production environment"
+            exit 1
+          fi
+          echo "account id ends with: ...${CLOUDFLARE_ACCOUNT_ID: -6}"
+          npx --yes wrangler@4 whoami 2>&1 | sed 's/[0-9a-f]\{28,\}/<redacted>/g'
 
       - name: Export the tables worth keeping
         working-directory: backend

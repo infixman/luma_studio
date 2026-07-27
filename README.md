@@ -113,6 +113,19 @@ R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflar
 
 用的是 `d1 execute` 逐表查詢而不是 `d1 export`。後者的端點即使 token 有 `D1:Edit` 仍回 `Authentication error [code: 10000]`，而查詢端點是部署本來就在用的那一套。
 
+備份用自己的 token，存成 GitHub secret `CLOUDFLARE_BACKUP_TOKEN`。這個工作會讀出整個資料庫，部署 token 沒有理由具備那個能力；反過來部署權限對備份也毫無用處。建立方式：
+
+My Profile → API Tokens → Create Token → Create Custom Token
+
+| Type | Resource | Level |
+| --- | --- | --- |
+| Account | D1 | Edit |
+| Account | Workers R2 Storage | Edit |
+
+Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `production` environment（或 repository secrets）。
+
+**錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
+
 只匯出四張表：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`。刻意排除的是：
 
 - `admin_sessions`、`admin_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
