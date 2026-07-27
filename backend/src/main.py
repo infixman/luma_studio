@@ -23,13 +23,22 @@ def needs_database(path: str) -> bool:
     return not path.startswith("/images/")
 
 
-def wants_html(ctx: Ctx) -> bool:
-    """Only send browsers to the frontend; scripts still get JSON."""
+def wants_json(ctx: Ctx) -> bool:
+    """Decide whether a legacy /ibon_print/{id} caller wants data or a page.
+
+    These URLs are printed on shared links and QR codes, so anything that
+    might be a person gets redirected to the page. In-app browsers and QR
+    scanners often send `Accept: */*`, which is why the default is the page
+    and only an explicit request for JSON opts out.
+    """
 
     requested = (ctx.query.get("format") or [""])[0].lower()
     if requested == "json":
+        return True
+    if requested == "html":
         return False
-    return requested == "html" or "text/html" in (ctx.request.headers.get("Accept") or "")
+    accept = ctx.request.headers.get("Accept") or ""
+    return "application/json" in accept and "text/html" not in accept
 
 
 async def public_image_response(ctx: Ctx, path: str):
@@ -122,9 +131,9 @@ async def dispatch(ctx: Ctx):
         identifier = path.removeprefix("/ibon_print/")
         if not IDENTIFIER_PATTERN.fullmatch(identifier):
             return ctx.error("Invalid id", 400)
-        if wants_html(ctx):
-            return frontend_redirect(ctx, f"/ibon_print/{identifier}")
-        return await print_response(ctx, identifier)
+        if wants_json(ctx):
+            return await print_response(ctx, identifier)
+        return frontend_redirect(ctx, f"/ibon_print/{identifier}")
     if path == "/admin" and method == "GET":
         return frontend_redirect(ctx, "/admin")
 

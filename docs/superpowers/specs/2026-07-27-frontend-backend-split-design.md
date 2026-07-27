@@ -63,7 +63,9 @@ scripts/
 | GET | `/images/{folder}/{file}` | 公開圖檔（維持原路徑，前端與分享連結都指這裡） |
 | GET/POST/PUT/DELETE | `/api/admin/*` | 既有管理端點，行為不變 |
 
-相容處理：`GET /admin` 一律 302 到 `FRONTEND_ORIGIN/admin`。`GET /ibon_print/{id}` 只在請求想要 HTML 時（`Accept` 含 `text/html` 或 `?format=html`）轉址到前端；`?format=json` 或非瀏覽器的 `Accept` 仍直接回 JSON，維持既有腳本與 Postman 用法。
+相容處理：`GET /admin` 一律 302 到 `FRONTEND_ORIGIN/admin`。
+
+`GET /ibon_print/{id}` 的網址已經印在分享連結與 QR Code 上，因此預設轉址到前端頁面，只有明確要求 JSON 的呼叫端例外（`?format=json`，或 `Accept` 含 `application/json` 且不含 `text/html`）。判斷不能只看 `Accept` 有沒有 `text/html`：LINE、IG 的內建瀏覽器與 QR 掃描 app 常送 `Accept: */*`，那些都是人在看，不是腳本。
 
 ### 跨來源
 

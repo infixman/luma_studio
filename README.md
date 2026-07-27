@@ -27,7 +27,7 @@ https://luma-studio.infixman.workers.dev/api/print/20260721_soda
 
 JSON 包含 `pincode`、`deadline`、`qrCodeSvg`、圖檔清單與快取資訊。ibon 的一般 `GetPincode` 回應目前 `qRcode` 為 `null`，因此 Worker 以同一組取件編號產生等效 SVG QR Code。
 
-舊網址仍可用：`/ibon_print/{id}` 會 302 導向前端頁面，`/ibon_print/{id}?format=json` 仍直接回 JSON。
+舊網址仍可用。已經發出去的 `https://luma-studio.infixman.workers.dev/ibon_print/{id}` 預設一律 302 導向前端頁面——包含 LINE、IG 內建瀏覽器與 QR 掃描 app 這類送 `Accept: */*` 的客戶端。只有明確要求 JSON 的呼叫端會拿到資料：`?format=json`，或送出 `Accept: application/json` 且不接受 HTML。
 
 ## 專案結構
 
