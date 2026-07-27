@@ -35,7 +35,11 @@ class Ctx:
         self.request = request
         self.path = path
         self.query = query
-        self.method = str(request.method).upper()
+        self.raw_method = str(request.method).upper()
+        # Link previewers (LINE, Slack) probe shared URLs with HEAD before a
+        # person opens them. Routing on GET alone answered those with a 404,
+        # which reads as a dead link, so HEAD takes the GET path throughout.
+        self.method = "GET" if self.raw_method == "HEAD" else self.raw_method
         self.origin = (request.headers.get("Origin") or "").rstrip("/")
         self.allowed_origins = allowed_origins(env)
         self.cors = self._cors_headers()
