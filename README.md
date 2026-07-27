@@ -29,6 +29,8 @@ JSON 包含 `pincode`、`deadline`、`qrCodeSvg`、圖檔清單與快取資訊�
 
 舊網址仍可用。已經發出去的 `https://api.luma-studio.tw/ibon_print/{id}` 預設一律 302 導向前端頁面——包含 LINE、IG 內建瀏覽器與 QR 掃描 app 這類送 `Accept: */*` 的客戶端。只有明確要求 JSON 的呼叫端會拿到資料：`?format=json`，或送出 `Accept: application/json` 且不接受 HTML。
 
+已知缺口與待辦記在 [docs/backlog.md](docs/backlog.md)。
+
 ## 專案結構
 
 ```text
