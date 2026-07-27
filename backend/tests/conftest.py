@@ -6,6 +6,7 @@ modules here. Only the pieces the pure functions actually touch are faked;
 anything that reaches D1, R2 or the network is not covered by these tests.
 """
 
+import json
 import sys
 import types
 from pathlib import Path
@@ -34,6 +35,18 @@ class _FakeUint8Array:
         return _FakeTypedArray(int(length))
 
 
+class FakeResponse:
+    """Stands in for the runtime's Response so handlers can be inspected."""
+
+    def __init__(self, body="", status: int = 200, headers: dict | None = None):
+        self.body = body
+        self.status = status
+        self.headers = {key.lower(): value for key, value in (headers or {}).items()}
+
+    def json(self):
+        return json.loads(self.body)
+
+
 def _install_runtime_stubs() -> None:
     js = types.ModuleType("js")
     js.Object = types.SimpleNamespace(fromEntries=lambda pairs: dict(pairs))
@@ -50,7 +63,7 @@ def _install_runtime_stubs() -> None:
     sys.modules["pyodide.ffi"] = ffi
 
     workers = types.ModuleType("workers")
-    workers.Response = object
+    workers.Response = FakeResponse
     workers.WorkerEntrypoint = object
     sys.modules["workers"] = workers
 
