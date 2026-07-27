@@ -107,6 +107,27 @@ docs/superpowers/specs/  設計文件
 
 R2 物件的回應帶了 `cache-control: public, max-age=3600`，但 **Cloudflare 預設不會快取 Worker 產生的回應**。要讓重複請求不進 R2，需在儀表板加一條 Cache Rule：符合 `/images/*` 或 `/bio-link-assets/*` 時設為 Eligible for cache。目前沒有設，所以每一次請求都是一筆 R2 讀取。
 
+### 備份
+
+[.github/workflows/backup.yml](.github/workflows/backup.yml) 每天台北時間清晨三點把 D1 匯出到 R2 的 `_backups/YYYY-MM-DD.sql`。也可以在 Actions 頁面手動觸發。
+
+只匯出四張表：`bio_link_settings`、`bio_link_items`、`bio_link_events`、`folder_print_settings`。刻意排除的是：
+
+- `admin_sessions`、`admin_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
+- `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
+
+匯出後會檢查檔案大小與內容，空檔或缺表就讓工作失敗——否則會安靜地把無用的備份存起來，等到真的要用才發現。
+
+還原：
+
+```powershell
+uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file backup.sql
+```
+
+備份不會自動清理。要限制數量的話，在 R2 → `luma-ibon-images` → Settings 加一條 lifecycle rule，讓 `_backups/` 前綴的物件在 90 天後過期。
+
+**R2 裡的圖檔本身沒有備份。** 客人的作品圖只有一份，這是已知的缺口。
+
 ### D1 migration
 
 schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker 每個 isolate 首次收到請求時自動套用，並以 `schema_migrations` 表記錄。所有敘述都必須可重複執行，因為多個 isolate 會同時啟動。手動執行 `wrangler d1 execute` 已不再需要。

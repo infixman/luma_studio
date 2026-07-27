@@ -1,0 +1,65 @@
+name: Back up D1
+
+on:
+  schedule:
+    # 19:10 UTC is 03:10 in Taipei — after the day's edits, before anyone works.
+    - cron: "10 19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: luma-studio-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Export to R2
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export the tables worth keeping
+        working-directory: backend
+        # admin_sessions and admin_oauth_states hold live credentials, and
+        # ibon_print_cache expires in a day. Backing any of them up would
+        # store secrets for no recovery value.
+        run: |
+          npx --yes wrangler@4 d1 export luma-ibon-cache \
+            --remote \
+            --table bio_link_settings \
+            --table bio_link_items \
+            --table bio_link_events \
+            --table folder_print_settings \
+            --output "$RUNNER_TEMP/backup.sql"
+
+      - name: Confirm the export is not empty
+        # A zero-byte or schema-only file would otherwise be uploaded happily
+        # and only be discovered to be useless on the day it is needed.
+        run: |
+          SIZE=$(stat -c%s "$RUNNER_TEMP/backup.sql")
+          echo "export is ${SIZE} bytes"
+          if [ "$SIZE" -lt 200 ]; then
+            echo "::error::D1 export looks empty (${SIZE} bytes)"
+            exit 1
+          fi
+          grep -q "bio_link_settings" "$RUNNER_TEMP/backup.sql" || {
+            echo "::error::D1 export is missing the bio_link_settings table"
+            exit 1
+          }
+
+      - name: Upload to R2
+        working-directory: backend
+        # The underscore prefix keeps backups outside IDENTIFIER_PATTERN, so
+        # they never appear as an ibon print folder or through /images/.
+        run: |
+          npx --yes wrangler@4 r2 object put \
+            "luma-ibon-images/_backups/$(date -u +%Y-%m-%d).sql" \
+            --remote \
+            --file "$RUNNER_TEMP/backup.sql" \
+            --content-type "application/sql"
