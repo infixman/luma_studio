@@ -150,6 +150,84 @@ schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，Worker
    .\scripts\sync-r2.ps1 20260721_soda
    ```
 
+7. 套用下一節的後台設定。
+
+## Cloudflare 後台設定
+
+以下設定**不在版控裡**，只存在於 Cloudflare 儀表板。重建環境或換帳號時要照著設一遍，否則會出現一些很難查的症狀——這一節就是為了避免那些。
+
+### 網域與 Worker 綁定
+
+網域註冊在 Gandi，但 nameserver 指向 Cloudflare（Gandi → 網域管理 → Nameservers → External）。Workers 的 Custom Domain 必須在 zone 由 Cloudflare 託管的前提下才能綁。
+
+Workers & Pages → 選 Worker → Settings → Domains & Routes → Add → Custom Domain：
+
+| Worker | 網域 |
+| --- | --- |
+| `luma-studio-web` | `luma-studio.tw` |
+| `luma-studio-web` | `www.luma-studio.tw` |
+| `luma-studio` | `api.luma-studio.tw` |
+
+DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CNAME**，已存在的記錄會讓綁定失敗。
+
+### Worker secrets
+
+只有後端 Worker 需要。用指令設定，不要寫進 `wrangler.toml` 的 `[vars]`——那份設定會進版控。
+
+```powershell
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET
+uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI
+uv --directory backend run pywrangler secret put VISITOR_SALT
+```
+
+`GOOGLE_OAUTH_REDIRECT_URI` 是 `https://api.luma-studio.tw/auth/callback`。`VISITOR_SALT` 填任意隨機字串。
+
+### 速率限制規則
+
+Security → Security rules → Rate limiting rules → Create rule。
+
+| 欄位 | 值 |
+| --- | --- |
+| Rule name | `api flood guard` |
+| Expression | `starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/auth/") or starts_with(http.request.uri.path, "/r/") or starts_with(http.request.uri.path, "/images/") or starts_with(http.request.uri.path, "/bio-link-assets/") or starts_with(http.request.uri.path, "/ibon_print/")` |
+| Requests / Period | 50 / 10 秒 |
+| Action / Duration | Block / 10 秒 |
+
+免費方案把 Period、Duration 鎖在 10 秒，計數依據固定為 IP，只有 Requests 可調。
+
+**為什麼是 50 而不是更嚴**：團體包班時整間教室共用一個對外 IP，7-11 店內 Wi-Fi 也是。設太緊會整班一起被擋。觀察 Security → Events 的觸發次數再調整。
+
+這是唯一能保護 **Worker 每日請求額度**的一層，因為它在 Worker 之前執行。`backend/src/rate_limit.py` 的限制器保護的是 D1、R2 與 ibon 上傳，但限制器要執行，Worker 就已經被叫起來了。
+
+### 快取規則
+
+Caching → Cache Rules → Create rule。
+
+| 欄位 | 值 |
+| --- | --- |
+| Rule name | `cache r2 assets` |
+| Expression | `starts_with(http.request.uri.path, "/images/") or starts_with(http.request.uri.path, "/bio-link-assets/")` |
+| Cache eligibility | Eligible for cache |
+| Edge TTL | Use cache-control header if present, bypass cache if not |
+
+Cloudflare **預設不會快取 Worker 產生的回應**，所以沒有這條規則的話，每一次圖檔請求都是一筆 R2 讀取。Worker 已經在回應中送出 `cache-control: public, max-age=3600`，這條規則只是讓它生效。
+
+### 安全性與協定設定
+
+| 位置 | 項目 | 值 | 原因 |
+| --- | --- | --- | --- |
+| Security → Settings | Bot Fight Mode | **關** | 對純 JSON API 子網域誤判率高，會擋掉帶認證的 XHR |
+| Security → Settings | Browser Integrity Check | 開 | 預設值，擋標頭異常的請求 |
+| Speed → Settings | Always use HTTPS | 開 | |
+| Speed → Settings | 0-RTT Connection Resumption | **關** | early data 在某些路徑上會被回 403 |
+
+### 曾經踩過的坑
+
+**HTTP/3 回 403。** 曾出現整個 `api.luma-studio.tw` 在某台機器的 Edge 上回 403，但同一台機器的 curl 正常、無痕視窗正常、Cloudflare 的 firewall event 查無記錄。原因是該網路的 HTTP/3（QUIC）路徑異常；`edge://flags` 關閉 Experimental QUIC protocol 後恢復。
+
+診斷順序：比對瀏覽器與 curl 的 `https://www.cloudflare.com/cdn-cgi/trace` 輸出，若 `ip=` 相同而 `http=` 不同，就是協定層而非 Cloudflare 設定的問題。**不要在這種情況下逐項關閉安全設定**——firewall event 查不到記錄就代表不是那一層擋的。
+
 ## 本機開發
 
 兩個服務要同時跑：
