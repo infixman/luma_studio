@@ -28,7 +28,7 @@ function declarations(block: string): Palette {
 function palettes(): Record<string, Palette> {
   // The base block carries the default palette; each theme block overrides
   // part of it, exactly as the cascade does at runtime.
-  const base = declarations(/body\.bio,\s*\.bio-preview\s*\{([^}]*)\}/.exec(css)?.[1] ?? '')
+  const base = declarations(/:where\(body\.bio, \.bio-preview\)\s*\{([^}]*)\}/.exec(css)?.[1] ?? '')
   const found: Record<string, Palette> = { warm: base }
   for (const [, name, block] of css.matchAll(/\[data-theme="([a-z]+)"\]\s*\{([^}]*)\}/g)) {
     found[name!] = { ...base, ...declarations(block!) }
@@ -58,6 +58,23 @@ const themes = palettes()
 const names = Object.keys(themes)
 
 describe('theme palettes', () => {
+  it('lets a theme outweigh the default palette', () => {
+    // The themes are plain attribute selectors, (0,1,0). Written as
+    // `body.bio, .bio-preview` the defaults are (0,1,1) and win every
+    // cascade, which shipped a page that ignored every appearance setting.
+    // :where() zeroes them, so this is what makes the choices work.
+    expect(css).toContain(':where(body.bio, .bio-preview) {')
+
+    // Every block that sets a palette must be either the zeroed default or a
+    // theme; anything else would sit between them in the cascade.
+    for (const rule of css.split('}')) {
+      const [selector, body] = rule.split('{')
+      if (!body?.includes('--bio-page:')) continue
+      const name = selector!.replace(/\/\*[\s\S]*?\*\//g, '').trim()
+      expect(name === ':where(body.bio, .bio-preview)' || /^\[data-theme="[a-z]+"\]$/.test(name), name).toBe(true)
+    }
+  })
+
   it('finds every theme the backend offers', () => {
     // Mirrors THEMES in backend/src/bio_link.py.
     expect(names.sort()).toEqual(['forest', 'ink', 'night', 'sand', 'warm'])

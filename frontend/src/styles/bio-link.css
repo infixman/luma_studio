@@ -3,9 +3,12 @@
    owner picks a name; nothing they type becomes CSS. */
 
 /* Selector-agnostic so the editor's preview can use the same definitions
-   rather than a copy that drifts. */
-body.bio,
-.bio-preview {
+   rather than a copy that drifts.
+
+   :where() is what makes the themes below work at all. It zeroes this
+   block's specificity; written plainly, `body.bio` (0,1,1) outweighs
+   `[data-theme="night"]` (0,1,0) and every override here is ignored. */
+:where(body.bio, .bio-preview) {
   --bio-page: #f7f6f2;
   --bio-glow: #eaf1ec;
   --bio-surface: #fffefa;
