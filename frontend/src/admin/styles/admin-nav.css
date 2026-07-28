@@ -1,19 +1,21 @@
+/* Inline navigation, sitting in the header beside the mark.
+   `margin-right: auto` is what keeps it next to the logo rather than being
+   spread across the row by the header's space-between. */
 body.admin .admin-nav {
   display: flex;
-  gap: 8px;
-  margin: 22px 0 0;
-  border-bottom: 1px solid #e1e5e1;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 0 8px;
+  margin-right: auto;
 }
 
 body.admin .admin-tab {
-  padding: 10px 16px;
+  padding: 8px 14px;
   border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
+  border-radius: 8px;
   color: #55676f;
   font-weight: 700;
   text-decoration: none;
-  transform: translateY(1px);
 }
 
 body.admin .admin-tab:hover {
@@ -22,7 +24,7 @@ body.admin .admin-tab:hover {
 }
 
 body.admin .admin-tab.current {
-  border-color: #e1e5e1;
+  border-color: #d8ddd7;
   background: #fff;
   color: #1f3343;
 }
@@ -30,4 +32,18 @@ body.admin .admin-tab.current {
 body.admin .admin-tab:focus-visible {
   outline: 3px solid #a7d5d0;
   outline-offset: 2px;
+}
+
+/* Narrow screens: the mark and the way out stay on one line, the links wrap
+   underneath rather than squeezing the logo. */
+@media (max-width: 720px) {
+  body.admin header {
+    flex-wrap: wrap;
+  }
+
+  body.admin .admin-nav {
+    order: 3;
+    width: 100%;
+    margin: 4px 0 0;
+  }
 }

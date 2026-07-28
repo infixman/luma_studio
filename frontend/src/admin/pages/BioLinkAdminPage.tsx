@@ -393,14 +393,14 @@ export function BioLinkAdminPage() {
           <div class="card">
             <div class="bio-admin-head">
               <div>
-                <h2>Bio Link</h2>
+                <h2>名片頁</h2>
                 <p class="muted">公開網址：{bioLinkPageUrl()}</p>
               </div>
               <div class="bio-admin-head-actions">
-                <OpenButton url={bioLinkPageUrl()} label="公開的 Bio Link 頁" />
+                <OpenButton url={bioLinkPageUrl()} label="公開的名片頁" />
                 <CopyButton
                   url={bioLinkPageUrl()}
-                  label="公開的 Bio Link 頁"
+                  label="公開的名片頁"
                   onCopied={(label) => show(`已複製「${label}」的網址。`, 'ok')}
                   onFailed={showError}
                 />

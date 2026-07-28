@@ -1,8 +1,12 @@
 import '../styles/admin-nav.css'
 
+/**
+ * Ordered by how often the owner reaches for it, not by when it was built.
+ * The hrefs carry no /admin segment: every path on this host is administration.
+ */
 const tabs = [
+  { href: '/bio-link', label: '名片頁' },
   { href: '/', label: 'ibon 列印' },
-  { href: '/bio-link', label: 'Bio Link' },
   { href: '/products', label: '商城' },
   { href: '/shipping', label: '運費' },
 ]
