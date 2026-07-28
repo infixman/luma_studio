@@ -149,6 +149,8 @@ docs/superpowers/specs/  設計文件
 
 `ALLOWED_ORIGINS` 與 `FRONTEND_ORIGIN` 各自定義在該 Worker 的設定檔 `[vars]`。兩份清單刻意不重疊：公開 API 不接受管理網域的來源，管理 API 也不接受公開站台的來源。
 
+瀏覽器端有對應的一半：`_headers` 裡的 CSP `connect-src` 也是各站只放行自己的 API。這份檔案由 [vite.config.ts](frontend/vite.config.ts) 依 build mode 產生，而不是放在 `public/` —— `public/` 會被複製進兩份建置，共用一份就代表 `connect-src` 必須是兩邊需求的聯集，而聯集正好是我們不想要的東西。政策的來源是 `.env` 裡那組網址，跟 client 讀的是同一份，兩者不會各說各話。
+
 ### 速率限制
 
 限制器宣告在**擁有該路由的那個 Worker** 的設定檔裡：

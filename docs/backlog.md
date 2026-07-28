@@ -82,5 +82,5 @@ Linktree 有。連結多的時候辨識度差很多。
 
 - **前端 Worker 的 `fetch` 測試**（2026-07-27）。`/admin` 曾經 307 導回首頁，部署後才發現。現在 `frontend/worker/fetch.test.ts` 覆蓋路由與預覽標籤注入，並且用還原修正的方式驗證過那條測試真的會變紅。
 - **後端路由整合測試**（2026-07-27）。`backend/tests/test_routing.py` 覆蓋路由表、CSRF 閘門、驗證與速率限制的接線。用四種變異（拿掉 CSRF 閘門、拿掉 admin 驗證、忽略速率限制、移除 id 驗證）確認每一項都會被抓到。
-- **完整的 CSP**（2026-07-27）。`frontend/public/_headers`。在瀏覽器實測：同源與 API 允許、其他來源觸發 `connect-src` 違規、inline style 仍有效。
+- **完整的 CSP**（2026-07-27）。在瀏覽器實測：同源與 API 允許、其他來源觸發 `connect-src` 違規、inline style 仍有效。（2026-07-28 更新：站台拆成兩個之後，`public/_headers` 改由 `vite.config.ts` 依 build mode 產生，兩份 `connect-src` 各自只放行自己的 API。）
 - **Threads 官方 icon**（2026-07-27）。改用官方 path，並讓字形支援填色而非描邊。
