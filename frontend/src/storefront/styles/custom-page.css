@@ -1,12 +1,11 @@
 /* The frame a built page sits in. The blocks bring their own typography from
    shared/components/blocks.css, so this is only the page around them. */
 
-body.custom-page {
-  background: #faf7f2;
-  color: #2b2622;
-}
-
-.custom-page {
+/* `main.custom-page`, not `.custom-page`: the body wears that class too, and
+   a bare selector was giving the body a max-width and 2.5rem of top padding
+   — which is why the header on a built page was narrower than the header
+   everywhere else, and started 40px down the screen. */
+main.custom-page {
   max-width: 62rem;
   margin: 0 auto;
   /* No bottom padding: the last block's own margin provides it, and adding
@@ -15,7 +14,7 @@ body.custom-page {
   min-height: 40vh;
 }
 
-.custom-page .empty {
+main.custom-page .empty {
   padding: 2.5rem 0;
   text-align: center;
   opacity: 0.8;

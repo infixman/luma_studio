@@ -99,6 +99,20 @@ WHERE oi.order_id IN (SELECT id FROM orders WHERE customer_id = ?1)
 
 `/admin` 的轉向留在 Worker 上，只是前台不再有連結指過去。
 
+### 6. 同一個底色，宣告一次
+
+首頁與商城看起來像兩個網站：底色不同，而且首頁的頁首比別頁窄、還往下掉了 40px。
+
+窄掉那個是 `.cart` 的同一種錯：`body` 與 `<main>` 都掛著 `custom-page` 這個 class，而
+`custom-page.css` 寫的是 `.custom-page { max-width: 62rem; padding: 2.5rem … }`，
+於是 body 自己拿到了寬度上限與上緣留白，頁首跟著被縮進去。改成 `main.custom-page`。
+
+底色則是各寫各的：`shop.css` 一個色、`custom-page.css` 另一個色。這種東西宣告在頁面層，
+就一定會在走動之間變色。抽成 `styles/surface.css`，放頁面底色與那幾個共用變數
+（`--card`、`--accent`、`--hairline`、`--muted`），由 storefront 的進入點在 `base.css` 之後載入。
+
+沒有放進 `shared/styles/base.css`——那份後台也會載入，而後台是工具不是店面。
+
 ## 沒有做的事
 
 - 購物車的部分結帳、訂單的「再買一次」「聯絡賣家」——蝦皮有，這裡沒有對應功能，不畫空按鈕。

@@ -6,26 +6,14 @@
    The palette is not borrowed with it: this is a warm cream shop, and an
    imported orange would fight the brand rather than join it.
 
+   The page background and the colours come from styles/surface.css, which
+   every storefront page shares. A background declared per page is a
+   background that changes as somebody walks around the shop.
+
    Every container selector below is `main.x`, not `.x`. Each page's CSS ends
    up in one bundle, so a bare `.cart` is not "the cart page" — it is anything
    anywhere wearing that class, which is how the site header's cart link ended
    up with a page's padding. */
-
-body.shop,
-body.product,
-body.cart,
-body.checkout,
-body.orders,
-body.order {
-  background: #f3ede4;
-  color: #2b2622;
-
-  /* One accent, used only for money and the primary action. */
-  --accent: #a8532c;
-  --card: #fff;
-  --hairline: rgb(0 0 0 / 0.1);
-  --muted: rgb(43 38 34 / 0.62);
-}
 
 main.shop,
 main.product,

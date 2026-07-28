@@ -1,0 +1,24 @@
+/* The storefront's one page surface, and the handful of colours every page
+   on it draws from.
+
+   It lives here rather than in each page's stylesheet because every page had
+   been declaring its own: the shop was one cream, a built page another, and
+   the difference showed as a change of background while walking between them
+   under a header that had not moved.
+
+   Not in shared/styles/base.css, which the back office also loads — the
+   admin is a tool, not a shop front, and has no reason to wear this. */
+
+:root {
+  --surface: #f3ede4;
+  --card: #fff;
+  /* One accent, used for money and the primary action, and nothing else. */
+  --accent: #a8532c;
+  --hairline: rgb(0 0 0 / 0.1);
+  --muted: rgb(43 38 34 / 0.62);
+}
+
+body {
+  background: var(--surface);
+  color: #2b2622;
+}
