@@ -34,6 +34,19 @@ def _page_fields(body: dict) -> dict:
     }
 
 
+def _chrome_fields(body: dict) -> dict:
+    """Default to on when the field is absent.
+
+    An older client that does not know about these must not silently strip a
+    page's header off.
+    """
+
+    return {
+        "show_header": bool(body.get("showHeader", True)),
+        "show_footer": bool(body.get("showFooter", True)),
+    }
+
+
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
@@ -84,7 +97,7 @@ async def handle(ctx: Ctx):
         if not tail and method == "PUT":
             try:
                 body = await _read_json(ctx)
-                fields = _page_fields(body)
+                fields = {**_page_fields(body), **_chrome_fields(body)}
             except pages.PageError as error:
                 return ctx.error(str(error), 400)
             except (ValueError, AttributeError):

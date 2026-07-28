@@ -382,6 +382,8 @@ export interface Page {
   title: string
   status: PageStatus
   isHome: boolean
+  showHeader: boolean
+  showFooter: boolean
   position: number
   updatedAt: number
 }
@@ -472,6 +474,8 @@ export interface PageDetail {
 export interface PageContent {
   title: string
   path: string
+  showHeader: boolean
+  showFooter: boolean
   blocks: PageBlock[]
 }
 

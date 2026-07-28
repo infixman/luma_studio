@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useContext, useEffect, useState } from 'preact/hooks'
 
 import { Blocks } from '../../shared/components/Blocks'
+import { ChromeControl } from '../components/Chrome'
 import { ApiError, api } from '../../shared/api'
 import type { PageContent } from '../../shared/types'
 import '../styles/custom-page.css'
@@ -17,6 +18,7 @@ type State = { kind: 'loading' } | { kind: 'missing' } | { kind: 'failed' } | { 
  */
 export function CustomPage({ path, onMissing }: { path: string; onMissing: () => preact.JSX.Element }) {
   const [state, setState] = useState<State>({ kind: 'loading' })
+  const setChrome = useContext(ChromeControl)
 
   useEffect(() => {
     const url = path === '/' ? '/api/pages/home' : `/api/pages?path=${encodeURIComponent(path)}`
@@ -26,9 +28,15 @@ export function CustomPage({ path, onMissing }: { path: string; onMissing: () =>
         // The back office calls this field the browser tab's title, so it
         // has to actually become one.
         document.title = `${page.title} | Luma Studio`
+        // Only a page that loaded may turn the chrome off. A failed fetch
+        // leaves the header alone rather than stripping it.
+        setChrome({ header: page.showHeader, footer: page.showFooter })
       })
       .catch((error) => setState(error instanceof ApiError && error.status === 404 ? { kind: 'missing' } : { kind: 'failed' }))
-  }, [path])
+  }, [path, setChrome])
+
+  // Whatever this page asked for is undone when the visitor leaves it.
+  useEffect(() => () => setChrome({ header: true, footer: true }), [setChrome])
 
   // Nothing is drawn while the answer is unknown. Showing "not found" first
   // and replacing it a moment later reads as a broken link that healed.

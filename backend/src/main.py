@@ -250,6 +250,9 @@ async def page_response(ctx: Ctx, page: dict | None):
         {
             "title": page["title"],
             "path": page["path"],
+            # The site's chrome is on unless this page opted out of it.
+            "showHeader": page["showHeader"],
+            "showFooter": page["showFooter"],
             "blocks": await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"])),
         }
     )

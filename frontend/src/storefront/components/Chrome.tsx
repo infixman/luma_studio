@@ -1,3 +1,4 @@
+import { createContext } from 'preact'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 
@@ -15,10 +16,19 @@ import * as cart from '../lib/cart'
  *
  * `bare` is for checkout and the order pages. A row of navigation links part
  * way through paying is an invitation to go and look at something else.
+ *
+ * A custom page may also turn either half off for itself. It is the page that
+ * knows, and the page renders inside this, so it says so through
+ * `ChromeControl` rather than being fetched a second time out here.
  */
+
+export type ChromeWanted = { header: boolean; footer: boolean }
+
+export const ChromeControl = createContext<(wanted: ChromeWanted) => void>(() => undefined)
 export function Chrome({ bare, children }: { bare?: boolean; children: ComponentChildren }) {
   const [chrome, setChrome] = useState<SiteChrome | null>(null)
   const [items, setItems] = useState(0)
+  const [wanted, setWanted] = useState<ChromeWanted>({ header: true, footer: true })
 
   useEffect(() => {
     if (bare) return
@@ -35,18 +45,20 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
     return cart.onChange(refresh)
   }, [])
 
-  if (bare || chrome === null) return <>{children}</>
+  if (bare || chrome === null) return <ChromeControl.Provider value={setWanted}>{children}</ChromeControl.Provider>
 
   return (
-    <>
-      <SiteHeader
-        settings={chrome.settings}
-        menu={chrome.menu}
-        cartCount={items}
-        loginHref={loginUrl(`${location.origin}/orders`)}
-      />
+    <ChromeControl.Provider value={setWanted}>
+      {wanted.header && (
+        <SiteHeader
+          settings={chrome.settings}
+          menu={chrome.menu}
+          cartCount={items}
+          loginHref={loginUrl(`${location.origin}/orders`)}
+        />
+      )}
       {children}
-      <SiteFooter settings={chrome.settings} />
-    </>
+      {wanted.footer && <SiteFooter settings={chrome.settings} />}
+    </ChromeControl.Provider>
   )
 }

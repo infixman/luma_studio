@@ -1,6 +1,6 @@
 /** The single place that knows where the backend lives and how to talk to it. */
 
-import type { BioLinkState, MediaItem, ProductDetail } from './types'
+import type { BioLinkState, MediaItem, ProductDetail, SiteSettings } from './types'
 
 function origin(value: string | undefined, fallback: string): string {
   return (value ?? fallback).replace(/\/+$/, '')
@@ -141,6 +141,13 @@ export async function uploadMedia(file: File, alt: string): Promise<{ item: Medi
   form.append('alt', alt)
   // No content-type header: the browser has to set the multipart boundary.
   return api<{ item: MediaItem }>('/api/media', { method: 'POST', body: form })
+}
+
+export async function uploadHeaderImage(file: File): Promise<{ settings: SiteSettings }> {
+  const form = new FormData()
+  form.append('file', file)
+  // No content-type header: the browser has to set the multipart boundary.
+  return api<{ settings: SiteSettings }>('/api/site/header-image', { method: 'POST', body: form })
 }
 
 export async function uploadBioLinkAvatar(file: File): Promise<BioLinkState> {

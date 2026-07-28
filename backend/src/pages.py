@@ -287,6 +287,11 @@ def page_row(row: dict) -> dict:
         "title": row["title"],
         "status": row["status"],
         "isHome": bool(row["is_home"]),
+        # The site's header and footer are on by default and turned off per
+        # page for the exceptions — a landing page that wants nothing but its
+        # own content.
+        "showHeader": bool(row["show_header"]) if "show_header" in row else True,
+        "showFooter": bool(row["show_footer"]) if "show_footer" in row else True,
         "position": int(row["position"]),
         "updatedAt": int(row["updated_at"]),
     }
@@ -381,12 +386,15 @@ async def create_page(env, *, path: str, title: str, status: str) -> str:
     return page_id
 
 
-async def update_page(env, page_id: str, *, path: str, title: str, status: str) -> bool:
+async def update_page(
+    env, page_id: str, *, path: str, title: str, status: str, show_header: bool = True, show_footer: bool = True
+) -> bool:
     if await get_page(env, page_id) is None:
         return False
     await env.DB.prepare(
-        "UPDATE pages SET path = ?2, title = ?3, status = ?4, updated_at = ?5 WHERE id = ?1"
-    ).bind(page_id, path, title, status, utc_timestamp()).run()
+        "UPDATE pages SET path = ?2, title = ?3, status = ?4, show_header = ?5, show_footer = ?6, updated_at = ?7"
+        " WHERE id = ?1"
+    ).bind(page_id, path, title, status, 1 if show_header else 0, 1 if show_footer else 0, utc_timestamp()).run()
     return True
 
 

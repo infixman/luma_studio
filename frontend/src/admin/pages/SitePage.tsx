@@ -4,7 +4,8 @@ import { AdminShell } from '../components/AdminShell'
 import { MenuEditor } from '../components/MenuEditor'
 import { useStatus } from '../components/StatusBar'
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
-import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { socialPlatforms } from '../../shared/components/SocialIcon'
+import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadHeaderImage } from '../../shared/api'
 import type { MenuItem, MenuState, SiteSettings } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -90,6 +91,69 @@ export function SitePage() {
 
   function edit(patch: Partial<SiteSettings>) {
     setSettings((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  function pickHeaderImage(event: Event) {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    void run(async () => {
+      const next = await uploadHeaderImage(file)
+      // Only the path. The response carries the *saved* settings, and taking
+      // all of it would throw away whatever the owner has changed above but
+      // not saved yet — including the "background: image" that put this
+      // control on screen.
+      edit({ headerImagePath: next.settings.headerImagePath })
+      input.value = ''
+    }, '頁首背景圖已更新。')
+  }
+
+  function removeHeaderImage() {
+    void run(async () => {
+      await api<{ settings: SiteSettings }>('/api/site/header-image', { method: 'DELETE' })
+      edit({ headerImagePath: null })
+    }, '頁首背景圖已移除。')
+  }
+
+  /* These read the settings out of the updater rather than out of the render
+     that drew the field. Two edits inside one frame — a label and a URL
+     pasted together — would otherwise both be computed from the same starting
+     point, and the second would undo the first. */
+
+  function editColumn(index: number, patch: Partial<SiteSettings['footerColumns'][number]>) {
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            footerColumns: current.footerColumns.map((column, at) => (at === index ? { ...column, ...patch } : column)),
+          }
+        : current,
+    )
+  }
+
+  function editLink(columnIndex: number, linkIndex: number, patch: Partial<{ label: string; url: string }>) {
+    setSettings((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        footerColumns: current.footerColumns.map((column, at) =>
+          at === columnIndex
+            ? { ...column, links: column.links.map((link, on) => (on === linkIndex ? { ...link, ...patch } : link)) }
+            : column,
+        ),
+      }
+    })
+  }
+
+  function editSocial(index: number, patch: Partial<{ platform: string; url: string }>) {
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            footerSocials: current.footerSocials.map((social, at) => (at === index ? { ...social, ...patch } : social)),
+          }
+        : current,
+    )
   }
 
   function saveSettings(event: Event) {
@@ -260,6 +324,25 @@ export function SitePage() {
               ]}
               onPick={(headerBackground) => edit({ headerBackground })}
             />
+            {/* Only shown for the background that uses it: an upload control
+                beside a solid colour is a control that appears to do nothing. */}
+            {settings.headerBackground === 'image' && (
+              <div class="header-image-row">
+                {settings.headerImagePath ? (
+                  <img class="thumb" src={apiUrl(settings.headerImagePath)} alt="目前的頁首背景" />
+                ) : (
+                  <span class="thumb empty">還沒有背景圖</span>
+                )}
+                <div class="controls">
+                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={pickHeaderImage} disabled={busy} />
+                  {settings.headerImagePath && (
+                    <button type="button" class="danger" disabled={busy} onClick={removeHeaderImage}>
+                      移除背景圖
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <Choice legend="底色" value={settings.headerColour} options={COLOURS} onPick={(headerColour) => edit({ headerColour })} />
             <Choice legend="高度" value={settings.headerHeight} options={SIZES} onPick={(headerHeight) => edit({ headerHeight })} />
             <Choice
@@ -350,6 +433,108 @@ export function SitePage() {
                 placeholder="© 2026 苒光繪誌"
               />
             </label>
+
+            <h3>連結欄位</h3>
+            <p class="muted">服務條款、退換貨政策、隱私權政策這類頁面放這裡。最多 4 欄，每欄 10 個連結。</p>
+            <ul class="footer-columns-editor">
+              {settings.footerColumns.map((column, columnIndex) => (
+                <li key={columnIndex}>
+                  <div class="column-head">
+                    <input
+                      placeholder="欄位標題"
+                      maxLength={40}
+                      value={column.title}
+                      onInput={(event) => editColumn(columnIndex, { title: (event.target as HTMLInputElement).value })}
+                    />
+                    <button
+                      type="button"
+                      class="danger"
+                      onClick={() => edit({ footerColumns: settings.footerColumns.filter((_, at) => at !== columnIndex) })}
+                    >
+                      刪除這一欄
+                    </button>
+                  </div>
+                  <ul class="link-list">
+                    {column.links.map((link, linkIndex) => (
+                      <li key={linkIndex}>
+                        <input
+                          placeholder="文字"
+                          maxLength={40}
+                          value={link.label}
+                          onInput={(event) => editLink(columnIndex, linkIndex, { label: (event.target as HTMLInputElement).value })}
+                        />
+                        <input
+                          type="url"
+                          placeholder="https://"
+                          value={link.url}
+                          onInput={(event) => editLink(columnIndex, linkIndex, { url: (event.target as HTMLInputElement).value })}
+                        />
+                        <button
+                          type="button"
+                          class="danger"
+                          onClick={() => editColumn(columnIndex, { links: column.links.filter((_, at) => at !== linkIndex) })}
+                        >
+                          移除
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    disabled={column.links.length >= 10}
+                    onClick={() => editColumn(columnIndex, { links: [...column.links, { label: '', url: '' }] })}
+                  >
+                    加一個連結
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              disabled={settings.footerColumns.length >= 4}
+              onClick={() => edit({ footerColumns: [...settings.footerColumns, { title: '', links: [] }] })}
+            >
+              加一欄
+            </button>
+
+            <h3>社群連結</h3>
+            <ul class="link-list">
+              {settings.footerSocials.map((social, index) => (
+                <li key={index}>
+                  <select
+                    value={social.platform}
+                    onChange={(event) => editSocial(index, { platform: (event.target as HTMLSelectElement).value })}
+                  >
+                    {socialPlatforms.map((platform) => (
+                      <option key={platform.value} value={platform.value}>
+                        {platform.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="url"
+                    placeholder="https://"
+                    value={social.url}
+                    onInput={(event) => editSocial(index, { url: (event.target as HTMLInputElement).value })}
+                  />
+                  <button
+                    type="button"
+                    class="danger"
+                    onClick={() => edit({ footerSocials: settings.footerSocials.filter((_, at) => at !== index) })}
+                  >
+                    移除
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              disabled={settings.footerSocials.length >= 10}
+              onClick={() => edit({ footerSocials: [...settings.footerSocials, { platform: 'instagram', url: '' }] })}
+            >
+              加一個社群連結
+            </button>
+
             <button type="submit" disabled={busy}>
               儲存頁尾
             </button>

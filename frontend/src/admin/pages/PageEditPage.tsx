@@ -41,7 +41,7 @@ const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind
 
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
-  const [form, setForm] = useState({ title: '', path: '', status: 'draft' as PageStatus })
+  const [form, setForm] = useState({ title: '', path: '', status: 'draft' as PageStatus, showHeader: true, showFooter: true })
   const [drafts, setDrafts] = useState<Record<string, BlockConfig>>({})
   const [library, setLibrary] = useState<MediaItem[]>([])
   const [catalogue, setCatalogue] = useState<Catalogue>({ products: [], categories: [] })
@@ -54,7 +54,13 @@ export function PageEditPage({ id }: { id: string }) {
 
   const apply = useCallback((next: PageDetail) => {
     setDetail(next)
-    setForm({ title: next.page.title, path: next.page.path, status: next.page.status })
+    setForm({
+      title: next.page.title,
+      path: next.page.path,
+      status: next.page.status,
+      showHeader: next.page.showHeader,
+      showFooter: next.page.showFooter,
+    })
     // Block configs are edited locally and saved on demand, so they are kept
     // beside the server's copy rather than derived from it on every render.
     setDrafts(Object.fromEntries(next.blocks.map((block) => [block.id, block.config])))
@@ -279,6 +285,26 @@ export function PageEditPage({ id }: { id: string }) {
                 </label>
               ))}
             </fieldset>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={form.showHeader}
+                onChange={(event) => setForm({ ...form, showHeader: (event.target as HTMLInputElement).checked })}
+              />
+              顯示網站頁首
+            </label>
+            <label class="toggle">
+              <input
+                type="checkbox"
+                checked={form.showFooter}
+                onChange={(event) => setForm({ ...form, showFooter: (event.target as HTMLInputElement).checked })}
+              />
+              顯示網站頁尾
+            </label>
+            {/* Both on unless this page is the exception — a landing page that
+                wants nothing but its own content. */}
+            <p class="muted">關掉之後，這一頁就只有下面的區塊，沒有選單也沒有頁尾連結。</p>
+
             <button type="submit" disabled={busy}>
               儲存頁面
             </button>
