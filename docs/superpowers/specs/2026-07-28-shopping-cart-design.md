@@ -98,6 +98,8 @@ UPP 有「固定」版本的參數（`UPP02120` 收件人姓名(固定)、`UPP02
 
 公開 Worker 沿用既有的 `luma-studio` 名稱而不改成 `luma-studio-api`：改名會建出一個新 Worker、留下一個孤兒，還要把 custom domain 搬過去，換來的只是名字好看一點。
 
+（2026-07-28 後記：後來還是改了，改成 `luma-studio-web-api`。上面說的代價一項都沒少——新 Worker、搬網域、secrets 重設一次——只是四個 Worker 的名字終於能一眼看出誰對誰。搬移步驟記在 README。）
+
 拆分的理由是 cookie 隔離。現有 cookie 沒有設 `Domain`，是 host-only，
 所以拆開後管理者 session cookie 只會送到 `admin-api`，前台任何 XSS 都碰不到它。
 四個網域都在 `luma-studio.tw` 底下，仍是 same-site，`SameSite=Lax` 不需改變。

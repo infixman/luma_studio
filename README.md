@@ -8,7 +8,7 @@
 
 | 部署 | 內容 | 網址 |
 | --- | --- | --- |
-| `luma-studio` | Cloudflare Python Worker，公開 JSON API 與圖檔 | `https://api.luma-studio.tw` |
+| `luma-studio-web-api` | Cloudflare Python Worker，公開 JSON API 與圖檔 | `https://api.luma-studio.tw` |
 | `luma-studio-admin-api` | Cloudflare Python Worker，管理 API | `https://admin-api.luma-studio.tw` |
 | `luma-studio-web` | Vite + Preact 靜態站台，公開取件頁與 bio link | `https://luma-studio.tw` |
 | `luma-studio-admin` | Vite + Preact 靜態站台，管理介面 | `https://admin.luma-studio.tw` |
@@ -346,10 +346,24 @@ Workers & Pages → 選 Worker → Settings → Domains & Routes → Add → Cus
 | `luma-studio-web` | `luma-studio.tw` |
 | `luma-studio-web` | `www.luma-studio.tw` |
 | `luma-studio-admin` | `admin.luma-studio.tw` |
-| `luma-studio` | `api.luma-studio.tw` |
+| `luma-studio-web-api` | `api.luma-studio.tw` |
 | `luma-studio-admin-api` | `admin-api.luma-studio.tw` |
 
 DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CNAME**，已存在的記錄會讓綁定失敗。
+
+### 從 `luma-studio` 改名到 `luma-studio-web-api`
+
+**改 `wrangler.toml` 的 `name` 不會改名，會長出第二個 Worker。** 舊的那個還在，而且 `api.luma-studio.tw` 還綁在它身上。所以順序不能顛倒：
+
+1. **先 push**。deploy 會建立 `luma-studio-web-api`——沒有 secrets、沒有網域。此時線上完全不受影響，客人還是走舊的那個。
+2. **設 secrets**（secret 不會跟著搬）：`GOOGLE_CUSTOMER_CLIENT_ID`、`GOOGLE_CUSTOMER_CLIENT_SECRET`、`GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI`、`VISITOR_SALT`、`RESEND_API_KEY`。
+
+   `VISITOR_SALT` **一定要用原本那一組**。換了，bio link 的訪客雜湊就變了，同一個人會被算成新訪客——而且不會有任何錯誤訊息，統計只是從那天起悄悄失真。
+3. **搬網域**：舊 Worker → Settings → Domains & Routes 移除 `api.luma-studio.tw`，然後在新 Worker 加回去。一個 Custom Domain 同時只能綁一個 Worker，所以中間會有幾十秒打不開。挑沒人的時間做。
+4. **驗證**：`https://api.luma-studio.tw/api/health` 回得出 migration 清單就對了。順手開一次前台跟結帳。
+5. **刪掉舊的 Worker**。這一步不是收尾，是必要的：舊的那個身上還有 `crons = ["*/5 * * * *"]`，不刪就會有兩個 Worker 同時掃逾期訂單、同時排空信件佇列。
+
+Google OAuth 那邊**不用動**。redirect URI 綁的是網域不是 Worker 名字，`https://api.luma-studio.tw/auth/callback` 從頭到尾沒變。D1、R2 與速率限制的 binding 都寫在 `wrangler.toml` 裡，跟著部署走。
 
 ### Worker secrets
 
@@ -359,14 +373,14 @@ DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CN
 
 | Worker | Secret | 內容 |
 | --- | --- | --- |
-| `luma-studio` | `GOOGLE_CUSTOMER_CLIENT_ID` | 顧客那組 OAuth client |
-| `luma-studio` | `GOOGLE_CUSTOMER_CLIENT_SECRET` | 同上 |
-| `luma-studio` | `GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI` | `https://api.luma-studio.tw/auth/callback` |
-| `luma-studio` | `VISITOR_SALT` | 任意隨機字串，雜湊 bio link 訪客識別 |
+| `luma-studio-web-api` | `GOOGLE_CUSTOMER_CLIENT_ID` | 顧客那組 OAuth client |
+| `luma-studio-web-api` | `GOOGLE_CUSTOMER_CLIENT_SECRET` | 同上 |
+| `luma-studio-web-api` | `GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI` | `https://api.luma-studio.tw/auth/callback` |
+| `luma-studio-web-api` | `VISITOR_SALT` | 任意隨機字串，雜湊 bio link 訪客識別 |
 | `luma-studio-admin-api` | `GOOGLE_CLIENT_ID` | 店主那組 OAuth client |
 | `luma-studio-admin-api` | `GOOGLE_CLIENT_SECRET` | 同上 |
 | `luma-studio-admin-api` | `GOOGLE_OAUTH_REDIRECT_URI` | `https://admin-api.luma-studio.tw/auth/callback` |
-| `luma-studio` | `RESEND_API_KEY` | 寄信用。**只有公開 Worker 需要**——排空信件佇列的排程在那邊 |
+| `luma-studio-web-api` | `RESEND_API_KEY` | 寄信用。**只有公開 Worker 需要**——排空信件佇列的排程在那邊 |
 
 沒有設 `RESEND_API_KEY` 或 `MAIL_FROM` 時整套通知信是關的：不會排入、不會寄出，也不會累積一堆之後突然全部寄出去的舊信。
 

@@ -7,7 +7,7 @@
 | 用途 | 網域 | Cloudflare Worker |
 | --- | --- | --- |
 | 前端（取件頁、admin） | `luma-studio.tw`、`www.luma-studio.tw` | `luma-studio-web` |
-| 後端 API | `api.luma-studio.tw` | `luma-studio` |
+| 後端 API | `api.luma-studio.tw` | `luma-studio-web-api` |
 
 兩者在同一個 registrable domain 之下，因此 session cookie 可以從 `SameSite=None` 收回 `Lax`。
 
@@ -26,7 +26,7 @@ zone 變成 Active 之後：
 
 1. Workers & Pages → `luma-studio-web` → Settings → Domains & Routes → Add → Custom Domain → `luma-studio.tw`。
 2. 同一個 Worker 再加一次 `www.luma-studio.tw`。
-3. Workers & Pages → `luma-studio` → 同樣加入 `api.luma-studio.tw`。
+3. Workers & Pages → `luma-studio-web-api` → 同樣加入 `api.luma-studio.tw`。
 
 DNS 記錄與憑證由 Cloudflare 自動建立，不需要手動加。憑證簽發通常幾分鐘。
 

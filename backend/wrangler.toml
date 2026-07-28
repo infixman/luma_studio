@@ -1,4 +1,4 @@
-name = "luma-studio"
+name = "luma-studio-web-api"
 main = "src/main.py"
 compatibility_date = "2026-07-21"
 compatibility_flags = ["python_workers"]
