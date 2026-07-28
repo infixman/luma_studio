@@ -161,6 +161,9 @@ export function Select<T extends string>({
         break
       case 'Escape':
         event.preventDefault()
+        // The Escape that closes this list must not also close the dialog the
+        // list is sitting in. One key, one thing.
+        event.stopPropagation()
         // Leave it as it was: nothing was committed while moving around.
         close()
         break

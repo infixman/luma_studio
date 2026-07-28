@@ -104,13 +104,27 @@ export function dayStart(iso: string): number | null {
   if (!match) return null
   const [, year, month, day] = match
   const at = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
-  return Number.isNaN(at.getTime()) ? null : Math.floor(at.getTime() / 1000)
+  if (Number.isNaN(at.getTime())) return null
+  // The shape was right but the date need not be: 2026-13-45 passes the
+  // regex, and Date quietly rolls it forward into some other day. Filtering
+  // by a day nobody typed is worse than not filtering.
+  if (at.getFullYear() !== Number(year) || at.getMonth() !== Number(month) - 1 || at.getDate() !== Number(day)) {
+    return null
+  }
+  return Math.floor(at.getTime() / 1000)
 }
 
 /** The last second of that day, so "之前（含當天）" really includes it. */
 export function dayEnd(iso: string): number | null {
-  const start = dayStart(iso)
-  return start === null ? null : start + 24 * 60 * 60 - 1
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim())
+  if (dayStart(iso) === null || !match) return null
+  // The next midnight, not "+ 86399". A day is not always 86400 seconds long
+  // — a laptop in a zone that shifts its clocks has one 23-hour day and one
+  // 25-hour day a year, and on those two days a flat 86400 cuts an hour off
+  // the range or lets an hour of the next day in.
+  const [, year, month, day] = match
+  const next = new Date(Number(year), Number(month) - 1, Number(day) + 1, 0, 0, 0, 0)
+  return Math.floor(next.getTime() / 1000) - 1
 }
 
 /* --- matching ---------------------------------------------------------- */
@@ -142,6 +156,10 @@ export function matches(value: unknown, rule: FilterRule, type: FilterFieldType 
   }
 
   if (type === 'number') {
+    // Not Number(): Number(null) is 0 and Number('') is 0, so a row with no
+    // value would match "= 0" — a filter answering with rows that have no
+    // number at all.
+    if (value === null || value === undefined || value === '') return false
     const left = Number(value)
     const right = Number(rule.value)
     if (!Number.isFinite(left) || !Number.isFinite(right)) return false

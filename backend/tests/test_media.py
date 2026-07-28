@@ -710,6 +710,16 @@ class TestListEndpoint:
         assert response.status == 200
         assert "media.title LIKE ?1" in database.statements[0]
 
+    def test_like_wildcards_in_the_search_box_are_literal(self, media):
+        """Typing `cover_2` means the file called cover_2, not cover-2 as
+        well. A lone `%` used to answer with the whole library."""
+
+        database = FakeDatabase()
+        call(JsonRequest("/api/media?q=cover_2", None, "GET"), database)
+        query, bindings = database.reads[0]
+        assert r"ESCAPE '\'" in query
+        assert bindings[0] == r"%cover\_2%"
+
     def test_the_tag_list_is_reached_before_the_id_route(self, media):
         """`tags` is not an id, so the order of these two routes is load bearing."""
 

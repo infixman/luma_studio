@@ -62,7 +62,10 @@ export function MediaGrid({ items, selectedId, onSelect, selection, empty = '媒
             </span>
           )}
           <button type="button" onClick={() => onSelect(item)} title={mediaName(item)}>
-            <Thumbnail item={item} sizes="150px" />
+            {/* The grid is auto-fill minmax(150px, 1fr), so a cell stretches
+                up to just under 300px before another column fits. Stating the
+                floor made the browser fetch the 150 and draw it at 290. */}
+            <Thumbnail item={item} sizes="300px" />
             <span class="name">{mediaName(item)}</span>
             {/* PNG · 1024×1024. The shop sells illustrations, so the format and
                 the shape are half of what tells two files apart. */}

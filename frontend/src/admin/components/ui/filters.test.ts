@@ -108,3 +108,36 @@ describe('stacking', () => {
     expect(activeCount([rule('status', 'eq', 'active'), rule('stock', 'gte', '')])).toBe(1)
   })
 })
+
+describe('a date that only looks like one', () => {
+  it('refuses a month and day that cannot exist', () => {
+    // Date rolls 2026-13-45 forward into some other day, and filtering by a
+    // day nobody typed is worse than not filtering.
+    expect(dayStart('2026-13-45')).toBeNull()
+    expect(dayStart('2026-02-30')).toBeNull()
+    expect(dayEnd('2026-13-45')).toBeNull()
+  })
+
+  it('still takes a real one', () => {
+    expect(dayStart('2026-02-28')).not.toBeNull()
+  })
+
+  it('ends the day at the next midnight rather than 86400 later', () => {
+    // The two are the same on an ordinary day; they differ by an hour on the
+    // two days a year a DST zone shifts its clocks.
+    const start = dayStart('2026-03-08')!
+    const end = dayEnd('2026-03-08')!
+    expect(end).toBe(dayStart('2026-03-09')! - 1)
+    expect(end).toBeGreaterThan(start)
+  })
+})
+
+describe('a number filter and a row that has no number', () => {
+  it('does not read an empty cell as zero', () => {
+    const rule: FilterRule = { id: 'r', field: 'stock', operator: 'eq', value: '0' }
+    expect(matches(null, rule, 'number')).toBe(false)
+    expect(matches(undefined, rule, 'number')).toBe(false)
+    expect(matches('', rule, 'number')).toBe(false)
+    expect(matches(0, rule, 'number')).toBe(true)
+  })
+})

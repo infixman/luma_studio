@@ -36,6 +36,8 @@ export function MediaPage() {
   const { message, show, showError } = useStatus()
   const { query, setQuery, items, setItems, tags, loadTags, truncated } = useMediaLibrary(true, showError)
   const [selected, setSelected] = useState<MediaItem | null>(null)
+  /** The usage lookup failed, so the dialog says so instead of pretending. */
+  const [usageFailed, setUsageFailed] = useState(false)
   const [usedBy, setUsedBy] = useState<Usage[] | null>(null)
   const [title, setTitle] = useState('')
   const [alt, setAlt] = useState('')
@@ -82,10 +84,16 @@ export function MediaPage() {
     setAlt(item.alt)
     setChosen(item.tags)
     setUsedBy(null)
+    setUsageFailed(false)
     try {
       const data = await api<{ item: MediaItem; usedBy: Usage[] }>(`/api/media/${encodeURIComponent(item.id)}`)
       setUsedBy(data.usedBy)
     } catch (error) {
+      // A blip here used to leave the delete button disabled with nothing
+      // said, and nothing that would ever re-enable it short of closing the
+      // panel and opening it again. Deleting stays possible: the server does
+      // its own usage check and answers 409, so the safety is not this list.
+      setUsageFailed(true)
       showError(error)
     }
   }
@@ -180,7 +188,11 @@ export function MediaPage() {
     const name = mediaName(selected)
     const agreed = await ask({
       title: '刪除這張圖？',
-      body: used.length ? (
+      body: usageFailed ? (
+        <p>
+          「{name}」會從媒體庫與儲存空間一併移除。剛才查不到哪些頁面正在使用它，所以這裡沒辦法先告訴你——如果還有頁面用著，刪除會被擋下來。
+        </p>
+      ) : used.length ? (
         <>
           <p>
             「{name}」還被 {used.length} 個頁面使用。刪除後那些頁面就少一張圖。
@@ -469,13 +481,14 @@ export function MediaPage() {
         onClose={() => {
           setSelected(null)
           setUsedBy(null)
+          setUsageFailed(false)
         }}
         footer={
           <>
             <Button tone="ghost" onClick={() => setSelected(null)}>
               關閉
             </Button>
-            <Button tone="danger" onClick={remove} disabled={busy || usedBy === null}>
+            <Button tone="danger" onClick={remove} disabled={busy || (usedBy === null && !usageFailed)}>
               刪除這張圖
             </Button>
           </>

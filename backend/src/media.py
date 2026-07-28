@@ -363,15 +363,21 @@ def _search_clause(search: str) -> tuple[str, list]:
     tags are a table: searching 貓 must not answer with everything tagged
     熊貓. So the term is put through the same normaliser the tags were stored
     with, and compared as a whole.
+
+    `%` and `_` are LIKE's own wildcards. Searching for a file called
+    `cover_2.png` by typing `cover_2` would otherwise also answer with
+    `cover-2`, and a lone `%` would answer with the entire library — a
+    search box that quietly means something else than what was typed.
     """
 
     term = str(search or "").strip()[:MAX_SEARCH]
     if not term:
         return "", []
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return (
-        """ WHERE media.title LIKE ?1 OR media.file_name LIKE ?1
+        r""" WHERE (media.title LIKE ?1 ESCAPE '\' OR media.file_name LIKE ?1 ESCAPE '\')
               OR EXISTS (SELECT 1 FROM media_tags WHERE media_id = media.id AND tag = ?2)""",
-        [f"%{term}%", normalise_tag(term)],
+        [f"%{escaped}%", normalise_tag(term)],
     )
 
 
