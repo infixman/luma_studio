@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { CartLink } from '../components/CartLink'
 import { api, apiUrl } from '../../shared/api'
 import type { PublicCategory, PublicProductCard } from '../../shared/types'
 import '../styles/shop.css'
@@ -29,13 +28,9 @@ export function ShopPage() {
 
   return (
     <main class="shop">
-      <header class="shop-head">
-        <a class="brand" href="/">
-          <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
-        </a>
-        <h1>商品</h1>
-        <CartLink />
-      </header>
+      {/* No logo and no cart link here: the site header carries both, on
+          every page, and a second copy is what this page used to show. */}
+      <h1 class="shop-title">商品</h1>
 
       {categories.length > 0 && (
         <ul class="category-chips">

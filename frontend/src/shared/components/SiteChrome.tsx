@@ -39,6 +39,32 @@ function MenuTree({ menu, parentId, depth }: { menu: ResolvedMenuItem[]; parentI
   )
 }
 
+/**
+ * Drawn rather than written, because the count has to sit on top of it.
+ *
+ * A word cannot carry a badge without the badge either pushing the word along
+ * or covering a letter; a 22px square can, and every shop the customer has
+ * used puts the number in that corner.
+ */
+function CartGlyph() {
+  return (
+    <svg
+      class="cart-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2.6 3h2.1l2.4 10.6a1.6 1.6 0 0 0 1.56 1.25h7.8a1.6 1.6 0 0 0 1.56-1.23L19.6 7H6" />
+      <circle cx="9.5" cy="19.4" r="1.4" />
+      <circle cx="16.6" cy="19.4" r="1.4" />
+    </svg>
+  )
+}
+
 export function SiteHeader({
   settings,
   menu,
@@ -104,10 +130,20 @@ export function SiteHeader({
               {signedIn ? '我的訂單' : '登入'}
             </a>
           )}
+          {/* The class is `cart-action`, not `cart`: the storefront's cart
+              page owns `.cart`, and every page's CSS ends up in one bundle. */}
           {settings.headerShowCart && (
-            <a class="action cart" href="/cart">
-              購物車
-              {cartCount ? <span class="count">{cartCount}</span> : null}
+            <a
+              class="action cart-action"
+              href="/cart"
+              aria-label={cartCount ? `購物車，${cartCount} 件` : '購物車'}
+            >
+              <CartGlyph />
+              {cartCount ? (
+                <span class="count" aria-hidden="true">
+                  {cartCount}
+                </span>
+              ) : null}
             </a>
           )}
         </div>

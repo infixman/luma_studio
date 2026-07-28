@@ -1,46 +1,87 @@
-/* The customer-facing shop: index cards and one product page. */
+/* The customer-facing shop: the index, one product, the cart, and orders.
+
+   Layout follows the shape every Taiwanese shopper already knows — content
+   sits on white cards floating on a tinted page, money is right-aligned in one
+   column, and an order's state is a row of tabs rather than a label per line.
+   The palette is not borrowed with it: this is a warm cream shop, and an
+   imported orange would fight the brand rather than join it.
+
+   Every container selector below is `main.x`, not `.x`. Each page's CSS ends
+   up in one bundle, so a bare `.cart` is not "the cart page" — it is anything
+   anywhere wearing that class, which is how the site header's cart link ended
+   up with a page's padding. */
 
 body.shop,
-body.product {
-  background: #faf7f2;
+body.product,
+body.cart,
+body.checkout,
+body.orders,
+body.order {
+  background: #f3ede4;
   color: #2b2622;
+
+  /* One accent, used only for money and the primary action. */
+  --accent: #a8532c;
+  --card: #fff;
+  --hairline: rgb(0 0 0 / 0.1);
+  --muted: rgb(43 38 34 / 0.62);
 }
 
-.shop,
-.product {
+main.shop,
+main.product,
+main.cart,
+main.checkout,
+main.orders,
+main.order {
   max-width: 62rem;
   margin: 0 auto;
   padding: 1.5rem 1.1rem 4rem;
 }
 
-.shop .empty,
-.product .empty {
+main.cart,
+main.checkout,
+main.orders,
+main.order {
+  max-width: 52rem;
+}
+
+main.shop .empty,
+main.product .empty,
+main.cart .empty,
+main.checkout .empty,
+main.orders .empty,
+main.order .empty {
   padding: 2.5rem 0;
   text-align: center;
-  opacity: 0.7;
+  color: var(--muted);
 }
 
-.shop-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.6rem;
+/* The white card everything sits on. */
+.panel {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.1rem;
+  margin-bottom: 0.9rem;
 }
 
-.shop-head .brand img {
-  height: 44px;
-  width: auto;
-  display: block;
+main.shop h1,
+main.cart h1,
+main.orders h1,
+main.checkout h1,
+main.order h1 {
+  margin: 0 0 1.1rem;
+  font-size: 1.4rem;
+  font-weight: 650;
 }
 
-.shop-head h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 600;
+.shop-title {
+  margin: 0 0 1.1rem;
 }
 
-.product .crumb {
-  margin: 0 0 1.2rem;
+main.shop .crumb,
+main.product .crumb,
+main.checkout .crumb {
+  margin: 0 0 1rem;
   font-size: 0.9rem;
 }
 
@@ -51,20 +92,44 @@ body.product {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 1.4rem 1.1rem;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.8rem;
 }
 
+/* A card with an edge, not a bare thumbnail: it is what makes a grid of
+   photographs read as a row of things that can be bought. */
+.product-grid .card {
+  background: var(--card);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.product-grid .card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
+}
+
+/* Full height and a column, so the price can be pushed to the bottom edge:
+   otherwise a two-line title drops its card's price below its neighbours'
+   and the row of numbers stops being a row. */
 .product-grid a {
   color: inherit;
   text-decoration: none;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.product-grid .price {
+  margin-top: auto;
 }
 
 .product-grid .cover {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 10px;
   overflow: hidden;
   background: rgb(0 0 0 / 0.05);
 }
@@ -73,11 +138,6 @@ body.product {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 240ms ease;
-}
-
-.product-grid a:hover img {
-  transform: scale(1.03);
 }
 
 /* Sold out stays browsable rather than hidden: it tells a returning customer
@@ -98,29 +158,42 @@ body.product {
 }
 
 .product-grid h2 {
-  margin: 0.6rem 0 0.15rem;
+  margin: 0;
+  padding: 0.6rem 0.7rem 0.1rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.45;
+  /* Two lines, then an ellipsis. A four-line title pushes the price of one
+     card below the price of its neighbour and the row stops being a row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-grid .price {
+  margin-bottom: 0;
+  padding: 0.25rem 0.7rem 0.7rem;
+  color: var(--accent);
   font-size: 1rem;
   font-weight: 600;
 }
 
-.product-grid .price {
-  margin: 0;
-  font-size: 0.95rem;
-  opacity: 0.8;
-}
-
 /* --- product page --- */
 
-.product .layout {
+main.product .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 1.6rem;
   align-items: start;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.2rem;
 }
 
 .gallery .cover {
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   background: rgb(0 0 0 / 0.05);
 }
@@ -143,7 +216,7 @@ body.product {
 .thumbs button {
   padding: 0;
   border: 2px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   background: none;
   cursor: pointer;
@@ -152,7 +225,7 @@ body.product {
 }
 
 .thumbs button.current {
-  border-color: #2b2622;
+  border-color: var(--accent);
 }
 
 .thumbs img {
@@ -163,45 +236,79 @@ body.product {
 }
 
 .info h1 {
-  margin: 0 0 1rem;
-  font-size: 1.6rem;
+  margin: 0 0 0.9rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* The price gets its own tinted band. It is the number the page exists to
+   answer, and in body text it reads as one more line of specification. */
+.headline-price {
+  margin: 0 0 1.2rem;
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  background: rgb(168 83 44 / 0.07);
+  color: var(--accent);
+  font-size: 1.7rem;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Label on the left, choices on the right — the same two-column reading order
+   for 規格 and 數量, so the eye only has to find the labels once. */
+.chooser {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  align-items: start;
+  gap: 0.6rem 0.8rem;
+  margin-bottom: 1.1rem;
+}
+
+.chooser-label {
+  padding-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chooser .left {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .variants {
   list-style: none;
-  margin: 0 0 1.5rem;
+  margin: 0;
   padding: 0;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .variant {
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid rgb(0 0 0 / 0.18);
-  border-radius: 10px;
-  background: #fff;
+  gap: 0.55rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--card);
   cursor: pointer;
   font: inherit;
+  font-size: 0.9rem;
   text-align: left;
 }
 
 .variant.current {
-  border-color: #2b2622;
-  box-shadow: inset 0 0 0 1px #2b2622;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgb(168 83 44 / 0.06);
 }
 
 .variant:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.variant .name {
-  flex: 1;
+  opacity: 0.45;
 }
 
 .variant .price {
@@ -209,7 +316,7 @@ body.product {
 }
 
 .variant .note {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
 }
@@ -223,34 +330,68 @@ body.product {
   background: rgb(0 0 0 / 0.08);
 }
 
-.description p {
-  margin: 0 0 0.9rem;
-  line-height: 1.7;
-  white-space: pre-wrap;
+.stepper {
+  display: inline-flex;
+  /* Its column is 1fr, and a grid item stretches by default — without this
+     the three buttons spread across the whole width of the panel. */
+  justify-self: start;
+  align-items: stretch;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-@media (max-width: 720px) {
-  .product .layout {
-    grid-template-columns: 1fr;
-    gap: 1.4rem;
-  }
+.stepper button {
+  width: 2.1rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
-/* --- add to cart --- */
+.stepper button:disabled {
+  color: rgb(0 0 0 / 0.25);
+  cursor: not-allowed;
+}
+
+.stepper input {
+  width: 3.2rem;
+  border: none;
+  border-left: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline);
+  padding: 0.45rem 0;
+  font: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: none;
+  color: inherit;
+  /* The arrows would sit next to the buttons that already do their job. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
 
 .buy {
-  margin: 0 0 1.5rem;
+  margin: 0 0 1.2rem;
 }
 
 .buy .add {
-  width: 100%;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 2.2rem;
   border: none;
-  border-radius: 10px;
-  background: #2b2622;
+  border-radius: 6px;
+  background: var(--accent);
   color: #fff;
   font: inherit;
   font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -264,65 +405,95 @@ body.product {
   font-size: 0.9rem;
 }
 
+main.product .description {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.2rem;
+  margin-top: 0.9rem;
+}
+
+main.product .description h2 {
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+main.product .description p {
+  margin: 0 0 0.9rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  main.product .layout {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+}
+
 /* --- cart --- */
 
-body.cart {
-  background: #faf7f2;
-  color: #2b2622;
-}
-
-.cart {
-  max-width: 52rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.1rem 4rem;
-}
-
-.cart h1 {
-  margin: 0 0 1.2rem;
-  font-size: 1.5rem;
-}
-
-.cart .empty {
-  padding: 2.5rem 0;
-  text-align: center;
-  opacity: 0.8;
-}
-
-.cart .notes {
+main.cart .notes {
   list-style: none;
-  margin: 0 0 1.2rem;
+  margin: 0 0 0.9rem;
   padding: 0.7rem 0.9rem;
   border-radius: 8px;
   border-left: 3px solid #a05a00;
-  background: rgb(160 90 0 / 0.08);
+  background: rgb(160 90 0 / 0.1);
   color: #7a4400;
   font-size: 0.9rem;
   display: grid;
   gap: 0.3rem;
 }
 
+.cart-panel {
+  padding: 0.4rem 1.1rem 0.9rem;
+}
+
+/* One track, shared by the headings and every row, so the columns cannot
+   drift apart as prices grow a digit. */
+.cart-heads,
+.cart-lines li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 6rem 7rem 6rem 4rem;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.cart-heads {
+  padding: 0.7rem 0 0.6rem;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The first heading spans the thumbnail and the title; the rest are one
+   column each, right-aligned over the numbers they name. */
+.cart-heads span:first-child {
+  grid-column: 1 / 3;
+}
+
+.cart-heads span:not(:first-child) {
+  text-align: right;
+}
+
 .cart-lines {
   list-style: none;
-  margin: 0 0 1.8rem;
+  margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0.7rem;
 }
 
 .cart-lines li {
-  display: grid;
-  grid-template-columns: 72px 1fr auto auto auto;
-  gap: 0.9rem;
-  align-items: center;
-  padding: 0.7rem;
-  background: #fff;
-  border-radius: 10px;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--hairline);
 }
 
 .cart-lines .thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
   overflow: hidden;
   background: rgb(0 0 0 / 0.05);
 }
@@ -335,55 +506,77 @@ body.cart {
 
 .cart-lines .what a {
   color: inherit;
-  font-weight: 600;
   text-decoration: none;
+}
+
+.cart-lines .what a:hover {
+  color: var(--accent);
 }
 
 .cart-lines .variant,
 .cart-lines .note {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
-  opacity: 0.75;
+  margin: 0.2rem 0 0;
+  font-size: 0.83rem;
+  color: var(--muted);
 }
 
 .cart-lines .note.low {
   color: #a05a00;
-  opacity: 1;
 }
 
-.cart-lines .qty {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.8rem;
-}
-
-.cart-lines .qty input {
-  width: 4.5rem;
+.cart-lines .unit,
+.cart-lines .line-total {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .cart-lines .line-total {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  min-width: 5rem;
-  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cart-lines .qty {
+  justify-self: end;
+}
+
+.cart-lines .qty-label {
+  display: none;
+}
+
+.cart-lines .qty input {
+  width: 5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font: inherit;
+  text-align: center;
+  background: none;
+  color: inherit;
 }
 
 .cart-lines .drop {
+  justify-self: end;
   border: none;
   background: none;
-  color: inherit;
-  opacity: 0.6;
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
-  text-decoration: underline;
 }
 
-.summary {
-  background: #fff;
-  border-radius: 12px;
-  padding: 1.1rem;
+.cart-lines .drop:hover {
+  color: var(--accent);
+}
+
+.keep-shopping {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+}
+
+.keep-shopping a {
+  color: var(--muted);
+  text-decoration: none;
 }
 
 .summary h2 {
@@ -417,18 +610,31 @@ body.cart {
 .delivery .hint {
   margin: 0.1rem 0 0 1.6rem;
   font-size: 0.82rem;
-  opacity: 0.7;
+  color: var(--muted);
 }
+
+.summary .pending {
+  margin: 0.8rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* --- totals, shared by the cart and one order --- */
 
 .totals {
   margin: 0;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  justify-content: end;
 }
 
+/* Label and figure in two fixed columns, so 小計 / 運費 / 總計 line up on
+   their decimal點 instead of on the length of their names. */
 .totals div {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 7rem;
+  gap: 1rem;
 }
 
 .totals dt,
@@ -436,110 +642,113 @@ body.cart {
   margin: 0;
 }
 
+.totals dt {
+  color: var(--muted);
+  text-align: right;
+}
+
 .totals dd {
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .totals .grand {
   margin-top: 0.4rem;
   padding-top: 0.5rem;
-  border-top: 1px solid rgb(0 0 0 / 0.12);
-  font-weight: 650;
-  font-size: 1.05rem;
+  border-top: 1px solid var(--hairline);
 }
 
-.summary .pending {
-  margin: 1rem 0 0;
-  padding-top: 0.8rem;
-  border-top: 1px dashed rgb(0 0 0 / 0.15);
-  font-size: 0.9rem;
-  opacity: 0.7;
-  text-align: center;
-}
-
-.cart-link {
-  margin-left: auto;
+.totals .grand dt {
   color: inherit;
-  text-decoration: none;
-  font-size: 0.95rem;
 }
 
-.cart-link .count {
-  display: inline-block;
-  min-width: 1.35rem;
-  padding: 0.05rem 0.35rem;
-  margin-left: 0.3rem;
-  border-radius: 999px;
-  background: #2b2622;
+.totals .grand dd {
+  color: var(--accent);
+  font-weight: 650;
+  font-size: 1.25rem;
+}
+
+.to-checkout,
+main.checkout .place {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
   color: #fff;
-  font-size: 0.78rem;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
   text-align: center;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-@media (max-width: 640px) {
+main.checkout .place:disabled {
+  background: rgb(0 0 0 / 0.18);
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .cart-heads {
+    display: none;
+  }
+
+  /* Below the table width the row stops pretending to be one: thumbnail on
+     the left, everything else stacked beside it. */
   .cart-lines li {
-    grid-template-columns: 56px 1fr auto;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
     row-gap: 0.5rem;
   }
 
-  .cart-lines .line-total {
+  .cart-lines .what {
+    grid-column: 2 / 4;
+  }
+
+  .cart-lines .unit {
     grid-column: 2;
     text-align: left;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .cart-lines .qty {
+    grid-column: 2;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .cart-lines .qty-label {
+    display: inline;
+    color: var(--muted);
+  }
+
+  .cart-lines .line-total {
+    grid-column: 3;
+    grid-row: 3;
   }
 
   .cart-lines .drop {
     grid-column: 3;
-    justify-self: end;
+    grid-row: 4;
   }
 }
 
-/* The crumb doubles as the product page's header bar. */
-.product .crumb {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* --- checkout, orders --- */
-
-body.checkout,
-body.orders,
-body.order {
-  background: #faf7f2;
-  color: #2b2622;
-}
-
-.checkout,
-.orders,
-.order {
-  max-width: 46rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.1rem 4rem;
-}
-
-.checkout .empty,
-.orders .empty,
-.order .empty {
-  padding: 2.5rem 0;
-  text-align: center;
-  opacity: 0.8;
-}
-
-.checkout h1,
-.orders h1,
-.order h1 {
-  margin: 0 0 1.2rem;
-  font-size: 1.5rem;
-}
+/* --- checkout --- */
 
 .checkout-form {
   display: grid;
-  gap: 1.6rem;
+  gap: 0.9rem;
 }
 
 .checkout-form section {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--card);
+  border-radius: 10px;
   padding: 1.1rem;
 }
 
@@ -556,86 +765,337 @@ body.order {
 }
 
 .checkout-form small {
-  opacity: 0.7;
+  color: var(--muted);
 }
 
-.checkout .hint,
-.order .hint {
+main.checkout .hint,
+main.order .hint {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
-  opacity: 0.7;
+  color: var(--muted);
 }
 
-.checkout .failed,
-.order .failed {
+main.checkout .failed,
+main.order .failed {
   margin: 0.6rem 0 0;
   color: #a02020;
   font-size: 0.9rem;
 }
 
-.to-checkout,
-.checkout .place {
-  display: block;
-  width: 100%;
-  margin-top: 1rem;
-  padding: 0.85rem 1rem;
-  border: none;
-  border-radius: 10px;
-  background: #2b2622;
-  color: #fff;
-  font: inherit;
-  font-size: 1rem;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.checkout .place:disabled {
-  background: rgb(0 0 0 / 0.18);
-  cursor: not-allowed;
-}
-
-.checkout .notes {
+main.checkout .notes {
   margin: 0 0 1rem;
   padding: 0.7rem 0.9rem;
   border-radius: 8px;
   border-left: 3px solid #a05a00;
-  background: rgb(160 90 0 / 0.08);
+  background: rgb(160 90 0 / 0.1);
   color: #7a4400;
   font-size: 0.9rem;
 }
 
-/* --- one order --- */
+/* --- the order list --- */
 
-.order .status {
-  display: inline-block;
-  margin: 0 0 1.2rem;
-  padding: 0.2rem 0.7rem;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 0.08);
+/* Tabs, not a label per row: somebody opening this page is nearly always
+   looking for the orders in one particular state. */
+.status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.status-tabs button {
+  flex: 1 0 auto;
+  padding: 0.85rem 0.9rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-tabs button.current {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.status-tabs .tab-count {
+  margin-left: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.order-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.order-card {
+  background: var(--card);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.order-card .card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.1rem;
+  border-bottom: 1px solid var(--hairline);
   font-size: 0.9rem;
 }
 
-.order .status.paid,
-.order .status.shipped,
-.order .status.completed {
-  background: rgb(30 120 60 / 0.16);
+.order-card .card-head .id {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-card .card-head .date {
+  color: var(--muted);
+}
+
+/* The status pushes to the far end of the head row: same place on every card,
+   so a column of them can be scanned without reading any of them. */
+.order-card .card-head .status {
+  margin-left: auto;
+}
+
+.order-card .card-items {
+  display: grid;
+  padding: 0 1.1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.order-card .line,
+main.order .order-items li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.9rem 0;
+}
+
+.order-card .line + .line,
+main.order .order-items li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.order-card .thumb,
+main.order .order-items .thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.05);
+}
+
+.order-card .thumb img,
+main.order .order-items .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.order-card .what,
+main.order .order-items .what {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.order-card .what .title,
+main.order .order-items .what .title {
+  font-weight: 500;
+  line-height: 1.5;
+  color: inherit;
+  text-decoration: none;
+}
+
+main.order .order-items .what a.title:hover {
+  color: var(--accent);
+}
+
+.order-card .what small,
+main.order .order-items .what small {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.order-card .money,
+main.order .order-items .money {
+  align-self: start;
+  padding-top: 0.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-card .card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  border-top: 1px solid var(--hairline);
+  background: rgb(168 83 44 / 0.04);
+}
+
+.order-card .card-foot .grand {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.order-card .card-foot .grand strong {
+  color: var(--accent);
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-card .card-foot .see {
+  padding: 0.45rem 1.2rem;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.order-card .card-foot .see:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* --- one order --- */
+
+.order-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.9rem;
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 0.9rem;
+}
+
+.order-bar .back {
+  color: inherit;
+  text-decoration: none;
+}
+
+.order-bar .order-id {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.07);
+  font-size: 0.85rem;
+}
+
+.status.paid,
+.status.shipped,
+.status.completed {
+  background: rgb(30 120 60 / 0.14);
   color: #1e783c;
 }
 
-.order .status.cancelled,
-.order .status.expired {
-  background: rgb(160 32 32 / 0.12);
+.status.pending {
+  background: rgb(168 83 44 / 0.12);
+  color: var(--accent);
+}
+
+.status.cancelled,
+.status.expired {
+  background: rgb(160 32 32 / 0.1);
   color: #a02020;
+}
+
+/* Four dots on one line with the track drawn between them. The track is a
+   pseudo-element on each step rather than a line behind the row, so the run
+   from a done step to the next is coloured on its own. */
+.progress {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0 0.9rem;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.progress li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.progress li::before {
+  content: '';
+  position: absolute;
+  top: 0.55rem;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--hairline);
+}
+
+.progress li:first-child::before {
+  display: none;
+}
+
+.progress li.done::before {
+  background: #1e783c;
+}
+
+.progress .dot {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 2px solid var(--hairline);
+  background: var(--card);
+  /* Above the track, which runs behind it. */
+  position: relative;
+  z-index: 1;
+}
+
+.progress li.done .dot {
+  border-color: #1e783c;
+  background: #1e783c;
+}
+
+.progress li.done {
+  color: #1e783c;
+}
+
+.closed-note {
+  margin: 0;
+  color: var(--muted);
 }
 
 /* Clearly a scaffold: it is meant to look like something that will be
    removed, not like a payment button. */
 .pay-panel {
-  margin: 0 0 1.5rem;
+  margin: 1rem 0 0;
   padding: 1rem;
   border: 1px dashed rgb(0 0 0 / 0.3);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .pay-panel p {
@@ -645,110 +1105,65 @@ body.order {
 .pay-panel button {
   padding: 0.6rem 1.1rem;
   border: 1px solid currentColor;
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 
-.order-items {
+main.order .order-items {
   list-style: none;
-  margin: 0 0 1.2rem;
+  margin: 0 0 1rem;
   padding: 0;
-  display: grid;
-  gap: 0.5rem;
 }
 
-.order-items li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.8rem;
-  padding: 0.6rem 0.8rem;
-  background: #fff;
-  border-radius: 8px;
+main.order .order-items li:first-child {
+  padding-top: 0;
 }
 
-.order-items .what {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+main.order .totals {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--hairline);
 }
 
-.order-items small {
-  opacity: 0.7;
-}
-
-.order-items .money,
-.order-items .qty {
-  font-variant-numeric: tabular-nums;
-}
-
-.delivery-detail {
-  margin-top: 1.6rem;
+.placed-at {
+  margin: 0.9rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .delivery-detail h2 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.7rem;
   font-size: 1rem;
+  font-weight: 600;
 }
 
-.delivery-detail p {
-  margin: 0 0 0.2rem;
+.delivery-detail .recipient p {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+}
+
+.delivery-detail .recipient .who {
+  color: inherit;
+  font-weight: 600;
 }
 
 .delivery-detail small {
   display: block;
-  opacity: 0.7;
-}
-
-/* --- order list --- */
-
-.order-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.order-list a {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 0.9rem;
-  align-items: center;
-  padding: 0.8rem 0.9rem;
-  background: #fff;
-  border-radius: 10px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.order-list .id {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.order-list .date {
-  opacity: 0.7;
-  font-size: 0.9rem;
-}
-
-.order-list .status {
-  padding: 0.1rem 0.55rem;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 0.08);
-  font-size: 0.82rem;
-}
-
-.order-list .money {
-  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 @media (max-width: 560px) {
-  .order-list a {
-    grid-template-columns: 1fr auto;
-    row-gap: 0.35rem;
+  .order-bar .order-id {
+    margin-left: 0;
+    width: 100%;
+    order: 3;
+    color: var(--muted);
+  }
+
+  .progress {
+    font-size: 0.75rem;
   }
 }
 
@@ -756,7 +1171,7 @@ body.order {
 
 .category-chips {
   list-style: none;
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.1rem;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
@@ -768,30 +1183,27 @@ body.order {
   align-items: baseline;
   gap: 0.35rem;
   padding: 0.35rem 0.85rem;
-  border: 1px solid rgb(0 0 0 / 0.18);
+  border: 1px solid var(--hairline);
   border-radius: 999px;
   color: inherit;
   text-decoration: none;
   font-size: 0.9rem;
-  background: #fff;
+  background: var(--card);
 }
 
 .category-chips a:hover {
-  border-color: #2b2622;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .category-chips .count {
   font-size: 0.78rem;
-  opacity: 0.6;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 /* On a product page they are a footnote about where it belongs, not a
    navigation bar, so they sit quieter than on the index. */
-.category-chips.on-product {
-  margin: 0 0 1.4rem;
-}
-
 .category-chips.on-product a {
   background: transparent;
   font-size: 0.82rem;
@@ -799,13 +1211,8 @@ body.order {
 }
 
 .category-blurb {
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.1rem;
   max-width: 42rem;
   line-height: 1.7;
-  opacity: 0.85;
-}
-
-.shop .crumb {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
+  color: var(--muted);
 }

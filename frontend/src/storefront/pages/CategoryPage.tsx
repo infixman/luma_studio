@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { CartLink } from '../components/CartLink'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { CategoryPageData, PublicProductCard } from '../../shared/types'
 import '../styles/shop.css'
@@ -49,17 +48,11 @@ export function CategoryPage({ filter }: { filter: string }) {
 
   return (
     <main class="shop">
-      <header class="shop-head">
-        <a class="brand" href="/">
-          <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
-        </a>
-        <h1>{page.title}</h1>
-        <CartLink />
-      </header>
-
       <p class="crumb">
         <a href="/shop">← 所有商品</a>
       </p>
+
+      <h1 class="shop-title">{page.title}</h1>
 
       {page.description && <p class="category-blurb">{page.description}</p>}
 

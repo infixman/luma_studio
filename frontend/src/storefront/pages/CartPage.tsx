@@ -79,9 +79,6 @@ export function CartPage() {
 
   return (
     <main class="cart">
-      <p class="crumb">
-        <a href="/shop">← 繼續選購</a>
-      </p>
       <h1>購物車</h1>
 
       {notes.length > 0 && (
@@ -98,39 +95,57 @@ export function CartPage() {
         </p>
       ) : (
         <>
-          <ul class="cart-lines">
-            {quote.lines.map((line) => (
-              <li key={line.variantId}>
-                <div class="thumb">
-                  {line.imagePath ? <img src={apiUrl(line.imagePath)} alt="" /> : <span />}
-                </div>
-                <div class="what">
-                  <a href={`/shop/${encodeURIComponent(line.productSlug)}`}>{line.productTitle}</a>
-                  <p class="variant">{line.variantTitle}</p>
-                  {line.stockLeft !== null && <p class="note low">剩 {line.stockLeft} 件</p>}
-                </div>
-                <label class="qty">
-                  數量
-                  <input
-                    type="number"
-                    min={1}
-                    max={cart.MAX_QUANTITY}
-                    step={1}
-                    value={line.quantity}
-                    onChange={(event) =>
-                      change(line.variantId, Number.parseInt((event.target as HTMLInputElement).value, 10))
-                    }
-                  />
-                </label>
-                <p class="line-total">NT${line.lineTotal}</p>
-                <button type="button" class="drop" onClick={() => drop(line.variantId)}>
-                  移除
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div class="panel cart-panel">
+            {/* Column headings, so the four numbers down the right are read as
+                a table rather than four unrelated figures per row. Hidden on a
+                narrow screen, where the rows stop being columns at all. */}
+            <div class="cart-heads" aria-hidden="true">
+              <span>商品</span>
+              <span>單價</span>
+              <span>數量</span>
+              <span>小計</span>
+              <span />
+            </div>
 
-          <section class="summary">
+            <ul class="cart-lines">
+              {quote.lines.map((line) => (
+                <li key={line.variantId}>
+                  <div class="thumb">
+                    {line.imagePath ? <img src={apiUrl(line.imagePath)} alt="" /> : <span />}
+                  </div>
+                  <div class="what">
+                    <a href={`/shop/${encodeURIComponent(line.productSlug)}`}>{line.productTitle}</a>
+                    <p class="variant">規格：{line.variantTitle}</p>
+                    {line.stockLeft !== null && <p class="note low">剩 {line.stockLeft} 件</p>}
+                  </div>
+                  <p class="unit">NT${line.unitPrice}</p>
+                  <label class="qty">
+                    <span class="qty-label">數量</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={cart.MAX_QUANTITY}
+                      step={1}
+                      value={line.quantity}
+                      onChange={(event) =>
+                        change(line.variantId, Number.parseInt((event.target as HTMLInputElement).value, 10))
+                      }
+                    />
+                  </label>
+                  <p class="line-total">NT${line.lineTotal}</p>
+                  <button type="button" class="drop" onClick={() => drop(line.variantId)}>
+                    移除
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <p class="keep-shopping">
+              <a href="/shop">← 繼續選購</a>
+            </p>
+          </div>
+
+          <section class="panel summary">
             <h2>配送方式</h2>
             <ul class="delivery">
               {quote.shipping.map((option) => (

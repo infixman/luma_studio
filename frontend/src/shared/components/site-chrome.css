@@ -165,25 +165,50 @@
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: 1rem;
   font-size: 0.9rem;
 }
 
+/* Each action is its own flex box rather than a bare inline link, so they line
+   up on their centres whatever is inside them — a word next to an icon. */
+.header-actions .action {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+}
+
 .header-actions .cta {
+  display: inline-flex;
+  align-items: center;
   padding: 0.45rem 1rem;
   border: 1px solid currentColor;
   border-radius: 999px;
   font-weight: 600;
 }
 
+.header-actions .cart-action {
+  position: relative;
+}
+
+.cart-icon {
+  display: block;
+  width: 23px;
+  height: 23px;
+}
+
+/* Over the icon's top-right corner, not beside it: beside it, the header
+   shifts every time something is added to the cart. */
 .header-actions .count {
-  display: inline-block;
-  min-width: 1.3rem;
-  margin-left: 0.3rem;
-  padding: 0.05rem 0.35rem;
+  position: absolute;
+  top: -5px;
+  left: 55%;
+  min-width: 1.05rem;
+  padding: 0.05rem 0.28rem;
   border-radius: 999px;
   background: currentColor;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  font-weight: 600;
   text-align: center;
 }
 

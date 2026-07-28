@@ -39,15 +39,13 @@ function markBody(page: string): void {
  * in a convenience store, on a phone, to read one number off it. Both already
  * carry the studio's own mark, so the site chrome puts a second logo above
  * the first and a shopping cart in front of someone who is trying to print.
+ *
+ * The order pages are neither. Somebody looking up what they bought is
+ * browsing, and taking the navigation away from them only makes the shop
+ * harder to get back to.
  */
 export function isBare(path: string): boolean {
-  return (
-    path === '/checkout' ||
-    path === '/orders' ||
-    path.startsWith('/orders/') ||
-    path === '/card' ||
-    path.startsWith('/ibon_print/')
-  )
+  return path === '/checkout' || path === '/card' || path.startsWith('/ibon_print/')
 }
 
 /** A handful of entry points, no in-app navigation, so matching the path is enough. */

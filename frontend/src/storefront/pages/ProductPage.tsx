@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { CartLink } from '../components/CartLink'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { PublicProductDetail, PublicVariant } from '../../shared/types'
 import * as cart from '../lib/cart'
@@ -13,12 +12,28 @@ function stockNote(variant: PublicVariant): string | null {
   return null
 }
 
+/**
+ * The headline price: one number once a variant is picked, a range before.
+ *
+ * Shown large and on its own line, because it is the one thing on this page
+ * somebody scrolled here to find.
+ */
+function headlinePrice(product: PublicProductDetail, chosen: PublicVariant | null): string {
+  if (chosen) return `NT$${chosen.price}`
+  const prices = product.variants.map((variant) => variant.price)
+  if (prices.length === 0) return '暫不販售'
+  const low = Math.min(...prices)
+  const high = Math.max(...prices)
+  return low === high ? `NT$${low}` : `NT$${low} – NT$${high}`
+}
+
 export function ProductPage({ slug }: { slug: string }) {
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
   const [missing, setMissing] = useState(false)
   const [failed, setFailed] = useState(false)
   const [chosen, setChosen] = useState<string | null>(null)
   const [shown, setShown] = useState(0)
+  const [wanted, setWanted] = useState(1)
   const [added, setAdded] = useState<string | null>(null)
 
   useEffect(() => {
@@ -52,21 +67,31 @@ export function ProductPage({ slug }: { slug: string }) {
 
   function addToCart() {
     if (!chosen) return
-    if (!cart.add(chosen, 1)) {
+    if (!cart.add(chosen, wanted)) {
       setAdded(`購物車最多放 ${cart.MAX_LINES} 種商品，先結帳或移除一些再加。`)
       return
     }
-    setAdded('已加入購物車。')
+    setAdded(`已加入 ${wanted} 件。`)
+  }
+
+  /** Picking a different variant starts the quantity over: its shelf is a different shelf. */
+  function choose(id: string) {
+    setChosen(id)
+    setWanted(1)
+    setAdded(null)
   }
 
   const images = product.images.filter((image) => image.path)
   const cover = images[Math.min(shown, images.length - 1)]
+  const picked = product.variants.find((variant) => variant.id === chosen) ?? null
+  // Only the server knows the real ceiling; this one exists so the stepper
+  // stops somewhere sensible when the shop has said how many are left.
+  const ceiling = picked?.stockLeft ?? cart.MAX_QUANTITY
 
   return (
     <main class="product">
       <p class="crumb">
         <a href="/shop">← 商品列表</a>
-        <CartLink />
       </p>
 
       <div class="layout">
@@ -93,42 +118,84 @@ export function ProductPage({ slug }: { slug: string }) {
         <div class="info">
           <h1>{product.title}</h1>
 
+          <p class="headline-price">{headlinePrice(product, picked)}</p>
+
           {product.variants.length === 0 ? (
             <p class="empty">這個商品目前沒有可販售的規格。</p>
           ) : (
-            <ul class="variants">
-              {product.variants.map((variant) => {
-                const note = stockNote(variant)
-                return (
-                  <li key={variant.id}>
-                    <button
-                      type="button"
-                      class={variant.id === chosen ? 'variant current' : 'variant'}
-                      disabled={!variant.inStock}
-                      aria-pressed={variant.id === chosen}
-                      onClick={() => setChosen(variant.id)}
-                    >
-                      <span class="name">{variant.title}</span>
-                      <span class="price">NT${variant.price}</span>
-                      {note && <span class={variant.inStock ? 'note low' : 'note out'}>{note}</span>}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <div class="chooser">
+              <span class="chooser-label">規格</span>
+              <ul class="variants">
+                {product.variants.map((variant) => {
+                  const note = stockNote(variant)
+                  return (
+                    <li key={variant.id}>
+                      <button
+                        type="button"
+                        class={variant.id === chosen ? 'variant current' : 'variant'}
+                        disabled={!variant.inStock}
+                        aria-pressed={variant.id === chosen}
+                        onClick={() => choose(variant.id)}
+                      >
+                        <span class="name">{variant.title}</span>
+                        <span class="price">NT${variant.price}</span>
+                        {note && <span class={variant.inStock ? 'note low' : 'note out'}>{note}</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           )}
 
           {product.variants.length > 0 && (
-            <div class="buy">
-              <button type="button" class="add" disabled={!chosen} onClick={addToCart}>
-                {chosen ? '加入購物車' : '請先選擇規格'}
-              </button>
-              {added && (
-                <p class="added" aria-live="polite">
-                  {added} <a href="/cart">查看購物車</a>
-                </p>
-              )}
-            </div>
+            <>
+              <div class="chooser">
+                <span class="chooser-label">數量</span>
+                <div class="stepper">
+                  <button
+                    type="button"
+                    aria-label="減一"
+                    disabled={!picked || wanted <= 1}
+                    onClick={() => setWanted(Math.max(1, wanted - 1))}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={ceiling}
+                    value={wanted}
+                    disabled={!picked}
+                    aria-label="數量"
+                    onInput={(event) => {
+                      const typed = Number.parseInt((event.currentTarget as HTMLInputElement).value, 10)
+                      setWanted(Number.isNaN(typed) ? 1 : Math.min(Math.max(1, typed), ceiling))
+                    }}
+                  />
+                  <button
+                    type="button"
+                    aria-label="加一"
+                    disabled={!picked || wanted >= ceiling}
+                    onClick={() => setWanted(Math.min(ceiling, wanted + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+                {picked !== null && picked.stockLeft !== null && <span class="left">剩 {picked.stockLeft} 件</span>}
+              </div>
+
+              <div class="buy">
+                <button type="button" class="add" disabled={!chosen} onClick={addToCart}>
+                  {chosen ? '加入購物車' : '請先選擇規格'}
+                </button>
+                {added && (
+                  <p class="added" aria-live="polite">
+                    {added} <a href="/cart">查看購物車</a>
+                  </p>
+                )}
+              </div>
+            </>
           )}
 
           {product.categories.length > 0 && (
@@ -140,18 +207,21 @@ export function ProductPage({ slug }: { slug: string }) {
               ))}
             </ul>
           )}
-
-          {product.description && (
-            <div class="description">
-              {product.description.split(/\n{2,}/).map((paragraph, index) => (
-                // Keyed by position: two identical paragraphs are legitimate
-                // in a description, and the text itself would collide.
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Its own panel below the fold, the way every shop the customer has
+          used arranges it: the buying decision is above, the reading is here. */}
+      {product.description && (
+        <section class="description">
+          <h2>商品描述</h2>
+          {product.description.split(/\n{2,}/).map((paragraph, index) => (
+            // Keyed by position: two identical paragraphs are legitimate
+            // in a description, and the text itself would collide.
+            <p key={index}>{paragraph}</p>
+          ))}
+        </section>
+      )}
     </main>
   )
 }

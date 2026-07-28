@@ -5,8 +5,11 @@ import { isBare } from './app'
 describe('which pages wear no site chrome', () => {
   it('keeps the navigation out of the way while someone is paying', () => {
     expect(isBare('/checkout')).toBe(true)
-    expect(isBare('/orders')).toBe(true)
-    expect(isBare('/orders/LS20260728abcdefg')).toBe(true)
+  })
+
+  it('dresses the order pages: looking up a past order is browsing', () => {
+    expect(isBare('/orders')).toBe(false)
+    expect(isBare('/orders/LS20260728abcdefg')).toBe(false)
   })
 
   it('leaves the pages that stand on their own alone', () => {
@@ -27,6 +30,6 @@ describe('which pages wear no site chrome', () => {
 
   it('does not mistake a page whose path merely starts the same way', () => {
     expect(isBare('/cards')).toBe(false)
-    expect(isBare('/orders-archive')).toBe(false)
+    expect(isBare('/ibon_printer')).toBe(false)
   })
 })

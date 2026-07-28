@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
-import { ApiError, api } from '../../shared/api'
-import type { OrderDetail, OrderStatus } from '../../shared/types'
+import { ApiError, api, apiUrl } from '../../shared/api'
+import type { OrderStatus, OrderDetail } from '../../shared/types'
 import '../styles/shop.css'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -13,9 +13,33 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   expired: '已逾期',
 }
 
+/**
+ * The road an order travels, and how far along it is.
+ *
+ * Only the happy path is a rail. Cancelled and expired leave it rather than
+ * continuing to a further step, so those two get a plain notice instead: a
+ * greyed-out track implies the order is still on its way somewhere.
+ */
+const STEPS: { label: string; reached: OrderStatus[] }[] = [
+  { label: '訂單已成立', reached: ['pending', 'paid', 'shipped', 'completed'] },
+  { label: '訂單已付款', reached: ['paid', 'shipped', 'completed'] },
+  { label: '訂單已出貨', reached: ['shipped', 'completed'] },
+  { label: '已完成', reached: ['completed'] },
+]
+
 function minutesLeft(reservedUntil: number | null): number | null {
   if (reservedUntil === null) return null
   return Math.max(0, Math.ceil((reservedUntil * 1000 - Date.now()) / 60000))
+}
+
+function stamp(seconds: number): string {
+  return new Date(seconds * 1000).toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function OrderPage({ id }: { id: string }) {
@@ -72,69 +96,106 @@ export function OrderPage({ id }: { id: string }) {
 
   const { order, items } = detail
   const remaining = order.status === 'pending' ? minutesLeft(order.reservedUntil) : null
+  const closed = order.status === 'cancelled' || order.status === 'expired'
 
   return (
     <main class="order">
-      <p class="crumb">
-        <a href="/orders">← 我的訂單</a>
-      </p>
-      <h1>訂單 {order.id}</h1>
-      <p class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</p>
+      <div class="order-bar">
+        <a class="back" href="/orders">
+          ← 我的訂單
+        </a>
+        <span class="order-id">訂單編號 {order.id}</span>
+        <span class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
+      </div>
 
-      {order.status === 'pending' && (
-        <div class="pay-panel">
-          <p>
-            這筆訂單還沒付款。
-            {remaining !== null && remaining > 0 ? `庫存為你保留 ${remaining} 分鐘。` : '保留時間已過，庫存可能已經釋出。'}
-          </p>
-          <p class="hint">金流尚未串接，以下按鈕只是用來測試整個流程。</p>
-          <button type="button" onClick={fakePay} disabled={busy}>
-            {busy ? '處理中…' : '模擬付款（測試用）'}
-          </button>
-          {note && <p class="failed">{note}</p>}
-        </div>
-      )}
-
-      <ul class="order-items">
-        {items.map((item, index) => (
-          <li key={index}>
-            <span class="what">
-              {item.productTitle}
-              <small>{item.variantTitle}</small>
-            </span>
-            <span class="qty">×{item.quantity}</span>
-            <span class="money">NT${item.subtotal}</span>
-          </li>
-        ))}
-      </ul>
-
-      <dl class="totals">
-        <div>
-          <dt>小計</dt>
-          <dd>NT${order.subtotal}</dd>
-        </div>
-        <div>
-          <dt>運費</dt>
-          <dd>{order.shippingFee === 0 ? '免運' : `NT$${order.shippingFee}`}</dd>
-        </div>
-        <div class="grand">
-          <dt>總計</dt>
-          <dd>NT${order.total}</dd>
-        </div>
-      </dl>
-
-      <section class="delivery-detail">
-        <h2>收件資料</h2>
-        <p>{order.recipientName}</p>
-        <p>{order.recipientPhone}</p>
-        <p>{order.recipientEmail}</p>
-        {order.shippingAddress && <p>{order.shippingAddress}</p>}
-        {order.storeName && (
-          <p>
-            {order.storeName}
-            {order.storeAddr && <small>{order.storeAddr}</small>}
-          </p>
+      <section class="panel">
+        {closed ? (
+          <p class="closed-note">這筆訂單{order.status === 'cancelled' ? '已取消' : '已逾期'}，庫存已經放回架上。</p>
+        ) : (
+          <ol class="progress">
+            {STEPS.map((step) => (
+              <li key={step.label} class={step.reached.includes(order.status) ? 'done' : ''}>
+                <span class="dot" aria-hidden="true" />
+                <span class="step-label">{step.label}</span>
+              </li>
+            ))}
+          </ol>
         )}
+
+        {order.status === 'pending' && (
+          <div class="pay-panel">
+            <p>
+              這筆訂單還沒付款。
+              {remaining !== null && remaining > 0 ? `庫存為你保留 ${remaining} 分鐘。` : '保留時間已過，庫存可能已經釋出。'}
+            </p>
+            <p class="hint">金流尚未串接，以下按鈕只是用來測試整個流程。</p>
+            <button type="button" onClick={fakePay} disabled={busy}>
+              {busy ? '處理中…' : '模擬付款（測試用）'}
+            </button>
+            {note && <p class="failed">{note}</p>}
+          </div>
+        )}
+      </section>
+
+      <section class="panel delivery-detail">
+        <h2>收件資料</h2>
+        <div class="recipient">
+          <p class="who">{order.recipientName}</p>
+          <p>{order.recipientPhone}</p>
+          <p>{order.recipientEmail}</p>
+          {order.shippingAddress && <p>{order.shippingAddress}</p>}
+          {order.storeName && (
+            <p>
+              {order.storeName}
+              {order.storeAddr && <small>{order.storeAddr}</small>}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section class="panel">
+        <ul class="order-items">
+          {items.map((item, index) => (
+            // Keyed by position: the same product may appear twice under two
+            // different variants.
+            <li key={index}>
+              <span class="thumb">
+                {item.coverPath ? <img src={apiUrl(item.coverPath)} alt="" loading="lazy" /> : <span />}
+              </span>
+              <span class="what">
+                {/* Only linked while the product is still listed. A dead link
+                    on a receipt is worse than plain text. */}
+                {item.slug ? (
+                  <a class="title" href={`/shop/${encodeURIComponent(item.slug)}`}>
+                    {item.productTitle}
+                  </a>
+                ) : (
+                  <span class="title">{item.productTitle}</span>
+                )}
+                <small>規格：{item.variantTitle}</small>
+                <small>×{item.quantity}</small>
+              </span>
+              <span class="money">NT${item.subtotal}</span>
+            </li>
+          ))}
+        </ul>
+
+        <dl class="totals">
+          <div>
+            <dt>商品小計</dt>
+            <dd>NT${order.subtotal}</dd>
+          </div>
+          <div>
+            <dt>運費</dt>
+            <dd>{order.shippingFee === 0 ? '免運' : `NT$${order.shippingFee}`}</dd>
+          </div>
+          <div class="grand">
+            <dt>訂單金額</dt>
+            <dd>NT${order.total}</dd>
+          </div>
+        </dl>
+
+        <p class="placed-at">成立時間：{stamp(order.createdAt)}</p>
       </section>
     </main>
   )
