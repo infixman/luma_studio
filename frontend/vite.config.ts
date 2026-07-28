@@ -57,6 +57,30 @@ function securityHeaders(apiOrigin: string, imageOrigin: string): Plugin {
 }
 
 /**
+ * Serve admin.html as the dev shell when running the back office.
+ *
+ * `rollupOptions.input` only steers a build. The dev server answers a
+ * navigation with index.html whatever the mode, so without this
+ * `npm run dev:admin` quietly serves the storefront on the back office's port
+ * — the mode swaps the env vars and nothing else, which is a confusing way to
+ * spend an afternoon.
+ */
+function adminDevShell(): Plugin {
+  return {
+    name: 'luma-admin-dev-shell',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        // Navigations only. Module and asset requests do not ask for HTML,
+        // and rewriting those would break the dev client.
+        if (request.headers.accept?.includes('text/html')) request.url = '/admin.html'
+        next()
+      })
+    },
+  }
+}
+
+/**
  * Two sites out of one project.
  *
  * The storefront and the back office are separate deployments on separate
@@ -75,7 +99,7 @@ export default defineConfig(({ mode }) => {
   const imageOrigin = env.VITE_PUBLIC_API_BASE || 'https://api.luma-studio.tw'
 
   return {
-    plugins: [preact(), securityHeaders(apiOrigin, imageOrigin)],
+    plugins: [preact(), securityHeaders(apiOrigin, imageOrigin), ...(admin ? [adminDevShell()] : [])],
     build: {
       outDir: admin ? 'dist/admin' : 'dist/storefront',
       // No sourcemaps in the deployed bundle: they are three times the size of

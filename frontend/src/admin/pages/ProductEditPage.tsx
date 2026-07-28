@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
-import { AdminNav } from '../components/AdminNav'
-import { StatusBar, useStatus } from '../components/StatusBar'
+import { AdminShell } from '../components/AdminShell'
+import { useStatus } from '../components/StatusBar'
 import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
 import type { ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
@@ -126,84 +126,86 @@ export function ProductEditPage({ id }: { id: string }) {
 
   if (detail === null) {
     return (
-      <>
-        <AdminNav current="/products" />
-        <main class="admin shop">
-          <p class="muted">載入中…</p>
-        </main>
-        <StatusBar message={message} />
-      </>
+      <AdminShell current="/products" message={message} onError={showError}>
+        <section class="stack shop">
+          <div class="card">
+            <p class="muted">載入中…</p>
+          </div>
+        </section>
+      </AdminShell>
     )
   }
 
   const sellable = detail.variants.some((variant) => variant.enabled)
 
   return (
-    <>
-      <AdminNav current="/products" />
-      <main class="admin shop">
+    <AdminShell current="/products" message={message} onError={showError}>
+      <section class="stack shop">
         <p class="crumb">
           <a href="/products">← 回到商城</a>
         </p>
-        <h1>{detail.product.title}</h1>
+        <h2 class="product-heading">{detail.product.title}</h2>
 
         {!sellable && detail.product.status === 'active' && (
           <p class="notice warn">這個商品已上架，但沒有任何啟用的規格，顧客看得到卻買不了。</p>
         )}
 
-        <form class="product-form" onSubmit={saveProduct}>
-          <label>
-            商品名稱
-            <input
-              value={form.title}
-              onInput={(event) => setForm({ ...form, title: (event.target as HTMLInputElement).value })}
-              maxLength={80}
-              required
-            />
-          </label>
-          <label>
-            網址代稱
-            <input
-              value={form.slug}
-              onInput={(event) => setForm({ ...form, slug: (event.target as HTMLInputElement).value })}
-              maxLength={64}
-              required
-            />
-            <small>顧客看到的網址是 /shop/{form.slug || '…'}，改動會讓舊連結失效。</small>
-          </label>
-          <label>
-            商品說明
-            <textarea
-              value={form.description}
-              onInput={(event) => setForm({ ...form, description: (event.target as HTMLTextAreaElement).value })}
-              maxLength={2000}
-              rows={6}
-            />
-          </label>
-          <fieldset class="statuses">
-            <legend>狀態</legend>
-            {STATUSES.map((status) => (
-              <label key={status.value} class="radio">
-                <input
-                  type="radio"
-                  name="status"
-                  checked={form.status === status.value}
-                  onChange={() => setForm({ ...form, status: status.value })}
-                />
-                <span>
-                  {status.label}
-                  <small>{status.hint}</small>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          <button type="submit" disabled={busy}>
-            儲存商品
-          </button>
-        </form>
+        <div class="card">
+          <h3>商品資料</h3>
+          <form class="product-form" onSubmit={saveProduct}>
+            <label>
+              商品名稱
+              <input
+                value={form.title}
+                onInput={(event) => setForm({ ...form, title: (event.target as HTMLInputElement).value })}
+                maxLength={80}
+                required
+              />
+            </label>
+            <label>
+              網址代稱
+              <input
+                value={form.slug}
+                onInput={(event) => setForm({ ...form, slug: (event.target as HTMLInputElement).value })}
+                maxLength={64}
+                required
+              />
+              <small>顧客看到的網址是 /shop/{form.slug || '…'}，改動會讓舊連結失效。</small>
+            </label>
+            <label>
+              商品說明
+              <textarea
+                value={form.description}
+                onInput={(event) => setForm({ ...form, description: (event.target as HTMLTextAreaElement).value })}
+                maxLength={2000}
+                rows={6}
+              />
+            </label>
+            <fieldset class="statuses">
+              <legend>狀態</legend>
+              {STATUSES.map((status) => (
+                <label key={status.value} class="radio">
+                  <input
+                    type="radio"
+                    name="status"
+                    checked={form.status === status.value}
+                    onChange={() => setForm({ ...form, status: status.value })}
+                  />
+                  <span>
+                    {status.label}
+                    <small>{status.hint}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <button type="submit" disabled={busy}>
+              儲存商品
+            </button>
+          </form>
+        </div>
 
-        <section class="variants">
-          <h2>規格與庫存</h2>
+        <section class="card variants">
+          <h3>規格與庫存</h3>
           {detail.variants.length === 0 && <p class="muted">還沒有規格。至少要有一個，商品才能販售。</p>}
           <ul>
             {detail.variants.map((variant) => (
@@ -291,8 +293,8 @@ export function ProductEditPage({ id }: { id: string }) {
           </form>
         </section>
 
-        <section class="photos">
-          <h2>照片</h2>
+        <section class="card photos">
+          <h3>照片</h3>
           <p class="muted">第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。</p>
           <ul class="photo-grid">
             {detail.images.map((image) => (
@@ -311,8 +313,7 @@ export function ProductEditPage({ id }: { id: string }) {
             onChange={uploadPhoto}
           />
         </section>
-      </main>
-      <StatusBar message={message} />
-    </>
+      </section>
+    </AdminShell>
   )
 }

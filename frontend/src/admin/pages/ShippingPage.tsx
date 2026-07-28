@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
-import { AdminNav } from '../components/AdminNav'
-import { StatusBar, useStatus } from '../components/StatusBar'
+import { AdminShell } from '../components/AdminShell'
+import { useStatus } from '../components/StatusBar'
 import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { ShippingMethod } from '../../shared/types'
 import '../styles/admin.css'
@@ -73,72 +73,72 @@ export function ShippingPage() {
   }
 
   return (
-    <>
-      <AdminNav current="/shipping" />
-      <main class="admin shop">
-        <h1>運費</h1>
-        {drafts === null ? (
-          <p class="muted">載入中…</p>
-        ) : (
-          <form class="shipping-form" onSubmit={save}>
-            <p class="muted">
-              免運門檻留空代表這個方式不提供免運。門檻是「達到就免運」，不是「超過才免運」。
-            </p>
-            {drafts.map((draft) => (
-              <fieldset key={draft.method} class={draft.enabled ? 'method' : 'method off'}>
-                <legend>{draft.label}</legend>
-                <label class="toggle">
-                  <input
-                    type="checkbox"
-                    checked={draft.enabled}
-                    onChange={(event) => edit(draft.method, { enabled: (event.target as HTMLInputElement).checked })}
-                  />
-                  提供這個配送方式
-                </label>
-                <label>
-                  顯示名稱
-                  <input
-                    value={draft.label}
-                    maxLength={40}
-                    required
-                    onInput={(event) => edit(draft.method, { label: (event.target as HTMLInputElement).value })}
-                  />
-                </label>
-                <label>
-                  運費
-                  <input
-                    type="number"
-                    min={0}
-                    max={1000}
-                    step={1}
-                    value={draft.fee}
-                    required
-                    onInput={(event) => edit(draft.method, { fee: (event.target as HTMLInputElement).value })}
-                  />
-                </label>
-                <label>
-                  免運門檻
-                  <input
-                    type="number"
-                    min={1}
-                    max={100000}
-                    step={1}
-                    placeholder="留空＝不免運"
-                    value={draft.freeThreshold}
-                    onInput={(event) =>
-                      edit(draft.method, { freeThreshold: (event.target as HTMLInputElement).value })
-                    }
-                  />
-                </label>
-              </fieldset>
-            ))}
-            <button type="submit" disabled={busy}>
-              儲存運費
-            </button>
-          </form>
-        )}
-      </main>
-      <StatusBar message={message} />
-    </>
+    <AdminShell current="/shipping" message={message} onError={showError}>
+      <section class="stack shop">
+        <div class="card">
+          <h2>配送方式與運費</h2>
+          {drafts === null ? (
+            <p class="muted">載入中…</p>
+          ) : (
+            <form class="shipping-form" onSubmit={save}>
+              <p class="muted">
+                免運門檻留空代表這個方式不提供免運。門檻是「達到就免運」，不是「超過才免運」。
+              </p>
+              {drafts.map((draft) => (
+                <fieldset key={draft.method} class={draft.enabled ? 'method' : 'method off'}>
+                  <legend>{draft.label}</legend>
+                  <label class="toggle">
+                    <input
+                      type="checkbox"
+                      checked={draft.enabled}
+                      onChange={(event) => edit(draft.method, { enabled: (event.target as HTMLInputElement).checked })}
+                    />
+                    提供這個配送方式
+                  </label>
+                  <label>
+                    顯示名稱
+                    <input
+                      value={draft.label}
+                      maxLength={40}
+                      required
+                      onInput={(event) => edit(draft.method, { label: (event.target as HTMLInputElement).value })}
+                    />
+                  </label>
+                  <label>
+                    運費
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      step={1}
+                      value={draft.fee}
+                      required
+                      onInput={(event) => edit(draft.method, { fee: (event.target as HTMLInputElement).value })}
+                    />
+                  </label>
+                  <label>
+                    免運門檻
+                    <input
+                      type="number"
+                      min={1}
+                      max={100000}
+                      step={1}
+                      placeholder="留空＝不免運"
+                      value={draft.freeThreshold}
+                      onInput={(event) =>
+                        edit(draft.method, { freeThreshold: (event.target as HTMLInputElement).value })
+                      }
+                    />
+                  </label>
+                </fieldset>
+              ))}
+              <button type="submit" disabled={busy}>
+                儲存運費
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+    </AdminShell>
   )
 }

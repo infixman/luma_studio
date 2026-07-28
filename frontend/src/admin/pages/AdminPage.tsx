@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { AdminNav } from '../components/AdminNav'
 import { CopyButton, OpenButton } from '../components/IconButtons'
-import { StatusBar, useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, clearLoginAttempt, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
+import { AdminShell } from '../components/AdminShell'
+import { useStatus } from '../components/StatusBar'
+import { ApiError, api, apiJson, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
 import {
   applyChoice,
   defaultPrintChoice,
@@ -203,27 +203,8 @@ export function AdminPage() {
     }
   }
 
-  const logout = async () => {
-    try {
-      await api('/auth/logout', { method: 'POST' })
-    } catch (error) {
-      showError(error)
-      return
-    }
-    clearLoginAttempt()
-    location.assign('/')
-  }
-
   return (
-    <main>
-      <header>
-        <img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
-        <button class="ghost" onClick={logout}>
-          登出
-        </button>
-      </header>
-      <AdminNav current="/admin" />
-      <StatusBar message={message} />
+    <AdminShell current="/" message={message} onError={showError}>
 
       <section class="grid">
         <div class="card">
@@ -386,6 +367,6 @@ export function AdminPage() {
           </ul>
         </div>
       </section>
-    </main>
+    </AdminShell>
   )
 }

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
-import { AdminNav } from '../components/AdminNav'
 import { BioLinkAppearance } from '../components/BioLinkAppearance'
 import { BioLinkStatsPanel } from '../components/BioLinkStats'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../shared/components/SocialIcon'
-import { StatusBar, useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, apiUrl, bioLinkPageUrl, clearLoginAttempt, uploadBioLinkAvatar } from '../../shared/api'
+import { AdminShell } from '../components/AdminShell'
+import { useStatus } from '../components/StatusBar'
+import { ApiError, api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/bio-link-admin.css'
@@ -242,17 +242,6 @@ export function BioLinkAdminPage() {
     if (source && source.kind === kind) reorderTo(kind, source.index, index)
   }
 
-  const logout = async () => {
-    if (dirty && !confirm('有未儲存的修改，登出後會遺失。要登出嗎？')) return
-    try {
-      await api('/auth/logout', { method: 'POST' })
-    } catch (error) {
-      showError(error)
-      return
-    }
-    clearLoginAttempt()
-    location.assign('/')
-  }
 
   const atCapacity = (page?.items.length ?? 0) >= MAX_ITEMS
 
@@ -390,15 +379,12 @@ export function BioLinkAdminPage() {
   const remaining = page ? MAX_ITEMS - page.items.length : MAX_ITEMS
 
   return (
-    <main>
-      <header>
-        <img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
-        <button class="ghost" onClick={logout}>
-          登出
-        </button>
-      </header>
-      <AdminNav current="/admin/bio-link" />
-      <StatusBar message={message} />
+    <AdminShell
+      current="/bio-link"
+      message={message}
+      onError={showError}
+      confirmLeave={() => !dirty || confirm('有未儲存的修改，登出後會遺失。要登出嗎？')}
+    >
 
       {page === null ? (
         <p class="muted bio-loading">載入中…</p>
@@ -572,6 +558,6 @@ export function BioLinkAdminPage() {
           </div>
         </div>
       )}
-    </main>
+    </AdminShell>
   )
 }
