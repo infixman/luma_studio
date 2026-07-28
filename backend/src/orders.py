@@ -15,6 +15,7 @@ written once, here.
 import re
 
 import shipping
+import shop
 import mail
 from common import d1_rows, random_alpha_numeric, utc_timestamp
 
@@ -120,6 +121,24 @@ def item_row(row: dict) -> dict:
         "unitPrice": int(row["unit_price"]),
         "quantity": int(row["quantity"]),
         "subtotal": int(row["subtotal"]),
+    }
+
+
+def card_item_row(row: dict) -> dict:
+    """A line, plus enough to show a picture of it and link back to the product.
+
+    The title and the price come from the order; the picture and the link come
+    from the product as it is today. That is deliberate, and the two must not
+    be confused: a receipt from March may not change because the shop renamed
+    something in June, whereas the thumbnail is only there to help someone
+    recognise what they bought. A product that has since been deleted leaves
+    both null, and the line still reads correctly without them.
+    """
+
+    return {
+        **item_row(row),
+        "slug": row["product_slug"],
+        "coverPath": shop.image_path(row["cover_key"]) if row["cover_key"] else None,
     }
 
 
@@ -248,6 +267,26 @@ async def list_items(env, order_id: str) -> list[dict]:
     ]
 
 
+# Every join is a LEFT one: a deleted product must not delete the line that
+# says somebody bought it. The cover is whichever image the product shows
+# first, read as a subquery so a product with four photos still yields one row
+# per order line rather than four.
+_ITEM_WITH_PRODUCT = (
+    "SELECT oi.*, p.slug AS product_slug,"
+    " (SELECT r2_key FROM product_images WHERE product_id = p.id ORDER BY position LIMIT 1) AS cover_key"
+    " FROM order_items oi"
+    " LEFT JOIN product_variants pv ON pv.id = oi.variant_id"
+    " LEFT JOIN products p ON p.id = pv.product_id"
+)
+
+
+async def list_card_items(env, order_id: str) -> list[dict]:
+    return [
+        card_item_row(row)
+        for row in await d1_rows(env.DB.prepare(f"{_ITEM_WITH_PRODUCT} WHERE oi.order_id = ?1").bind(order_id))
+    ]
+
+
 async def list_for_customer(env, customer_id: str) -> list[dict]:
     return [
         order_row(row)
@@ -255,6 +294,33 @@ async def list_for_customer(env, customer_id: str) -> list[dict]:
             env.DB.prepare("SELECT * FROM orders WHERE customer_id = ?1 ORDER BY created_at DESC").bind(customer_id)
         )
     ]
+
+
+async def list_cards_for_customer(env, customer_id: str) -> list[dict]:
+    """Every order the customer has placed, each carrying its own lines.
+
+    The lines arrive in one query for the whole list rather than one query per
+    order: a customer with twenty orders would otherwise cost twenty-one round
+    trips to show a page that is mostly thumbnails.
+    """
+
+    orders_ = await list_for_customer(env, customer_id)
+    if not orders_:
+        return []
+
+    lines: dict[str, list[dict]] = {order["id"]: [] for order in orders_}
+    rows = await d1_rows(
+        env.DB.prepare(
+            f"{_ITEM_WITH_PRODUCT} WHERE oi.order_id IN (SELECT id FROM orders WHERE customer_id = ?1)"
+        ).bind(customer_id)
+    )
+    for row in rows:
+        # An order that arrived between the two queries has no entry here, and
+        # its lines are dropped rather than crashing the list.
+        if row["order_id"] in lines:
+            lines[row["order_id"]].append(card_item_row(row))
+
+    return [{**order, "items": lines[order["id"]]} for order in orders_]
 
 
 async def release_stock(env, order_id: str) -> None:

@@ -473,7 +473,7 @@ async def order_response(ctx: Ctx, customer: dict, order_id: str):
         return ctx.error("Order not found", 404)
 
     order = orders.order_row(rows[0])
-    return ctx.json({"order": order, "items": await orders.list_items(ctx.env, order_id)})
+    return ctx.json({"order": order, "items": await orders.list_card_items(ctx.env, order_id)})
 
 
 async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
@@ -682,7 +682,7 @@ async def dispatch(ctx: Ctx):
                 return ctx.too_many_requests()
             return await checkout_response(ctx, customer)
         if path == "/api/orders" and method == "GET":
-            return ctx.json({"orders": await orders.list_for_customer(ctx.env, customer["id"])})
+            return ctx.json({"orders": await orders.list_cards_for_customer(ctx.env, customer["id"])})
         if path.endswith("/fake-payment") and method == "POST":
             return await fake_payment_response(
                 ctx, customer, path.removeprefix("/api/orders/").removesuffix("/fake-payment")

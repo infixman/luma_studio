@@ -216,6 +216,132 @@ class TestMarkingPaid:
         assert run(orders.mark_paid(env, "LS1", "test")) is False
 
 
+def order_row(order_id="LS1", **overrides):
+    row = {
+        "id": order_id,
+        "status": "paid",
+        "subtotal": 300,
+        "shipping_fee": 60,
+        "total": 360,
+        "shipping_method": "cvs_c2c",
+        "recipient_name": "王小明",
+        "recipient_phone": "0912345678",
+        "recipient_email": "buyer@example.com",
+        "shipping_address": "",
+        "store_name": None,
+        "store_addr": None,
+        "reserved_until": None,
+        "paid_at": 1000,
+        "created_at": 900,
+    }
+    row.update(overrides)
+    return row
+
+
+def item_join_row(order_id="LS1", slug="soda-tote", cover="_shop/abc.jpg", title="蘇打托特包"):
+    return {
+        "id": "i1",
+        "order_id": order_id,
+        "variant_id": "v1",
+        "product_title": title,
+        "variant_title": "M",
+        "unit_price": 300,
+        "quantity": 1,
+        "subtotal": 300,
+        "product_slug": slug,
+        "cover_key": cover,
+    }
+
+
+class TestTheOrderList:
+    """What the customer's order list carries, and what it does without."""
+
+    def test_each_order_arrives_with_its_own_lines(self, orders):
+        env = make_env(
+            FakeDatabase(
+                {
+                    "SELECT * FROM orders WHERE customer_id": [order_row("LS1"), order_row("LS2")],
+                    "FROM order_items oi": [item_join_row("LS1"), item_join_row("LS2", title="貼紙")],
+                }
+            )
+        )
+        listed = run(orders.list_cards_for_customer(env, "c1"))
+
+        assert [order["id"] for order in listed] == ["LS1", "LS2"]
+        assert [item["productTitle"] for order in listed for item in order["items"]] == ["蘇打托特包", "貼紙"]
+
+    def test_the_lines_cost_one_query_however_many_orders(self, orders):
+        """Twenty orders must not become twenty-one round trips to D1."""
+
+        database = FakeDatabase(
+            {
+                "SELECT * FROM orders WHERE customer_id": [order_row(f"LS{n}") for n in range(20)],
+                "FROM order_items oi": [item_join_row(f"LS{n}") for n in range(20)],
+            }
+        )
+        run(orders.list_cards_for_customer(make_env(database), "c1"))
+
+        assert sum("FROM order_items" in statement for statement in database.statements) == 1
+
+    def test_a_deleted_product_leaves_the_line_readable(self, orders):
+        """The title and the price are the order's own; only the picture is the shop's."""
+
+        env = make_env(
+            FakeDatabase(
+                {
+                    "SELECT * FROM orders WHERE customer_id": [order_row("LS1")],
+                    "FROM order_items oi": [item_join_row(slug=None, cover=None)],
+                }
+            )
+        )
+        item = run(orders.list_cards_for_customer(env, "c1"))[0]["items"][0]
+
+        assert item["productTitle"] == "蘇打托特包"
+        assert item["subtotal"] == 300
+        assert item["slug"] is None
+        assert item["coverPath"] is None
+
+    def test_the_cover_becomes_a_url_the_browser_can_ask_for(self, orders):
+        env = make_env(
+            FakeDatabase(
+                {
+                    "SELECT * FROM orders WHERE customer_id": [order_row("LS1")],
+                    "FROM order_items oi": [item_join_row()],
+                }
+            )
+        )
+        item = run(orders.list_cards_for_customer(env, "c1"))[0]["items"][0]
+
+        assert item["coverPath"] == "/shop-assets/abc.jpg"
+
+    def test_a_customer_with_no_orders_asks_for_no_lines(self, orders):
+        database = FakeDatabase({"SELECT * FROM orders WHERE customer_id": []})
+        assert run(orders.list_cards_for_customer(make_env(database), "c1")) == []
+        assert not any("FROM order_items" in statement for statement in database.statements)
+
+    def test_lines_belonging_to_an_order_that_is_not_listed_are_dropped(self, orders):
+        """An order placed between the two queries must not crash the list."""
+
+        env = make_env(
+            FakeDatabase(
+                {
+                    "SELECT * FROM orders WHERE customer_id": [order_row("LS1")],
+                    "FROM order_items oi": [item_join_row("LS1"), item_join_row("LS-later")],
+                }
+            )
+        )
+        listed = run(orders.list_cards_for_customer(env, "c1"))
+
+        assert len(listed) == 1
+        assert len(listed[0]["items"]) == 1
+
+    def test_the_admin_list_is_left_as_it_was(self, orders):
+        """`list_for_customer` also backs a back-office page; it gains nothing."""
+
+        env = make_env(FakeDatabase({"SELECT * FROM orders WHERE customer_id": [order_row("LS1")]}))
+        assert "items" not in run(orders.list_for_customer(env, "c1"))[0]
+
+
 @pytest.fixture
 def call():
     import main

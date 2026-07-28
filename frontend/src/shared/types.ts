@@ -314,9 +314,26 @@ export interface OrderItem {
   subtotal: number
 }
 
+/**
+ * The same line, plus a picture of the product as it is now.
+ *
+ * Both are null once the product has been deleted, which is why they are not
+ * on `OrderItem` itself: the snapshot above always reads, and these two are
+ * decoration that may be missing.
+ */
+export interface OrderCardItem extends OrderItem {
+  slug: string | null
+  coverPath: string | null
+}
+
 export interface OrderDetail {
   order: Order
-  items: OrderItem[]
+  items: OrderCardItem[]
+}
+
+/** One row of the customer's order list: the order, and what was in it. */
+export interface OrderCard extends Order {
+  items: OrderCardItem[]
 }
 
 /** The same order plus what only the shop may see. */
