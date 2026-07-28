@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { ApiError } from '../../shared/api'
 
-export type StatusKind = 'ok' | 'error' | 'plain'
+export type StatusKind = 'ok' | 'warn' | 'error' | 'plain'
 
 interface StatusMessage {
   text: string
@@ -45,15 +45,19 @@ export function useStatus() {
   /**
    * The wrapper six pages had copied verbatim: refuse while something else is
    * running, report either way, and say whether it worked.
+   *
+   * `work` may return its own sentence, for actions whose outcome is not known
+   * until the server answers. It is shown in the warning tone: something that
+   * had to correct the caller's optimistic `done` did not go entirely to plan.
    */
   const [busy, setBusy] = useState(false)
   const run = useCallback(
-    async (work: () => Promise<void>, done: string): Promise<boolean> => {
+    async (work: () => Promise<string | void>, done: string): Promise<boolean> => {
       if (busy) return false
       setBusy(true)
       try {
-        await work()
-        show(done, 'ok')
+        const said = await work()
+        show(said || done, said ? 'warn' : 'ok')
         return true
       } catch (error) {
         showError(error)

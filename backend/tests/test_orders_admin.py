@@ -119,6 +119,23 @@ class TestWhatTheShopSees:
         assert query.count("status != ") == 2
         assert bindings[:2] == ("cancelled", "expired")
 
+    def test_two_is_rules_return_nothing_rather_than_the_last_one(self, orders):
+        """狀態是已付款 and 狀態是已出貨 stacked describes an order that cannot
+        exist. Keeping the last rule answered a filter nobody wrote, while
+        both rows were still on screen with 而且 between them."""
+
+        database = FakeDatabase({"FROM orders": [order()]})
+        body = body_of(call(AdminRequest("/api/orders?status=paid&status=shipped"), database))
+        assert body["orders"] == []
+        # And it did not go and ask the database for the last one.
+        assert not any("FROM orders WHERE" in statement for statement in database.statements)
+
+    def test_one_is_rule_still_filters(self, orders):
+        database = FakeDatabase({"FROM orders": [order()]})
+        call(AdminRequest("/api/orders?status=paid"), database)
+        query, bindings = [read for read in database.reads if "FROM orders WHERE" in read[0]][0]
+        assert "status = ?1" in query and bindings[0] == "paid"
+
     def test_an_unknown_excluded_status_is_refused_too(self, orders):
         database = FakeDatabase()
         assert call(AdminRequest("/api/orders?statusNot=lost"), database).status == 400

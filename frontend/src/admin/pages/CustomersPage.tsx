@@ -19,6 +19,7 @@ import {
   activeCount,
   applyFilters,
   readHidden,
+  Truncated,
   useConfirm,
   writeHidden,
 } from '../components/ui'
@@ -29,6 +30,7 @@ import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
 import { dateOnly } from '../../shared/dates'
+import { useLatest } from '../lib/latest'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -87,20 +89,27 @@ export function CustomersPage() {
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
+  const latest = useLatest()
 
   // Search stays on the server: it is the thing that reaches past the cap, so
   // doing it here would only search the hundred rows the cap let through.
-  const load = useCallback(async () => {
-    const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''
-    try {
-      const data = await api<{ customers: AdminCustomer[]; truncated: boolean }>(`/api/customers${query}`)
-      setCustomers(data.customers)
-      setTruncated(data.truncated)
-      clearLoginAttempt()
-    } catch (error) {
-      showError(error)
-    }
-  }, [search, showError])
+  // Typing fast can put two searches in flight; only the current one paints.
+  const load = useCallback(
+    () =>
+      latest(async (isCurrent) => {
+        const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''
+        try {
+          const data = await api<{ customers: AdminCustomer[]; truncated: boolean }>(`/api/customers${query}`)
+          if (!isCurrent()) return
+          setCustomers(data.customers)
+          setTruncated(data.truncated)
+          clearLoginAttempt()
+        } catch (error) {
+          if (isCurrent()) showError(error)
+        }
+      }),
+    [latest, search, showError],
+  )
 
   useEffect(() => {
     void load()
@@ -300,7 +309,7 @@ export function CustomersPage() {
           <FilterBar fields={FIELDS} rules={rules} onChange={changeRules} />
         )}
 
-        {truncated && <p class="muted warn">只顯示最新的 {customers?.length} 位。用搜尋縮小範圍。</p>}
+        {truncated && <Truncated count={customers?.length ?? 0} unit="位" narrowed={filtered} />}
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void blockSelected(true)}>

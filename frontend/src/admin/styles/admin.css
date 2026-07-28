@@ -292,6 +292,14 @@ body.admin #status.ok {
   color: var(--on-success);
 }
 
+body.admin #status.warn {
+  /* Part of what was asked for happened. Neither green nor red is true, and
+     saying "done" in green over a partial failure is the reason this tone
+     exists. */
+  background: var(--warning);
+  color: var(--on-warning);
+}
+
 body.admin .empty {
   padding: var(--space-5) 0;
   color: var(--muted);

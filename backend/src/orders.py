@@ -445,7 +445,8 @@ async def set_note(env, order_id: str, note: str, actor: str) -> bool:
 async def list_all(
     env,
     *,
-    status: str = "",
+    status: str | None = "",
+    impossible: bool = False,
     exclude_statuses: tuple[str, ...] = (),
     search: str = "",
     created_from: int | None = None,
@@ -464,7 +465,14 @@ async def list_all(
     short only narrows the part that made it back, which reads exactly like a
     complete answer and is not one. Every condition is AND-ed, which is what
     the back office's stacked filter rows mean.
+
+    `impossible` is that AND taken to its conclusion: two "狀態 是" rules on
+    different statuses describe an order that cannot exist. No rows is the
+    honest answer, and cheaper than asking the database for it.
     """
+
+    if impossible:
+        return [], False
 
     conditions, bindings = [], []
     if status:

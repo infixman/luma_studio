@@ -62,6 +62,7 @@
   /* Darker than Strapi's #be5d01, which reads 4.03:1 on its own tint — these
      badges are 12px, so that is under AA. This one is 5.15:1. */
   --warning: #a54f00;
+  --on-warning: #fff;
   --warning-soft: #fdf4dc;
   --warning-line: #faca8c;
   --success: #328048;
@@ -147,6 +148,7 @@
     --danger-soft: #181826;
     --danger-line: #4a4a6a;
     --warning: #f29d41;
+    --on-warning: #2a1602;
     --warning-soft: #181826;
     --warning-line: #4a4a6a;
     --success: #5cb176;
@@ -197,6 +199,7 @@
   --danger-soft: #181826;
   --danger-line: #4a4a6a;
   --warning: #f29d41;
+  --on-warning: #2a1602;
   --warning-soft: #181826;
   --warning-line: #4a4a6a;
   --success: #5cb176;

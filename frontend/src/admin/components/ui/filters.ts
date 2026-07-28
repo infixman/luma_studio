@@ -66,9 +66,15 @@ export function defaultOperator(field: FilterField): FilterOperator {
   return OPERATORS[field.type][0] ?? 'eq'
 }
 
-/** The value a freshly added rule starts on: the first option, or nothing. */
-export function defaultValue(field: FilterField): string {
-  return field.type === 'enum' ? (field.options?.[0]?.value ?? '') : ''
+/**
+ * The value a freshly added rule starts on: nothing, whatever its type.
+ *
+ * An enum rule used to start on its first option, so pressing 新增篩選 filtered
+ * the list to a status nobody had chosen. The rule reads 請選擇 until somebody
+ * does, and an empty value is skipped when the query is built.
+ */
+export function defaultValue(_field: FilterField): string {
+  return ''
 }
 
 let counter = 0

@@ -14,6 +14,7 @@ import {
   Spinner,
   TagInput,
   TextField,
+  Truncated,
   useConfirm,
 } from '../components/ui'
 import { api, apiJson, apiUrl, uploadMedia } from '../../shared/api'
@@ -54,12 +55,19 @@ export function MediaPage() {
   const pickedHere = shown.filter((item) => picked.includes(item.id))
   const allPicked = shown.length > 0 && pickedHere.length === shown.length
 
-  async function run(work: () => Promise<void>, done: string) {
+  /**
+   * Run one action and report it.
+   *
+   * `work` may return its own sentence, for the actions whose outcome is not
+   * known until the server answers — a bulk delete where two of the ten were
+   * already gone should not claim ten.
+   */
+  async function run(work: () => Promise<string | void>, done: string) {
     if (busy) return
     setBusy(true)
     try {
-      await work()
-      show(done, 'ok')
+      const said = await work()
+      show(said || done, said ? 'warn' : 'ok')
     } catch (error) {
       showError(error)
     } finally {
@@ -260,10 +268,11 @@ export function MediaPage() {
     if (!agreed) return
 
     void run(async () => {
-      const data = await apiJson<{ media: MediaItem[] }>(`/api/media/delete${searchParam()}`, 'POST', {
-        ids,
-        force: inUse.length > 0,
-      })
+      const data = await apiJson<{ media: MediaItem[]; deleted: number; failed: string[] }>(
+        `/api/media/delete${searchParam()}`,
+        'POST',
+        { ids, force: inUse.length > 0 },
+      )
       setItems(data.media)
       setPicked([])
       if (selected && ids.includes(selected.id)) {
@@ -271,6 +280,9 @@ export function MediaPage() {
         setUsedBy(null)
       }
       void loadTags()
+      // What actually happened, which is not always what was asked for.
+      if (data.failed.length > 0) return `刪除了 ${data.deleted} 張，有 ${data.failed.length} 張刪不掉，請再試一次。`
+      if (data.deleted < ids.length) return `刪除了 ${data.deleted} 張，其餘的在別的地方已經刪掉了。`
     }, `已刪除 ${ids.length} 張圖。`)
   }
 
@@ -421,7 +433,9 @@ export function MediaPage() {
           </div>
 
           {truncated && (
-            <p class="muted">只顯示最新的 {shown.length} 張，用搜尋找更舊的。舊的圖片仍然在頁面上正常顯示。</p>
+            <Truncated count={shown.length} unit="張" narrowed={query.trim() !== ''}>
+              {' 沒顯示的圖片在頁面上仍然正常。'}
+            </Truncated>
           )}
 
           {items === null ? (

@@ -104,7 +104,7 @@ export async function prepareUpload(file: File): Promise<PreparedUpload> {
     const dimensions = { width: bitmap.width, height: bitmap.height }
     const variants: RenderedVariant[] = []
     for (const planned of planSizes(bitmap.width, bitmap.height)) {
-      const blob = await drawToWebp(bitmap, planned.width, planned.height)
+      const blob = await drawToWebp(bitmap, planned.width, planned.height, file.size)
       // One width that will not encode costs that width. The rest of the set
       // and the original are still worth uploading.
       if (blob) variants.push({ ...planned, blob })
@@ -118,7 +118,26 @@ export async function prepareUpload(file: File): Promise<PreparedUpload> {
   }
 }
 
-async function drawToWebp(bitmap: ImageBitmap, width: number, height: number): Promise<Blob | null> {
+/**
+ * Draws one width, or answers null.
+ *
+ * The null cases are both real. A browser that cannot encode WebP is required
+ * by the spec to fall back to PNG *silently* — the callback still fires, with
+ * a blob of the wrong type. Storing that would put PNG bytes behind a `.webp`
+ * key served as `image/webp` under nosniff, which renders as a broken image
+ * on the storefront while the library looks perfectly fine. Older iOS Safari
+ * does exactly this.
+ *
+ * A variant that came out no smaller than the original is also refused: it is
+ * a copy that costs storage and saves a customer nothing, which happens on a
+ * flat drawing that was already well compressed.
+ */
+async function drawToWebp(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  originalBytes: number,
+): Promise<Blob | null> {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -129,10 +148,10 @@ async function drawToWebp(bitmap: ImageBitmap, width: number, height: number): P
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
   context.drawImage(bitmap, 0, 0, width, height)
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', VARIANT_QUALITY))
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/webp', VARIANT_QUALITY),
+  )
+  if (!blob || blob.type !== 'image/webp') return null
+  return blob.size < originalBytes ? blob : null
 }
 
-/** How the dimensions travel in the upload form: one field, "1024x768". */
-export function dimensionsField(size: { width: number; height: number }): string {
-  return `${size.width}x${size.height}`
-}

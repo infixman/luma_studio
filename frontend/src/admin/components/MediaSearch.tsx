@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { IconButton, TextField } from './ui'
 import { api } from '../../shared/api'
 import type { MediaItem } from '../../shared/types'
+import { useLatest } from '../lib/latest'
 
 /**
  * The library as something to read and search, shared by the page and the
@@ -27,21 +28,24 @@ export function useMediaLibrary(active: boolean, onError: (error: unknown) => vo
   const [tags, setTags] = useState<string[]>([])
   const [truncated, setTruncated] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const latest = useLatest()
 
   const load = useCallback(
-    async (term: string) => {
-      try {
-        const suffix = term.trim() ? `?q=${encodeURIComponent(term.trim())}` : ''
-        const data = await api<{ media: MediaItem[]; truncated: boolean }>(`/api/media${suffix}`)
-        setItems(data.media)
-        setTruncated(data.truncated)
-      } catch (error) {
-        // A 401 has already sent the browser to Google; saying so as well
-        // would put an error on screen on the way out of the page.
-        onError(error)
-      }
-    },
-    [onError],
+    (term: string) =>
+      latest(async (isCurrent) => {
+        try {
+          const suffix = term.trim() ? `?q=${encodeURIComponent(term.trim())}` : ''
+          const data = await api<{ media: MediaItem[]; truncated: boolean }>(`/api/media${suffix}`)
+          if (!isCurrent()) return
+          setItems(data.media)
+          setTruncated(data.truncated)
+        } catch (error) {
+          // Only the current request may report. An older one failing says
+          // nothing about what is on screen now.
+          if (isCurrent()) onError(error)
+        }
+      }),
+    [latest, onError],
   )
 
   const loadTags = useCallback(async () => {

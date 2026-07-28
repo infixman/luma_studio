@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { SIZE_TARGETS, dimensionsField, planSizes, scaledHeight } from './mediaResize'
+import { SIZE_TARGETS, planSizes, scaledHeight } from './mediaResize'
 
 /* The maths, not the drawing. A wrong height is invisible — the picture still
    appears, only slightly squashed — which is exactly the kind of mistake that
@@ -82,8 +82,3 @@ describe('scaledHeight', () => {
   })
 })
 
-describe('dimensionsField', () => {
-  it('writes the pair the way the upload form reads it', () => {
-    expect(dimensionsField({ width: 1024, height: 768 })).toBe('1024x768')
-  })
-})

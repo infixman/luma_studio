@@ -23,6 +23,7 @@ import {
   dayEnd,
   dayStart,
   readHidden,
+  Truncated,
   useConfirm,
   writeHidden,
 } from '../components/ui'
@@ -33,6 +34,7 @@ import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
 import { dateTime } from '../../shared/dates'
+import { useLatest } from '../lib/latest'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -126,10 +128,10 @@ function ordersQuery(rules: FilterRule[], search: string): string {
   for (const rule of rules) {
     if (!rule.value.trim()) continue
     if (rule.field === 'status') {
-      // Only one "是" can hold at a time, so the last one wins rather than
-      // being AND-ed into a list that can only ever be empty.
-      if (rule.operator === 'eq') query.set('status', rule.value)
-      else query.append('statusNot', rule.value)
+      // Every rule is sent. Two "是" cannot both hold, and the server answers
+      // that with no orders — which is what the filter bar is asking for.
+      // Keeping only the last one would quietly ignore a row still on screen.
+      query.append(rule.operator === 'eq' ? 'status' : 'statusNot', rule.value)
       continue
     }
     if (rule.field === 'createdAt') {
@@ -170,17 +172,25 @@ export function OrdersAdminPage() {
   const [answer, setAnswer] = useState('')
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
+  const latest = useLatest()
 
   const query = ordersQuery(rules, search)
 
-  const load = useCallback(async () => {
-    try {
-      setList(await api<AdminOrderList>(`/api/orders${query ? `?${query}` : ''}`))
-      clearLoginAttempt()
-    } catch (error) {
-      showError(error)
-    }
-  }, [query, showError])
+  // Filtering and searching both re-run this, and a slow answer to an older
+  // query must not land on top of a fast answer to the current one.
+  const load = useCallback(
+    () =>
+      latest(async (isCurrent) => {
+        try {
+          const answer = await api<AdminOrderList>(`/api/orders${query ? `?${query}` : ''}`)
+          if (isCurrent()) setList(answer)
+          clearLoginAttempt()
+        } catch (error) {
+          if (isCurrent()) showError(error)
+        }
+      }),
+    [latest, query, showError],
+  )
 
   useEffect(() => {
     void load()
@@ -443,7 +453,7 @@ export function OrdersAdminPage() {
         {/* A list that stops at its limit without saying so reads as "the
             old orders are gone". */}
         {list?.truncated && (
-          <p class="muted warn">只顯示最新的 {orders.length} 筆。用搜尋或篩選縮小範圍。</p>
+          <Truncated count={orders.length} unit="筆" narrowed={search.trim() !== '' || rules.length > 0} />
         )}
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>

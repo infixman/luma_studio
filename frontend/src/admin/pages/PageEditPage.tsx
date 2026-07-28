@@ -38,6 +38,7 @@ import type {
   CarouselConfig,
   ContactConfig,
   MediaItem,
+  MediaRef,
   PageBlock,
   PageDetail,
   PageStatus,
@@ -496,6 +497,14 @@ export function PageEditPage({ id }: { id: string }) {
    * a slide added a second ago appears without a round trip. Products are not:
    * prices and stock live on the server, so a shop block previews what it last
    * knew until the block is saved.
+   *
+   * That library stops at the most recent 300 images, so an id can fail to
+   * resolve here and still be perfectly fine — which is why every case falls
+   * back to what the server already hydrated. Without that, opening an older
+   * page in a shop with 400 pictures previewed an empty carousel and blank
+   * album tiles, while the published page rendered correctly. Showing somebody
+   * convincing evidence that their images are gone is worse than showing them
+   * a slightly stale one.
    */
   const previewBlocks: PageBlock[] = detail.blocks.map((block) => {
     const config = drafts[block.id] ?? block.config
@@ -507,13 +516,15 @@ export function PageEditPage({ id }: { id: string }) {
           config: draft,
           data: {
             slides: draft.slides
-              .map((slide) => ({ item: byId.get(slide.mediaId), slide }))
-              .filter((entry) => entry.item)
-              .map(({ item, slide }) => ({
-                image: asRef(item!),
+              .map((slide) => ({ image: byId.get(slide.mediaId), slide }))
+              .map(({ image, slide }, index) => ({
+                // The server's copy of this slide, when the library does not
+                // reach far enough back to hold its picture.
+                image: image ? asRef(image) : block.data?.slides?.[index]?.image,
                 caption: slide.caption,
                 href: slide.href,
-              })),
+              }))
+              .filter((slide): slide is { image: MediaRef; caption: string; href: string } => Boolean(slide.image)),
           },
         }
       }
@@ -524,9 +535,11 @@ export function PageEditPage({ id }: { id: string }) {
           config: draft,
           data: {
             images: draft.mediaIds
-              .map((mediaId) => byId.get(mediaId))
-              .filter((item): item is MediaItem => Boolean(item))
-              .map(asRef),
+              .map((mediaId, index) => {
+                const item = byId.get(mediaId)
+                return item ? asRef(item) : block.data?.images?.[index]
+              })
+              .filter((image): image is MediaRef => Boolean(image)),
           },
         }
       }
@@ -536,7 +549,7 @@ export function PageEditPage({ id }: { id: string }) {
         return {
           ...block,
           config: draft,
-          data: { image: item ? asRef(item) : null },
+          data: { image: item ? asRef(item) : block.data?.image ?? null },
         }
       }
       // Same single picture beside its words, resolved the same way.
@@ -546,7 +559,7 @@ export function PageEditPage({ id }: { id: string }) {
         return {
           ...block,
           config: draft,
-          data: { image: item ? asRef(item) : null },
+          data: { image: item ? asRef(item) : block.data?.image ?? null },
         }
       }
       case 'shop':

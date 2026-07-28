@@ -95,14 +95,32 @@ async def handle(ctx: Ctx):
         if used and not body.get("force"):
             return ctx.json({"error": "選取的圖片還被頁面使用中", "usage": used}, 409)
 
+        # One image failing must not take the other nine down with it, and it
+        # must not be reported as deleted either. The old loop raised on the
+        # first failure, so the browser saw a 500, said nothing was deleted,
+        # and the rows that had already gone came back missing on reload.
+        deleted, failed = 0, []
         for media_id in wanted:
-            keys = await media.delete(env, media_id)
-            # Silently skipping the ones already gone: two tabs open on the
-            # same library is not an error worth failing the other nine over.
-            for key in keys or ():
-                await env.IBON_IMAGES.delete(key)
+            try:
+                keys = await media.delete(env, media_id)
+            except Exception:
+                failed.append(media_id)
+                continue
+            if keys is None:
+                # Already gone — two tabs open on the same library. Nothing
+                # failed, so it is not reported as a failure.
+                continue
+            deleted += 1
+            for key in keys:
+                try:
+                    await env.IBON_IMAGES.delete(key)
+                except Exception:
+                    # The row is gone; the file is orphaned in the bucket. The
+                    # image is deleted as far as anyone using the shop can
+                    # tell, and telling the owner otherwise helps nobody.
+                    pass
         items, truncated = await media.list_media(env, search=(ctx.query.get("q") or [""])[0])
-        return ctx.json({"media": items, "truncated": truncated})
+        return ctx.json({"media": items, "truncated": truncated, "deleted": deleted, "failed": failed})
 
     if path == "/api/media" and method == "POST":
         try:

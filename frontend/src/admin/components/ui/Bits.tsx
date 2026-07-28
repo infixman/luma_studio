@@ -76,3 +76,34 @@ export function Spinner({ label = '載入中' }: { label?: string }) {
     </p>
   )
 }
+
+/**
+ * The list stopped at its limit and this says so.
+ *
+ * Three pages wrote their own, and all three ended with "用搜尋縮小範圍" —
+ * advice that reads as nonsense to somebody who has already typed a search and
+ * is being cut short inside its results. `narrowed` is whether anything is
+ * filtering already, and it changes the sentence rather than the number.
+ */
+export function Truncated({
+  count,
+  unit,
+  narrowed = false,
+  children,
+}: {
+  count: number
+  /** 筆 / 張 / 位 — the measure word this list counts in. */
+  unit: string
+  narrowed?: boolean
+  /** Anything else worth saying, when being cut short has a consequence. */
+  children?: ComponentChildren
+}) {
+  return (
+    <p class="muted warn">
+      {narrowed
+        ? `符合的太多，只顯示最新的 ${count} ${unit}。再縮小範圍才看得到其餘的。`
+        : `只顯示最新的 ${count} ${unit}。用搜尋或篩選縮小範圍。`}
+      {children}
+    </p>
+  )
+}

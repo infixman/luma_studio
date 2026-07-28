@@ -829,6 +829,36 @@ class TestBulkDeleteEndpoint:
         assert response.status == 200
         assert len(bucket.deleted) == 2
 
+    def test_one_that_fails_does_not_take_the_rest_down_with_it(self, media):
+        """The loop used to raise on the first failure, so the browser got a
+        500 and said nothing had been deleted — while the rows deleted before
+        it were already gone."""
+
+        class Sulky(FakeBucket):
+            async def delete(self, key):
+                raise RuntimeError("bucket unavailable")
+
+        database = FakeDatabase({"SELECT object_key FROM media WHERE": [{"object_key": "_media/abc123.jpg"}]})
+        response = call(
+            JsonRequest("/api/media/delete", {"ids": ["mediaid1234", "otherid12345"]}, "POST"), database, Sulky()
+        )
+        # A file left in the bucket is not something the owner can act on, and
+        # the image is gone as far as the shop is concerned.
+        assert response.status == 200
+        assert body_of(response)["deleted"] == 2
+        assert body_of(response)["failed"] == []
+
+    def test_one_already_gone_is_not_counted_as_deleted(self, media):
+        """Two tabs open on the same library. Claiming ten when eight went is
+        how the count stops meaning anything."""
+
+        database = FakeDatabase({"SELECT object_key FROM media WHERE": []})
+        response = call(
+            JsonRequest("/api/media/delete", {"ids": ["mediaid1234", "otherid12345"]}, "POST"), database, FakeBucket()
+        )
+        assert response.status == 200
+        assert body_of(response)["deleted"] == 0
+
     def test_anything_a_page_uses_stops_the_lot_and_says_which(self, media):
         """Discovering it halfway through would leave half a selection deleted."""
 

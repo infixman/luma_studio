@@ -146,6 +146,17 @@ export async function uploadProductImage(productId: string, file: File, alt: str
  * photographs takes long enough that a progress bar is the difference between
  * waiting and wondering, and fetch has no upload progress event.
  */
+/**
+ * How a size travels in the upload form: one field, "1024x768".
+ *
+ * Here rather than beside the resizer because it describes the request, and
+ * `shared/` cannot import from `admin/` — the dependency only runs the other
+ * way. It was written out by hand at both call sites below.
+ */
+export function dimensionsField(size: { width: number; height: number }): string {
+  return `${size.width}x${size.height}`
+}
+
 export function uploadMedia(
   upload: {
     file: File
@@ -161,12 +172,12 @@ export function uploadMedia(
   form.append('file', upload.file)
   form.append('alt', upload.alt ?? '')
   if (upload.title) form.append('title', upload.title)
-  if (upload.dimensions) form.append('dimensions', `${upload.dimensions.width}x${upload.dimensions.height}`)
+  if (upload.dimensions) form.append('dimensions', dimensionsField(upload.dimensions))
   for (const variant of upload.variants ?? []) {
     // The name only has to be a name — the server keys everything off the
     // field, and the original's file name is what the library displays.
     form.append(`size_${variant.label}`, variant.blob, `${variant.label}.webp`)
-    form.append(`size_${variant.label}_dimensions`, `${variant.width}x${variant.height}`)
+    form.append(`size_${variant.label}_dimensions`, dimensionsField(variant))
   }
 
   return new Promise((resolve, reject) => {

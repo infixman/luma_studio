@@ -79,18 +79,24 @@ async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/orders" and method == "GET":
-        status = _first(ctx, "status")
-        # `statusNot` is repeatable: "不是已取消" and "不是已逾期" is one of the
-        # few filter pairs anyone actually stacks. `status` is not — two of
-        # those AND-ed can only be empty, so the back office sends one.
+        # Both are repeatable. "不是已取消" and "不是已逾期" is a pair anybody
+        # might stack; two "是" cannot both hold, and that is exactly why they
+        # are read rather than collapsed. Silently keeping the last one would
+        # drop a rule the filter bar is still showing with 而且 beside it —
+        # the answer to an impossible filter is no rows, not a different
+        # filter's rows.
+        wanted = tuple(dict.fromkeys(value.strip() for value in ctx.query.get("status", []) if value.strip()))
         excluded = tuple(value.strip() for value in ctx.query.get("statusNot", []) if value.strip())
-        for value in (status, *excluded):
+        for value in (*wanted, *excluded):
             if value and value not in orders.STATUSES:
                 return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
         search = _first(ctx, "q")[:60]
         rows, truncated = await orders.list_all(
             env,
-            status=status,
+            status=wanted[0] if len(wanted) == 1 else None,
+            # Two different statuses AND-ed match nothing, and saying so is
+            # the honest answer.
+            impossible=len(wanted) > 1,
             exclude_statuses=excluded,
             search=search,
             created_from=_seconds(ctx, "createdFrom"),
