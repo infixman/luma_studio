@@ -52,7 +52,16 @@ def _picture(library: dict, media_id: str) -> dict | None:
     item = library.get(media_id)
     if item is None:
         return None
-    return {"id": item["id"], "path": item["path"], "alt": item["alt"]}
+    # The narrower copies travel with it. Making them at upload time and then
+    # not naming them in the markup would leave every phone downloading the
+    # full-width original, which was the whole problem.
+    return {
+        "id": item["id"],
+        "path": item["path"],
+        "alt": item["alt"],
+        "width": item["width"],
+        "sizes": item["sizes"],
+    }
 
 
 async def _data_for(env, block: dict, library: dict) -> dict:

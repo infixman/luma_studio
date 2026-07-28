@@ -443,6 +443,10 @@ export interface MediaRef {
   id: string
   path: string
   alt: string
+  /** The original's width, or 0 for an image uploaded before widths were kept. */
+  width: number
+  /** Narrower copies, so a phone is not sent the original. Empty for older uploads. */
+  sizes: MediaSize[]
 }
 
 export interface TextBlockConfig {

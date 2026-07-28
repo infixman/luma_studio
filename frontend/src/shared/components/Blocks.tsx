@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { srcSetFor } from '../srcset'
 import { apiUrl } from '../api'
 import { renderMarkdown } from '../markdown'
 import type { ContactDetail, MediaRef, PageBlock, PublicProductCard } from '../types'
@@ -71,8 +72,21 @@ function Block({ block }: { block: PageBlock }) {
   }
 }
 
-function Picture({ image, className }: { image: MediaRef; className?: string }) {
-  return <img class={className} src={apiUrl(image.path)} alt={image.alt} loading="lazy" />
+function Picture({ image, className, sizes }: { image: MediaRef; className?: string; sizes?: string }) {
+  return (
+    <img
+      class={className}
+      src={apiUrl(image.path)}
+      // Without `sizes` the browser assumes the image fills the viewport and
+      // picks the widest candidate, which would undo the srcset. Blocks that
+      // know their own width pass it; the default is the safe reading of a
+      // full-width block.
+      srcset={srcSetFor(image)}
+      sizes={sizes ?? '100vw'}
+      alt={image.alt}
+      loading="lazy"
+    />
+  )
 }
 
 function Carousel({

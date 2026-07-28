@@ -85,6 +85,21 @@ const VIEWPORTS = [
 
 type ViewportId = (typeof VIEWPORTS)[number]['id']
 
+/**
+ * A library item as a block wants it.
+ *
+ * The widths travel too, so the editor's own preview asks for the same file
+ * the storefront would. Without them the preview would quietly be the only
+ * place that always loads the full-size original.
+ */
+const asRef = (item: MediaItem) => ({
+  id: item.id,
+  path: item.path,
+  alt: item.alt,
+  width: item.width,
+  sizes: item.sizes,
+})
+
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
   const [form, setForm] = useState({
@@ -458,7 +473,7 @@ export function PageEditPage({ id }: { id: string }) {
               .map((slide) => ({ item: byId.get(slide.mediaId), slide }))
               .filter((entry) => entry.item)
               .map(({ item, slide }) => ({
-                image: { id: item!.id, path: item!.path, alt: item!.alt },
+                image: asRef(item!),
                 caption: slide.caption,
                 href: slide.href,
               })),
@@ -474,7 +489,7 @@ export function PageEditPage({ id }: { id: string }) {
             images: draft.mediaIds
               .map((mediaId) => byId.get(mediaId))
               .filter((item): item is MediaItem => Boolean(item))
-              .map((item) => ({ id: item.id, path: item.path, alt: item.alt })),
+              .map(asRef),
           },
         }
       }
@@ -484,7 +499,7 @@ export function PageEditPage({ id }: { id: string }) {
         return {
           ...block,
           config: draft,
-          data: { image: item ? { id: item.id, path: item.path, alt: item.alt } : null },
+          data: { image: item ? asRef(item) : null },
         }
       }
       // Same single picture beside its words, resolved the same way.
@@ -494,7 +509,7 @@ export function PageEditPage({ id }: { id: string }) {
         return {
           ...block,
           config: draft,
-          data: { image: item ? { id: item.id, path: item.path, alt: item.alt } : null },
+          data: { image: item ? asRef(item) : null },
         }
       }
       case 'shop':
