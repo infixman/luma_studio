@@ -63,26 +63,28 @@ class TestTheList:
     def test_the_counts_come_from_the_same_query_as_the_rows(self, customers):
         """One round trip. Asking per customer is one more for every row."""
 
-        database = FakeDatabase({"FROM customers": [row()]})
-        listed, truncated = asyncio.run(customers.list_all(make_env(database)))
+        database = FakeDatabase({"SELECT COUNT(*)": [{"total": 1}], "FROM customers": [row()]})
+        listed, total = asyncio.run(customers.list_all(make_env(database)))
         assert listed[0]["orderCount"] == 2 and listed[0]["paidTotal"] == 980
-        assert truncated is False
-        assert len(database.statements) == 1
+        assert total == 1
+        # Two: the rows, and the count beside them. The counts per customer
+        # still come from the same query as the rows they sit on.
+        assert len(database.statements) == 2
 
     def test_only_orders_that_were_paid_for_count_towards_the_total(self, customers):
-        database = FakeDatabase({"FROM customers": [row()]})
+        database = FakeDatabase({"SELECT COUNT(*)": [{"total": 1}], "FROM customers": [row()]})
         asyncio.run(customers.list_all(make_env(database)))
-        assert "'paid', 'shipped', 'completed'" in database.statements[0]
+        assert any("'paid', 'shipped', 'completed'" in statement for statement in database.statements)
 
     def test_search_covers_the_email_and_both_names(self, customers):
-        database = FakeDatabase({"FROM customers": [row()]})
+        database = FakeDatabase({"SELECT COUNT(*)": [{"total": 1}], "FROM customers": [row()]})
         asyncio.run(customers.list_all(make_env(database), search="王"))
-        query = database.statements[0]
+        query = [statement for statement in database.statements if "GROUP BY" in statement][0]
         assert "c.email LIKE ?1" in query and "display_name LIKE ?1" in query
         assert "default_recipient_name LIKE ?1" in query
 
     def test_a_customer_who_never_ordered_reports_zero_rather_than_nothing(self, customers):
-        database = FakeDatabase({"FROM customers": [row(orders=0, paid=None)]})
+        database = FakeDatabase({"SELECT COUNT(*)": [{"total": 1}], "FROM customers": [row(orders=0, paid=None)]})
         listed, _ = asyncio.run(customers.list_all(make_env(database)))
         assert listed[0]["paidTotal"] == 0
 

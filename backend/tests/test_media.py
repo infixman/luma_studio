@@ -351,10 +351,14 @@ class TestSearch:
         asyncio.run(media.list_media(make_env(database), search="   "))
         assert "media.title LIKE" not in database.statements[0]
 
-    def test_the_list_says_when_it_was_cut_short(self, media):
-        database = FakeDatabase({"FROM media": [row() for _ in range(media.MAX_ITEMS + 1)]})
-        items, truncated = asyncio.run(media.list_media(make_env(database)))
-        assert truncated is True and len(items) == media.MAX_ITEMS
+    def test_a_page_is_asked_for_by_limit_and_offset(self, media):
+        database = FakeDatabase({"SELECT COUNT(*)": [{"total": 137}], "FROM media": [row()]})
+        items, total = asyncio.run(media.list_media(make_env(database), page=3, per_page=20))
+        assert total == 137
+        query, bindings = [read for read in database.reads if "ORDER BY media.created_at" in read[0]][0]
+        assert "LIMIT" in query and "OFFSET" in query
+        assert bindings[-2:] == (20, 40)
+        assert len(items) == 1
 
 
 class TestTagIndex:

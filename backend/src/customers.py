@@ -11,10 +11,10 @@ to be forgotten in June. So the personal fields are overwritten and the row
 stays, with `anonymized_at` recording when.
 """
 
+import paging
 from common import d1_rows, utc_timestamp
 
 
-MAX_LIST = 200
 MAX_SEARCH = 60
 
 # What is left of someone after they ask to be forgotten. Not empty strings:
@@ -57,19 +57,35 @@ _LIST_QUERY = """
 """
 
 
-async def list_all(env, *, search: str = "", limit: int = 100) -> tuple[list[dict], bool]:
-    """The member list, and whether it was cut short."""
+async def list_all(
+    env, *, search: str = "", page: int = 1, per_page: int = paging.DEFAULT_PER_PAGE
+) -> tuple[list[dict], int]:
+    """One page of members, and how many there are altogether."""
 
     bindings = []
     where = ""
     if search:
-        bindings.append(f"%{search[:MAX_SEARCH]}%")
-        where = " WHERE c.email LIKE ?1 OR c.display_name LIKE ?1 OR c.default_recipient_name LIKE ?1"
-    wanted = max(1, min(limit, MAX_LIST))
-    bindings.append(wanted + 1)
-    query = f"{_LIST_QUERY}{where} GROUP BY c.id ORDER BY c.created_at DESC LIMIT ?{len(bindings)}"
+        # LIKE's own wildcards, made literal: searching for `a_b` must not
+        # also answer with `axb`.
+        term = search[:MAX_SEARCH].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        bindings.append(f"%{term}%")
+        where = (
+            r" WHERE c.email LIKE ?1 ESCAPE '\' OR c.display_name LIKE ?1 ESCAPE '\'"
+            r" OR c.default_recipient_name LIKE ?1 ESCAPE '\'"
+        )
+
+    counted = await d1_rows(env.DB.prepare(f"SELECT COUNT(*) AS total FROM customers c{where}").bind(*bindings))
+    total = int(counted[0]["total"]) if counted else 0
+
+    limit, offset = paging.window(page, per_page)
+    bindings.append(limit)
+    bindings.append(offset)
+    query = (
+        f"{_LIST_QUERY}{where} GROUP BY c.id ORDER BY c.created_at DESC"
+        f" LIMIT ?{len(bindings) - 1} OFFSET ?{len(bindings)}"
+    )
     rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
-    return [admin_row(row) for row in rows[:wanted]], len(rows) > wanted
+    return [admin_row(row) for row in rows], total
 
 
 async def get(env, customer_id: str) -> dict | None:

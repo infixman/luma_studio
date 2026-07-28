@@ -96,9 +96,12 @@ function adminDevShell(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((request, _response, next) => {
-        // Navigations only. Module and asset requests do not ask for HTML,
-        // and rewriting those would break the dev client.
-        if (request.headers.accept?.includes('text/html')) request.url = '/admin.html'
+        // Navigations only, and only the ones that are SPA routes. Module and
+        // asset requests do not ask for HTML; a request that names a real
+        // `.html` file is asking for that file and not for the shell.
+        const path = (request.url ?? '').split('?')[0] ?? ''
+        const namesAFile = path.slice(path.lastIndexOf('/')).includes('.')
+        if (!namesAFile && request.headers.accept?.includes('text/html')) request.url = '/admin.html'
         next()
       })
     },

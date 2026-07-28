@@ -14,6 +14,7 @@ written once, here.
 
 import re
 
+import paging
 import shipping
 import shop
 import mail
@@ -28,7 +29,6 @@ ORDER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,25}$")
 RESERVATION_SECONDS = 15 * 60
 
 # The back office reads a page at a time; nothing here pages through a year.
-MAX_LIST = 200
 
 STATUSES = ("pending", "paid", "shipped", "completed", "cancelled", "expired")
 # The states in which stock is still spoken for. Leaving any of these puts it
@@ -451,20 +451,20 @@ async def list_all(
     search: str = "",
     created_from: int | None = None,
     created_to: int | None = None,
-    limit: int = 50,
-) -> tuple[list[dict], bool]:
-    """The shop's own view of its orders, newest first, and whether the answer
-    was cut short.
+    page: int = 1,
+    per_page: int = paging.DEFAULT_PER_PAGE,
+) -> tuple[list[dict], int]:
+    """One page of the shop's orders, newest first, and how many there are
+    altogether.
 
     Search covers the order id, the recipient and the email they gave at
     checkout — the three things someone has in front of them when they write
     in asking about an order.
 
     The status and date bounds are here rather than in the browser because the
-    answer stops at `MAX_LIST`. Narrowing a list that has already been cut
-    short only narrows the part that made it back, which reads exactly like a
-    complete answer and is not one. Every condition is AND-ed, which is what
-    the back office's stacked filter rows mean.
+    browser only holds one page. Narrowing a page reads exactly like narrowing
+    the list and is not the same thing. Every condition is AND-ed, which is
+    what the back office's stacked filter rows mean.
 
     `impossible` is that AND taken to its conclusion: two "狀態 是" rules on
     different statuses describe an order that cannot exist. No rows is the
@@ -472,7 +472,7 @@ async def list_all(
     """
 
     if impossible:
-        return [], False
+        return [], 0
 
     conditions, bindings = [], []
     if status:
@@ -492,13 +492,19 @@ async def list_all(
         index = len(bindings)
         conditions.append(f"(id LIKE ?{index} OR recipient_name LIKE ?{index} OR recipient_email LIKE ?{index})")
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-    wanted = max(1, min(limit, MAX_LIST))
-    # One more than asked for. Whether anything was left out is then a fact
-    # rather than "we returned exactly the limit, so probably".
-    bindings.append(wanted + 1)
-    query = f"SELECT * FROM orders{where} ORDER BY created_at DESC, id LIMIT ?{len(bindings)}"
+
+    counted = await d1_rows(env.DB.prepare(f"SELECT COUNT(*) AS total FROM orders{where}").bind(*bindings))
+    total = int(counted[0]["total"]) if counted else 0
+
+    limit, offset = paging.window(page, per_page)
+    bindings.append(limit)
+    bindings.append(offset)
+    query = (
+        f"SELECT * FROM orders{where} ORDER BY created_at DESC, id"
+        f" LIMIT ?{len(bindings) - 1} OFFSET ?{len(bindings)}"
+    )
     rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
-    return [admin_row(row) for row in rows[:wanted]], len(rows) > wanted
+    return [admin_row(row) for row in rows], total
 
 
 async def counts_by_status(env) -> dict:

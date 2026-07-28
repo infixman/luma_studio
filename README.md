@@ -66,6 +66,7 @@ backend/
     cart.py           購物車：內容、上限與庫存檢查
     shipping.py       運送方式與運費級距
     orders.py         訂單本身：建立、狀態、稽核記錄
+    paging.py         page/perPage 的解讀、LIMIT/OFFSET 與回應外層
     pages.py          自訂頁面與區塊、分享資訊、一次性預覽 token
     block_data.py     區塊設定的驗證與正規化，頁面與預覽共用
     pages_admin_api.py 管理端頁面端點
@@ -188,20 +189,20 @@ docs/superpowers/specs/  設計文件
 | GET / POST | `/api/menu` | 選單項目 |
 | PUT | `/api/menu/order` | 排序與改層級，必須排在 `{id}` 之前 |
 | PUT / DELETE | `/api/menu/{id}` | 單一項目 |
-| GET / POST | `/api/media` | 媒體庫清單（`?q=` 搜尋）與上傳（原圖 + 瀏覽器產生的縮圖） |
+| GET / POST | `/api/media` | 媒體庫清單（`?q=` 搜尋、`?page=` 分頁）與上傳（原圖 + 瀏覽器產生的縮圖） |
 | GET | `/api/media/tags` | 現有標籤，給自動完成 |
 | GET | `/api/media/usage?ids=` | 一次問多張圖被哪些頁面使用 |
 | GET | `/api/media/{id}` | 單張圖與使用它的頁面 |
 | PUT | `/api/media/{id}` | 改標題、替代文字與標籤 |
 | DELETE | `/api/media/{id}` | 刪除。還被使用時回 409，加 `?force=1` 才真的刪 |
 | POST | `/api/media/delete` | 批次刪除，規則同上 |
-| GET | `/api/orders?status=&q=` | 訂單列表與各狀態筆數 |
+| GET | `/api/orders?status=&q=&page=&perPage=` | 訂單列表與各狀態筆數，分頁 |
 | GET | `/api/orders/{id}` | 單筆訂單、品項、付款嘗試與稽核紀錄 |
 | POST | `/api/orders/{id}/paid` | 手動標記已付款（匯款先到時用） |
 | POST | `/api/orders/{id}/shipped`、`/completed` | 往前一步，不能跳過也不能倒退 |
 | POST | `/api/orders/{id}/cancel` | 取消並退回庫存 |
 | POST | `/api/orders/{id}/note` | 店家備註，顧客看不到 |
-| GET | `/api/customers?q=` | 會員列表，含訂單數與已付金額 |
+| GET | `/api/customers?q=&page=&perPage=` | 會員列表，含訂單數與已付金額，分頁 |
 | GET | `/api/customers/{id}` | 單一會員與他的訂單 |
 | POST | `/api/customers/{id}/blocked` | 封鎖／解除封鎖結帳 |
 | POST | `/api/customers/{id}/anonymise` | 清除個人資料，保留訂單 |
@@ -666,6 +667,10 @@ prefers-color-scheme: dark   系統偏好，僅在沒有 data-theme 時生效
   為某一頁寫的樣式，套到了每一個穿著那個 class 的東西上。容器一律寫成 `main.x` 這種形式。
 - **localStorage 的 key 只有一種取法**，[lib/storage.ts](frontend/src/admin/lib/storage.ts) 的
   `key()`。同一天長出三種命名法就是第四種出現的原因。
+- **長清單一律分頁**，後端 [paging.py](backend/src/paging.py)、前端
+  [ui/Pagination.tsx](frontend/src/admin/components/ui/Pagination.tsx)。訂單、會員與媒體庫
+  以前是「只給最新的 200 筆，還有更多喔」——那不是清單，是一個「其餘的存在於你到不了的地方」
+  的承諾。總數來自真正的 `COUNT(*)`，不是「這次回了幾筆」。
 - **會被覆蓋的請求要記票號**，[lib/latest.ts](frontend/src/admin/lib/latest.ts) 的 `useLatest()`。
   搜尋框輸入很快時，先發的慢答案會蓋在後發的快答案上面。
 

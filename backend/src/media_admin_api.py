@@ -12,6 +12,7 @@ plausible and to store all of it under one image.
 """
 
 import media
+import paging
 from responses import Ctx
 
 
@@ -49,13 +50,30 @@ async def _read_variants(form) -> list[dict]:
     return variants
 
 
+async def _library(ctx: Ctx) -> dict:
+    """One page of the library as the browser asked for it.
+
+    Three routes answer with it — the list itself, and the two that change it
+    and hand back what the grid should now show. Rebuilding the query in each
+    is how one of them ends up on a different page from the others.
+    """
+
+    page, per_page = paging.clamp(
+        (ctx.query.get("page") or [""])[0],
+        (ctx.query.get("perPage") or [""])[0],
+        default_per_page=media.PER_PAGE,
+    )
+    items, total = await media.list_media(
+        ctx.env, search=(ctx.query.get("q") or [""])[0], page=page, per_page=per_page
+    )
+    return {"media": items, **paging.envelope(items, total, page, per_page)}
+
+
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/media" and method == "GET":
-        search = (ctx.query.get("q") or [""])[0]
-        items, truncated = await media.list_media(env, search=search)
-        return ctx.json({"media": items, "truncated": truncated})
+        return ctx.json(await _library(ctx))
 
     # Before the /api/media/{id} block below, which would read "tags" as an id
     # and refuse it. Same rule as the order and category routes.
@@ -119,8 +137,7 @@ async def handle(ctx: Ctx):
                     # image is deleted as far as anyone using the shop can
                     # tell, and telling the owner otherwise helps nobody.
                     pass
-        items, truncated = await media.list_media(env, search=(ctx.query.get("q") or [""])[0])
-        return ctx.json({"media": items, "truncated": truncated, "deleted": deleted, "failed": failed})
+        return ctx.json({**await _library(ctx), "deleted": deleted, "failed": failed})
 
     if path == "/api/media" and method == "POST":
         try:
@@ -223,7 +240,6 @@ async def handle(ctx: Ctx):
                 await env.IBON_IMAGES.delete(key)
             # The list comes back filtered the same way it was asked for, so
             # deleting from a search does not silently drop the search.
-            items, truncated = await media.list_media(env, search=(ctx.query.get("q") or [""])[0])
-            return ctx.json({"media": items, "truncated": truncated})
+            return ctx.json(await _library(ctx))
 
     return ctx.error("Not found", 404)

@@ -1170,3 +1170,60 @@ body.admin .usage {
   font-size: var(--font-sm);
   color: var(--text-soft);
 }
+
+/* --- the pager ---------------------------------------------------------- */
+
+.ui-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.ui-pager-count {
+  margin: 0;
+  margin-right: auto;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.ui-pager-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The numbers stay the same width whichever one is current, so the row does
+   not shift under the cursor as you page through it. */
+.ui-pager-pages .ui-button {
+  min-width: 2.25rem;
+  justify-content: center;
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+}
+
+.ui-pager-gap {
+  padding: 0 var(--space-1);
+  color: var(--muted);
+}
+
+.ui-pager .ui-field {
+  flex: 0 0 auto;
+}
+
+/* Present to a screen reader, absent to everyone else. Not display:none —
+   that would take it out of the accessibility tree along with the sight of
+   it, which is the opposite of the point. */
+.ui-label.is-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

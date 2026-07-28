@@ -34,6 +34,8 @@ interface SelectProps<T extends string> {
   disabled?: boolean
   /** Shown when nothing is selected. */
   placeholder?: string
+  /** Keep the label for screen readers only — see Field. */
+  hiddenLabel?: boolean
 }
 
 /** How long a run of keystrokes counts as one word being typed. */
@@ -41,6 +43,7 @@ const TYPEAHEAD_MS = 700
 
 export function Select<T extends string>({
   label,
+  hiddenLabel,
   value,
   options,
   onChange,
@@ -181,7 +184,7 @@ export function Select<T extends string>({
   }
 
   return (
-    <Field label={label} hint={hint} error={error} required={Boolean(required)}>
+    <Field label={label} hint={hint} error={error} required={Boolean(required)} hiddenLabel={hiddenLabel}>
       {({ id, describedBy }) => (
         <div class="ui-select" ref={wrap}>
           <button

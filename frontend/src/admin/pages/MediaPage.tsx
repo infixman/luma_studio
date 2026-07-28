@@ -10,11 +10,11 @@ import {
   Checkbox,
   EmptyState,
   Modal,
+  Pagination,
   Panel,
   Spinner,
   TagInput,
   TextField,
-  Truncated,
   useConfirm,
 } from '../components/ui'
 import { api, apiJson, apiUrl, uploadMedia } from '../../shared/api'
@@ -34,7 +34,7 @@ type UploadTask = { key: number; name: string; ratio: number; state: 'working' |
 
 export function MediaPage() {
   const { message, show, showError } = useStatus()
-  const { query, setQuery, items, setItems, tags, loadTags, truncated } = useMediaLibrary(true, showError)
+  const { query, setQuery, items, setItems, tags, loadTags, info, page, setPage } = useMediaLibrary(true, showError)
   const [selected, setSelected] = useState<MediaItem | null>(null)
   /** The usage lookup failed, so the dialog says so instead of pretending. */
   const [usageFailed, setUsageFailed] = useState(false)
@@ -175,11 +175,17 @@ export function MediaPage() {
   }
 
   /** The query string that keeps a filtered list filtered across a delete. */
+  /**
+   * The query the grid is currently showing, so that a route which answers
+   * with the library after changing it answers with the *same* page.
+   *
+   * Without the page number a delete on page 3 came back with page 1, and the
+   * grid jumped to the top of the library.
+   */
   function searchParam(extra: Record<string, string> = {}): string {
-    const params = new URLSearchParams(extra)
+    const params = new URLSearchParams({ ...extra, page: String(page) })
     if (query.trim()) params.set('q', query.trim())
-    const search = params.toString()
-    return search ? `?${search}` : ''
+    return `?${params}`
   }
 
   async function remove() {
@@ -444,12 +450,6 @@ export function MediaPage() {
             </ButtonRow>
           </div>
 
-          {truncated && (
-            <Truncated count={shown.length} unit="張" narrowed={query.trim() !== ''}>
-              {' 沒顯示的圖片在頁面上仍然正常。'}
-            </Truncated>
-          )}
-
           {items === null ? (
             <Spinner />
           ) : shown.length === 0 && query.trim() ? (
@@ -467,6 +467,18 @@ export function MediaPage() {
           ) : (
             list
           )}
+
+          <Pagination
+            info={info}
+            unit="張"
+            disabled={busy}
+            onPage={(next) => {
+              setPage(next)
+              // Different pictures, so the ticks that were on the old ones are
+              // not about anything any more.
+              setPicked([])
+            }}
+          />
         </Panel>
       </section>
 

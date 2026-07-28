@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { IconButton, TextField } from './ui'
 import { api } from '../../shared/api'
-import type { MediaItem } from '../../shared/types'
+import type { MediaItem, PageInfo } from '../../shared/types'
 import { useLatest } from '../lib/latest'
 
 /**
@@ -14,9 +14,10 @@ import { useLatest } from '../lib/latest'
  * into a page, which happens in the picker. Written once so the two cannot
  * end up searching differently.
  *
- * The search goes to the server. Filtering in the browser would only filter
- * the images already fetched, and the list is capped: past the cap the images
- * that are missing are exactly the old ones nobody can remember the name of.
+ * The search goes to the server, and so does the paging. Filtering in the
+ * browser would only ever filter the page the browser happens to be holding,
+ * and the images not on it are exactly the old ones nobody can remember the
+ * name of.
  */
 
 /** Long enough that typing a word is one request, short enough to feel live. */
@@ -26,19 +27,21 @@ export function useMediaLibrary(active: boolean, onError: (error: unknown) => vo
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<MediaItem[] | null>(null)
   const [tags, setTags] = useState<string[]>([])
-  const [truncated, setTruncated] = useState(false)
+  const [info, setInfo] = useState<PageInfo | null>(null)
+  const [page, setPage] = useState(1)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const latest = useLatest()
 
   const load = useCallback(
-    (term: string) =>
+    (term: string, wanted: number) =>
       latest(async (isCurrent) => {
         try {
-          const suffix = term.trim() ? `?q=${encodeURIComponent(term.trim())}` : ''
-          const data = await api<{ media: MediaItem[]; truncated: boolean }>(`/api/media${suffix}`)
+          const query = new URLSearchParams({ page: String(wanted) })
+          if (term.trim()) query.set('q', term.trim())
+          const data = await api<{ media: MediaItem[] } & PageInfo>(`/api/media?${query}`)
           if (!isCurrent()) return
           setItems(data.media)
-          setTruncated(data.truncated)
+          setInfo(data)
         } catch (error) {
           // Only the current request may report. An older one failing says
           // nothing about what is on screen now.
@@ -63,15 +66,32 @@ export function useMediaLibrary(active: boolean, onError: (error: unknown) => vo
     // The first load is immediate; only keystrokes wait. Otherwise opening the
     // picker shows an empty grid for a quarter of a second every time.
     if (query === '') {
-      void load('')
+      void load('', page)
       void loadTags()
       return
     }
-    timer.current = setTimeout(() => void load(query), DEBOUNCE_MS)
+    timer.current = setTimeout(() => void load(query, page), DEBOUNCE_MS)
     return () => clearTimeout(timer.current)
-  }, [active, query, load, loadTags])
+  }, [active, query, page, load, loadTags])
 
-  return { query, setQuery, items, setItems, tags, loadTags, truncated, reload: () => load(query) }
+  /** A new search is a different library, so it starts at its own first page. */
+  const search = useCallback((term: string) => {
+    setQuery(term)
+    setPage(1)
+  }, [])
+
+  return {
+    query,
+    setQuery: search,
+    items,
+    setItems,
+    tags,
+    loadTags,
+    info,
+    page,
+    setPage,
+    reload: () => load(query, page),
+  }
 }
 
 /** The search box itself, so both places offer the same control and wording. */

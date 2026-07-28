@@ -391,11 +391,25 @@ export interface AdminCustomerDetail {
   orders: Order[]
 }
 
-export interface AdminOrderList {
+/**
+ * What every paged list answers with, beside its rows.
+ *
+ * `total` is a real COUNT, not "how many came back" — a pager that can only
+ * say "at least this many" cannot draw a last page.
+ */
+export interface PageInfo {
+  total: number
+  page: number
+  perPage: number
+  /** At least 1: "第 1 頁，共 0 頁" reads as broken. */
+  pages: number
+  /** How many rows are in this answer. */
+  count: number
+}
+
+export interface AdminOrderList extends PageInfo {
   orders: AdminOrder[]
   counts: Partial<Record<OrderStatus, number>>
-  /** True when the answer stopped at its limit and more rows exist. */
-  truncated: boolean
 }
 
 // --- custom pages -------------------------------------------------------

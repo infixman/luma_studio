@@ -150,25 +150,42 @@ class TestWhatTheShopSees:
         assert body_of(call(AdminRequest("/api/orders"), database))["counts"] == {"paid": 3}
 
 
-class TestSayingWhatWasLeftOut:
-    """A list that stops at its limit and says nothing reads as "the old
-    orders are gone"."""
+class TestPaging:
+    """The list used to stop at 200 and say so, which is not a list — it is a
+    promise that the rest exists somewhere unreachable."""
 
-    def test_a_full_page_is_reported_as_cut_short(self, orders):
-        # One more row than the page holds, which is exactly how the query
-        # finds out there is more.
-        database = FakeDatabase({"FROM orders": [order(f"LS2026072{index}abcdefg") for index in range(9)]})
-        rows, truncated = asyncio.run(orders.list_all(make_env(database), limit=8))
-        assert len(rows) == 8 and truncated is True
-
-    def test_a_short_page_is_not(self, orders):
+    def test_the_page_asked_for_becomes_a_limit_and_an_offset(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})
-        rows, truncated = asyncio.run(orders.list_all(make_env(database), limit=8))
-        assert len(rows) == 1 and truncated is False
+        call(AdminRequest("/api/orders?page=3&perPage=20"), database)
+        query, bindings = [read for read in database.reads if "SELECT * FROM orders" in read[0]][0]
+        assert "LIMIT" in query and "OFFSET" in query
+        assert bindings[-2:] == (20, 40)
 
-    def test_the_flag_reaches_the_response(self, orders):
+    def test_the_total_comes_from_a_count_not_from_the_rows(self, orders):
+        """Otherwise the pager can only ever say "at least this many"."""
+
+        database = FakeDatabase({"SELECT COUNT(*) AS total": [{"total": 137}], "FROM orders": [order()]})
+        body = body_of(call(AdminRequest("/api/orders?perPage=20"), database))
+        assert body["total"] == 137
+        assert body["pages"] == 7
+        assert body["page"] == 1 and body["perPage"] == 20
+
+    def test_an_exact_multiple_does_not_gain_an_empty_last_page(self, orders):
+        database = FakeDatabase({"SELECT COUNT(*) AS total": [{"total": 40}], "FROM orders": [order()]})
+        assert body_of(call(AdminRequest("/api/orders?perPage=20"), database))["pages"] == 2
+
+    def test_nothing_at_all_is_still_one_page(self, orders):
+        """A pager that says "第 1 頁，共 0 頁" reads as broken."""
+
+        database = FakeDatabase({"SELECT COUNT(*) AS total": [{"total": 0}]})
+        assert body_of(call(AdminRequest("/api/orders"), database))["pages"] == 1
+
+    def test_a_nonsense_page_lands_somewhere_sensible(self, orders):
+        """A pager is navigation. A broken URL should not be an error page."""
+
         database = FakeDatabase({"FROM orders": [order()]})
-        assert body_of(call(AdminRequest("/api/orders"), database))["truncated"] is False
+        body = body_of(call(AdminRequest("/api/orders?page=-4&perPage=9999"), database))
+        assert body["page"] == 1 and body["perPage"] == 100
 
 
 class TestMovingAnOrderAlong:

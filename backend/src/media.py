@@ -22,6 +22,7 @@ only thing it enforces is that both are within reason.
 
 import json
 
+import paging
 from common import d1_rows, urlsafe_token, utc_timestamp
 
 
@@ -30,14 +31,17 @@ MEDIA_ID_PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01
 MAX_ALT = 200
 MAX_TITLE = 120
 MAX_FILE_NAME = 120
-MAX_ITEMS = 300
 MAX_SEARCH = 60
 
-# Select-all selects everything on screen, and what is on screen is capped by
-# MAX_ITEMS — so anything smaller than MAX_ITEMS makes select-all-then-delete
-# refuse itself. It was 100 against a 300-row page, which failed before the
-# confirmation dialog was even drawn.
-MAX_BULK = MAX_ITEMS
+# A grid, not a table: 48 divides into 2, 3, 4 and 6 columns without a ragged
+# last row at any of the widths the library is laid out at.
+PER_PAGE = 48
+
+# Select-all selects everything on screen, and what is on screen is one page —
+# so this only has to clear PER_PAGE. It is set well above it because a bulk
+# delete that refuses itself after the selection is made is worse than one
+# that is simply allowed.
+MAX_BULK = 300
 
 # Short enough that a tag stays a label rather than becoming a sentence, and
 # few enough that the list under an image is still readable at a glance.
@@ -340,17 +344,25 @@ _SIZES = """(SELECT group_concat(
 _SELECT = f"SELECT media.*, {_TAGS}, {_SIZES} FROM media"
 
 
-async def list_media(env, *, search: str = "") -> tuple[list[dict], bool]:
-    """The library, and whether it was cut short."""
+async def list_media(
+    env, *, search: str = "", page: int = 1, per_page: int = PER_PAGE
+) -> tuple[list[dict], int]:
+    """One page of the library, and how many images match altogether."""
 
     where, bindings = _search_clause(search)
-    bindings.append(MAX_ITEMS + 1)
+    counted = await d1_rows(env.DB.prepare(f"SELECT COUNT(*) AS total FROM media{where}").bind(*bindings))
+    total = int(counted[0]["total"]) if counted else 0
+
+    limit, offset = paging.window(page, per_page)
+    bindings.append(limit)
+    bindings.append(offset)
     rows = await d1_rows(
         env.DB.prepare(
-            f"{_SELECT}{where} ORDER BY media.created_at DESC, media.id LIMIT ?{len(bindings)}"
+            f"{_SELECT}{where} ORDER BY media.created_at DESC, media.id"
+            f" LIMIT ?{len(bindings) - 1} OFFSET ?{len(bindings)}"
         ).bind(*bindings)
     )
-    return [media_row(row) for row in rows[:MAX_ITEMS]], len(rows) > MAX_ITEMS
+    return [media_row(row) for row in rows], total
 
 
 def _search_clause(search: str) -> tuple[str, list]:

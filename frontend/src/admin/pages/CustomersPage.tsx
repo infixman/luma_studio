@@ -11,6 +11,8 @@ import {
   EmptyState,
   FilterBar,
   MenuItem,
+  DEFAULT_PER_PAGE,
+  Pagination,
   Panel,
   Spinner,
   TableWrap,
@@ -19,13 +21,12 @@ import {
   activeCount,
   applyFilters,
   readHidden,
-  Truncated,
   useConfirm,
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
 import { api, apiJson, clearLoginAttempt } from '../../shared/api'
-import type { AdminCustomer, AdminCustomerDetail, Order, OrderStatus } from '../../shared/types'
+import type { AdminCustomer, AdminCustomerDetail, Order, OrderStatus, PageInfo } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
@@ -79,8 +80,10 @@ const FIELDS: FilterField[] = [
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null)
-  const [truncated, setTruncated] = useState(false)
+  const [info, setInfo] = useState<PageInfo | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE)
   const [rules, setRules] = useState<FilterRule[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [hidden, setHidden] = useState<string[]>(() => readHidden(COLUMN_PAGE) ?? [])
@@ -91,24 +94,25 @@ export function CustomersPage() {
   const { ask, dialog } = useConfirm()
   const latest = useLatest()
 
-  // Search stays on the server: it is the thing that reaches past the cap, so
-  // doing it here would only search the hundred rows the cap let through.
+  // Search stays on the server: the browser only holds one page, so searching
+  // here would only ever search the page it happens to be on.
   // Typing fast can put two searches in flight; only the current one paints.
   const load = useCallback(
     () =>
       latest(async (isCurrent) => {
-        const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''
+        const query = new URLSearchParams({ page: String(page), perPage: String(perPage) })
+        if (search.trim()) query.set('q', search.trim())
         try {
-          const data = await api<{ customers: AdminCustomer[]; truncated: boolean }>(`/api/customers${query}`)
+          const data = await api<{ customers: AdminCustomer[] } & PageInfo>(`/api/customers?${query}`)
           if (!isCurrent()) return
           setCustomers(data.customers)
-          setTruncated(data.truncated)
+          setInfo(data)
           clearLoginAttempt()
         } catch (error) {
           if (isCurrent()) showError(error)
         }
       }),
-    [latest, search, showError],
+    [latest, page, perPage, search, showError],
   )
 
   useEffect(() => {
@@ -125,7 +129,18 @@ export function CustomersPage() {
    * not the rows that were ticked before it.
    */
   function changeRules(next: FilterRule[]) {
-    setRules(next)
+    narrow(() => setRules(next))
+  }
+
+  /**
+   * Change what the list is showing, and go back to its first page.
+   *
+   * Narrowing while on page 7 lands on a page that no longer exists, which
+   * looks exactly like "the search found nobody".
+   */
+  function narrow(change: () => void) {
+    change()
+    setPage(1)
     setSelected([])
   }
 
@@ -295,7 +310,7 @@ export function CustomersPage() {
             type="search"
             placeholder="email、顯示名稱或收件人"
             value={search}
-            onInput={(event) => setSearch((event.currentTarget as HTMLInputElement).value)}
+            onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
           />
           <div class="ui-toolbar-end">
             <Button size="sm" onClick={() => setShowFilters((open) => !open)}>
@@ -309,7 +324,7 @@ export function CustomersPage() {
           <FilterBar fields={FIELDS} rules={rules} onChange={changeRules} />
         )}
 
-        {truncated && <Truncated count={customers?.length ?? 0} unit="位" narrowed={filtered} />}
+
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void blockSelected(true)}>
@@ -356,8 +371,10 @@ export function CustomersPage() {
                   action={
                     <Button
                       onClick={() => {
-                        setRules([])
-                        setSearch('')
+                        narrow(() => {
+                          setRules([])
+                          setSearch('')
+                        })
                       }}
                     >
                       清除搜尋與篩選
@@ -370,6 +387,21 @@ export function CustomersPage() {
             }
           />
         )}
+
+        <Pagination
+          info={info}
+          unit="位"
+          disabled={busy}
+          onPage={(next) => {
+            setPage(next)
+            setSelected([])
+          }}
+          onPerPage={(size) => {
+            setPerPage(size)
+            setPage(1)
+            setSelected([])
+          }}
+        />
       </Panel>
 
       {detail && (

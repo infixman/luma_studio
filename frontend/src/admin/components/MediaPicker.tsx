@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { MediaGrid } from './MediaGrid'
 import { MediaSearchField, useMediaLibrary } from './MediaSearch'
-import { Button, Modal, Spinner } from './ui'
+import { Button, Modal, Pagination, Spinner } from './ui'
 import { uploadMedia } from '../../shared/api'
 import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
@@ -39,7 +39,7 @@ export function MediaPicker({
     (problem: unknown) => setError(problem instanceof Error ? problem.message : '媒體庫載入失敗'),
     [],
   )
-  const { query, setQuery, items, setItems } = useMediaLibrary(open, report)
+  const { query, setQuery, items, setItems, info, setPage } = useMediaLibrary(open, report)
 
   // Escape, the backdrop and the focus trap belong to Modal — including the
   // two this used to be missing: focus never entered the dialog, and never
@@ -119,6 +119,11 @@ export function MediaPicker({
             />
           )}
         </div>
+
+        {/* The picker pages too. Without it, the image you want is reachable
+            from the library page and unreachable from the one place you are
+            actually trying to use it. */}
+        <Pagination info={info} unit="張" onPage={setPage} />
       </div>
     </Modal>
   )

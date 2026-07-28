@@ -20,18 +20,26 @@ interface FieldProps {
   hint?: string
   error?: string | null
   required?: boolean
+  /**
+   * Hide the label from sight but keep it for a screen reader.
+   *
+   * For the places where the control already says what it is — a page-size
+   * dropdown reading 每頁 50 does not need 每頁 written above it as well —
+   * and where a stacked label would make one row twice as tall as the rest.
+   */
+  hiddenLabel?: boolean
   /** Given the id to put on the control, and the id of its description. */
   children: (ids: { id: string; describedBy: string | undefined }) => ComponentChildren
 }
 
-export function Field({ label, hint, error, required, children }: FieldProps) {
+export function Field({ label, hint, error, required, hiddenLabel, children }: FieldProps) {
   const id = useId()
   const noteId = `${id}-note`
   const note = error ?? hint
 
   return (
     <div class={error ? 'ui-field has-error' : 'ui-field'}>
-      <label class="ui-label" for={id}>
+      <label class={hiddenLabel ? 'ui-label is-hidden' : 'ui-label'} for={id}>
         {label}
         {required && (
           <span class="ui-required" aria-hidden="true">

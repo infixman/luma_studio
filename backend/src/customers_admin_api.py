@@ -9,6 +9,7 @@ office never has to guess whether the click landed.
 
 import customers
 import orders
+import paging
 from responses import Ctx
 
 
@@ -31,8 +32,11 @@ async def handle(ctx: Ctx):
 
     if path == "/api/customers" and method == "GET":
         search = (ctx.query.get("q") or [""])[0].strip()
-        rows, truncated = await customers.list_all(env, search=search)
-        return ctx.json({"customers": rows, "truncated": truncated})
+        page, per_page = paging.clamp(
+            (ctx.query.get("page") or [""])[0], (ctx.query.get("perPage") or [""])[0]
+        )
+        rows, total = await customers.list_all(env, search=search, page=page, per_page=per_page)
+        return ctx.json({"customers": rows, **paging.envelope(rows, total, page, per_page)})
 
     if not path.startswith("/api/customers/"):
         return ctx.error("Not found", 404)

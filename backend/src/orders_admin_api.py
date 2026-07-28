@@ -12,6 +12,7 @@ not here — this file is the door, not the policy.
 
 import mail
 import orders
+import paging
 from responses import Ctx
 
 
@@ -91,7 +92,8 @@ async def handle(ctx: Ctx):
             if value and value not in orders.STATUSES:
                 return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
         search = _first(ctx, "q")[:60]
-        rows, truncated = await orders.list_all(
+        page, per_page = paging.clamp(_first(ctx, "page"), _first(ctx, "perPage"))
+        rows, total = await orders.list_all(
             env,
             status=wanted[0] if len(wanted) == 1 else None,
             # Two different statuses AND-ed match nothing, and saying so is
@@ -101,16 +103,16 @@ async def handle(ctx: Ctx):
             search=search,
             created_from=_seconds(ctx, "createdFrom"),
             created_to=_seconds(ctx, "createdTo"),
+            page=page,
+            per_page=per_page,
         )
         return ctx.json(
             {
                 "orders": rows,
-                # Said out loud rather than left to be discovered as "the old
-                # orders are gone".
-                "truncated": truncated,
                 # The counts come back with every list so the tabs can show
                 # them without a second request that could disagree.
                 "counts": await orders.counts_by_status(env),
+                **paging.envelope(rows, total, page, per_page),
             }
         )
 

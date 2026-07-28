@@ -7,6 +7,7 @@ import {
   BulkBar,
   Button,
   ColumnChooser,
+  DEFAULT_PER_PAGE,
   DataTable,
   EmptyState,
   FilterBar,
@@ -14,6 +15,7 @@ import {
   MenuGroup,
   MenuItem,
   Modal,
+  Pagination,
   Panel,
   Spinner,
   TableWrap,
@@ -23,7 +25,6 @@ import {
   dayEnd,
   dayStart,
   readHidden,
-  Truncated,
   useConfirm,
   writeHidden,
 } from '../components/ui'
@@ -121,9 +122,11 @@ const DEFAULT_HIDDEN = ['recipientPhone', 'recipientEmail', 'shippingMethod', 'a
  * has no idea which midnight was meant, and would drop an order placed in the
  * evening out of a range that visibly includes its date.
  */
-function ordersQuery(rules: FilterRule[], search: string): string {
+function ordersQuery(rules: FilterRule[], search: string, page: number, perPage: number): string {
   const query = new URLSearchParams()
   if (search.trim()) query.set('q', search.trim())
+  query.set('page', String(page))
+  query.set('perPage', String(perPage))
 
   for (const rule of rules) {
     if (!rule.value.trim()) continue
@@ -164,6 +167,8 @@ export function OrdersAdminPage() {
   const [search, setSearch] = useState(new URLSearchParams(location.search).get('q') ?? '')
   const [hidden, setHidden] = useState<string[]>(() => readHidden(COLUMN_PAGE) ?? DEFAULT_HIDDEN)
   const [selected, setSelected] = useState<string[]>([])
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE)
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -174,7 +179,7 @@ export function OrdersAdminPage() {
   const { ask, dialog } = useConfirm()
   const latest = useLatest()
 
-  const query = ordersQuery(rules, search)
+  const query = ordersQuery(rules, search, page, perPage)
 
   // Filtering and searching both re-run this, and a slow answer to an older
   // query must not land on top of a fast answer to the current one.
@@ -195,6 +200,18 @@ export function OrdersAdminPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * Change what the list is showing, and go back to its first page.
+   *
+   * Narrowing while on page 7 lands on a page that no longer exists, which
+   * looks exactly like "the search found nothing".
+   */
+  function narrow(change: () => void) {
+    change()
+    setPage(1)
+    setSelected([])
+  }
 
   function chooseColumns(next: string[]) {
     setHidden(next)
@@ -353,8 +370,7 @@ export function OrdersAdminPage() {
    * would act on orders no longer on screen.
    */
   function changeRules(next: FilterRule[]) {
-    setRules(next)
-    setSelected([])
+    narrow(() => setRules(next))
   }
 
   /** Puts the tabs and the filter rows on one model, so they cannot disagree. */
@@ -371,8 +387,11 @@ export function OrdersAdminPage() {
    */
   function chooseTab(status: OrderStatus | '') {
     const others = rules.filter((rule) => !rule.id.startsWith(TAB_RULE))
-    setRules(status ? [...others, { id: `${TAB_RULE}${status}`, field: 'status', operator: 'eq', value: status }] : others)
-    setSelected([])
+    narrow(() =>
+      setRules(
+        status ? [...others, { id: `${TAB_RULE}${status}`, field: 'status', operator: 'eq', value: status }] : others,
+      ),
+    )
   }
 
   return (
@@ -438,7 +457,7 @@ export function OrdersAdminPage() {
             type="search"
             placeholder="訂單編號、收件人或 email"
             value={search}
-            onInput={(event) => setSearch((event.currentTarget as HTMLInputElement).value)}
+            onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
           />
           <div class="ui-toolbar-end">
             <Button size="sm" onClick={() => setShowFilters((open) => !open)}>
@@ -449,12 +468,6 @@ export function OrdersAdminPage() {
         </Toolbar>
 
         {showFilters && <FilterBar fields={fields} rules={rules} onChange={changeRules} />}
-
-        {/* A list that stops at its limit without saying so reads as "the
-            old orders are gone". */}
-        {list?.truncated && (
-          <Truncated count={orders.length} unit="筆" narrowed={search.trim() !== '' || rules.length > 0} />
-        )}
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void cancelSelected()}>
@@ -496,10 +509,12 @@ export function OrdersAdminPage() {
                   body="條件把所有訂單都排除了。放寬一條，或清掉全部從頭看。"
                   action={
                     <Button
-                      onClick={() => {
-                        setRules([])
-                        setSearch('')
-                      }}
+                      onClick={() =>
+                        narrow(() => {
+                          setRules([])
+                          setSearch('')
+                        })
+                      }
                     >
                       清除搜尋與篩選
                     </Button>
@@ -511,6 +526,22 @@ export function OrdersAdminPage() {
             }
           />
         )}
+
+        <Pagination
+          info={list}
+          unit="筆"
+          disabled={busy}
+          onPage={(next) => {
+            setPage(next)
+            // The rows are about to be different rows.
+            setSelected([])
+          }}
+          onPerPage={(size) => {
+            setPerPage(size)
+            setPage(1)
+            setSelected([])
+          }}
+        />
       </Panel>
 
       {detail && (

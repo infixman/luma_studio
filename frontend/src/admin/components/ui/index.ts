@@ -13,6 +13,7 @@ export { Menu, MenuCheckItem, MenuGroup, MenuItem } from './Menu'
 export { BulkBar, DataTable, Toolbar, type Column } from './DataTable'
 export { ColumnChooser } from './ColumnChooser'
 export { FilterBar } from './FilterBar'
+export { Pagination, pageNumbers, DEFAULT_PER_PAGE } from './Pagination'
 export {
   choosableColumns,
   readHidden,
