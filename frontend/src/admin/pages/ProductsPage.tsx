@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { ApiError, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
-import type { ProductListing, ProductStatus } from '../../shared/types'
+import type { Category, ProductListing, ProductStatus } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 
@@ -27,6 +27,7 @@ export function ProductsPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [busy, setBusy] = useState(false)
+  const [newCategory, setNewCategory] = useState({ title: '', slug: '' })
   const { message, show, showError } = useStatus()
 
   const load = useCallback(async () => {
@@ -77,7 +78,50 @@ export function ProductsPage() {
     }
   }
 
+  async function addCategory(event: Event) {
+    event.preventDefault()
+    if (busy) return
+    setBusy(true)
+    try {
+      await apiJson('/api/categories', 'POST', {
+        title: newCategory.title,
+        slug: newCategory.slug.trim() || suggestSlug(newCategory.title),
+        description: '',
+      })
+      setNewCategory({ title: '', slug: '' })
+      show('分類已建立。', 'ok')
+      await load()
+    } catch (error) {
+      showError(error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function renameCategory(category: Category, title: string) {
+    if (title === category.title) return
+    try {
+      await apiJson(`/api/categories/${encodeURIComponent(category.id)}`, 'PUT', { ...category, title })
+      await load()
+    } catch (error) {
+      showError(error)
+    }
+  }
+
+  async function removeCategory(category: Category) {
+    // Worth spelling out: deleting a label does not delete what it was on.
+    if (!confirm(`確定要刪除分類「${category.title}」？商品不會被刪除，只會失去這個分類。`)) return
+    try {
+      await api(`/api/categories/${encodeURIComponent(category.id)}`, { method: 'DELETE' })
+      show('分類已刪除。', 'ok')
+      await load()
+    } catch (error) {
+      showError(error)
+    }
+  }
+
   const products = listing?.products ?? []
+  const categories = listing?.categories ?? []
 
   return (
     <AdminShell current="/products" message={message} onError={showError}>
@@ -163,6 +207,59 @@ export function ProductsPage() {
               )
             })}
           </ul>
+          )}
+        </div>
+
+        <div class="card">
+          <h2>分類</h2>
+          <p class="muted">
+            分類是貼在商品上的標籤，沒有階層。前台網址是 <code>/shop/c/代稱</code>，多個分類用逗號代表「任一」、加號代表「兩者皆是」。
+          </p>
+
+          <form class="new-product" onSubmit={addCategory}>
+            <label>
+              分類名稱
+              <input
+                value={newCategory.title}
+                onInput={(event) => setNewCategory({ ...newCategory, title: (event.target as HTMLInputElement).value })}
+                maxLength={40}
+                required
+              />
+            </label>
+            <label>
+              網址代稱
+              <input
+                value={newCategory.slug}
+                onInput={(event) => setNewCategory({ ...newCategory, slug: (event.target as HTMLInputElement).value })}
+                placeholder={suggestSlug(newCategory.title) || '留空自動產生'}
+                maxLength={64}
+              />
+            </label>
+            <button type="submit" disabled={busy || !newCategory.title.trim()}>
+              新增分類
+            </button>
+          </form>
+
+          {categories.length === 0 ? (
+            <p class="muted">還沒有分類。</p>
+          ) : (
+            <ul class="category-list">
+              {categories.map((category) => (
+                <li key={category.id}>
+                  <input
+                    class="category-title"
+                    value={category.title}
+                    maxLength={40}
+                    onBlur={(event) => void renameCategory(category, (event.target as HTMLInputElement).value)}
+                  />
+                  <code>/shop/c/{category.slug}</code>
+                  <span class="count">{listing?.counts?.[category.id] ?? 0} 件上架中</span>
+                  <button type="button" class="danger" onClick={() => void removeCategory(category)}>
+                    刪除
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </section>

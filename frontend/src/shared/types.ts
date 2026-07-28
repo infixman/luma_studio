@@ -157,6 +157,7 @@ export interface ProductDetail {
   product: Product
   variants: ProductVariant[]
   images: ProductImage[]
+  categories: Category[]
 }
 
 /** The catalogue list, with children keyed by product id. */
@@ -164,6 +165,25 @@ export interface ProductListing {
   products: Product[]
   variants: Record<string, ProductVariant[]>
   images: Record<string, ProductImage[]>
+  categories: Category[]
+  /** Active-product count per category id, so the editor needs one call. */
+  counts: Record<string, number>
+  productCategories: Record<string, Category[]>
+}
+
+/** Flat and many-to-many — a tag, not a branch of a tree. */
+export interface Category {
+  id: string
+  slug: string
+  title: string
+  description: string
+  position: number
+}
+
+/** The back office's view: every category, and how many active products each holds. */
+export interface CategoryListing {
+  categories: Category[]
+  counts: Record<string, number>
 }
 
 /** What an anonymous visitor is told about a variant. Stock is deliberately vague above the low-stock threshold. */
@@ -185,12 +205,29 @@ export interface PublicProductCard {
   inStock: boolean
 }
 
+export interface PublicCategory {
+  slug: string
+  title: string
+  productCount: number
+}
+
+/** A category page, which may name several categories at once. */
+export interface CategoryPageData {
+  title: string
+  /** Only a single category carries one; no one blurb describes a combination. */
+  description: string
+  mode: 'any' | 'all'
+  categories: { slug: string; title: string }[]
+  products: PublicProductCard[]
+}
+
 export interface PublicProductDetail {
   slug: string
   title: string
   description: string
   images: { path: string | null; alt: string }[]
   variants: PublicVariant[]
+  categories: { slug: string; title: string }[]
 }
 
 /** One cart line as the server rebuilt it. Prices never come from the browser. */

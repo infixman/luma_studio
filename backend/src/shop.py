@@ -203,7 +203,7 @@ def public_summary(product: dict, variants: list[dict], images: list[dict]) -> d
     }
 
 
-def public_detail(product: dict, variants: list[dict], images: list[dict]) -> dict:
+def public_detail(product: dict, variants: list[dict], images: list[dict], product_categories: list[dict]) -> dict:
     """One product page. Disabled variants are withheld entirely."""
 
     return {
@@ -212,6 +212,7 @@ def public_detail(product: dict, variants: list[dict], images: list[dict]) -> di
         "description": product["description"],
         "images": [{"path": image["path"], "alt": image["alt"]} for image in images],
         "variants": [public_variant(variant) for variant in variants if variant["enabled"]],
+        "categories": [{"slug": c["slug"], "title": c["title"]} for c in product_categories],
     }
 
 

@@ -2,6 +2,7 @@ import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 import { CartPage } from './pages/CartPage'
+import { CategoryPage } from './pages/CategoryPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { ProductPage } from './pages/ProductPage'
 import { OrderPage } from './pages/OrderPage'
@@ -9,6 +10,9 @@ import { OrdersPage } from './pages/OrdersPage'
 import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
+// /shop/c/... is matched first, so a category filter is never read as a
+// product slug. The `c` segment exists to make that impossible either way.
+const CATEGORY_PATH = /^\/shop\/c\/(.+)$/
 const PRODUCT_PATH = /^\/shop\/([^/]+)$/
 const ORDER_PATH = /^\/orders\/([^/]+)$/
 
@@ -58,6 +62,12 @@ export function App() {
   if (order) {
     markBody('order')
     return <OrderPage id={decodeURIComponent(order[1]!)} />
+  }
+
+  const category = CATEGORY_PATH.exec(path)
+  if (category) {
+    markBody('shop')
+    return <CategoryPage filter={category[1]!} />
   }
 
   const product = PRODUCT_PATH.exec(path)

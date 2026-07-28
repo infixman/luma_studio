@@ -131,6 +131,16 @@ export function ProductPage({ slug }: { slug: string }) {
             </div>
           )}
 
+          {product.categories.length > 0 && (
+            <ul class="category-chips on-product">
+              {product.categories.map((category) => (
+                <li key={category.slug}>
+                  <a href={`/shop/c/${encodeURIComponent(category.slug)}`}>{category.title}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {product.description && (
             <div class="description">
               {product.description.split(/\n{2,}/).map((paragraph, index) => (

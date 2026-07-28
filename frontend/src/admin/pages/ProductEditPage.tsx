@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
-import type { ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
+import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 
@@ -22,11 +22,14 @@ export function ProductEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null)
   const [form, setForm] = useState({ title: '', slug: '', description: '', status: 'draft' as ProductStatus })
   const [draft, setDraft] = useState(EMPTY_VARIANT)
+  const [allCategories, setAllCategories] = useState<Category[]>([])
+  const [chosen, setChosen] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
 
   const apply = useCallback((next: ProductDetail) => {
     setDetail(next)
+    setChosen(next.categories.map((category) => category.id))
     setForm({
       title: next.product.title,
       slug: next.product.slug,
@@ -37,7 +40,14 @@ export function ProductEditPage({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      apply(await api<ProductDetail>(`/api/products/${encodeURIComponent(id)}`))
+      // Two calls rather than one: the editor needs every category to draw
+      // the checkboxes, not only the ones already ticked.
+      const [detailed, listing] = await Promise.all([
+        api<ProductDetail>(`/api/products/${encodeURIComponent(id)}`),
+        api<{ categories: Category[] }>('/api/categories'),
+      ])
+      setAllCategories(listing.categories)
+      apply(detailed)
       clearLoginAttempt()
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) showError(error)
@@ -65,7 +75,7 @@ export function ProductEditPage({ id }: { id: string }) {
   function saveProduct(event: Event) {
     event.preventDefault()
     void run(
-      () => apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', form),
+      () => apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, categoryIds: chosen }),
       '商品已儲存。',
     )
   }
@@ -181,7 +191,34 @@ export function ProductEditPage({ id }: { id: string }) {
                 rows={6}
               />
             </label>
-            <fieldset class="statuses">
+              <fieldset class="statuses categories">
+              <legend>分類</legend>
+              {allCategories.length === 0 ? (
+                <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
+              ) : (
+                allCategories.map((category) => (
+                  <label key={category.id} class="radio">
+                    <input
+                      type="checkbox"
+                      checked={chosen.includes(category.id)}
+                      onChange={(event) =>
+                        setChosen((current) =>
+                          (event.target as HTMLInputElement).checked
+                            ? [...current, category.id]
+                            : current.filter((value) => value !== category.id),
+                        )
+                      }
+                    />
+                    <span>
+                      {category.title}
+                      <small>/shop/c/{category.slug}</small>
+                    </span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+
+          <fieldset class="statuses">
               <legend>狀態</legend>
               {STATUSES.map((status) => (
                 <label key={status.value} class="radio">

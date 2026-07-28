@@ -275,6 +275,7 @@ async def shop_product_response(ctx: Ctx, slug: str):
             product,
             await shop.list_variants(ctx.env, product["id"]),
             await shop.list_images(ctx.env, product["id"]),
+            await categories.of_product(ctx.env, product["id"]),
         )
     )
 

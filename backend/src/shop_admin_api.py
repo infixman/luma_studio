@@ -161,6 +161,7 @@ async def handle(ctx: Ctx):
                 "variants": {p["id"]: await shop.list_variants(env, p["id"]) for p in products},
                 "images": {p["id"]: await shop.list_images(env, p["id"]) for p in products},
                 "categories": await categories.list_all(env),
+                "counts": await categories.counts(env),
                 "productCategories": {p["id"]: await categories.of_product(env, p["id"]) for p in products},
             }
         )
