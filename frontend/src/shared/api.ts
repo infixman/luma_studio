@@ -170,6 +170,28 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 
+/**
+ * Ask who is signed in, without acting on the answer.
+ *
+ * `api` sends a 401 straight to Google, which is right once a page has decided
+ * the visitor belongs there. It is wrong for the question "does this visitor
+ * belong here at all" — that has to be answerable as "no" so the caller can
+ * show a door instead of a dashboard.
+ */
+export async function probeSession<T>(path: string): Promise<T | null> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'include', headers: APP_HEADER })
+  } catch {
+    throw new ApiError('無法連線到伺服器', 0)
+  }
+  if (response.status === 401) return null
+  const body = await readBody(response)
+  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : '操作失敗', response.status)
+  clearLoginAttempt()
+  return body as T
+}
+
 export async function apiJson<T>(path: string, method: string, payload: unknown): Promise<T> {
   return api<T>(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
 }

@@ -1,3 +1,4 @@
+import { AdminGate } from './components/AdminGate'
 import { AdminPage } from './pages/AdminPage'
 import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
 import { ProductEditPage } from './pages/ProductEditPage'
@@ -14,9 +15,8 @@ function markBody(page: string): void {
   document.body.className = page
 }
 
-export function App() {
+function Routed() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
-  markBody('admin')
 
   if (path === '/bio-link') return <BioLinkAdminPage />
   if (path === '/products') return <ProductsPage />
@@ -29,4 +29,16 @@ export function App() {
   // old /admin and /admin/bio-link URLs arrive here through the storefront's
   // redirect, and a bookmark that lands on a blank page reads as a fault.
   return <AdminPage />
+}
+
+export function App() {
+  markBody('admin')
+
+  // The gate renders nothing of the back office until there is a session, so
+  // the routing below never runs for a visitor who has not signed in.
+  return (
+    <AdminGate>
+      <Routed />
+    </AdminGate>
+  )
 }

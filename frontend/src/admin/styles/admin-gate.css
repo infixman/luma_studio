@@ -1,0 +1,43 @@
+/* The sign-in page, and the only thing an unauthenticated visitor is shown.
+   Deliberately says nothing about what is behind it. */
+
+body.admin main.gate {
+  max-width: 420px;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+}
+
+body.admin main.gate .brand-logo {
+  width: 190px;
+}
+
+body.admin .gate-note {
+  margin: 0;
+  color: #5d6b63;
+}
+
+body.admin .gate-note.error {
+  color: #8a2a2a;
+}
+
+body.admin .gate-action {
+  display: inline-block;
+  padding: 11px 26px;
+  border: 1px solid #2f5d4a;
+  border-radius: 8px;
+  background: #2f5d4a;
+  color: #fff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+body.admin .gate-action:hover {
+  background: #264c3c;
+  border-color: #264c3c;
+}

@@ -428,6 +428,10 @@ https://admin.luma-studio.tw
 
 舊網址 `https://luma-studio.tw/admin` 會 301 轉過來。
 
+**未登入的訪客只會看到一頁登入畫面**，沒有分頁列、沒有卡片、沒有表單（[AdminGate](frontend/src/admin/components/AdminGate.tsx)）。先渲染介面、再讓各頁的 401 把人踢去 Google，等於讓路過的人看完整份功能清單——分頁名稱、卡片標題、每個表單的形狀。單獨看都不是什麼機密，合起來就是一份寫給不該讀的人看的營運說明。
+
+這是**揭露面**的處理，不是授權本身。真正的邊界在管理 Worker：沒有 session 的請求一律 401，這件事有測試守著（`test_admin_routing.py`）。前端的閘門讓人看不到，後端的閘門讓人拿不到。
+
 僅允許 `chiao7912@gmail.com`、`infixman@gmail.com` 這兩個已驗證 Google 帳號。介面可建立資料夾、上傳/刪除圖片、刪除空資料夾、複製或開啟公開取件頁與圖檔網址，並設定每個資料夾的紙張尺寸、色彩、單/雙面與紙張種類。
 
 預設規格為 **A4／彩色／單面列印／一般用紙**，對應 ibon `SelectType: FA4CN1`。每次規格異動都會清除該資料夾的 ibon 24 小時快取；下一個公開列印請求會以新的 `SelectType` 建立 pincode。
