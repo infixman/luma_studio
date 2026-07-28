@@ -166,6 +166,17 @@ body.admin .block-row.is-open .block-chevron {
   transform: rotate(0deg);
 }
 
+/* Tabular figures and a fixed width, so eight numbers make a column rather
+   than a ragged edge — the number is only useful if it can be scanned. */
+body.admin .block-index {
+  flex: none;
+  min-width: 1.6em;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 body.admin .block-kind {
   display: grid;
   place-items: center;
@@ -280,9 +291,24 @@ body.admin .block-menu button {
   cursor: pointer;
 }
 
-body.admin .block-menu button:hover {
+body.admin .block-menu button:hover:not(:disabled) {
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+/* Disabled rather than absent, so the gesture is still visible to somebody
+   who has not filled the clipboard yet. */
+body.admin .block-menu button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* Insert above/below are about where a new block goes; copy, duplicate and
+   paste are about which block. The line is where that changes. */
+body.admin .block-menu-sep {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--border);
 }
 
 body.admin .block-body {
@@ -407,8 +433,66 @@ body.admin .preview-surface .block {
   margin-bottom: 1.2rem;
 }
 
-body.admin .preview-surface .block:last-child {
+body.admin .preview-block:last-child .block {
   margin-bottom: 0;
+}
+
+/* --- clicking a block in the preview --- */
+
+/* Each rendered block wrapped in the row that made it. The preview and the
+   editor are the same document, so the only thing needed to connect them is
+   somewhere to hang the click. */
+body.admin .preview-block {
+  position: relative;
+  border-radius: var(--radius);
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 120ms ease;
+  cursor: pointer;
+}
+
+body.admin .preview-block:hover,
+body.admin .preview-block:focus-within {
+  outline-color: var(--primary-line);
+}
+
+/* The block whose editor is open, marked in the preview too: two panels
+   showing the same thing should agree on which one that is. */
+body.admin .preview-block.is-open {
+  outline-color: var(--primary);
+}
+
+/* The keyboard's way to the same place. Out of sight until it is hovered or
+   tabbed to, because the preview is meant to look like the page. */
+body.admin .preview-jump {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+body.admin .preview-block:hover .preview-jump,
+body.admin .preview-jump:focus-visible {
+  opacity: 1;
+}
+
+/* --- the path lock --- */
+
+/* Shut reads as the stronger of the two states because it is the one that is
+   doing something: the field below it is not the owner's to type in. */
+body.admin .slug-lock.is-locked {
+  color: var(--primary);
 }
 
 @media (max-width: 1100px) {

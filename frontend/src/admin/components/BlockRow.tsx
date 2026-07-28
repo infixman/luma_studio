@@ -16,6 +16,11 @@ import type { BlockConfig, PageBlock } from '../../shared/types'
  * Reordering is a drag handle rather than a pair of arrows. Arrows move one
  * step at a time and each step is a request; a drag says where the block
  * belongs and costs one.
+ *
+ * The ⋯ menu holds the three gestures that are about this block rather than
+ * about the page: duplicate it, copy it somewhere else, paste something here.
+ * Copy and paste go through storage rather than through this component,
+ * because the page they are for is the other one.
  */
 
 const LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.label]))
@@ -23,11 +28,16 @@ const LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.labe
 export function BlockRow({
   block,
   config,
+  position,
+  domId,
   open,
   dirty,
   onToggle,
   onDelete,
   onInsert,
+  onDuplicate,
+  onCopy,
+  onPaste,
   onDragStart,
   onDragOver,
   onDrop,
@@ -36,6 +46,10 @@ export function BlockRow({
 }: {
   block: PageBlock
   config: BlockConfig
+  /** Where this row sits, counting from one. Drawn as 01, 02, 03. */
+  position: number
+  /** The row's anchor, so the preview can scroll to the block that was clicked. */
+  domId: string
   open: boolean
   /** Marked when this block holds changes that have not been saved. */
   dirty: boolean
@@ -43,6 +57,11 @@ export function BlockRow({
   onDelete: () => void
   /** Where a new block should go relative to this one. */
   onInsert: (where: 'above' | 'below') => void
+  /** Same type, same config, directly below this one. */
+  onDuplicate: () => void
+  onCopy: () => void
+  /** Null when there is nothing to paste, or when what is there is a type this build cannot use. */
+  onPaste: (() => void) | null
   onDragStart: () => void
   onDragOver: () => void
   onDrop: () => void
@@ -61,8 +80,15 @@ export function BlockRow({
     return () => document.removeEventListener('pointerdown', away)
   }, [menu])
 
+  /** Closes the menu first, so the row underneath is not left with a panel over it. */
+  const choose = (act: () => void) => () => {
+    setMenu(false)
+    act()
+  }
+
   return (
     <li
+      id={domId}
       class={['block-row', open ? 'is-open' : '', dragging ? 'is-dragging' : ''].filter(Boolean).join(' ')}
       onDragOver={(event) => {
         event.preventDefault()
@@ -85,6 +111,11 @@ export function BlockRow({
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+
+        {/* Eight rows carrying the same five words are told apart by where
+            they are, so the row says where it is. Two digits because the
+            column then never changes width between 9 and 10. */}
+        <span class="block-index">{String(position).padStart(2, '0')}</span>
 
         <span class="block-kind" aria-hidden="true">
           <BlockIcon type={block.type} />
@@ -140,25 +171,39 @@ export function BlockRow({
           {menu && (
             <ul class="block-menu">
               <li>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenu(false)
-                    onInsert('above')
-                  }}
-                >
+                <button type="button" onClick={choose(() => onInsert('above'))}>
                   在上方插入區塊
                 </button>
               </li>
               <li>
+                <button type="button" onClick={choose(() => onInsert('below'))}>
+                  在下方插入區塊
+                </button>
+              </li>
+
+              <li class="block-menu-sep" role="separator" />
+
+              <li>
+                <button type="button" onClick={choose(onDuplicate)}>
+                  複製
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={choose(onCopy)}>
+                  複製區塊
+                </button>
+              </li>
+              <li>
+                {/* Shown even with nothing to paste, and disabled instead of
+                    hidden: a gesture that only appears once you have already
+                    used the other half of it is a gesture nobody finds. */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setMenu(false)
-                    onInsert('below')
-                  }}
+                  disabled={!onPaste}
+                  title={onPaste ? undefined : '沒有複製過的區塊，或那一個是這個版本認不得的型別'}
+                  onClick={onPaste ? choose(onPaste) : undefined}
                 >
-                  在下方插入區塊
+                  貼上區塊
                 </button>
               </li>
             </ul>

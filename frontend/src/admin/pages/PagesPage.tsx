@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
+import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
+import { nextPath, suggestPath } from '../lib/slug'
 import { ApiError, STOREFRONT_ORIGIN, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { Page } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
 
-/** Turns a title into a starting path, which the owner can still overwrite. */
-function suggestPath(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return slug ? `/${slug}` : ''
-}
-
 export function PagesPage() {
   const [pages, setPages] = useState<Page[] | null>(null)
-  const [draft, setDraft] = useState({ title: '', path: '' })
+  /* The lock starts shut on a page that does not exist yet: there is no
+     address to protect, so following the title is free. */
+  const [draft, setDraft] = useState({ title: '', path: '', locked: true })
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -39,6 +34,11 @@ export function PagesPage() {
     void load()
   }, [load])
 
+  /* What the page would actually be created at. A locked field is already
+     filled by the title, so this only has anything left to do when the lock
+     is open and the owner left the box empty. */
+  const newPath = draft.path.trim() || suggestPath(draft.title)
+
   async function create(event: Event) {
     event.preventDefault()
     if (busy) return
@@ -46,10 +46,10 @@ export function PagesPage() {
     try {
       await apiJson('/api/pages', 'POST', {
         title: draft.title,
-        path: draft.path.trim() || suggestPath(draft.title),
+        path: newPath,
         status: 'draft',
       })
-      setDraft({ title: '', path: '' })
+      setDraft({ title: '', path: '', locked: true })
       show('頁面已建立，現在是草稿。', 'ok')
       await load()
     } catch (error) {
@@ -101,7 +101,13 @@ export function PagesPage() {
             <TextField
               label="頁面名稱"
               value={draft.title}
-              onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })}
+              onInput={(event) => {
+                const title = (event.currentTarget as HTMLInputElement).value
+                // The path keeps up with the title rather than being guessed
+                // once and then left behind — that drift is what the lock is
+                // here to end.
+                setDraft((current) => ({ ...current, title, path: nextPath(current.path, title, current.locked) }))
+              }}
               maxLength={80}
               required
             />
@@ -109,12 +115,23 @@ export function PagesPage() {
               label="網址路徑"
               value={draft.path}
               onInput={(event) => setDraft({ ...draft, path: (event.currentTarget as HTMLInputElement).value })}
+              disabled={draft.locked}
+              trailing={<SlugLock locked={draft.locked} onChange={(locked) => setDraft({ ...draft, locked })} />}
               placeholder={suggestPath(draft.title) || '留空自動產生'}
-              hint="首頁不用填——建好之後把下面的「首頁」打開就會接管 /"
+              hint={
+                /* A Chinese title romanises to nothing, so a shut lock leaves
+                   this empty — and an empty, read-only field with a disabled
+                   button is a dead end unless it says which key opens it. */
+                draft.locked && !newPath
+                  ? '頁面名稱裡沒有可以放進網址的英數字。按右邊的鎖，自己填一個，例如 /about。'
+                  : draft.locked
+                    ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
+                    : '首頁不用填——建好之後把下面的「首頁」打開就會接管 /'
+              }
               maxLength={120}
             />
           </div>
-          <Button type="submit" tone="primary" busy={busy} disabled={!draft.title.trim()}>
+          <Button type="submit" tone="primary" busy={busy} disabled={!draft.title.trim() || !newPath}>
             新增頁面
           </Button>
         </form>

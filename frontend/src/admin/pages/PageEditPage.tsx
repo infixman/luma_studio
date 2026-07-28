@@ -13,8 +13,21 @@ import {
 import type { Catalogue } from '../components/BlockEditors'
 import { BlockPicker, BlockRow } from '../components/BlockRow'
 import { useMediaPicker } from '../components/MediaPicker'
+import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
-import { Button, Panel, RadioGroup, Spinner, TextArea, TextField, Toggle, useConfirm } from '../components/ui'
+import {
+  Button,
+  Panel,
+  RadioGroup,
+  Spinner,
+  TextArea,
+  TextField,
+  Toggle,
+  useConfirm,
+} from '../components/ui'
+import { CLIPBOARD_KEY, readCopiedBlock, writeCopiedBlock } from '../lib/blockClipboard'
+import type { CopiedBlock } from '../lib/blockClipboard'
+import { followsTitle, nextPath } from '../lib/slug'
 import { Blocks } from '../../shared/components/Blocks'
 import { ApiError, STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type {
@@ -40,6 +53,14 @@ const STATUSES: { value: PageStatus; label: string; hint: string }[] = [
 ]
 
 const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.label]))
+
+/* The types this build can edit and draw. A paste is checked against it, so a
+   block copied from a newer deployment is refused rather than dropped into a
+   page that has no editor for it. */
+const KNOWN_TYPES = BLOCK_KINDS.map((kind) => kind.type)
+
+/** The anchor a row gets, so a click in the preview has somewhere to scroll to. */
+const rowId = (blockId: string) => `block-row-${blockId}`
 
 const MAX_SHARE_DESCRIPTION = 200
 
@@ -76,8 +97,21 @@ export function PageEditPage({ id }: { id: string }) {
   const [drafts, setDrafts] = useState<Record<string, BlockConfig>>({})
   const [library, setLibrary] = useState<MediaItem[]>([])
   const [catalogue, setCatalogue] = useState<Catalogue>({ products: [], categories: [] })
-  /** Which block is expanded. One at a time: the point of collapsing is that the page stays short. */
-  const [openId, setOpenId] = useState<string | null>(null)
+  /**
+   * Which blocks are expanded, and whether opening one closes the rest.
+   *
+   * One at a time is the default, because the point of collapsing is that the
+   * page stays short enough to scan. 全部展開 is the override — comparing two
+   * carousels, or reading the whole page in one pass, needs them all open —
+   * and it flips `multi` so that opening a sixth does not close the five you
+   * just asked for.
+   */
+  const [openIds, setOpenIds] = useState<string[]>([])
+  const [multi, setMulti] = useState(false)
+  /** What is on the block clipboard right now, or null if it is empty or unusable. */
+  const [clipboard, setClipboard] = useState<CopiedBlock | null>(null)
+  /** Shut while the path is the title's shadow; opened by the owner to type their own. */
+  const [pathLocked, setPathLocked] = useState(false)
   /** Where the type picker is open, as an index in the block list; null when closed. */
   const [inserting, setInserting] = useState<number | null>(null)
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
@@ -110,7 +144,13 @@ export function PageEditPage({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      apply(await api<PageDetail>(`/api/pages/${encodeURIComponent(id)}`))
+      const next = await api<PageDetail>(`/api/pages/${encodeURIComponent(id)}`)
+      apply(next)
+      // Where the lock starts, decided once from what is already stored: a
+      // path that still matches its title is one nobody has taken over, so it
+      // can go on following. A path that was typed by hand cannot, or the
+      // first keystroke in the title box would move a published address.
+      setPathLocked(followsTitle(next.page.title, next.page.path))
       clearLoginAttempt()
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) showError(error)
@@ -120,6 +160,24 @@ export function PageEditPage({ id }: { id: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  /* The clipboard is a place, not a message, so it is read rather than
+     received. Re-read on focus and on the storage event because the copy that
+     fills it usually happens in the other tab, or on the page you just came
+     from — and a menu offering 貼上區塊 has to know before it is opened. */
+  useEffect(() => {
+    const refresh = () => setClipboard(readCopiedBlock(KNOWN_TYPES))
+    refresh()
+    const moved = (event: StorageEvent) => {
+      if (event.key === null || event.key === CLIPBOARD_KEY) refresh()
+    }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', moved)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', moved)
+    }
+  }, [])
 
   // The library and the catalogue are what the block editors offer to choose
   // from. Fetched once here rather than per block: five carousels on a page
@@ -175,15 +233,18 @@ export function PageEditPage({ id }: { id: string }) {
     if (item) setShareImage({ id: item.id, path: item.path })
   }
 
-  async function run(work: () => Promise<PageDetail | void>, done: string) {
-    if (busy) return
+  /** Answers whether the work went through, which is what "and then refresh the frame" needs to know. */
+  async function run(work: () => Promise<PageDetail | void>, done: string): Promise<boolean> {
+    if (busy) return false
     setBusy(true)
     try {
       const next = await work()
       if (next) apply(next)
       show(done, 'ok')
+      return true
     } catch (error) {
       showError(error)
+      return false
     } finally {
       setBusy(false)
     }
@@ -207,6 +268,7 @@ export function PageEditPage({ id }: { id: string }) {
   function saveAll() {
     if (!detail) return
     const dirty = dirtyIds(detail)
+    const refreshFrame = frame !== null
     void run(async () => {
       // The image travels only when the owner touched it: leaving the field
       // out means "unchanged", so saving a title cannot drop a picture this
@@ -222,26 +284,92 @@ export function PageEditPage({ id }: { id: string }) {
       // The last write already answered with the whole page; only ask again
       // when there were no blocks to write.
       return latest ?? (await api<PageDetail>(`/api/pages/${encodeURIComponent(id)}`))
-    }, dirty.length ? `已儲存，包含 ${dirty.length} 個區塊。` : '頁面已儲存。')
+    }, dirty.length ? `已儲存，包含 ${dirty.length} 個區塊。` : '頁面已儲存。').then((ok) => {
+      // The frame reads the server, so what it is showing is now one save out
+      // of date. Refreshing it means minting another token, because the one
+      // that loaded it was spent by that load — reusing the URL would put an
+      // expired page where the preview was.
+      if (ok && refreshFrame) void openLivePreview()
+    })
   }
 
-  /** Adds at the end, then moves it into place — the API only appends. */
-  function addBlock(type: PageBlock['type'], at: number) {
+  /** Expands a block, closing the others unless the owner asked for all of them. */
+  function openBlock(blockId: string) {
+    setOpenIds((current) => (multi ? [...current.filter((each) => each !== blockId), blockId] : [blockId]))
+  }
+
+  function toggleBlock(blockId: string) {
+    setOpenIds((current) =>
+      current.includes(blockId) ? current.filter((each) => each !== blockId) : multi ? [...current, blockId] : [blockId],
+    )
+  }
+
+  /**
+   * Opens a block and brings its row into view.
+   *
+   * Called from the preview, which is why this exists at all: the preview and
+   * the editor are in the same document, so a click on a rendered block can
+   * reach the row that made it without a single message crossing a frame.
+   * The scroll waits a frame because the row is about to grow.
+   */
+  function focusBlock(blockId: string) {
+    openBlock(blockId)
+    requestAnimationFrame(() => {
+      document.getElementById(rowId(blockId))?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
+
+  /**
+   * Puts a block at a given index. Adds at the end, then moves it into
+   * place — the API only appends.
+   *
+   * `config` is what the new block starts as: an empty one when it came from
+   * the picker, a copy of another when it came from 複製 or 貼上區塊.
+   */
+  function insertBlock(type: PageBlock['type'], config: BlockConfig, at: number, done: string) {
     setInserting(null)
     void run(async () => {
       const added = await apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks`, 'POST', {
         type,
-        config: emptyConfig(type),
+        config,
       })
       const fresh = added.blocks[added.blocks.length - 1]
       if (!fresh) return added
-      setOpenId(fresh.id)
+      openBlock(fresh.id)
       if (at >= added.blocks.length - 1) return added
 
       const order = added.blocks.map((block) => block.id)
       order.splice(at, 0, ...order.splice(order.length - 1, 1))
       return apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks/order`, 'PUT', { ids: order })
-    }, '區塊已新增。')
+    }, done)
+  }
+
+  function addBlock(type: PageBlock['type'], at: number) {
+    insertBlock(type, emptyConfig(type), at, '區塊已新增。')
+  }
+
+  /* The config that goes on the clipboard, or into the twin, is the one on
+     screen — not the one the server last saw. Copying a block you have just
+     finished editing has to copy those edits, or the gesture is a trap. */
+  const configOf = (block: PageBlock): BlockConfig => drafts[block.id] ?? block.config
+
+  function duplicateBlock(block: PageBlock, index: number) {
+    insertBlock(block.type, configOf(block), index + 1, '區塊已複製。')
+  }
+
+  function copyBlock(block: PageBlock) {
+    const copied: CopiedBlock = { type: block.type, config: configOf(block) }
+    if (!writeCopiedBlock(copied)) {
+      show('這個瀏覽器不讓我們暫存區塊，複製失敗。', 'error')
+      return
+    }
+    setClipboard(copied)
+    show('已複製，可以貼到任何一頁。', 'ok')
+  }
+
+  function pasteBlock(index: number) {
+    if (!clipboard) return
+    insertBlock(clipboard.type, clipboard.config, index + 1, '區塊已貼上。')
   }
 
   async function removeBlock(block: PageBlock) {
@@ -284,6 +412,19 @@ export function PageEditPage({ id }: { id: string }) {
   }
 
   const viewportWidth = VIEWPORTS.find((size) => size.id === viewport)!.width
+
+  /* The two overrides. 全部展開 also switches the list into multi mode, or
+     opening a sixth block would close the five that were just asked for;
+     全部收合 switches it back, which is the editor's default. */
+  const expandAll = () => {
+    setMulti(true)
+    setOpenIds(detail.blocks.map((block) => block.id))
+  }
+  const collapseAll = () => {
+    setMulti(false)
+    setOpenIds([])
+  }
+
   const dirty = dirtyIds(detail)
   const pageChanged =
     form.title !== detail.page.title ||
@@ -374,7 +515,21 @@ export function PageEditPage({ id }: { id: string }) {
 
       <div class="page-editor">
         <div class="editor-main">
-          <Panel title="區塊">
+          <Panel
+            title="區塊"
+            actions={
+              detail.blocks.length > 1 && (
+                <>
+                  <Button size="sm" onClick={collapseAll}>
+                    全部收合
+                  </Button>
+                  <Button size="sm" onClick={expandAll}>
+                    全部展開
+                  </Button>
+                </>
+              )
+            }
+          >
             {detail.blocks.length === 0 && inserting === null && (
               <p class="muted">還沒有區塊。用下面的按鈕加第一個。</p>
             )}
@@ -391,12 +546,17 @@ export function PageEditPage({ id }: { id: string }) {
                     key={block.id}
                     block={block}
                     config={drafts[block.id] ?? block.config}
-                    open={openId === block.id}
+                    position={index + 1}
+                    domId={rowId(block.id)}
+                    open={openIds.includes(block.id)}
                     dirty={dirty.includes(block.id)}
                     dragging={drag?.from === index}
-                    onToggle={() => setOpenId(openId === block.id ? null : block.id)}
+                    onToggle={() => toggleBlock(block.id)}
                     onDelete={() => void removeBlock(block)}
                     onInsert={(where) => setInserting(where === 'above' ? index : index + 1)}
+                    onDuplicate={() => duplicateBlock(block, index)}
+                    onCopy={() => copyBlock(block)}
+                    onPaste={clipboard ? () => pasteBlock(index) : null}
                     onDragStart={() => setDrag({ from: index, over: index })}
                     onDragOver={() => setDrag((current) => (current ? { ...current, over: index } : null))}
                     onDrop={dropBlock}
@@ -508,10 +668,42 @@ export function PageEditPage({ id }: { id: string }) {
             ) : (
               <>
                 <div class="preview-surface" style={{ maxWidth: viewportWidth }}>
-                  {previewBlocks.length === 0 ? <p class="muted">還沒有內容。</p> : <Blocks blocks={previewBlocks} />}
+                  {previewBlocks.length === 0 ? (
+                    <p class="muted">還沒有內容。</p>
+                  ) : (
+                    /* One <Blocks> per block rather than one for the list, so
+                       each rendered block sits in something that knows which
+                       row made it. Payload posts a message into an iframe for
+                       this; ours is the same document, so the click is just a
+                       click. */
+                    previewBlocks.map((block) => (
+                      <div
+                        key={block.id}
+                        class={openIds.includes(block.id) ? 'preview-block is-open' : 'preview-block'}
+                        onClick={(event) => {
+                          // A carousel arrow and an album's lightbox are inside
+                          // here. Stealing those clicks would break the preview
+                          // to make it navigable, which is the wrong trade.
+                          if ((event.target as HTMLElement).closest('a, button, input, select, textarea')) return
+                          focusBlock(block.id)
+                        }}
+                      >
+                        <Blocks blocks={[block]} />
+                        {/* The keyboard's way in. The wrapper cannot be the
+                            button — it has buttons inside it. */}
+                        <button
+                          type="button"
+                          class="preview-jump"
+                          onClick={() => focusBlock(block.id)}
+                        >
+                          編輯這個區塊
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <p class="muted">
-                  這裡用的是前台渲染區塊的同一份程式，所以區塊本身就是公開後的樣子——但沒有站台的頁首頁尾與底色。要看整頁，按「看真實畫面」。
+                  這裡用的是前台渲染區塊的同一份程式，所以區塊本身就是公開後的樣子——但沒有站台的頁首頁尾與底色。點一下就會打開那個區塊的編輯器。要看整頁，按「看真實畫面」。
                 </p>
               </>
             )}
@@ -525,7 +717,16 @@ export function PageEditPage({ id }: { id: string }) {
             <TextField
               label="頁面名稱"
               value={form.title}
-              onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
+              onInput={(event) => {
+                const title = (event.currentTarget as HTMLInputElement).value
+                // The path comes along while the lock is shut. The home page
+                // is excluded outright: its address is / whatever it is called.
+                setForm((current) => ({
+                  ...current,
+                  title,
+                  path: nextPath(current.path, title, pathLocked && !detail.page.isHome),
+                }))
+              }}
               maxLength={80}
               required
               hint="會成為瀏覽器分頁的標題。"
@@ -536,11 +737,14 @@ export function PageEditPage({ id }: { id: string }) {
               onInput={(event) => setForm({ ...form, path: (event.currentTarget as HTMLInputElement).value })}
               maxLength={120}
               required
-              disabled={detail.page.isHome}
+              disabled={detail.page.isHome || pathLocked}
+              trailing={!detail.page.isHome && <SlugLock locked={pathLocked} onChange={setPathLocked} />}
               hint={
                 detail.page.isHome
                   ? '這一頁是首頁，網址固定是 /。取消首頁後才能改路徑。'
-                  : '例如 /about。/shop、/cart 這類系統路徑不能使用。'
+                  : pathLocked
+                    ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
+                    : '例如 /about。/shop、/cart 這類系統路徑不能使用。'
               }
             />
             <RadioGroup
