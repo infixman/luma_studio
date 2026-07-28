@@ -457,20 +457,19 @@ https://admin.luma-studio.tw
 
 ## GitHub 自動部署
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時依序部署四個站台：
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 在 `main` 有新 commit 時部署四個站台，但只有**兩個 job**：
 
 ```text
-管理 Worker ──> 管理後台
-     └───────> 公開 Worker ──┐
-                             ├──> 商店前台
-        管理後台 ────────────┘
+後端 Worker（測試 → 管理 API → 公開 API）
+        ↓
+網站（測試 → 建置 → 管理後台 → 商店前台）
 ```
 
-順序不是任意的：
+四個部署但只有兩條真正的依賴：**schema 要先於讀它的東西**，**API 要先於呼叫它的頁面**。那是一條線，不是一張圖。job 內部的先後就是普通的步驟順序，比一堆 `needs:` 好讀，而且不用多付一份冷環境的成本——兩個後端 Worker 共用同一份原始碼和同一個 token。
 
-- **管理 Worker 最先**，它是唯一會套用 migration 的部署，必須先於任何會讀取那些表的東西
-- **前端後於它要呼叫的 API**
-- **商店前台最後**，因為它會把 `/admin` 轉向管理後台；轉過去的時候對方要已經在服務了
+**測試跟它守護的部署放在同一個 job。** 拆成四個 job 時，測試只跑在其中兩個，另外兩個靠 `needs` 假設上游測過了——那是一個沒有東西在強制的約定，改動依賴關係就會讓測試安靜地不再擋住部署。
+
+商店前台放在管理後台之後，只是為了讓 `/admin` 的 301 一上線就有地方可去。這是步驟順序，不是 job 依賴：顧客看得到的商店，不該被內部工具的建置擋住。
 
 所有 job 都綁在名為 `production` 的 GitHub Environment，請先建立該 environment，再於 repository 的 **Settings → Secrets and variables → Actions**（或該 environment）設定：
 

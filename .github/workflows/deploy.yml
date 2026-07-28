@@ -12,54 +12,53 @@ concurrency:
 permissions:
   contents: read
 
+# Four things are deployed, but there are only two real dependencies: the
+# schema has to exist before anything reads it, and an API has to exist before
+# the pages that call it. That is a line, not a graph.
+#
+# Within a job the order is ordinary step order, which is easier to read than
+# a `needs:` web and costs nothing — the two Workers share a source tree and a
+# token, so splitting them would only buy a second cold environment.
 jobs:
-  admin-backend:
-    name: Deploy admin API Worker
+  backend:
+    name: Deploy backend Workers
     runs-on: ubuntu-latest
     environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
         working-directory: backend
+
+      # In the same job as the deploys it gates, so nothing has to remember
+      # that some other job was supposed to have run it.
       - name: Test
         run: uv run pytest
         working-directory: backend
-      # First of the four. This deployment owns the D1 schema, so the
-      # migrations it applies have to be in place before anything that reads
-      # them goes live.
-      - name: Deploy Worker
+
+      # The admin Worker owns the D1 schema, so the migrations it applies have
+      # to be in place before the public Worker — which never applies one —
+      # meets the database.
+      - name: Deploy admin API
         run: uv run pywrangler deploy -c wrangler.admin.toml
         working-directory: backend
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  backend:
-    name: Deploy API Worker
-    runs-on: ubuntu-latest
-    environment: production
-    # The public Worker never applies a migration, so it must not be the first
-    # thing to meet a database the admin Worker has not brought up to date.
-    needs: admin-backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-      - run: uv sync --frozen
-        working-directory: backend
-      - name: Deploy Worker
+      - name: Deploy public API
         run: uv run pywrangler deploy
         working-directory: backend
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  admin-frontend:
-    name: Deploy back office
+  frontend:
+    name: Deploy web sites
     runs-on: ubuntu-latest
     environment: production
-    # The admin API must exist before the pages that call it go live.
-    needs: admin-backend
+    # Both sites call an API that has to be answering first.
+    needs: backend
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,44 +68,25 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
+
       - name: Test
         run: npm test
         working-directory: frontend
-      # The API URLs come from frontend/.env.admin, not from here. The two
-      # builds need different values, and a shell variable feeding both is how
-      # the back office would end up pointed at the public API.
+
+      # Typechecks once and builds both sites. Their API URLs come from
+      # .env.production and .env.admin rather than from here: the two builds
+      # need different values, and one shell variable feeding both is how the
+      # back office ends up quietly pointed at the public API.
       - name: Build
-        run: npm run typecheck && npm run build:admin
+        run: npm run build
         working-directory: frontend
-      - name: Deploy static assets
+
+      # The back office first, so the storefront's /admin redirect has
+      # somewhere to land the moment it ships.
+      - name: Deploy back office
         run: npx wrangler deploy -c wrangler.admin.jsonc
         working-directory: frontend
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  frontend:
-    name: Deploy storefront
-    runs-on: ubuntu-latest
-    environment: production
-    # Last: it forwards /admin to the back office, which should already be
-    # answering by the time anyone follows that redirect.
-    needs: [backend, admin-frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: frontend
-      - name: Build
-        run: npm run typecheck && npm run build:storefront
-        working-directory: frontend
-      - name: Deploy static assets
+      - name: Deploy storefront
         run: npx wrangler deploy
         working-directory: frontend
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
