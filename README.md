@@ -66,6 +66,8 @@ backend/
     media.py          媒體庫：上傳的圖片與誰在用它
     media_admin_api.py 管理端媒體端點
     orders_admin_api.py 管理端訂單端點
+    customers.py      會員名單、封鎖與個資清除
+    customers_admin_api.py 管理端會員端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -174,6 +176,10 @@ docs/superpowers/specs/  設計文件
 | POST | `/api/orders/{id}/shipped`、`/completed` | 往前一步，不能跳過也不能倒退 |
 | POST | `/api/orders/{id}/cancel` | 取消並退回庫存 |
 | POST | `/api/orders/{id}/note` | 店家備註，顧客看不到 |
+| GET | `/api/customers?q=` | 會員列表，含訂單數與已付金額 |
+| GET | `/api/customers/{id}` | 單一會員與他的訂單 |
+| POST | `/api/customers/{id}/blocked` | 封鎖／解除封鎖結帳 |
+| POST | `/api/customers/{id}/anonymise` | 清除個人資料，保留訂單 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -687,6 +693,22 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 **手動標記已付款**是刻意留的：金流還沒串，匯款先到的時候需要一個入口。對到哪一筆匯款會寫進稽核的 detail，因為「手動標記」單獨看沒有意義。
 
 **店家備註不會出現在顧客的訂單頁。** `orders.order_row` 是交給顧客的形狀，`admin_row` 才多帶 `adminNote` 與 `customerId`。把私人備註加進共用的形狀，就是把它發佈在別人的訂單頁上。
+
+### 後台的會員
+
+| 位置 | |
+| --- | --- |
+| 會員列表與明細 | `admin.luma-studio.tw/customers` |
+
+沒有註冊流程——顧客第一次用 Google 登入結帳時自動建立。列表帶著訂單數與已付金額，那兩個數字跟名單來自**同一次查詢**：逐筆去問等於每一列多一次往返，而 D1 每一次都算錢。已付金額只算 `paid`／`shipped`／`completed`。
+
+**封鎖只擋結帳。** 不會登出，也不會影響對方查看已經成立的訂單——拒絕一筆生意和沒收一張收據是兩件事。
+
+**清除個人資料不是刪除帳號。** 訂單列必須留下：那是店家的帳，三月的收據不能因為六月有人要求被遺忘就消失。所以覆蓋掉 email、姓名、電話、地址，保留該列並記下 `anonymized_at`。留下的是「（已刪除）」而不是空字串——訂單上空白的名字看起來像 bug，會有人去找「不見的資料」。
+
+`google_sub` 一併覆蓋，所以同一個 Google 帳號之後再登入會建立新的顧客，不會復活舊的那一列。session 也一起刪，否則還活著的 session 會繼續吐出那一列已經不再持有的資料。
+
+**沒有動到的**：已成立訂單上的收件人、電話與地址。那是交易紀錄的快照（國稅局要看的東西），不是個人檔案。要不要連那些一起洗掉，是「帳務保存多久」的決定，屬於店主，不寫死在程式裡。
 
 ### 金流還沒串
 

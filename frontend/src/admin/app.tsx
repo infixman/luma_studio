@@ -7,6 +7,7 @@ import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ShippingPage } from './pages/ShippingPage'
 import { MediaPage } from './pages/MediaPage'
+import { CustomersPage } from './pages/CustomersPage'
 import { OrdersAdminPage } from './pages/OrdersAdminPage'
 import { SitePage } from './pages/SitePage'
 
@@ -31,6 +32,7 @@ function Routed() {
   if (path === '/site') return <SitePage />
   if (path === '/media') return <MediaPage />
   if (path === '/orders') return <OrdersAdminPage />
+  if (path === '/customers') return <CustomersPage />
 
   const page = PAGE_PATH.exec(path)
   if (page) return <PageEditPage id={decodeURIComponent(page[1]!)} />

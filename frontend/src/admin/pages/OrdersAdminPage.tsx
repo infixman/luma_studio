@@ -61,7 +61,9 @@ function when(seconds: number): string {
 export function OrdersAdminPage() {
   const [list, setList] = useState<AdminOrderList | null>(null)
   const [status, setStatus] = useState<OrderStatus | ''>('')
-  const [search, setSearch] = useState('')
+  // Seeded from the URL, because the member page links here with the order
+  // id in it. A link that lands on an unfiltered list is a link that lies.
+  const [search, setSearch] = useState(new URLSearchParams(location.search).get('q') ?? '')
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)

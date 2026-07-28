@@ -348,6 +348,25 @@ export interface AdminOrderDetail {
   audit: OrderAuditEntry[]
 }
 
+export interface AdminCustomer {
+  id: string
+  email: string
+  displayName: string
+  recipientName: string
+  recipientPhone: string
+  address: string
+  blocked: boolean
+  anonymizedAt: number | null
+  createdAt: number
+  orderCount: number
+  paidTotal: number
+}
+
+export interface AdminCustomerDetail {
+  customer: AdminCustomer
+  orders: Order[]
+}
+
 export interface AdminOrderList {
   orders: AdminOrder[]
   counts: Partial<Record<OrderStatus, number>>

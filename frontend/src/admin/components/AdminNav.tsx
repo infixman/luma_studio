@@ -11,6 +11,7 @@ const tabs = [
   { href: '/media', label: '媒體庫' },
   { href: '/', label: 'ibon 列印' },
   { href: '/orders', label: '訂單' },
+  { href: '/customers', label: '會員' },
   { href: '/products', label: '商城' },
   { href: '/shipping', label: '運費' },
 ]
