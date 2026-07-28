@@ -630,12 +630,17 @@ PAYUNi 的 Form Post 既沒有 `x-luma-app: 1`，Origin 也不在允許清單，
 
 先讓新的能用，再拿掉舊的。中間有一段兩邊都能服務 admin 的重疊期，那是安全網。
 
-1. 建 DNS：`admin-api`、`admin`
-2. 部署 admin-api（跑 migration）——`api` 上的舊 admin 路由仍在，沒有東西壞掉
-3. 部署 admin 前端，實際登入驗證
+1. 部署 admin-api（跑 migration）——`api` 上的舊 admin 路由仍在，沒有東西壞掉
+2. 綁 `admin-api.luma-studio.tw` 的 Custom Domain
+3. 部署 admin 前端，綁 `admin.luma-studio.tw`，實際登入驗證
 4. 確認無誤後，`main.py` 移除 admin 路由、加入 shop 路由，部署 api
 5. storefront 加 `/admin*` → 301，部署
 6. 更新 Google OAuth 的 redirect URI
+
+**DNS 不是第一步。** Custom Domain 要有 Worker 才能綁，而 DNS 記錄與憑證是綁定
+時由 Cloudflare 自動建立的——先手動加 A/CNAME 反而會讓綁定失敗。也沒有把
+`routes = [{ custom_domain = true }]` 寫進設定檔：那會讓部署 token 需要額外的
+Zone DNS 編輯權限，而綁定是一次性的事，不值得為它擴大 CI 的權限。
 
 第 2 步和第 4 步之間，公開 Worker 上的 `main.legacy_admin_response` 把舊的
 `/api/admin/*` 改寫成新形狀後交給 `admin_main.dispatch`。用同一張路由表而不是
