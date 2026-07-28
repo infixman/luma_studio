@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
+import { Badge, Button, EmptyState, Panel, Spinner, TableWrap, TextField, useConfirm } from '../components/ui'
+import type { BadgeTone } from '../components/ui'
 import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { AdminCustomer, AdminCustomerDetail, Order, OrderStatus } from '../../shared/types'
 import '../styles/admin.css'
@@ -17,6 +19,16 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   expired: '已逾期',
 }
 
+/** The one place a status becomes a colour, so the two lists cannot disagree. */
+export const STATUS_TONES: Record<OrderStatus, BadgeTone> = {
+  pending: 'warning',
+  paid: 'info',
+  shipped: 'primary',
+  completed: 'success',
+  cancelled: 'danger',
+  expired: 'neutral',
+}
+
 function when(seconds: number): string {
   return new Date(seconds * 1000).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
@@ -28,6 +40,7 @@ export function CustomersPage() {
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''
@@ -66,8 +79,20 @@ export function CustomersPage() {
     }
   }
 
-  function setBlocked(customer: AdminCustomer, blocked: boolean) {
-    if (blocked && !confirm(`封鎖 ${customer.email}？他們仍然看得到自己已經下的訂單，只是不能再結帳。`)) return
+  async function setBlocked(customer: AdminCustomer, blocked: boolean) {
+    if (blocked) {
+      const ok = await ask({
+        title: '封鎖結帳',
+        body: (
+          <>
+            <p>確定要封鎖 {customer.email} 嗎？</p>
+            <p>他們仍然看得到自己已經下的訂單，也不會被登出，只是不能再結帳。</p>
+          </>
+        ),
+        confirmLabel: '封鎖',
+      })
+      if (!ok) return
+    }
     void run(async () => {
       setDetail(
         await apiJson<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}/blocked`, 'POST', {
@@ -78,12 +103,19 @@ export function CustomersPage() {
     }, blocked ? '已封鎖。' : '已解除封鎖。')
   }
 
-  function erase(customer: AdminCustomer) {
-    const warning =
-      `清除 ${customer.email} 的個人資料？\n\n` +
-      '姓名、email、電話與地址會被覆蓋，這個動作無法還原。\n' +
-      '已經成立的訂單會保留（那是店家的交易紀錄），上面的收件資料不會被動到。'
-    if (!confirm(warning)) return
+  async function erase(customer: AdminCustomer) {
+    const ok = await ask({
+      title: '清除個人資料',
+      body: (
+        <>
+          <p>確定要清除 {customer.email} 的個人資料嗎？</p>
+          <p>姓名、email、電話與地址會被覆蓋，這個動作無法還原。</p>
+          <p>已經成立的訂單會保留——那是店家的交易紀錄——上面的收件資料不會被動到。</p>
+        </>
+      ),
+      confirmLabel: '清除資料',
+    })
+    if (!ok) return
     void run(async () => {
       setDetail(
         await apiJson<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}/anonymise`, 'POST', {}),
@@ -94,69 +126,87 @@ export function CustomersPage() {
 
   return (
     <AdminShell current="/customers" message={message} onError={showError}>
-      <section class="stack shop">
-        <div class="card">
-          <h2>會員</h2>
-          <p class="muted">顧客第一次用 Google 登入結帳時自動建立，沒有註冊流程。</p>
+      {dialog}
 
-          <div class="order-filters">
-            <input
-              type="search"
-              placeholder="email、顯示名稱或收件人"
-              value={search}
-              onInput={(event) => setSearch((event.target as HTMLInputElement).value)}
-            />
-          </div>
+      <Panel title="會員">
+        <p class="muted">顧客第一次用 Google 登入結帳時自動建立，沒有註冊流程。</p>
 
-          {truncated && (
-            <p class="muted warn">只顯示最新的 {customers?.length} 位。用搜尋縮小範圍。</p>
-          )}
+        <TextField
+          label="搜尋"
+          type="search"
+          placeholder="email、顯示名稱或收件人"
+          value={search}
+          onInput={(event) => setSearch((event.currentTarget as HTMLInputElement).value)}
+        />
 
-          {customers === null ? (
-            <p class="muted">載入中…</p>
-          ) : customers.length === 0 ? (
-            <p class="muted">還沒有會員。</p>
-          ) : (
-            <table class="order-table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>稱呼</th>
-                  <th>訂單</th>
-                  <th>已付金額</th>
-                  <th>加入</th>
-                  <th />
+        {truncated && <p class="muted warn">只顯示最新的 {customers?.length} 位。用搜尋縮小範圍。</p>}
+
+        {customers === null ? (
+          <Spinner />
+        ) : customers.length === 0 ? (
+          <EmptyState
+            title={search.trim() ? '沒有符合的會員' : '還沒有會員'}
+            body={search.trim() ? '換個關鍵字試試，或清空搜尋看全部。' : '第一位顧客用 Google 登入結帳時，這裡就會有人。'}
+          />
+        ) : (
+          <TableWrap>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>稱呼</th>
+                <th class="numeric">訂單</th>
+                <th class="numeric">已付金額</th>
+                <th>加入</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {customers.map((customer) => (
+                <tr key={customer.id} class={detail?.customer.id === customer.id ? 'current' : ''}>
+                  <td>
+                    {customer.email}
+                    {customer.blocked && <Badge tone="danger">已封鎖</Badge>}
+                    {customer.anonymizedAt && <Badge>已清除</Badge>}
+                  </td>
+                  <td>{customer.displayName || '—'}</td>
+                  <td class="numeric">{customer.orderCount}</td>
+                  <td class="numeric">NT${customer.paidTotal}</td>
+                  <td>{when(customer.createdAt)}</td>
+                  <td>
+                    <Button size="sm" onClick={() => void open(customer)}>
+                      明細
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer) => (
-                  <tr key={customer.id} class={detail?.customer.id === customer.id ? 'current' : ''}>
-                    <td>
-                      {customer.email}
-                      {customer.blocked && <span class="status cancelled">已封鎖</span>}
-                      {customer.anonymizedAt && <span class="status expired">已清除</span>}
-                    </td>
-                    <td>{customer.displayName || '—'}</td>
-                    <td>{customer.orderCount}</td>
-                    <td>NT${customer.paidTotal}</td>
-                    <td>{when(customer.createdAt)}</td>
-                    <td>
-                      <button type="button" onClick={() => void open(customer)}>
-                        明細
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              ))}
+            </tbody>
+          </TableWrap>
+        )}
+      </Panel>
 
-        {detail && (
-          <div class="card">
-            <h2>{detail.customer.email}</h2>
-
-            <dl class="facts">
+      {detail && (
+        <Panel
+          title={detail.customer.email}
+          actions={
+            <>
+              {detail.customer.blocked ? (
+                <Button size="sm" busy={busy} onClick={() => void setBlocked(detail.customer, false)}>
+                  解除封鎖
+                </Button>
+              ) : (
+                <Button size="sm" tone="danger" busy={busy} onClick={() => void setBlocked(detail.customer, true)}>
+                  封鎖結帳
+                </Button>
+              )}
+              {!detail.customer.anonymizedAt && (
+                <Button size="sm" tone="danger" busy={busy} onClick={() => void erase(detail.customer)}>
+                  清除個人資料
+                </Button>
+              )}
+            </>
+          }
+        >
+          <dl class="facts">
               <dt>顯示名稱</dt>
               <dd>{detail.customer.displayName || '—'}</dd>
               <dt>預設收件人</dt>
@@ -176,54 +226,37 @@ export function CustomersPage() {
               ) : null}
             </dl>
 
-            <div class="moves">
-              {detail.customer.blocked ? (
-                <button type="button" disabled={busy} onClick={() => setBlocked(detail.customer, false)}>
-                  解除封鎖
-                </button>
-              ) : (
-                <button type="button" class="danger" disabled={busy} onClick={() => setBlocked(detail.customer, true)}>
-                  封鎖結帳
-                </button>
-              )}
-              {!detail.customer.anonymizedAt && (
-                <button type="button" class="danger" disabled={busy} onClick={() => erase(detail.customer)}>
-                  清除個人資料
-                </button>
-              )}
-            </div>
-            {/* Said here, because "delete the member" is what people expect
-                this button to do, and it is not what it does. */}
-            <p class="muted">
-              封鎖只擋結帳，不會登出，也不會影響他們查看已成立的訂單。清除會覆蓋個人資料但保留訂單——那是店家的交易紀錄。
-            </p>
+          {/* Said here, because "delete the member" is what people expect
+              those buttons to do, and it is not what they do. */}
+          <p class="muted">
+            封鎖只擋結帳，不會登出，也不會影響他們查看已成立的訂單。清除會覆蓋個人資料但保留訂單——那是店家的交易紀錄。
+          </p>
 
-            <h3>訂單</h3>
-            {detail.orders.length === 0 ? (
-              <p class="muted">還沒有下過單。</p>
-            ) : (
-              <table class="order-table">
-                <tbody>
-                  {detail.orders.map((order: Order) => (
-                    <tr key={order.id}>
-                      <td>
-                        <a href={`/orders?q=${encodeURIComponent(order.id)}`}>
-                          <code>{order.id}</code>
-                        </a>
-                      </td>
-                      <td>NT${order.total}</td>
-                      <td>
-                        <span class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
-                      </td>
-                      <td>{when(order.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </section>
+          <h3>訂單</h3>
+          {detail.orders.length === 0 ? (
+            <p class="muted">還沒有下過單。</p>
+          ) : (
+            <TableWrap>
+              <tbody>
+                {detail.orders.map((order: Order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <a href={`/orders?q=${encodeURIComponent(order.id)}`}>
+                        <code>{order.id}</code>
+                      </a>
+                    </td>
+                    <td class="numeric">NT${order.total}</td>
+                    <td>
+                      <Badge tone={STATUS_TONES[order.status]}>{STATUS_LABELS[order.status]}</Badge>
+                    </td>
+                    <td>{when(order.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
+      )}
     </AdminShell>
   )
 }

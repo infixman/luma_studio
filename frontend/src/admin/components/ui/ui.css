@@ -240,6 +240,14 @@
   line-height: 1.5;
 }
 
+/* Short fields side by side rather than one per line. Auto-fit rather than a
+   fixed column count, so a narrow window folds them without a breakpoint. */
+.field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 var(--space-4);
+}
+
 .ui-note.is-error {
   color: var(--danger);
 }

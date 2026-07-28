@@ -1,3 +1,5 @@
+import type { JSX } from 'preact'
+
 import { apiUrl } from '../../shared/api'
 import type {
   AboutConfig,
@@ -25,6 +27,60 @@ import type {
  * thumbnail gets drawn beside it.
  */
 
+const stroke = {
+  fill: 'none',
+  stroke: 'currentColor',
+  'stroke-width': 1.6,
+  'stroke-linecap': 'round',
+  'stroke-linejoin': 'round',
+} as const
+
+/**
+ * Each type's mark, shown on the collapsed row and in the picker.
+ *
+ * A row of identical rows distinguished only by a word is read one word at a
+ * time; a shape is recognised without reading. That matters on a page with
+ * eight blocks, which is the page this editor is for.
+ */
+const ICONS: Record<PageBlock['type'], JSX.Element> = {
+  text: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M4 6h16M4 11h16M4 16h10" />
+    </svg>
+  ),
+  carousel: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="6" y="5" width="12" height="14" rx="1.5" />
+      <path d="M3 8v8M21 8v8" />
+    </svg>
+  ),
+  album: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="3" y="4" width="7.5" height="7.5" rx="1" />
+      <rect x="13.5" y="4" width="7.5" height="7.5" rx="1" />
+      <rect x="3" y="14.5" width="7.5" height="5.5" rx="1" />
+      <rect x="13.5" y="14.5" width="7.5" height="5.5" rx="1" />
+    </svg>
+  ),
+  shop: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M3 5h2l2 10h10l2-7H6" />
+      <circle cx="9" cy="19" r="1.3" />
+      <circle cx="17" cy="19" r="1.3" />
+    </svg>
+  ),
+  about: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <circle cx="8.5" cy="9" r="3" />
+      <path d="M3.5 19a5 5 0 0 1 10 0M16 8h5M16 12h5M16 16h3" />
+    </svg>
+  ),
+}
+
+export function BlockIcon({ type }: { type: PageBlock['type'] }) {
+  return ICONS[type] ?? ICONS.text
+}
+
 export const BLOCK_KINDS: { type: PageBlock['type']; label: string; hint: string }[] = [
   { type: 'text', label: '純文字', hint: '條款、說明，支援 Markdown' },
   { type: 'carousel', label: '輪播圖', hint: '一次一張，可以放圖說與連結' },
@@ -32,6 +88,48 @@ export const BLOCK_KINDS: { type: PageBlock['type']; label: string; hint: string
   { type: 'shop', label: '商城', hint: '指定商品，或整個分類' },
   { type: 'about', label: '介紹', hint: '關於我、聯絡我：照片＋文字＋連結' },
 ]
+
+/**
+ * The line of content shown beside the type when a block is collapsed.
+ *
+ * Eight rows reading "純文字 / 輪播圖 / 相簿" tell somebody what the blocks are
+ * but not which is which. A heading, or the first few words, is what they
+ * actually recognise the block by.
+ *
+ * Empty is a real answer and says so, rather than leaving the row looking
+ * like it failed to load.
+ */
+export function blockSummary(type: PageBlock['type'], config: BlockConfig): string {
+  switch (type) {
+    case 'text': {
+      const body = (config as TextBlockConfig).body.replace(/[#*_>`\-]/g, '').trim()
+      return body ? clip(body.split('\n')[0] ?? '', 60) : '（還沒有內容）'
+    }
+    case 'carousel': {
+      const slides = (config as CarouselConfig).slides
+      return slides.length ? `${slides.length} 張` : '（還沒有圖片）'
+    }
+    case 'album': {
+      const ids = (config as AlbumConfig).mediaIds
+      return ids.length ? `${ids.length} 張` : '（還沒有圖片）'
+    }
+    case 'shop': {
+      const shop = config as ShopBlockConfig
+      const what = shop.source === 'products' ? `指定 ${shop.slugs.length} 件商品` : `分類 ${shop.filter || '未指定'}`
+      return shop.heading ? `${shop.heading} · ${what}` : what
+    }
+    case 'about': {
+      const about = config as AboutConfig
+      return about.heading || clip(about.body.trim(), 60) || '（還沒有內容）'
+    }
+    default:
+      return ''
+  }
+}
+
+function clip(value: string, limit: number): string {
+  return value.length > limit ? `${value.slice(0, limit)}…` : value
+}
 
 export const RATIOS: { value: BlockRatio; label: string }[] = [
   { value: 'wide', label: '寬 16:9' },

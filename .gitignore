@@ -11,3 +11,6 @@ python_modules/
 __pycache__/
 *.pyc
 upload_ibon/
+
+# Agent worktrees, created per task and removed with them.
+.claude/worktrees/

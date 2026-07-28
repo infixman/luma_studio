@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
+import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
 import { ApiError, STOREFRONT_ORIGIN, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { Page } from '../../shared/types'
 import '../styles/admin.css'
@@ -22,6 +23,7 @@ export function PagesPage() {
   const [draft, setDraft] = useState({ title: '', path: '' })
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +69,19 @@ export function PagesPage() {
   }
 
   async function remove(page: Page) {
-    if (!confirm(`確定要刪除「${page.title}」？頁面上的區塊會一併移除，且無法復原。`)) return
+    const ok = await ask({
+      title: '刪除頁面',
+      body: (
+        <>
+          <p>
+            確定要刪除「{page.title}」（<code>{page.isHome ? '/' : page.path}</code>）嗎？
+          </p>
+          <p>這一頁上的區塊會一併移除，而且無法復原。</p>
+        </>
+      ),
+      confirmLabel: '刪除頁面',
+    })
+    if (!ok) return
     try {
       await api(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'DELETE' })
       show('頁面已刪除。', 'ok')
@@ -79,102 +93,82 @@ export function PagesPage() {
 
   return (
     <AdminShell current="/pages" message={message} onError={showError}>
-      <section class="stack shop">
-        <div class="card">
-          <h2>新增頁面</h2>
-          <form class="new-product" onSubmit={create}>
-            <label>
-              頁面名稱
-              <input
-                value={draft.title}
-                onInput={(event) => setDraft({ ...draft, title: (event.target as HTMLInputElement).value })}
-                maxLength={80}
-                required
-              />
-            </label>
-            <label>
-              網址路徑
-              <input
-                value={draft.path}
-                onInput={(event) => setDraft({ ...draft, path: (event.target as HTMLInputElement).value })}
-                placeholder={suggestPath(draft.title) || '留空自動產生'}
-                maxLength={120}
-              />
-            </label>
-            <button type="submit" disabled={busy || !draft.title.trim()}>
-              新增頁面
-            </button>
-          </form>
-          <p class="muted">
-            首頁不用填路徑——建好之後在下面勾「首頁」就會接管 <code>/</code>。
-          </p>
-        </div>
+      {dialog}
 
-        <div class="card">
-          <h2>頁面</h2>
-          {pages === null ? (
-            <p class="muted">載入中…</p>
-          ) : pages.length === 0 ? (
-            <p class="muted">還沒有頁面。</p>
-          ) : (
-            <ul class="page-list">
-              {pages.map((page) => (
-                <li key={page.id} class={page.status === 'published' ? 'page-row' : 'page-row draft'}>
-                  <div class="detail">
-                    <a class="name" href={`/pages/${encodeURIComponent(page.id)}`}>
-                      {page.title}
-                    </a>
-                    <p class="meta">
-                      <code>{page.isHome ? '/' : page.path}</code>
-                      {page.isHome && <span class="badge active">首頁</span>}
-                      {page.status === 'published' ? (
-                        <a
-                          class="visit"
-                          href={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
-                          target="_blank"
-                          rel="noopener"
-                        >
-                          開啟
-                        </a>
-                      ) : (
-                        <span class="badge">草稿</span>
-                      )}
-                    </p>
-                  </div>
-                  <div class="actions">
-                    <label class="toggle">
-                      <input
-                        type="checkbox"
-                        checked={page.status === 'published'}
-                        onChange={(event) =>
-                          void save(page, {
-                            status: (event.target as HTMLInputElement).checked ? 'published' : 'draft',
-                          })
-                        }
-                      />
-                      公開
-                    </label>
-                    <label class="toggle">
-                      <input
-                        type="checkbox"
-                        checked={page.isHome}
-                        onChange={(event) => void save(page, { isHome: (event.target as HTMLInputElement).checked })}
-                      />
-                      首頁
-                    </label>
-                    <a class="edit" href={`/pages/${encodeURIComponent(page.id)}`}>
-                      編輯
-                    </a>
-                    <button type="button" class="danger" onClick={() => void remove(page)}>
-                      刪除
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+      <Panel title="新增頁面">
+        <form onSubmit={create}>
+          <div class="field-pair">
+            <TextField
+              label="頁面名稱"
+              value={draft.title}
+              onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })}
+              maxLength={80}
+              required
+            />
+            <TextField
+              label="網址路徑"
+              value={draft.path}
+              onInput={(event) => setDraft({ ...draft, path: (event.currentTarget as HTMLInputElement).value })}
+              placeholder={suggestPath(draft.title) || '留空自動產生'}
+              hint="首頁不用填——建好之後把下面的「首頁」打開就會接管 /"
+              maxLength={120}
+            />
+          </div>
+          <Button type="submit" tone="primary" busy={busy} disabled={!draft.title.trim()}>
+            新增頁面
+          </Button>
+        </form>
+      </Panel>
+
+      <Panel title="頁面">
+        {pages === null ? (
+          <Spinner />
+        ) : pages.length === 0 ? (
+          <EmptyState title="還沒有頁面" body="用上面的欄位建立第一頁。建好的頁面預設是草稿，公開之後才會出現在前台。" />
+        ) : (
+          <ul class="page-list">
+            {pages.map((page) => (
+              <li key={page.id} class={page.status === 'published' ? 'page-row' : 'page-row draft'}>
+                <div class="detail">
+                  <a class="name" href={`/pages/${encodeURIComponent(page.id)}`}>
+                    {page.title}
+                  </a>
+                  <p class="meta">
+                    <code>{page.isHome ? '/' : page.path}</code>
+                    {page.isHome && <Badge tone="primary">首頁</Badge>}
+                    {page.status === 'published' ? (
+                      <a
+                        class="visit"
+                        href={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        開啟
+                      </a>
+                    ) : (
+                      <Badge>草稿</Badge>
+                    )}
+                  </p>
+                </div>
+                <div class="actions">
+                  <Toggle
+                    label="公開"
+                    checked={page.status === 'published'}
+                    onChange={(on) => void save(page, { status: on ? 'published' : 'draft' })}
+                  />
+                  <Toggle label="首頁" checked={page.isHome} onChange={(isHome) => void save(page, { isHome })} />
+                  <Button size="sm" onClick={() => location.assign(`/pages/${encodeURIComponent(page.id)}`)}>
+                    編輯
+                  </Button>
+                  <Button size="sm" tone="danger" onClick={() => void remove(page)}>
+                    刪除
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
     </AdminShell>
   )
 }

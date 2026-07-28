@@ -133,7 +133,12 @@ body.admin .files {
   margin: var(--space-4) 0 0;
 }
 
-body.admin li {
+/* Scoped to the two lists it was written for. As `body.admin li` it turned
+   every list item in the back office into a horizontal flex row — including
+   ones that arrived years later and had no idea, which is how a block that
+   opens into a form ended up laying its form out beside its own header. */
+body.admin .folders li,
+body.admin .files li {
   display: flex;
   justify-content: space-between;
   align-items: center;

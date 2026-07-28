@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
+import { Button, Panel, Spinner, TextField, Toggle } from '../components/ui'
 import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { ShippingMethod } from '../../shared/types'
 import '../styles/admin.css'
@@ -47,8 +48,7 @@ export function ShippingPage() {
     setDrafts((current) => current?.map((draft) => (draft.method === method ? { ...draft, ...patch } : draft)) ?? null)
   }
 
-  async function save(event: Event) {
-    event.preventDefault()
+  async function save() {
     if (!drafts || busy) return
     setBusy(true)
     try {
@@ -73,72 +73,66 @@ export function ShippingPage() {
   }
 
   return (
-    <AdminShell current="/shipping" message={message} onError={showError}>
-      <section class="stack shop">
-        <div class="card">
-          <h2>配送方式與運費</h2>
-          {drafts === null ? (
-            <p class="muted">載入中…</p>
-          ) : (
-            <form class="shipping-form" onSubmit={save}>
-              <p class="muted">
-                免運門檻留空代表這個方式不提供免運。門檻是「達到就免運」，不是「超過才免運」。
-              </p>
-              {drafts.map((draft) => (
-                <fieldset key={draft.method} class={draft.enabled ? 'method' : 'method off'}>
-                  <legend>{draft.label}</legend>
-                  <label class="toggle">
-                    <input
-                      type="checkbox"
-                      checked={draft.enabled}
-                      onChange={(event) => edit(draft.method, { enabled: (event.target as HTMLInputElement).checked })}
-                    />
-                    提供這個配送方式
-                  </label>
-                  <label>
-                    顯示名稱
-                    <input
-                      value={draft.label}
-                      maxLength={40}
-                      required
-                      onInput={(event) => edit(draft.method, { label: (event.target as HTMLInputElement).value })}
-                    />
-                  </label>
-                  <label>
-                    運費
-                    <input
-                      type="number"
-                      min={0}
-                      max={1000}
-                      step={1}
-                      value={draft.fee}
-                      required
-                      onInput={(event) => edit(draft.method, { fee: (event.target as HTMLInputElement).value })}
-                    />
-                  </label>
-                  <label>
-                    免運門檻
-                    <input
-                      type="number"
-                      min={1}
-                      max={100000}
-                      step={1}
-                      placeholder="留空＝不免運"
-                      value={draft.freeThreshold}
-                      onInput={(event) =>
-                        edit(draft.method, { freeThreshold: (event.target as HTMLInputElement).value })
-                      }
-                    />
-                  </label>
-                </fieldset>
-              ))}
-              <button type="submit" disabled={busy}>
-                儲存運費
-              </button>
-            </form>
-          )}
-        </div>
-      </section>
+    <AdminShell
+      current="/shipping"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" busy={busy} disabled={drafts === null} onClick={() => void save()}>
+          儲存運費
+        </Button>
+      }
+    >
+      <p class="muted" style="margin-top:0">
+        免運門檻留空代表這個方式不提供免運。門檻是「達到就免運」，不是「超過才免運」。
+      </p>
+
+      {drafts === null ? (
+        <Spinner />
+      ) : (
+        drafts.map((draft) => (
+          <Panel key={draft.method} title={draft.label}>
+            <Toggle
+              label="提供這個配送方式"
+              hint={draft.enabled ? undefined : '關掉之後結帳頁不會列出它。'}
+              checked={draft.enabled}
+              onChange={(enabled) => edit(draft.method, { enabled })}
+            />
+            <div class="field-pair">
+              <TextField
+                label="顯示名稱"
+                value={draft.label}
+                maxLength={40}
+                required
+                onInput={(event) => edit(draft.method, { label: (event.currentTarget as HTMLInputElement).value })}
+              />
+              <TextField
+                label="運費"
+                type="number"
+                min={0}
+                max={1000}
+                step={1}
+                value={draft.fee}
+                required
+                onInput={(event) => edit(draft.method, { fee: (event.currentTarget as HTMLInputElement).value })}
+              />
+              <TextField
+                label="免運門檻"
+                type="number"
+                min={1}
+                max={100000}
+                step={1}
+                placeholder="留空＝不免運"
+                hint="達到這個金額就免運"
+                value={draft.freeThreshold}
+                onInput={(event) =>
+                  edit(draft.method, { freeThreshold: (event.currentTarget as HTMLInputElement).value })
+                }
+              />
+            </div>
+          </Panel>
+        ))
+      )}
     </AdminShell>
   )
 }

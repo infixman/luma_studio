@@ -11,8 +11,10 @@ import {
   emptyConfig,
 } from '../components/BlockEditors'
 import type { Catalogue } from '../components/BlockEditors'
+import { BlockPicker, BlockRow } from '../components/BlockRow'
 import { useMediaPicker } from '../components/MediaPicker'
 import { useStatus } from '../components/StatusBar'
+import { Button, Panel, RadioGroup, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
 import { Blocks } from '../../shared/components/Blocks'
 import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type {
@@ -45,9 +47,14 @@ export function PageEditPage({ id }: { id: string }) {
   const [drafts, setDrafts] = useState<Record<string, BlockConfig>>({})
   const [library, setLibrary] = useState<MediaItem[]>([])
   const [catalogue, setCatalogue] = useState<Catalogue>({ products: [], categories: [] })
-  const [adding, setAdding] = useState<PageBlock['type']>('text')
+  /** Which block is expanded. One at a time: the point of collapsing is that the page stays short. */
+  const [openId, setOpenId] = useState<string | null>(null)
+  /** Where the type picker is open, as an index in the block list; null when closed. */
+  const [inserting, setInserting] = useState<number | null>(null)
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
   const picker = useMediaPicker()
 
   const byId = useMemo(() => new Map(library.map((item) => [item.id, item])), [library])
@@ -115,44 +122,78 @@ export function PageEditPage({ id }: { id: string }) {
     }
   }
 
-  function savePage(event: Event) {
-    event.preventDefault()
-    void run(() => apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}`, 'PUT', form), '頁面已儲存。')
+  /** Which blocks hold edits the server has not seen. */
+  function dirtyIds(current: PageDetail): string[] {
+    return current.blocks
+      .filter((block) => JSON.stringify(drafts[block.id] ?? block.config) !== JSON.stringify(block.config))
+      .map((block) => block.id)
   }
 
-  function addBlock() {
-    void run(
-      () =>
-        apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks`, 'POST', {
-          type: adding,
-          config: emptyConfig(adding),
-        }),
-      '區塊已新增。',
-    )
+  /**
+   * One save for the whole page: the settings, then every block that changed.
+   *
+   * Each block used to carry its own save button, which meant one editing
+   * session produced several writes and no single answer to "have I finished".
+   * The API still takes them one at a time, so this walks them — but the
+   * person editing presses one button and gets one answer.
+   */
+  function saveAll() {
+    if (!detail) return
+    const dirty = dirtyIds(detail)
+    void run(async () => {
+      await apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}`, 'PUT', form)
+      let latest: PageDetail | undefined
+      for (const blockId of dirty) {
+        latest = await apiJson<PageDetail>(`/api/blocks/${encodeURIComponent(blockId)}`, 'PUT', {
+          config: drafts[blockId],
+        })
+      }
+      // The last write already answered with the whole page; only ask again
+      // when there were no blocks to write.
+      return latest ?? (await api<PageDetail>(`/api/pages/${encodeURIComponent(id)}`))
+    }, dirty.length ? `已儲存，包含 ${dirty.length} 個區塊。` : '頁面已儲存。')
   }
 
-  function saveBlock(block: PageBlock) {
-    void run(
-      () =>
-        apiJson<PageDetail>(`/api/blocks/${encodeURIComponent(block.id)}`, 'PUT', {
-          config: drafts[block.id] ?? block.config,
-        }),
-      '區塊已儲存。',
-    )
+  /** Adds at the end, then moves it into place — the API only appends. */
+  function addBlock(type: PageBlock['type'], at: number) {
+    setInserting(null)
+    void run(async () => {
+      const added = await apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks`, 'POST', {
+        type,
+        config: emptyConfig(type),
+      })
+      const fresh = added.blocks[added.blocks.length - 1]
+      if (!fresh) return added
+      setOpenId(fresh.id)
+      if (at >= added.blocks.length - 1) return added
+
+      const order = added.blocks.map((block) => block.id)
+      order.splice(at, 0, ...order.splice(order.length - 1, 1))
+      return apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks/order`, 'PUT', { ids: order })
+    }, '區塊已新增。')
   }
 
-  function removeBlock(block: PageBlock) {
-    if (!confirm('確定要刪除這個區塊？')) return
+  async function removeBlock(block: PageBlock) {
+    const ok = await ask({
+      title: '刪除區塊',
+      body: (
+        <p>
+          確定要刪除這個「{KIND_LABEL[block.type] ?? block.type}」區塊嗎？裡面的設定會一起消失，而且無法復原。
+        </p>
+      ),
+      confirmLabel: '刪除區塊',
+    })
+    if (!ok) return
     void run(() => api<PageDetail>(`/api/blocks/${encodeURIComponent(block.id)}`, { method: 'DELETE' }), '區塊已刪除。')
   }
 
-  function move(block: PageBlock, by: number) {
-    if (!detail) return
-    const order = detail.blocks.map((entry) => entry.id)
-    const from = order.indexOf(block.id)
-    const to = from + by
-    if (to < 0 || to >= order.length) return
-    order.splice(to, 0, ...order.splice(from, 1))
+  /** Commits a drag: the row that was picked up lands where it was dropped. */
+  function dropBlock() {
+    const move = drag
+    setDrag(null)
+    if (!detail || !move || move.from === move.over) return
+    const order = detail.blocks.map((block) => block.id)
+    order.splice(move.over, 0, ...order.splice(move.from, 1))
     void run(
       () => apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks/order`, 'PUT', { ids: order }),
       '順序已更新。',
@@ -166,14 +207,18 @@ export function PageEditPage({ id }: { id: string }) {
   if (detail === null) {
     return (
       <AdminShell current="/pages" message={message} onError={showError}>
-        <section class="stack shop">
-          <div class="card">
-            <p class="muted">載入中…</p>
-          </div>
-        </section>
+        <Spinner />
       </AdminShell>
     )
   }
+
+  const dirty = dirtyIds(detail)
+  const pageChanged =
+    form.title !== detail.page.title ||
+    form.path !== detail.page.path ||
+    form.status !== detail.page.status ||
+    form.showHeader !== detail.page.showHeader ||
+    form.showFooter !== detail.page.showFooter
 
   /**
    * What the storefront would render, given what is in the boxes right now.
@@ -232,181 +277,177 @@ export function PageEditPage({ id }: { id: string }) {
     }
   })
 
+  const unsaved = pageChanged || dirty.length > 0
+
   return (
-    <AdminShell current="/pages" message={message} onError={showError}>
-      <section class="stack shop">
-        <p class="crumb">
-          <a href="/pages">← 回到頁面</a>
-        </p>
-        <h2 class="product-heading">{detail.page.title}</h2>
+    <AdminShell
+      current="/pages"
+      title={detail.page.title}
+      message={message}
+      onError={showError}
+      confirmLeave={() => !unsaved || confirm('有未儲存的修改，離開後會遺失。要繼續嗎？')}
+      actions={
+        <>
+          {unsaved && <span class="unsaved-mark">有未儲存的修改</span>}
+          <Button onClick={() => location.assign('/pages')}>回到頁面清單</Button>
+          <Button tone="primary" busy={busy} disabled={!unsaved} onClick={saveAll}>
+            儲存
+          </Button>
+        </>
+      }
+    >
+      {dialog}
 
-        <div class="card">
-          <h3>頁面設定</h3>
-          <form class="product-form" onSubmit={savePage}>
-            <label>
-              頁面名稱
-              <input
-                value={form.title}
-                onInput={(event) => setForm({ ...form, title: (event.target as HTMLInputElement).value })}
-                maxLength={80}
-                required
-              />
-              <small>會成為瀏覽器分頁的標題。</small>
-            </label>
-            <label>
-              網址路徑
-              <input
-                value={form.path}
-                onInput={(event) => setForm({ ...form, path: (event.target as HTMLInputElement).value })}
-                maxLength={120}
-                required
-                disabled={detail.page.isHome}
-              />
-              <small>
-                {detail.page.isHome
-                  ? '這一頁是首頁，網址固定是 /。取消首頁後才能改路徑。'
-                  : '例如 /about。/shop、/cart 這類系統路徑不能使用。'}
-              </small>
-            </label>
-            <fieldset class="statuses">
-              <legend>狀態</legend>
-              {STATUSES.map((status) => (
-                <label key={status.value} class="radio">
-                  <input
-                    type="radio"
-                    name="status"
-                    checked={form.status === status.value}
-                    onChange={() => setForm({ ...form, status: status.value })}
-                  />
-                  <span>
-                    {status.label}
-                    <small>{status.hint}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <label class="toggle">
-              <input
-                type="checkbox"
-                checked={form.showHeader}
-                onChange={(event) => setForm({ ...form, showHeader: (event.target as HTMLInputElement).checked })}
-              />
-              顯示網站頁首
-            </label>
-            <label class="toggle">
-              <input
-                type="checkbox"
-                checked={form.showFooter}
-                onChange={(event) => setForm({ ...form, showFooter: (event.target as HTMLInputElement).checked })}
-              />
-              顯示網站頁尾
-            </label>
-            {/* Both on unless this page is the exception — a landing page that
-                wants nothing but its own content. */}
-            <p class="muted">關掉之後，這一頁就只有下面的區塊，沒有選單也沒有頁尾連結。</p>
-
-            <button type="submit" disabled={busy}>
-              儲存頁面
-            </button>
-          </form>
-        </div>
-
-        <div class="editor-split">
-          <div class="card blocks">
-            <h3>區塊</h3>
-            {detail.blocks.length === 0 && <p class="muted">還沒有區塊。從下面挑一種加上去。</p>}
+      <div class="page-editor">
+        <div class="editor-main">
+          <Panel title="區塊">
+            {detail.blocks.length === 0 && inserting === null && (
+              <p class="muted">還沒有區塊。用下面的按鈕加第一個。</p>
+            )}
 
             <ul class="block-list">
               {detail.blocks.map((block, index) => (
-                <li key={block.id}>
-                  <div class="block-head">
-                    <span class="kind">{KIND_LABEL[block.type] ?? block.type}</span>
-                    <button type="button" disabled={busy || index === 0} onClick={() => move(block, -1)}>
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || index === detail.blocks.length - 1}
-                      onClick={() => move(block, 1)}
-                    >
-                      ↓
-                    </button>
-                    <button type="button" class="danger" onClick={() => removeBlock(block)}>
-                      刪除
-                    </button>
-                  </div>
-
-                  {block.type === 'text' && (
-                    <TextEditor
-                      config={(drafts[block.id] ?? block.config) as TextBlockConfig}
-                      onChange={(config) => edit(block, config)}
-                    />
+                <>
+                  {inserting === index && (
+                    <li key={`picker-${index}`}>
+                      <BlockPicker onPick={(type) => addBlock(type, index)} onCancel={() => setInserting(null)} />
+                    </li>
                   )}
-                  {block.type === 'carousel' && (
-                    <CarouselEditor
-                      config={(drafts[block.id] ?? block.config) as CarouselConfig}
-                      onChange={(config) => edit(block, config)}
-                      library={byId}
-                      pick={pick}
-                    />
-                  )}
-                  {block.type === 'album' && (
-                    <AlbumEditor
-                      config={(drafts[block.id] ?? block.config) as AlbumConfig}
-                      onChange={(config) => edit(block, config)}
-                      library={byId}
-                      pick={pick}
-                    />
-                  )}
-                  {block.type === 'shop' && (
-                    <ShopEditor
-                      config={(drafts[block.id] ?? block.config) as ShopBlockConfig}
-                      onChange={(config) => edit(block, config)}
-                      catalogue={catalogue}
-                    />
-                  )}
-                  {block.type === 'about' && (
-                    <AboutEditor
-                      config={(drafts[block.id] ?? block.config) as AboutConfig}
-                      onChange={(config) => edit(block, config)}
-                      library={byId}
-                      pick={pick}
-                    />
-                  )}
-
-                  <button type="button" disabled={busy} onClick={() => saveBlock(block)}>
-                    儲存這個區塊
-                  </button>
-                </li>
+                  <BlockRow
+                    key={block.id}
+                    block={block}
+                    config={drafts[block.id] ?? block.config}
+                    open={openId === block.id}
+                    dirty={dirty.includes(block.id)}
+                    dragging={drag?.from === index}
+                    onToggle={() => setOpenId(openId === block.id ? null : block.id)}
+                    onDelete={() => void removeBlock(block)}
+                    onInsert={(where) => setInserting(where === 'above' ? index : index + 1)}
+                    onDragStart={() => setDrag({ from: index, over: index })}
+                    onDragOver={() => setDrag((current) => (current ? { ...current, over: index } : null))}
+                    onDrop={dropBlock}
+                  >
+                    {block.type === 'text' && (
+                      <TextEditor
+                        config={(drafts[block.id] ?? block.config) as TextBlockConfig}
+                        onChange={(config) => edit(block, config)}
+                      />
+                    )}
+                    {block.type === 'carousel' && (
+                      <CarouselEditor
+                        config={(drafts[block.id] ?? block.config) as CarouselConfig}
+                        onChange={(config) => edit(block, config)}
+                        library={byId}
+                        pick={pick}
+                      />
+                    )}
+                    {block.type === 'album' && (
+                      <AlbumEditor
+                        config={(drafts[block.id] ?? block.config) as AlbumConfig}
+                        onChange={(config) => edit(block, config)}
+                        library={byId}
+                        pick={pick}
+                      />
+                    )}
+                    {block.type === 'shop' && (
+                      <ShopEditor
+                        config={(drafts[block.id] ?? block.config) as ShopBlockConfig}
+                        onChange={(config) => edit(block, config)}
+                        catalogue={catalogue}
+                      />
+                    )}
+                    {block.type === 'about' && (
+                      <AboutEditor
+                        config={(drafts[block.id] ?? block.config) as AboutConfig}
+                        onChange={(config) => edit(block, config)}
+                        library={byId}
+                        pick={pick}
+                      />
+                    )}
+                  </BlockRow>
+                </>
               ))}
             </ul>
 
-            <div class="add-block">
-              <select value={adding} onChange={(event) => setAdding((event.target as HTMLSelectElement).value as PageBlock['type'])}>
-                {BLOCK_KINDS.map((kind) => (
-                  <option key={kind.type} value={kind.type}>
-                    {kind.label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" disabled={busy} onClick={addBlock}>
-                新增區塊
-              </button>
-              <small class="muted">{BLOCK_KINDS.find((kind) => kind.type === adding)?.hint}</small>
-            </div>
-          </div>
+            {inserting === detail.blocks.length ? (
+              <BlockPicker
+                onPick={(type) => addBlock(type, detail.blocks.length)}
+                onCancel={() => setInserting(null)}
+              />
+            ) : (
+              <div class="add-block">
+                <Button
+                  disabled={busy}
+                  onClick={() => setInserting(detail.blocks.length)}
+                  icon={
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  }
+                >
+                  新增區塊
+                </Button>
+              </div>
+            )}
+          </Panel>
 
-          <div class="card preview">
-            <h3>預覽</h3>
+          <Panel title="預覽">
             <p class="muted">
               這裡用的是前台渲染區塊的同一份程式，所以看到的就是公開後的樣子。商城區塊的商品要儲存後才會更新。
             </p>
             <div class="preview-surface">
               {previewBlocks.length === 0 ? <p class="muted">還沒有內容。</p> : <Blocks blocks={previewBlocks} />}
             </div>
-          </div>
+          </Panel>
         </div>
-      </section>
+
+        {/* The settings sit beside the blocks rather than above them: they are
+            changed once and then read, while the blocks are the work. */}
+        <aside class="editor-side">
+          <Panel title="頁面設定">
+            <TextField
+              label="頁面名稱"
+              value={form.title}
+              onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
+              maxLength={80}
+              required
+              hint="會成為瀏覽器分頁的標題。"
+            />
+            <TextField
+              label="網址路徑"
+              value={form.path}
+              onInput={(event) => setForm({ ...form, path: (event.currentTarget as HTMLInputElement).value })}
+              maxLength={120}
+              required
+              disabled={detail.page.isHome}
+              hint={
+                detail.page.isHome
+                  ? '這一頁是首頁，網址固定是 /。取消首頁後才能改路徑。'
+                  : '例如 /about。/shop、/cart 這類系統路徑不能使用。'
+              }
+            />
+            <RadioGroup
+              legend="狀態"
+              value={form.status}
+              options={STATUSES.map((status) => ({ value: status.value, label: status.label, hint: status.hint }))}
+              onChange={(status) => setForm({ ...form, status })}
+            />
+            <Toggle
+              label="顯示網站頁首"
+              checked={form.showHeader}
+              onChange={(showHeader) => setForm({ ...form, showHeader })}
+            />
+            <Toggle
+              label="顯示網站頁尾"
+              checked={form.showFooter}
+              onChange={(showFooter) => setForm({ ...form, showFooter })}
+              // Both on unless this page is the exception — a landing page
+              // that wants nothing but its own content.
+              hint="關掉之後，這一頁就只有區塊，沒有選單也沒有頁尾連結。"
+            />
+          </Panel>
+        </aside>
+      </div>
 
       {picker.element}
     </AdminShell>

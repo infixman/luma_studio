@@ -55,39 +55,303 @@ body.admin .page-row .toggle {
 
 /* --- the editor --- */
 
-body.admin .editor-split {
+/* The blocks are the work, so they get the width; the page's own settings are
+   set once and then read, so they sit in a column beside them. */
+body.admin .page-editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
   align-items: start;
+}
+
+body.admin .editor-side {
+  position: sticky;
+  top: 0;
+}
+
+body.admin .unsaved-mark {
+  color: var(--warning);
+  font-size: var(--font-sm);
 }
 
 body.admin .block-list {
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-3);
   padding: 0;
   display: grid;
-  gap: 1rem;
+  gap: var(--space-2);
 }
 
-body.admin .block-list li {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
+/* --- one block, collapsed --- */
+
+body.admin .block-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+body.admin .block-row.is-open {
+  border-color: var(--primary);
+}
+
+/* The row being dragged fades rather than disappearing, so the list does not
+   jump while it is being moved. */
+body.admin .block-row.is-dragging {
+  opacity: 0.4;
 }
 
 body.admin .block-head {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-2);
   align-items: center;
+  padding: var(--space-2) var(--space-3);
 }
 
-body.admin .block-head .kind {
+body.admin .block-toggle,
+body.admin .block-name {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+body.admin .block-chevron {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: rotate(-90deg);
+  transition: transform 140ms ease;
+}
+
+body.admin .block-row.is-open .block-chevron {
+  transform: rotate(0deg);
+}
+
+body.admin .block-kind {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+body.admin .block-kind svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* The type in full weight, what is in it in the muted one: the second is
+   what tells two carousels apart, but the first is what is being scanned. */
+body.admin .block-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+body.admin .kind-label {
+  font-weight: 650;
+  font-size: var(--font-base);
+  white-space: nowrap;
+}
+
+body.admin .kind-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+body.admin .block-dirty {
+  flex: none;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--font-xs);
   font-weight: 600;
-  font-size: 0.9rem;
+}
+
+body.admin .block-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+body.admin .block-grip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--muted);
+  cursor: grab;
+}
+
+body.admin .block-grip:active {
+  cursor: grabbing;
+}
+
+body.admin .block-grip svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke: none;
+}
+
+body.admin .block-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 11rem;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-2);
+}
+
+body.admin .block-menu li {
+  display: block;
+  padding: 0;
+  border: none;
+}
+
+body.admin .block-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.admin .block-menu button:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+body.admin .block-body {
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* --- the type picker --- */
+
+body.admin .block-picker {
+  padding: var(--space-3);
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+}
+
+body.admin .picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+body.admin .picker-head p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+body.admin .picker-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  padding: 0;
+}
+
+body.admin .picker-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+body.admin .picker-grid li {
+  display: block;
+  padding: 0;
+  border: none;
+}
+
+body.admin .picker-tile {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: center;
+  cursor: pointer;
+}
+
+body.admin .picker-tile:hover {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+body.admin .tile-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+body.admin .tile-mark svg {
+  width: 19px;
+  height: 19px;
+}
+
+body.admin .tile-label {
+  font-weight: 650;
+  font-size: var(--font-base);
+}
+
+body.admin .tile-hint {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.5;
 }
 
 body.admin .block-list textarea {
@@ -115,9 +379,16 @@ body.admin .preview-surface .block:last-child {
   margin-bottom: 0;
 }
 
-@media (max-width: 900px) {
-  body.admin .editor-split {
+@media (max-width: 1100px) {
+  body.admin .page-editor {
     grid-template-columns: 1fr;
+  }
+
+  body.admin .editor-side {
+    position: static;
+    /* Settings first when they are no longer beside the blocks: reading
+       "which page am I on" before editing it is the right order. */
+    order: -1;
   }
 }
 
