@@ -397,3 +397,41 @@ class TestPreviewTokens:
         database = FakeDatabase()
         assert run(pages_module.redeem_preview_token(make_env(database), bad)) is None
         assert database.statements == []
+
+
+class TestReorderingBlocks:
+    """A partial order leaves the blocks it left out on their old positions,
+    which then collide with the new ones and the page comes back in whatever
+    order the database felt like."""
+
+    @staticmethod
+    def _call(ids, rows):
+        import pages_admin_api
+        from responses import Ctx
+        from urllib.parse import parse_qs, urlsplit
+
+        page_id = "a" * 18
+        request = JsonRequest(f"/api/pages/{page_id}/blocks/order", {"ids": ids})
+        parts = urlsplit(request.url)
+        database = FakeDatabase(
+            {
+                "FROM pages WHERE id": [page_record(page_id=page_id)],
+                "SELECT id FROM page_blocks": [{"id": row} for row in rows],
+            }
+        )
+        ctx = Ctx(make_env(database), request, parts.path, parse_qs(parts.query))
+        response = asyncio.run(pages_admin_api.handle(ctx))
+        return response, database
+
+    def test_an_order_missing_a_block_is_refused(self):
+        blocks = ["b" * 18, "c" * 18, "d" * 18]
+        response, database = self._call(blocks[:2], blocks)
+        assert response.status == 400
+        assert not any("SET position" in statement for statement in database.statements)
+
+    def test_the_whole_page_is_accepted(self):
+        blocks = ["b" * 18, "c" * 18, "d" * 18]
+        response, database = self._call([blocks[2], blocks[0], blocks[1]], blocks)
+        assert response.status == 200
+        positions = [bindings[1] for statement, bindings in database.writes if "SET position" in statement]
+        assert positions == [0, 1, 2]

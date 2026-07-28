@@ -166,7 +166,8 @@ async def handle(ctx: Ctx):
                 return ctx.error(str(error), 400)
             except (ValueError, AttributeError):
                 return ctx.error("Invalid ordering", 400)
-            await pages.reorder_blocks(env, page_id, ordered)
+            if not await pages.reorder_blocks(env, page_id, ordered):
+                return ctx.error("順序必須包含這一頁的每一個區塊", 400)
             return ctx.json(await _detail(ctx, page))
 
         return ctx.error("Unknown page endpoint", 404)

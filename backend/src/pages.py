@@ -647,9 +647,23 @@ async def delete_block(env, block_id: str) -> bool:
     return True
 
 
-async def reorder_blocks(env, page_id: str, ordered_ids: list[str]) -> None:
+async def reorder_blocks(env, page_id: str, ordered_ids: list[str]) -> bool:
+    """Put the page's blocks in the given order.
+
+    The list has to be the whole page. A short list leaves the blocks it
+    omitted on their old positions, which then collide with the new ones and
+    the page comes back in an order the database picked — not silently wrong,
+    but wrong in a way nobody can point at afterwards. The editor always sends
+    every id, so a list that is not all of them is a request worth refusing.
+    """
+
+    rows = await d1_rows(env.DB.prepare("SELECT id FROM page_blocks WHERE page_id = ?1").bind(page_id))
+    if sorted(row["id"] for row in rows) != sorted(ordered_ids):
+        return False
+
     for index, block_id in enumerate(ordered_ids):
         await env.DB.prepare("UPDATE page_blocks SET position = ?2 WHERE id = ?1 AND page_id = ?3").bind(
             block_id, index, page_id
         ).run()
     await touch_page(env, page_id)
+    return True
