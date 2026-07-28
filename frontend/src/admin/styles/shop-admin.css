@@ -1,160 +1,82 @@
-/* Catalogue editing. Layout only — colours, cards and controls come from
-   admin.css, which the back office shares across every page. */
+/* Catalogue editing.
+
+   Layout only. Colours, controls and cards come from tokens.css and the
+   component set, so nothing here names a colour and both themes hold. */
 
 /* The single-column counterpart to admin.css's .grid, which is the two-column
    layout the ibon page needs and nothing else does. */
 body.admin .stack {
   display: grid;
-  gap: 24px;
-  margin-top: 32px;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
 }
 
-body.admin .shop .crumb {
-  margin: 0;
-  font-size: 0.9rem;
+body.admin .crumb {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-sm);
 }
 
 body.admin .product-heading {
-  margin: 0;
+  margin: 0 0 var(--space-4);
 }
 
-body.admin .shop .notice {
-  margin: 0 0 1rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: 6px;
+body.admin .notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
   border-left: 3px solid currentColor;
 }
 
-body.admin .shop .notice.warn,
-body.admin .shop .warn {
-  color: #a05a00;
+/* Colour only on the bare `.warn`: it is used inline inside sentences and
+   table cells elsewhere in the back office, where a tinted block would read
+   as a banner that had lost its edges. */
+body.admin .notice.warn,
+body.admin .warn {
+  color: var(--warning);
+}
+
+body.admin .notice.warn {
+  background: var(--warning-soft);
 }
 
 body.admin .shop h3 {
-  margin: 0 0 14px;
-  font-size: 1.05rem;
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-lg);
 }
 
-/* --- catalogue list --- */
+/* --- forms still on plain markup elsewhere in the back office ---
+
+   The site and block editors have not been moved onto the component set yet,
+   and these are the shapes they draw with. They stay until those pages are
+   migrated: deleting them here would quietly flatten two pages this change
+   never touched. */
 
 body.admin .new-product,
 body.admin .new-variant {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: var(--space-2);
   align-items: flex-end;
-  margin-bottom: 1.4rem;
+  margin-bottom: var(--space-4);
 }
 
 body.admin .new-product label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-}
-
-body.admin .product-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.6rem;
-}
-
-body.admin .product-row {
-  display: grid;
-  grid-template-columns: 72px 1fr auto;
-  gap: 0.9rem;
-  align-items: center;
-  padding: 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
-}
-
-/* A draft is not live, so it reads as quieter than the rest of the list. */
-body.admin .product-row.draft {
-  opacity: 0.72;
-}
-
-body.admin .product-row.archived {
-  opacity: 0.5;
-}
-
-body.admin .product-row .thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgb(0 0 0 / 0.06);
-}
-
-body.admin .product-row .thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-body.admin .product-row .name {
-  font-weight: 600;
-  text-decoration: none;
-}
-
-body.admin .product-row .meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-  opacity: 0.85;
-}
-
-body.admin .badge {
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  background: rgb(0 0 0 / 0.08);
-}
-
-body.admin .badge.active {
-  background: rgb(30 120 60 / 0.16);
-  color: #1e783c;
-}
-
-body.admin .product-row .actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-/* --- editor --- */
-
-body.admin .product-form {
-  display: grid;
-  gap: 0.9rem;
-  max-width: 46rem;
-  margin-bottom: 2rem;
-}
-
-body.admin .product-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-body.admin .product-form small {
-  opacity: 0.7;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
 }
 
 body.admin .statuses {
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
-  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
 }
 
 body.admin .statuses .radio {
   flex-direction: row;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 body.admin .statuses .radio span {
@@ -162,98 +84,166 @@ body.admin .statuses .radio span {
   flex-direction: column;
 }
 
-body.admin .variants ul {
+body.admin .statuses.categories {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* --- the catalogue list --- */
+
+/* The picture and the name are one target: the whole cell goes to the editor,
+   because aiming at a 24px name is a worse click than it looks on paper. */
+body.admin .product-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text);
+  text-decoration: none;
+}
+
+body.admin .product-cell:hover .name {
+  text-decoration: underline;
+}
+
+body.admin .product-cell .thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--sunken);
+}
+
+body.admin .product-cell .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+body.admin .product-cell .name {
+  font-weight: 600;
+}
+
+/* A draft is not live, so its row reads as quieter than the rest of the list.
+   Not hidden — a draft you cannot see is a draft you never finish. */
+body.admin .ui-table tbody tr.product-draft td {
+  opacity: 0.75;
+}
+
+body.admin .ui-table tbody tr.product-archived td {
+  opacity: 0.55;
+}
+
+/* --- editor --- */
+
+body.admin .product-form {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 46rem;
+}
+
+/* SitePage still builds its forms out of bare labels. Direct children only —
+   a descendant selector would also catch the <label> inside every component
+   field and stand it on end. */
+body.admin .product-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+body.admin .product-form > label > small {
+  color: var(--muted);
+}
+
+body.admin .variant-list {
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 body.admin .variant {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.7rem;
+  gap: var(--space-3);
   align-items: flex-end;
-  padding: 0.6rem 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* Disabled variants stay visible: they still hold stock counts worth seeing. */
 body.admin .variant.off {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
 body.admin .variant-title {
-  font-weight: 600;
-  min-width: 8rem;
-}
-
-body.admin .variant label {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.8rem;
+  flex: 1;
+  min-width: 8rem;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: 600;
 }
 
-body.admin .variant input[type='number'] {
-  width: 6.5rem;
+body.admin .variant .ui-field {
+  width: 7rem;
+  flex: none;
 }
 
-body.admin .variant .toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.35rem;
+body.admin .variant .ui-toggle-row {
+  padding: 0;
 }
 
 body.admin .photo-grid {
   list-style: none;
-  margin: 0 0 0.8rem;
+  margin: 0 0 var(--space-3);
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 body.admin .photo-grid li {
+  position: relative;
   display: grid;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 body.admin .photo-grid img {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 6px;
-  background: rgb(0 0 0 / 0.06);
+  border-radius: var(--radius);
+  background: var(--sunken);
 }
 
-@media (max-width: 640px) {
-  .product-row {
-    grid-template-columns: 56px 1fr;
-  }
-
-  .product-row .actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-  }
+/* The remove button sits on the corner of the photo it removes, rather than
+   under it — a row of identical buttons under a row of pictures is a row of
+   chances to delete the wrong one. */
+body.admin .photo-grid .ui-icon-button {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
 }
 
 /* --- delivery settings --- */
 
 body.admin .shipping-form {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
   max-width: 40rem;
 }
 
 body.admin .shipping-form .method {
   display: grid;
-  gap: 0.6rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
-  padding: 0.8rem 1rem 1rem;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
 /* A method that is switched off keeps its numbers visible: they are what the
@@ -265,14 +255,14 @@ body.admin .shipping-form .method.off {
 body.admin .shipping-form label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.9rem;
+  gap: var(--space-1);
+  font-size: var(--font-base);
 }
 
 body.admin .shipping-form .toggle {
   flex-direction: row;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 body.admin .shipping-form input[type='number'] {
@@ -286,32 +276,38 @@ body.admin .category-list {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.45rem;
+  gap: var(--space-2);
 }
 
 body.admin .category-list li {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.7rem;
+  gap: var(--space-3);
   align-items: center;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
-body.admin .category-title {
+/* Every row would otherwise carry the same word above the same box. The label
+   stays for a screen reader, which reads one row at a time and does need it. */
+body.admin .category-list .ui-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+body.admin .category-list .ui-field {
   flex: 1;
   min-width: 9rem;
 }
 
 body.admin .category-list .count {
-  font-size: 0.85rem;
-  opacity: 0.7;
-}
-
-/* Reuses the status fieldset's layout; the difference is only that these are
-   checkboxes and there can be many. */
-body.admin .statuses.categories {
-  display: grid;
-  gap: 0.4rem;
+  color: var(--muted);
+  font-size: var(--font-sm);
 }

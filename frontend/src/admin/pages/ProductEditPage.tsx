@@ -1,7 +1,23 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  EmptyState,
+  IconButton,
+  MenuItem,
+  Menu,
+  Panel,
+  RadioGroup,
+  Spinner,
+  TextArea,
+  TextField,
+  Toggle,
+  useConfirm,
+} from '../components/ui'
 import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
@@ -25,7 +41,9 @@ export function ProductEditPage({ id }: { id: string }) {
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
 
   const apply = useCallback((next: ProductDetail) => {
     setDetail(next)
@@ -111,8 +129,18 @@ export function ProductEditPage({ id }: { id: string }) {
     )
   }
 
-  function removeVariant(variant: ProductVariant) {
-    if (!confirm(`確定要刪除規格「${variant.title}」？`)) return
+  async function removeVariant(variant: ProductVariant) {
+    const ok = await ask({
+      title: '刪除規格',
+      body: (
+        <>
+          <p>確定要刪除規格「{variant.title}」嗎？</p>
+          <p>目前的 {variant.stock} 件庫存會一起消失，已經成立的訂單不受影響。</p>
+        </>
+      ),
+      confirmLabel: '刪除',
+    })
+    if (!ok) return
     void run(
       () => api<ProductDetail>(`/api/variants/${encodeURIComponent(variant.id)}`, { method: 'DELETE' }),
       '規格已刪除。',
@@ -120,7 +148,7 @@ export function ProductEditPage({ id }: { id: string }) {
   }
 
   function uploadPhoto(event: Event) {
-    const input = event.target as HTMLInputElement
+    const input = event.currentTarget as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
     void run(async () => {
@@ -130,18 +158,25 @@ export function ProductEditPage({ id }: { id: string }) {
     }, '照片已上傳。')
   }
 
-  function removePhoto(imageId: string) {
+  async function removePhoto(imageId: string, position: number) {
+    const ok = await ask({
+      title: '移除照片',
+      body:
+        position === 0
+          ? '這是列表上的封面。移除之後，下一張會遞補上來。'
+          : '確定要移除這張照片嗎？這個動作無法還原。',
+      confirmLabel: '移除',
+    })
+    if (!ok) return
     void run(() => api<ProductDetail>(`/api/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' }), '照片已移除。')
   }
 
   if (detail === null) {
     return (
       <AdminShell current="/products" message={message} onError={showError}>
-        <section class="stack shop">
-          <div class="card">
-            <p class="muted">載入中…</p>
-          </div>
-        </section>
+        <Panel title="商品">
+          <Spinner />
+        </Panel>
       </AdminShell>
     )
   }
@@ -150,207 +185,232 @@ export function ProductEditPage({ id }: { id: string }) {
 
   return (
     <AdminShell current="/products" message={message} onError={showError}>
-      <section class="stack shop">
-        <p class="crumb">
-          <a href="/products">← 回到商城</a>
-        </p>
-        <h2 class="product-heading">{detail.product.title}</h2>
+      {dialog}
 
-        {!sellable && detail.product.status === 'active' && (
-          <p class="notice warn">這個商品已上架，但沒有任何啟用的規格，顧客看得到卻買不了。</p>
-        )}
+      <p class="crumb">
+        <a href="/products">← 回到商城</a>
+      </p>
+      <h2 class="product-heading">{detail.product.title}</h2>
 
-        <div class="card">
-          <h3>商品資料</h3>
-          <form class="product-form" onSubmit={saveProduct}>
-            <label>
-              商品名稱
-              <input
-                value={form.title}
-                onInput={(event) => setForm({ ...form, title: (event.target as HTMLInputElement).value })}
-                maxLength={80}
-                required
-              />
-            </label>
-            <label>
-              網址代稱
-              <input
-                value={form.slug}
-                onInput={(event) => setForm({ ...form, slug: (event.target as HTMLInputElement).value })}
-                maxLength={64}
-                required
-              />
-              <small>顧客看到的網址是 /shop/{form.slug || '…'}，改動會讓舊連結失效。</small>
-            </label>
-            <label>
-              商品說明
-              <textarea
-                value={form.description}
-                onInput={(event) => setForm({ ...form, description: (event.target as HTMLTextAreaElement).value })}
-                maxLength={2000}
-                rows={6}
-              />
-            </label>
-              <fieldset class="statuses categories">
-              <legend>分類</legend>
-              {allCategories.length === 0 ? (
-                <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
-              ) : (
-                allCategories.map((category) => (
-                  <label key={category.id} class="radio">
-                    <input
-                      type="checkbox"
-                      checked={chosen.includes(category.id)}
-                      onChange={(event) =>
-                        setChosen((current) =>
-                          (event.target as HTMLInputElement).checked
-                            ? [...current, category.id]
-                            : current.filter((value) => value !== category.id),
-                        )
-                      }
-                    />
-                    <span>
-                      {category.title}
-                      <small>/shop/c/{category.slug}</small>
-                    </span>
-                  </label>
-                ))
-              )}
-            </fieldset>
+      {!sellable && detail.product.status === 'active' && (
+        <p class="notice warn">這個商品已上架，但沒有任何啟用的規格，顧客看得到卻買不了。</p>
+      )}
 
-          <fieldset class="statuses">
-              <legend>狀態</legend>
-              {STATUSES.map((status) => (
-                <label key={status.value} class="radio">
-                  <input
-                    type="radio"
-                    name="status"
-                    checked={form.status === status.value}
-                    onChange={() => setForm({ ...form, status: status.value })}
-                  />
-                  <span>
-                    {status.label}
-                    <small>{status.hint}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <button type="submit" disabled={busy}>
+      <Panel title="商品資料">
+        <form class="product-form" onSubmit={saveProduct}>
+          <TextField
+            label="商品名稱"
+            value={form.title}
+            maxLength={80}
+            required
+            onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="網址代稱"
+            hint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
+            value={form.slug}
+            maxLength={64}
+            required
+            onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextArea
+            label="商品說明"
+            value={form.description}
+            maxLength={2000}
+            rows={6}
+            onInput={(event) => setForm({ ...form, description: (event.currentTarget as HTMLTextAreaElement).value })}
+          />
+
+          <fieldset class="ui-checkbox-set">
+            <legend class="ui-label">分類</legend>
+            {allCategories.length === 0 ? (
+              <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
+            ) : (
+              allCategories.map((category) => (
+                <Checkbox
+                  key={category.id}
+                  label={category.title}
+                  hint={`/shop/c/${category.slug}`}
+                  checked={chosen.includes(category.id)}
+                  onChange={(checked) =>
+                    setChosen((current) =>
+                      checked ? [...current, category.id] : current.filter((value) => value !== category.id),
+                    )
+                  }
+                />
+              ))
+            )}
+          </fieldset>
+
+          <RadioGroup
+            legend="狀態"
+            value={form.status}
+            options={STATUSES}
+            onChange={(status) => setForm({ ...form, status })}
+          />
+
+          <ButtonRow>
+            <Button type="submit" tone="primary" busy={busy}>
               儲存商品
-            </button>
-          </form>
-        </div>
+            </Button>
+          </ButtonRow>
+        </form>
+      </Panel>
 
-        <section class="card variants">
-          <h3>規格與庫存</h3>
-          {detail.variants.length === 0 && <p class="muted">還沒有規格。至少要有一個，商品才能販售。</p>}
-          <ul>
+      <Panel title="規格與庫存">
+        {detail.variants.length === 0 ? (
+          <EmptyState title="還沒有規格" body="至少要有一個啟用的規格，商品才有價格、才能被買走。" />
+        ) : (
+          <ul class="variant-list">
             {detail.variants.map((variant) => (
               <li key={variant.id} class={variant.enabled ? 'variant' : 'variant off'}>
-                <span class="variant-title">{variant.title}</span>
-                {variant.sku && <code>{variant.sku}</code>}
-                <label>
-                  售價
-                  <input
-                    type="number"
-                    min={1}
-                    max={20000}
-                    step={1}
-                    value={variant.price}
-                    onChange={(event) =>
-                      saveVariant(variant, { price: Number.parseInt((event.target as HTMLInputElement).value, 10) })
-                    }
-                  />
-                </label>
-                <label>
-                  庫存
-                  <input
-                    type="number"
-                    min={0}
-                    max={100000}
-                    step={1}
-                    value={variant.stock}
-                    onChange={(event) =>
-                      saveVariant(variant, { stock: Number.parseInt((event.target as HTMLInputElement).value, 10) })
-                    }
-                  />
-                </label>
-                <label class="toggle">
-                  <input
-                    type="checkbox"
-                    checked={variant.enabled}
-                    onChange={(event) => saveVariant(variant, { enabled: (event.target as HTMLInputElement).checked })}
-                  />
-                  啟用
-                </label>
-                <button type="button" class="danger" onClick={() => removeVariant(variant)}>
-                  刪除
-                </button>
+                <span class="variant-title">
+                  {variant.title}
+                  {variant.sku && <code>{variant.sku}</code>}
+                </span>
+                <TextField
+                  label="售價"
+                  type="number"
+                  min={1}
+                  max={20000}
+                  step={1}
+                  value={variant.price}
+                  onChange={(event) =>
+                    saveVariant(variant, {
+                      price: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10),
+                    })
+                  }
+                />
+                <TextField
+                  label="庫存"
+                  type="number"
+                  min={0}
+                  max={100000}
+                  step={1}
+                  value={variant.stock}
+                  onChange={(event) =>
+                    saveVariant(variant, {
+                      stock: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10),
+                    })
+                  }
+                />
+                {/* A switch rather than a checkbox: this saves the moment it
+                    is flipped, there is no form waiting to be submitted. */}
+                <Toggle
+                  label="啟用"
+                  checked={variant.enabled}
+                  onChange={(enabled) => saveVariant(variant, { enabled })}
+                />
+                <Menu label={`「${variant.title}」的動作`}>
+                  <MenuItem tone="danger" disabled={busy} onClick={() => void removeVariant(variant)}>
+                    刪除規格
+                  </MenuItem>
+                </Menu>
               </li>
             ))}
           </ul>
+        )}
 
-          <form class="new-variant" onSubmit={addVariant}>
-            <input
-              placeholder="規格名稱，例如 M／藍"
-              value={draft.title}
-              onInput={(event) => setDraft({ ...draft, title: (event.target as HTMLInputElement).value })}
-              maxLength={60}
-              required
-            />
-            <input
-              placeholder="貨號（選填）"
-              value={draft.sku}
-              onInput={(event) => setDraft({ ...draft, sku: (event.target as HTMLInputElement).value })}
-              maxLength={40}
-            />
-            <input
-              type="number"
-              placeholder="售價"
-              min={1}
-              max={20000}
-              step={1}
-              value={draft.price}
-              onInput={(event) => setDraft({ ...draft, price: (event.target as HTMLInputElement).value })}
-              required
-            />
-            <input
-              type="number"
-              placeholder="庫存"
-              min={0}
-              max={100000}
-              step={1}
-              value={draft.stock}
-              onInput={(event) => setDraft({ ...draft, stock: (event.target as HTMLInputElement).value })}
-              required
-            />
-            <button type="submit" disabled={busy}>
-              新增規格
-            </button>
-          </form>
-        </section>
+        <form class="ui-inline-form" onSubmit={addVariant}>
+          <TextField
+            label="規格名稱"
+            placeholder="例如 M／藍"
+            value={draft.title}
+            maxLength={60}
+            required
+            onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="貨號"
+            hint="選填"
+            value={draft.sku}
+            maxLength={40}
+            onInput={(event) => setDraft({ ...draft, sku: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="售價"
+            type="number"
+            min={1}
+            max={20000}
+            step={1}
+            value={draft.price}
+            required
+            onInput={(event) => setDraft({ ...draft, price: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="庫存"
+            type="number"
+            min={0}
+            max={100000}
+            step={1}
+            value={draft.stock}
+            required
+            onInput={(event) => setDraft({ ...draft, stock: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <Button type="submit" tone="primary" busy={busy}>
+            新增規格
+          </Button>
+        </form>
+      </Panel>
 
-        <section class="card photos">
-          <h3>照片</h3>
-          <p class="muted">第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。</p>
+      <Panel title="照片">
+        <p class="muted">
+          第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。
+        </p>
+
+        {detail.images.length === 0 ? (
+          <EmptyState
+            title="還沒有照片"
+            body="沒有照片的商品在列表上是一個空格子。"
+            action={
+              <Button tone="primary" onClick={() => picker.current?.click()}>
+                選一張照片
+              </Button>
+            }
+          />
+        ) : (
           <ul class="photo-grid">
-            {detail.images.map((image) => (
+            {detail.images.map((image, position) => (
               <li key={image.id}>
                 {image.path && <img src={apiUrl(image.path)} alt={image.alt} />}
-                <button type="button" class="danger" onClick={() => removePhoto(image.id)}>
-                  移除
-                </button>
+                <IconButton
+                  label="移除這張照片"
+                  tone="danger"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void removePhoto(image.id, position)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </IconButton>
               </li>
             ))}
           </ul>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy || detail.images.length >= MAX_IMAGES}
-            onChange={uploadPhoto}
-          />
-        </section>
-      </section>
+        )}
+
+        {/* The file input itself stays out of sight: it is the one control the
+            component set cannot restyle, and it looks like a different
+            application on every operating system. */}
+        <input
+          ref={picker}
+          class="ui-file-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={busy || detail.images.length >= MAX_IMAGES}
+          onChange={uploadPhoto}
+        />
+        <ButtonRow>
+          <Button
+            busy={busy}
+            disabled={detail.images.length >= MAX_IMAGES}
+            onClick={() => picker.current?.click()}
+          >
+            上傳照片
+          </Button>
+          {detail.images.length >= MAX_IMAGES && <span class="muted">已經是 {MAX_IMAGES} 張上限。</span>}
+        </ButtonRow>
+      </Panel>
     </AdminShell>
   )
 }

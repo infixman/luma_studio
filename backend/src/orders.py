@@ -442,19 +442,43 @@ async def set_note(env, order_id: str, note: str, actor: str) -> bool:
     return changed
 
 
-async def list_all(env, *, status: str = "", search: str = "", limit: int = 50) -> tuple[list[dict], bool]:
+async def list_all(
+    env,
+    *,
+    status: str = "",
+    exclude_statuses: tuple[str, ...] = (),
+    search: str = "",
+    created_from: int | None = None,
+    created_to: int | None = None,
+    limit: int = 50,
+) -> tuple[list[dict], bool]:
     """The shop's own view of its orders, newest first, and whether the answer
     was cut short.
 
     Search covers the order id, the recipient and the email they gave at
     checkout — the three things someone has in front of them when they write
     in asking about an order.
+
+    The status and date bounds are here rather than in the browser because the
+    answer stops at `MAX_LIST`. Narrowing a list that has already been cut
+    short only narrows the part that made it back, which reads exactly like a
+    complete answer and is not one. Every condition is AND-ed, which is what
+    the back office's stacked filter rows mean.
     """
 
     conditions, bindings = [], []
     if status:
         bindings.append(status)
         conditions.append(f"status = ?{len(bindings)}")
+    for excluded in exclude_statuses:
+        bindings.append(excluded)
+        conditions.append(f"status != ?{len(bindings)}")
+    if created_from is not None:
+        bindings.append(int(created_from))
+        conditions.append(f"created_at >= ?{len(bindings)}")
+    if created_to is not None:
+        bindings.append(int(created_to))
+        conditions.append(f"created_at <= ?{len(bindings)}")
     if search:
         bindings.append(f"%{search}%")
         index = len(bindings)

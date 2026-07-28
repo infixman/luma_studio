@@ -1,151 +1,88 @@
-/* The shop's own view of its orders. */
+/* The shop's own view of its orders.
 
-body.admin .order-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.8rem;
-  margin: 0 0 1.1rem;
-}
+   Every colour here is a token from tokens.css, so both themes come out of
+   one set of rules. The status pills that used to live here are gone: they
+   are Badge now, and a second set of status colours beside it would be a
+   second set to keep in step. */
 
+/* The status tabs are a shortcut into the filter rows, not a second filter.
+   Clicking one writes a "狀態 是 X" rule, which is why they can carry counts
+   and still never disagree with what the list is actually showing. */
 body.admin .order-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
 }
 
 body.admin .order-tabs button {
-  padding: 0.35rem 0.8rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
-  border-radius: 999px;
-  background: #fff;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-soft);
   font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 
+body.admin .order-tabs button:hover {
+  border-color: var(--border-strong);
+  background: var(--sunken);
+  color: var(--text);
+}
+
 body.admin .order-tabs button.current {
-  border-color: #2f5d4a;
-  background: #2f5d4a;
-  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 body.admin .order-tabs .count {
-  margin-left: 0.35rem;
-  opacity: 0.7;
-  font-size: 0.85rem;
+  margin-left: var(--space-1);
+  opacity: 0.75;
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
 }
 
-body.admin .order-filters input[type='search'] {
-  flex: 1;
-  min-width: 12rem;
+/* The row whose detail panel is open, so the two are visibly the same order. */
+body.admin .ui-table tbody tr.current td {
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
-body.admin .order-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.92rem;
-}
-
-body.admin .order-table th {
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.82rem;
-  opacity: 0.65;
-  padding: 0 0.5rem 0.4rem;
-}
-
-body.admin .order-table td {
-  padding: 0.55rem 0.5rem;
-  border-top: 1px solid rgb(0 0 0 / 0.08);
-  vertical-align: top;
-}
-
-body.admin .order-table tr.current td {
-  background: #f6f2ec;
-}
-
-body.admin .order-table tr.total td {
+body.admin .ui-table tbody tr.total td {
   font-weight: 650;
-}
-
-/* Status colours carry meaning that the words already carry, so they stay
-   quiet: a tint, not a traffic light. */
-body.admin .status {
-  display: inline-block;
-  padding: 0.1rem 0.55rem;
-  border-radius: 999px;
-  background: #ece7e0;
-  font-size: 0.82rem;
-  white-space: nowrap;
-}
-
-body.admin .status.paid { background: #d8e6d8; }
-body.admin .status.shipped { background: #d7e2ee; }
-body.admin .status.completed { background: #dcd9ee; }
-body.admin .status.cancelled,
-body.admin .status.expired { background: #ecdcdc; }
-
-body.admin .order-detail h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-body.admin .order-detail h3 {
-  margin: 1.5rem 0 0.5rem;
-  font-size: 1rem;
-}
-
-body.admin .moves {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 body.admin .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
-  margin: 0;
-  font-size: 0.92rem;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-base);
 }
 
 body.admin .facts dt {
-  opacity: 0.65;
+  color: var(--muted);
 }
 
 body.admin .facts dd {
   margin: 0;
+  color: var(--text);
 }
 
 body.admin .audit {
-  margin: 0;
-  padding-left: 1.1rem;
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-4);
   display: grid;
-  gap: 0.3rem;
-  font-size: 0.86rem;
-}
-
-@media (max-width: 640px) {
-  body.admin .order-table thead {
-    display: none;
-  }
-
-  body.admin .order-table tr {
-    display: grid;
-    gap: 0.2rem;
-    padding: 0.5rem 0;
-    border-top: 1px solid rgb(0 0 0 / 0.08);
-  }
-
-  body.admin .order-table td {
-    padding: 0;
-    border: none;
-  }
+  gap: var(--space-1);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
 }
 
 /* Truncation is a fact about the answer, not an error — visible, not alarming. */
 body.admin .muted.warn {
-  color: #a05a00;
+  color: var(--warning);
   opacity: 1;
 }

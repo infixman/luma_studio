@@ -18,6 +18,35 @@ from responses import Ctx
 MAX_NOTE = 500
 MAX_REASON = 200
 
+# Far enough out that no real order falls outside it, close enough that a
+# mistyped year cannot turn into a number SQLite has to think about.
+MIN_TIME = 0
+MAX_TIME = 4102444800  # 2100-01-01
+
+
+def _first(ctx: Ctx, name: str) -> str:
+    return (ctx.query.get(name) or [""])[0].strip()
+
+
+def _seconds(ctx: Ctx, name: str) -> int | None:
+    """A `created_at` bound, or None when it was not asked for.
+
+    The back office sends seconds rather than a date, because the day a filter
+    means is the day in the reader's timezone and the server has no way to
+    know which one that is. Anything unparseable is treated as "no bound"
+    rather than as zero — a filter that silently became "everything since the
+    epoch" would look like it worked.
+    """
+
+    raw = _first(ctx, name)
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if MIN_TIME <= value <= MAX_TIME else None
+
 
 async def _read_json(ctx: Ctx) -> dict:
     body = await ctx.request.json()
@@ -50,11 +79,23 @@ async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/orders" and method == "GET":
-        status = (ctx.query.get("status") or [""])[0]
-        if status and status not in orders.STATUSES:
-            return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
-        search = (ctx.query.get("q") or [""])[0].strip()[:60]
-        rows, truncated = await orders.list_all(env, status=status, search=search)
+        status = _first(ctx, "status")
+        # `statusNot` is repeatable: "不是已取消" and "不是已逾期" is one of the
+        # few filter pairs anyone actually stacks. `status` is not — two of
+        # those AND-ed can only be empty, so the back office sends one.
+        excluded = tuple(value.strip() for value in ctx.query.get("statusNot", []) if value.strip())
+        for value in (status, *excluded):
+            if value and value not in orders.STATUSES:
+                return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
+        search = _first(ctx, "q")[:60]
+        rows, truncated = await orders.list_all(
+            env,
+            status=status,
+            exclude_statuses=excluded,
+            search=search,
+            created_from=_seconds(ctx, "createdFrom"),
+            created_to=_seconds(ctx, "createdTo"),
+        )
         return ctx.json(
             {
                 "orders": rows,

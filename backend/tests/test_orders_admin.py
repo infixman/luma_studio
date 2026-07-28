@@ -91,6 +91,39 @@ class TestWhatTheShopSees:
         query = [statement for statement in database.statements if "FROM orders WHERE" in statement][0]
         assert "id LIKE" in query and "recipient_name LIKE" in query and "recipient_email LIKE" in query
 
+    def test_a_date_range_narrows_the_query_rather_than_the_answer(self, orders):
+        """The list stops at a limit, so a range applied after it came back
+        would narrow only the part that made it — which reads exactly like a
+        complete answer and is not one."""
+
+        database = FakeDatabase({"FROM orders": [order()]})
+        call(AdminRequest("/api/orders?createdFrom=1700000000&createdTo=1700086399"), database)
+        query, bindings = [read for read in database.reads if "FROM orders WHERE" in read[0]][0]
+        assert "created_at >= ?1" in query and "created_at <= ?2" in query
+        assert bindings[:2] == (1700000000, 1700086399)
+
+    def test_a_bound_that_is_not_a_number_is_ignored_rather_than_read_as_zero(self, orders):
+        """"Everything since 1970" would look like the filter worked."""
+
+        database = FakeDatabase({"FROM orders": [order()]})
+        call(AdminRequest("/api/orders?createdFrom=last-tuesday"), database)
+        assert not any("created_at >=" in statement for statement in database.statements)
+
+    def test_status_rules_stack_with_and(self, orders):
+        """Two stacked "不是" rules is the pair anyone actually writes: show me
+        what is still open."""
+
+        database = FakeDatabase({"FROM orders": [order()]})
+        call(AdminRequest("/api/orders?statusNot=cancelled&statusNot=expired"), database)
+        query, bindings = [read for read in database.reads if "FROM orders WHERE" in read[0]][0]
+        assert query.count("status != ") == 2
+        assert bindings[:2] == ("cancelled", "expired")
+
+    def test_an_unknown_excluded_status_is_refused_too(self, orders):
+        database = FakeDatabase()
+        assert call(AdminRequest("/api/orders?statusNot=lost"), database).status == 400
+        assert not any("FROM orders WHERE" in statement for statement in database.statements)
+
     def test_the_counts_come_back_with_the_list(self, orders):
         """One request, so the tabs cannot disagree with the rows under them."""
 
