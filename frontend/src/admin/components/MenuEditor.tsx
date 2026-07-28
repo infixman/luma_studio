@@ -1,0 +1,132 @@
+import { useRef, useState } from 'preact/hooks'
+
+import { MAX_DEPTH, canIndent, canOutdent, drop, flatten, indent, move, outdent, toOrder } from '../lib/menu-tree'
+import type { Row } from '../lib/menu-tree'
+import type { MenuItem, MenuState } from '../../shared/types'
+
+/**
+ * The three-level menu, edited as a flat list with an indent level.
+ *
+ * Two gestures rather than one. Dragging moves an item up and down; buttons
+ * change its level. Doing both by drag means deciding what a diagonal
+ * movement meant from pixel positions, and getting that wrong reparents
+ * something the owner was only trying to move past.
+ *
+ * The buttons are always present, not a small-screen fallback. Drag is
+ * unusable from a keyboard, and it is the thing most likely to behave
+ * differently on someone else's device — so it is the addition, and the
+ * buttons are the floor.
+ *
+ * The arithmetic lives in ../lib/menu-tree; this is the drawing of it.
+ */
+export function MenuEditor({
+  state,
+  busy,
+  onReorder,
+  onEdit,
+  onRemove,
+}: {
+  state: MenuState
+  busy: boolean
+  onReorder: (items: { id: string; parentId: string | null }[]) => void
+  onEdit: (item: MenuItem) => void
+  onRemove: (item: MenuItem) => void
+}) {
+  const rows = flatten(state.menu)
+  const dragged = useRef<number | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+
+  /** Send the whole arrangement: order and parentage move together. */
+  function commit(next: Row[] | null) {
+    if (next) onReorder(toOrder(next))
+  }
+
+  function describe(item: MenuItem): string {
+    if (item.targetKind === 'page') {
+      const page = state.pages.find((entry) => entry.id === item.target)
+      if (!page) return '⚠ 找不到頁面'
+      return page.status === 'published' ? page.path : `${page.path}（草稿，前台看不到）`
+    }
+    if (item.targetKind === 'category') {
+      const missing = item.target
+        .replace(/\+/g, ',')
+        .split(',')
+        .filter((slug) => slug && !state.categories.some((entry) => entry.slug === slug))
+      return missing.length ? `⚠ 找不到分類：${missing.join('、')}` : `/shop/c/${item.target}`
+    }
+    return item.target
+  }
+
+  if (rows.length === 0) return <p class="muted">選單還是空的。</p>
+
+  return (
+    <ul class="menu-tree">
+      {rows.map((row, index) => {
+        const hint = describe(row.item)
+        return (
+          <li
+            key={row.item.id}
+            class={[`depth-${row.depth}`, dropTarget === row.item.id ? 'drop-target' : ''].filter(Boolean).join(' ')}
+            draggable
+            onDragStart={() => {
+              dragged.current = index
+            }}
+            onDragOver={(event) => {
+              if (dragged.current === null) return
+              event.preventDefault()
+              setDropTarget(row.item.id)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              const from = dragged.current
+              dragged.current = null
+              setDropTarget(null)
+              if (from === null || from === index) return
+              commit(drop(rows, from, row.item.id))
+            }}
+            onDragEnd={() => {
+              dragged.current = null
+              setDropTarget(null)
+            }}
+          >
+            <span class="grip" aria-hidden="true">
+              ⠿
+            </span>
+            <span class="label">{row.item.label}</span>
+            <code class={hint.startsWith('⚠') ? 'broken' : ''}>{hint}</code>
+            <span class="controls">
+              <button type="button" disabled={busy} title="上移" onClick={() => commit(move(rows, index, -1))}>
+                ↑
+              </button>
+              <button type="button" disabled={busy} title="下移" onClick={() => commit(move(rows, index, 1))}>
+                ↓
+              </button>
+              <button
+                type="button"
+                disabled={busy || !canOutdent(rows, index)}
+                title="升一層"
+                onClick={() => commit(outdent(rows, index))}
+              >
+                ⇤
+              </button>
+              <button
+                type="button"
+                disabled={busy || !canIndent(rows, index)}
+                title={`降一層（成為上一項的子項目，最多 ${MAX_DEPTH} 層）`}
+                onClick={() => commit(indent(rows, index))}
+              >
+                ⇥
+              </button>
+              <button type="button" disabled={busy} onClick={() => onEdit(row.item)}>
+                編輯
+              </button>
+              <button type="button" class="danger" disabled={busy} onClick={() => onRemove(row.item)}>
+                刪除
+              </button>
+            </span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}

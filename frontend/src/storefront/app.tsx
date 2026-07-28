@@ -1,6 +1,7 @@
 import { BioLinkPage } from './pages/BioLinkPage'
 import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
+import { Chrome } from './components/Chrome'
 import { CartPage } from './pages/CartPage'
 import { CategoryPage } from './pages/CategoryPage'
 import { CustomPage } from './pages/CustomPage'
@@ -27,6 +28,14 @@ function markBody(page: string): void {
 
 /** A handful of entry points, no in-app navigation, so matching the path is enough. */
 export function App() {
+  const path = location.pathname.replace(/\/+$/, '') || '/'
+  // Paying is the one thing the chrome stays out of: a navigation bar part
+  // way through checkout only offers ways to stop.
+  const bare = path === '/checkout' || path === '/orders' || path.startsWith('/orders/')
+  return <Chrome bare={bare}>{route()}</Chrome>
+}
+
+function route() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
   // A page flagged as home takes over /, and the built-in one is the

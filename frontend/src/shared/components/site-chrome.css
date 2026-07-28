@@ -1,0 +1,310 @@
+/* The header and footer, shared by the storefront and the back office's
+   appearance preview.
+
+   Every value here comes from a fixed set the API validated, so the settings
+   arrive as class names. Nothing the owner typed reaches CSS. */
+
+.site-header,
+.site-footer {
+  --surface-cream: #faf7f2;
+  --surface-sand: #ece2d2;
+  --surface-clay: #c9a79a;
+  --surface-forest: #2f5d4a;
+  --surface-ink: #2b2622;
+}
+
+/* --- header --- */
+
+.site-header {
+  position: relative;
+  isolation: isolate;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.site-header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.site-header.colour-cream { background: var(--surface-cream); }
+.site-header.colour-sand { background: var(--surface-sand); }
+.site-header.colour-clay { background: var(--surface-clay); }
+.site-header.colour-forest { background: var(--surface-forest); }
+.site-header.colour-ink { background: var(--surface-ink); }
+.site-header.bg-transparent { background: transparent; border-bottom-color: transparent; }
+
+.site-header.text-dark { color: #2b2622; }
+.site-header.text-light { color: #fff; }
+
+.header-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+}
+
+/* The overlay is not optional. It is what lets any photograph be uploaded
+   without the menu becoming unreadable over the bright parts of it. */
+.site-header.bg-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.site-header.bg-image { background: transparent; }
+
+.header-inner {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.site-header.height-small .header-inner { min-height: 56px; }
+.site-header.height-medium .header-inner { min-height: 76px; }
+.site-header.height-large .header-inner { min-height: 104px; }
+
+.site-header .brand img {
+  display: block;
+  height: auto;
+  width: 108px;
+}
+
+.site-header .brand.size-small img { width: 84px; }
+.site-header .brand.size-large img { width: 150px; }
+
+.site-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.menu-toggle {
+  display: none;
+  margin-left: auto;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+.site-menu {
+  margin-right: auto;
+}
+
+.menu-level {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 1.1rem;
+}
+
+.menu-level li {
+  position: relative;
+}
+
+.menu-level a {
+  display: block;
+  padding: 0.4rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* Second and third levels hang off their parent on a pointer device. They are
+   shown on hover and on focus-within, so a keyboard reaches them too. */
+.menu-level.depth-2,
+.menu-level.depth-3 {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 11rem;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.4rem 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #2b2622;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+.menu-level.depth-3 {
+  top: 0;
+  left: 100%;
+}
+
+.menu-level li:hover > .menu-level,
+.menu-level li:focus-within > .menu-level {
+  opacity: 1;
+  visibility: visible;
+}
+
+.menu-level.depth-2 a,
+.menu-level.depth-3 a {
+  padding: 0.45rem 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.menu-level.depth-2 a:hover,
+.menu-level.depth-3 a:hover {
+  background: rgb(0 0 0 / 0.05);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.9rem;
+}
+
+.header-actions .cta {
+  padding: 0.45rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.header-actions .count {
+  display: inline-block;
+  min-width: 1.3rem;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: currentColor;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* The count sits on a filled pill, so its text takes the header's background
+   rather than inheriting the colour it is painted with. */
+.site-header.text-light .header-actions .count { color: #2b2622; }
+.site-header.text-dark .header-actions .count { color: #faf7f2; }
+
+@media (max-width: 860px) {
+  .menu-toggle {
+    display: block;
+  }
+
+  .site-menu {
+    display: none;
+    order: 3;
+    width: 100%;
+    margin: 0 0 0.8rem;
+  }
+
+  .site-header.open .site-menu {
+    display: block;
+  }
+
+  .site-header.open .header-inner {
+    flex-wrap: wrap;
+  }
+
+  /* No hover on a touch screen, so every level is simply shown, indented. */
+  .site-menu .menu-level {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .site-menu .menu-level.depth-2,
+  .site-menu .menu-level.depth-3 {
+    position: static;
+    opacity: 1;
+    visibility: visible;
+    background: none;
+    color: inherit;
+    box-shadow: none;
+    padding: 0 0 0 1.1rem;
+  }
+
+  .header-actions {
+    margin-left: auto;
+  }
+}
+
+/* --- footer --- */
+
+.site-footer {
+  margin-top: 4rem;
+  padding: 2.5rem 1.1rem 2rem;
+}
+
+.site-footer.colour-cream { background: var(--surface-cream); }
+.site-footer.colour-sand { background: var(--surface-sand); }
+.site-footer.colour-clay { background: var(--surface-clay); }
+.site-footer.colour-forest { background: var(--surface-forest); }
+.site-footer.colour-ink { background: var(--surface-ink); }
+
+.site-footer.text-dark { color: #2b2622; }
+.site-footer.text-light { color: #f3efe9; }
+
+.footer-inner {
+  max-width: 76rem;
+  margin: 0 auto;
+}
+
+.footer-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1.8rem;
+  margin-bottom: 2rem;
+}
+
+.footer-column h2 {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.footer-column ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.site-footer a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.footer-socials {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  gap: 0.9rem;
+}
+
+.footer-socials .social-icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  display: block;
+}
+
+.footer-copyright {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
