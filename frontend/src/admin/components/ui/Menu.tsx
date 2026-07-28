@@ -137,11 +137,9 @@ interface MenuItemProps {
   /** `danger` for the one that cannot be undone. */
   tone?: 'neutral' | 'danger'
   disabled?: boolean
-  /** For an item that toggles something: the menu stays up for the next tick. */
-  keepOpen?: boolean
 }
 
-export function MenuItem({ children, onClick, tone = 'neutral', disabled, keepOpen }: MenuItemProps) {
+export function MenuItem({ children, onClick, tone = 'neutral', disabled }: MenuItemProps) {
   const close = useContext(Close)
   return (
     <button
@@ -151,7 +149,10 @@ export function MenuItem({ children, onClick, tone = 'neutral', disabled, keepOp
       disabled={disabled}
       onClick={() => {
         onClick()
-        if (!keepOpen) close()
+        // Every item here picks something and is done. A toggle that wanted
+        // the menu to stay up would be a different control — the column
+        // chooser is one, and it is not built on this.
+        close()
       }}
     >
       {children}

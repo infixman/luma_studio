@@ -574,7 +574,7 @@ export function MediaPage() {
             {usedBy === null ? (
               <Spinner label="查詢中" />
             ) : usedBy.length === 0 ? (
-              <p class="muted">目前沒有頁面使用這張圖。</p>
+              <EmptyState title="目前沒有頁面使用這張圖。" compact />
             ) : (
               <ul class="usage">
                 {usedBy.map((page) => (

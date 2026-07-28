@@ -625,7 +625,7 @@ export function OrdersAdminPage() {
               Shown so "did they get the shipping notice" has an answer that
               does not need a database console. */}
           {detail.emails.length === 0 ? (
-            <p class="muted">還沒有寄給這位顧客的信。沒有設定寄信服務時不會排入。</p>
+            <EmptyState title="還沒有寄給這位顧客的信" body="沒有設定寄信服務時不會排入。" compact />
           ) : (
             <ul class="audit">
               {detail.emails.map((email, index) => (

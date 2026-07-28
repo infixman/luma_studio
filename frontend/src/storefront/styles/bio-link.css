@@ -189,8 +189,7 @@ body.bio .bio-link:hover {
 }
 
 body.bio .bio-link:focus-visible,
-body.bio .bio-social:focus-visible,
-body.bio .bio-event-action:focus-visible {
+body.bio .bio-social:focus-visible {
   outline: 3px solid var(--bio-accent);
   outline-offset: 3px;
 }
@@ -305,28 +304,6 @@ body.bio .bio-event-note {
   line-height: 1.6;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-body.bio .bio-event-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-body.bio .bio-event-action {
-  padding: 6px 12px;
-  border: 1px solid var(--bio-border);
-  border-radius: 999px;
-  color: var(--bio-muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-body.bio .bio-event-action:hover {
-  border-color: var(--bio-accent);
-  color: var(--bio-text);
 }
 
 body.bio .bio-footer {

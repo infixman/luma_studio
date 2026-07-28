@@ -37,17 +37,28 @@ export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; childr
  * Nothing to show, and what to do about it. An empty list with no explanation
  * reads as a page that failed to load.
  */
+/**
+ * Nothing here yet, said the same way everywhere.
+ *
+ * `compact` is for the panels and sidebars where the full 48px of breathing
+ * room would push the rest of the panel off screen. It is a size, not a
+ * second kind of empty state — the pages that wrote their own
+ * `<p class="muted">還沒有…</p>` did it because this one was too tall for
+ * where they needed it, and two idioms is how the next one gets invented.
+ */
 export function EmptyState({
   title,
   body,
   action,
+  compact = false,
 }: {
   title: string
   body?: string
   action?: ComponentChildren
+  compact?: boolean
 }) {
   return (
-    <div class="ui-empty">
+    <div class={compact ? 'ui-empty is-compact' : 'ui-empty'}>
       <p class="ui-empty-title">{title}</p>
       {body && <p class="ui-empty-body">{body}</p>}
       {action}

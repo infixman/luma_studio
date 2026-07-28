@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { useConfirm } from '../components/ui'
+import { EmptyState, Spinner, useConfirm } from '../components/ui'
+import { fileSize } from '../lib/mediaFacts'
 import { api, apiJson, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
 import {
   applyChoice,
@@ -249,7 +250,7 @@ export function AdminPage() {
           </div>
           <ul class="folders">
             {!ready || folders.length === 0 ? (
-              <li class="empty">{ready ? '沒有資料夾' : '載入中…'}</li>
+              <li>{ready ? <EmptyState title="沒有資料夾" compact /> : <Spinner />}</li>
             ) : (
               folders.map((name) => (
                 <li key={name} class={name === folder ? 'folder-row selected' : 'folder-row'}>
@@ -372,7 +373,7 @@ export function AdminPage() {
                 <li key={item.key}>
                   <div class="file-main">
                     <img class="file-thumb" src={thumbnailUrl(item.key, item.size)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
-                    <span class="file-name">{`${item.name} (${Math.ceil(item.size / 1024)} KB)`}</span>
+                    <span class="file-name">{`${item.name} (${fileSize(item.size)})`}</span>
                   </div>
                   <div class="file-actions">
                     <OpenButton url={publicImageUrl(item.key)} label={item.name} />

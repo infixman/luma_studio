@@ -717,6 +717,18 @@
   text-align: center;
 }
 
+/* Inside a panel, where 48px of padding would push the panel's own content
+   out of sight. */
+.ui-empty.is-compact {
+  padding: var(--space-4) var(--space-2);
+}
+
+.ui-empty.is-compact .ui-empty-title {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
 .ui-empty-title {
   margin: 0;
   font-weight: 600;

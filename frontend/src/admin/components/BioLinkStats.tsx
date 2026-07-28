@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { Spinner } from './ui'
 import { api } from '../../shared/api'
 import type { BioLinkStats as Stats, LabelledTotal } from '../../shared/types'
 
@@ -67,7 +68,7 @@ export function BioLinkStatsPanel({ onError }: { onError: (error: unknown) => vo
       </div>
 
       {stats === null ? (
-        <p class="muted">載入中…</p>
+        <Spinner />
       ) : (
         <>
           <div class="stat-totals">

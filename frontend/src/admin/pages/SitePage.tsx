@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { MenuEditor } from '../components/MenuEditor'
 import { useStatus } from '../components/StatusBar'
-import { Button, Modal, TextField, useConfirm } from '../components/ui'
+import { Button, Modal, Spinner, TextField, useConfirm } from '../components/ui'
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../shared/components/SocialIcon'
 import { api, apiJson, apiUrl, clearLoginAttempt, uploadHeaderImage } from '../../shared/api'
@@ -241,7 +241,7 @@ export function SitePage() {
       <AdminShell current="/site" message={message} onError={showError}>
         <section class="stack shop">
           <div class="card">
-            <p class="muted">載入中…</p>
+            <Spinner />
           </div>
         </section>
       </AdminShell>

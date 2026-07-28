@@ -18,6 +18,7 @@ import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import {
   Button,
+  EmptyState,
   Panel,
   RadioGroup,
   Spinner,
@@ -608,7 +609,7 @@ export function PageEditPage({ id }: { id: string }) {
             }
           >
             {detail.blocks.length === 0 && inserting === null && (
-              <p class="muted">還沒有區塊。用下面的按鈕加第一個。</p>
+              <EmptyState title="還沒有區塊" body="用下面的按鈕加第一個。" />
             )}
 
             <ul class="block-list">
@@ -754,7 +755,7 @@ export function PageEditPage({ id }: { id: string }) {
               <>
                 <div class="preview-surface" style={{ maxWidth: viewportWidth }}>
                   {previewBlocks.length === 0 ? (
-                    <p class="muted">還沒有內容。</p>
+                    <EmptyState title="還沒有內容。" compact />
                   ) : (
                     /* One <Blocks> per block rather than one for the list, so
                        each rendered block sits in something that knows which

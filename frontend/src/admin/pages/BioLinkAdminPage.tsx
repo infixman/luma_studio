@@ -6,7 +6,7 @@ import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../shared/components/SocialIcon'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { useConfirm } from '../components/ui'
+import { EmptyState, Spinner, useConfirm } from '../components/ui'
 import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
@@ -322,7 +322,7 @@ export function BioLinkAdminPage() {
         </div>
 
         {group.length === 0 ? (
-          <p class="muted">尚未新增。</p>
+          <EmptyState title="尚未新增。" compact />
         ) : (
           <ul class="bio-items">
             {group.map((item, index) => (
@@ -428,7 +428,7 @@ export function BioLinkAdminPage() {
     >
 
       {page === null ? (
-        <p class="muted bio-loading">載入中…</p>
+        <Spinner />
       ) : (
         <section class="bio-admin">
           <div class="card">
