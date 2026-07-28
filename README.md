@@ -307,37 +307,34 @@ DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CN
 
 只有後端 Worker 需要。用指令設定，不要寫進 `wrangler.toml` 的 `[vars]`——那份設定會進版控。
 
-**secret 是 per-Worker 的，兩個後端 Worker 各要設一次。** 公開 Worker：
+**secret 是 per-Worker 的**，而且兩個 Worker 需要的**不一樣**。
 
-```powershell
-uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID
-uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET
-uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI
-uv --directory backend run pywrangler secret put VISITOR_SALT
-```
-
-管理 Worker（同樣四個，加上 `-c wrangler.admin.toml`）：
-
-```powershell
-uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID -c wrangler.admin.toml
-uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET -c wrangler.admin.toml
-uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wrangler.admin.toml
-uv --directory backend run pywrangler secret put VISITOR_SALT -c wrangler.admin.toml
-```
-
-公開 Worker 另外需要**顧客用的那一組**，與店主的那組分開申請：
+| Worker | Secret | 內容 |
+| --- | --- | --- |
+| `luma-studio` | `GOOGLE_CUSTOMER_CLIENT_ID` | 顧客那組 OAuth client |
+| `luma-studio` | `GOOGLE_CUSTOMER_CLIENT_SECRET` | 同上 |
+| `luma-studio` | `GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI` | `https://api.luma-studio.tw/auth/callback` |
+| `luma-studio` | `VISITOR_SALT` | 任意隨機字串，雜湊 bio link 訪客識別 |
+| `luma-studio-admin-api` | `GOOGLE_CLIENT_ID` | 店主那組 OAuth client |
+| `luma-studio-admin-api` | `GOOGLE_CLIENT_SECRET` | 同上 |
+| `luma-studio-admin-api` | `GOOGLE_OAUTH_REDIRECT_URI` | `https://admin-api.luma-studio.tw/auth/callback` |
 
 ```powershell
 uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_ID
 uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_SECRET
 uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI
+uv --directory backend run pywrangler secret put VISITOR_SALT
+
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wrangler.admin.toml
 ```
 
-分成兩組 OAuth client 而不是一組配兩個 redirect URI：店主那組可以在 Google Cloud Console 上設得更嚴，而顧客那組的 client secret 外洩也不會影響後台。
+管理 Worker **不需要** `VISITOR_SALT`（只有 `bio_link.record_event` 讀它，而記錄瀏覽是公開端的事），也不需要任何 `IBON_*`（後台只讀 D1 的列印設定，不跑上傳流程）。
 
-重新導向網址：管理 Worker 是 `https://admin-api.luma-studio.tw/auth/callback`，顧客是 `https://api.luma-studio.tw/auth/callback`。各自加進對應 client 的授權清單。`VISITOR_SALT` 填任意隨機字串。
+兩組 OAuth client 而不是一組配兩個 redirect URI：店主那組可以在 Google Cloud Console 上設得更嚴，而顧客那組的 client secret 外洩也不會波及後台。
 
-公開 Worker 上的 `GOOGLE_CLIENT_ID` 等三個已不再使用（管理登入搬走了），可以移除。
+從舊架構搬過來時，公開 Worker 上原有的 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`GOOGLE_OAUTH_REDIRECT_URI` 已經沒有程式碼在讀——管理登入搬走了。留著只是三個沒有用途的憑證，用 `pywrangler secret delete` 移除。
 
 ### 速率限制規則
 
