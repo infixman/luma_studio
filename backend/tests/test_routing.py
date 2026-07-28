@@ -242,6 +242,35 @@ class TestProductPhotos:
         assert call(browser("/shop-assets/a.jpg", "POST")).status == 404
 
 
+class TestLibraryImages:
+    def test_a_key_the_library_does_not_know_is_not_served(self, call):
+        """Same rule as the shop's: the bucket also holds ibon print jobs."""
+
+        database = FakeDatabase()
+        response = call(FakeRequest("/media-assets/guessed.jpg"), make_env(database))
+        assert response.status == 404
+        assert any("FROM media WHERE object_key" in statement for statement in database.statements)
+
+    @pytest.mark.parametrize("name", ["a.gif", "a.svg", "..%2Fa.jpg"])
+    def test_a_format_the_library_does_not_store_is_refused_before_the_lookup(self, call, name):
+        database = FakeDatabase()
+        response = call(FakeRequest(f"/media-assets/{name}"), make_env(database))
+        assert response.status == 400
+        assert not any("FROM media" in statement for statement in database.statements)
+
+    def test_a_known_key_is_served_with_its_own_content_type(self, call):
+        from conftest import FakeBucket, FakeObject
+
+        database = FakeDatabase({"FROM media WHERE object_key": [{"1": 1}]})
+        bucket = FakeBucket({"_media/abc123.webp": FakeObject(b"webpbytes")})
+        response = call(FakeRequest("/media-assets/abc123.webp"), make_env(database, bucket))
+        assert response.status == 200
+        assert response.headers["content-type"] == "image/webp"
+
+    def test_only_get_reaches_it(self, call):
+        assert call(browser("/media-assets/a.jpg", "POST")).status == 404
+
+
 class TestRateLimits:
     def test_a_denied_caller_gets_429_with_retry_after(self, call):
         env = make_env(PUBLIC_LIMITER=DenyingLimiter())

@@ -406,6 +406,23 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_menu_items_parent ON menu_items (parent_id, position)",
         ],
     },
+    {
+        "name": "0013_create_media",
+        "statements": [
+            # One row per uploaded image. Blocks store the id rather than the
+            # URL, so a replaced or renamed object does not leave a page
+            # pointing at something that is gone.
+            """CREATE TABLE IF NOT EXISTS media (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 object_key TEXT NOT NULL UNIQUE,
+                 file_name TEXT NOT NULL,
+                 alt TEXT NOT NULL DEFAULT '',
+                 byte_size INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_media_created ON media (created_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

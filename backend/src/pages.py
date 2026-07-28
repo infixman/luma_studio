@@ -40,6 +40,7 @@ RESERVED = (
     "/images",
     "/r",
     "/shop-assets",
+    "/media-assets",
     "/bio-link-assets",
     "/assets",
 )

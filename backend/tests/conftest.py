@@ -19,12 +19,15 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 
 
 class _FakeTypedArray:
-    """Enough of Uint8Array for `secure_bytes` to produce real bytes."""
+    """Enough of Uint8Array for `secure_bytes` and the image routes."""
 
-    def __init__(self, length: int):
-        # Deterministic rather than random: tests should not depend on chance,
-        # and no test asserts anything about the values themselves.
-        self._values = bytes((index * 7 + 13) % 256 for index in range(length))
+    def __init__(self, source):
+        if isinstance(source, (bytes, bytearray)):
+            self._values = bytes(source)
+        else:
+            # Deterministic rather than random: tests should not depend on
+            # chance, and no test asserts anything about the values.
+            self._values = bytes((index * 7 + 13) % 256 for index in range(int(source)))
 
     def to_py(self):
         return self._values
@@ -32,8 +35,10 @@ class _FakeTypedArray:
 
 class _FakeUint8Array:
     @staticmethod
-    def new(length):
-        return _FakeTypedArray(int(length))
+    def new(source):
+        # The real one takes either a length or a buffer. `secure_bytes` passes
+        # a length; the image routes pass what R2 handed back.
+        return _FakeTypedArray(source)
 
 
 class FakeResponse:
@@ -155,9 +160,27 @@ class FakeDatabase:
 class FakeBucket:
     def __init__(self, objects: dict | None = None):
         self.objects = objects or {}
+        self.deleted: list[str] = []
 
     async def get(self, key):
         return self.objects.get(key)
+
+    async def put(self, key, content):
+        self.objects[key] = FakeObject(content)
+
+    async def delete(self, key):
+        self.deleted.append(key)
+        self.objects.pop(key, None)
+
+
+class FakeObject:
+    """What R2 hands back: bytes reachable only through arrayBuffer()."""
+
+    def __init__(self, content: bytes):
+        self.content = bytes(content)
+
+    async def arrayBuffer(self):
+        return self.content
 
 
 class FakeHeaders:

@@ -63,6 +63,8 @@ backend/
     pages_admin_api.py 管理端頁面端點
     site_chrome.py    頁首頁尾設定與三層選單
     site_admin_api.py 管理端外框端點
+    media.py          媒體庫：上傳的圖片與誰在用它
+    media_admin_api.py 管理端媒體端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -107,6 +109,7 @@ docs/superpowers/specs/  設計文件
 | GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
 | GET | `/api/site` | 頁首頁尾設定與選單，一次取回 |
 | GET | `/site-assets/{file}` | 頁首背景圖 |
+| GET | `/media-assets/{file}` | 媒體庫圖片，key 必須在 `media` 表裡 |
 | GET | `/api/pages/home` | 目前設為首頁的那一頁，沒有就 404 |
 | GET | `/api/pages?path=/about` | 依路徑取頁面與其區塊，只有 `published` 解得開 |
 | GET | `/api/categories` | 分類清單，含上架商品數量 |
@@ -160,6 +163,10 @@ docs/superpowers/specs/  設計文件
 | GET / POST | `/api/menu` | 選單項目 |
 | PUT | `/api/menu/order` | 排序與改層級，必須排在 `{id}` 之前 |
 | PUT / DELETE | `/api/menu/{id}` | 單一項目 |
+| GET / POST | `/api/media` | 媒體庫清單與上傳 |
+| GET | `/api/media/{id}` | 單張圖與使用它的頁面 |
+| PUT | `/api/media/{id}` | 改替代文字 |
+| DELETE | `/api/media/{id}` | 刪除。還被使用時回 409，加 `?force=1` 才真的刪 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -569,6 +576,18 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 選單在編輯器裡是**一條有縮排的扁平清單**，不是巢狀清單。這樣「一個項目」和「它的位置」是同一件事，移動就是陣列的 splice 而不是樹的搬移。算術抽在 `frontend/src/admin/lib/menu-tree.ts`，因為會出錯的是算術，而算術才測得動（`menu-tree.test.ts`）。幾個藏在裡面的規則：移動會**連同子項目一起走**、越過鄰居時是越過它**整棵子樹**（否則會掉進它的子項目中間）、⇥ 檢查的是**整塊的最深層**而不是自己那一層（一個已經有孫項目的項目不能再往下降）。
 
 後台的預覽用的是前台**同一份** `SiteHeader` / `SiteFooter`。預覽卡片裡只覆蓋兩件跟「卡片不是視窗」有關的事：sticky 關掉，以及不要因為卡片寬度觸發手機版而顯示漢堡選單。
+
+### 媒體庫
+
+商品照片屬於商品、頁首背景圖屬於頁首，所以那兩個各自存自己的 R2 key。輪播圖不一樣：同一張照片會同時出現在輪播、相簿和介紹區塊裡，傳三次就等於之後要改三次。
+
+**區塊存的是 media id，不是網址。** id 撐得過檔案之後發生的任何事，而且頁面可以被告知「這張圖不見了」，而不是安靜地畫出一張破圖。
+
+刪除一張還在用的圖**允許，但不會不小心發生**：第一次刪會拿到 409 和「哪些頁面在用」，加上 `?force=1` 才真的刪。完全擋掉的話，一張圖就只能先把每個用到它的頁面都編輯過才刪得掉。
+
+「誰在用」是把每個區塊的 config 讀出來在 JSON 裡找，不是對著 JSON 跑 LIKE：`LIKE '%id%'` 會把「id 剛好是某個更長字串的一部分」也算進去。而且這個找法是照 JSON 的形狀寫的，不是照區塊類型寫的，所以之後新增的區塊類型不用回來這裡補一筆。
+
+公開路由 `/media-assets/{file}` 會先確認這個 key 真的在 `media` 表裡才去讀 R2。同一個 bucket 也放 ibon 的列印檔——網址不是權威。
 
 ### 分類
 

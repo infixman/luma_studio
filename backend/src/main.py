@@ -26,6 +26,7 @@ import pages
 import rate_limit
 import router
 import shipping
+import media
 import shop
 import site_chrome
 from common import (
@@ -485,6 +486,39 @@ async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
     return ctx.json({"order": await orders.get_order(ctx.env, order_id)})
 
 
+async def media_image_response(ctx: Ctx, file_name: str):
+    """Serve one image from the media library.
+
+    The key has to be one the library knows about. Reading whatever the URL
+    names would turn this route into a way to fetch any object in a bucket
+    that also holds ibon print jobs.
+    """
+
+    file_name = unquote(file_name)
+    try:
+        media.validate_image_suffix(file_name)
+    except media.MediaError:
+        return ctx.error("Invalid image URL", 400)
+
+    key = f"{media.OBJECT_PREFIX}/{file_name}"
+    if not await media.key_is_known(ctx.env, key):
+        return ctx.error("Image not found", 404)
+    stored = await ctx.env.IBON_IMAGES.get(key)
+    if stored is None:
+        return ctx.error("Image not found", 404)
+    content = bytes(Uint8Array.new(await stored.arrayBuffer()).to_py())
+    return ctx.binary(
+        content,
+        {
+            "content-type": media.content_type_for(file_name) or "application/octet-stream",
+            # Long, because the key is generated per upload: replacing a
+            # picture makes a new URL rather than changing what this one means.
+            "cache-control": "public, max-age=86400",
+            "x-content-type-options": "nosniff",
+        },
+    )
+
+
 async def site_image_response(ctx: Ctx, file_name: str):
     """Serve the header background.
 
@@ -699,6 +733,13 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
             return ctx.too_many_requests()
         return await site_image_response(ctx, path.removeprefix(f"{site_chrome.IMAGE_URL_PREFIX}/"))
+
+    if path.startswith(f"{media.IMAGE_URL_PREFIX}/"):
+        if method != "GET":
+            return ctx.error(f"Use GET {media.IMAGE_URL_PREFIX}/{{file}}", 404)
+        if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
+            return ctx.too_many_requests()
+        return await media_image_response(ctx, path.removeprefix(f"{media.IMAGE_URL_PREFIX}/"))
 
     if path.startswith(f"{shop.IMAGE_URL_PREFIX}/"):
         if method != "GET":
