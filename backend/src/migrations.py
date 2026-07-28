@@ -325,6 +325,39 @@ MIGRATIONS = [
             " ON product_category_links (category_id, product_id)",
         ],
     },
+    {
+        # Pages the owner builds in the back office, and the blocks they are
+        # made of. This migration carries the skeleton; the only block type it
+        # is used with at first is plain text.
+        "name": "0011_create_pages",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS pages (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 path TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 status TEXT NOT NULL DEFAULT 'draft',
+                 is_home INTEGER NOT NULL DEFAULT 0,
+                 position INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_pages_path ON pages (path)",
+            # One home page, guaranteed by the database rather than by the
+            # application remembering to clear whoever held it before.
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_pages_home ON pages (is_home) WHERE is_home = 1",
+            # `config` is JSON rather than a table per block type: the fields
+            # differ wildly between types and nothing ever queries inside them.
+            # It is settings, not queryable data.
+            """CREATE TABLE IF NOT EXISTS page_blocks (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 page_id TEXT NOT NULL,
+                 type TEXT NOT NULL,
+                 config TEXT NOT NULL,
+                 position INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks (page_id, position)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

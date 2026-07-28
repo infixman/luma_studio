@@ -17,6 +17,7 @@ from workers import WorkerEntrypoint
 import admin_api
 import auth_admin
 import bio_link_api
+import pages_admin_api
 import rate_limit
 import router
 import shop_admin_api
@@ -59,6 +60,9 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):
         return await bio_link_api.handle(ctx)
+
+    if path == "/api/pages" or path.startswith("/api/pages/") or path.startswith("/api/blocks/"):
+        return await pages_admin_api.handle(ctx)
 
     if (
         path == "/api/products"

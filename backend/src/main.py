@@ -22,6 +22,7 @@ import bio_link
 import cart
 import categories
 import orders
+import pages
 import rate_limit
 import router
 import shipping
@@ -192,6 +193,25 @@ async def shop_index_response(ctx: Ctx):
             )
         )
     return ctx.json({"products": cards})
+
+
+async def page_response(ctx: Ctx, page: dict | None):
+    """One published page and its blocks.
+
+    Drafts are 404 rather than gated: the back office previews them with the
+    same components the storefront uses, so there is no reason for an
+    unpublished page to be reachable here at all.
+    """
+
+    if page is None or page["status"] != "published":
+        return ctx.error("Page not found", 404)
+    return ctx.json(
+        {
+            "title": page["title"],
+            "path": page["path"],
+            "blocks": await pages.list_blocks(ctx.env, page["id"]),
+        }
+    )
 
 
 async def category_index_response(ctx: Ctx):
@@ -560,6 +580,23 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
             return ctx.too_many_requests()
         return ctx.json({"methods": await shipping.list_methods(ctx.env, only_enabled=True)})
+
+    if path == "/api/pages/home" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await page_response(ctx, await pages.home_page(ctx.env))
+
+    if path == "/api/pages" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        # The path arrives as a query parameter because it contains slashes of
+        # its own; nesting it in the route would mean splicing and unsplicing
+        # it at both ends.
+        try:
+            wanted = pages.validate_path((ctx.query.get("path") or [""])[0])
+        except pages.PageError:
+            return ctx.error("Page not found", 404)
+        return await page_response(ctx, await pages.page_by_path(ctx.env, wanted))
 
     if path == "/api/categories" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

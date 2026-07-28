@@ -59,6 +59,8 @@ backend/
     bio_link_api.py   管理端 /api/bio-link* 端點
     shop.py           商品、規格、庫存與照片
     categories.py     商品分類與 AND/OR 篩選
+    pages.py          自訂頁面與區塊
+    pages_admin_api.py 管理端頁面端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -101,6 +103,8 @@ docs/superpowers/specs/  設計文件
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
 | GET | `/api/products` | 上架商品列表 |
 | GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
+| GET | `/api/pages/home` | 目前設為首頁的那一頁，沒有就 404 |
+| GET | `/api/pages?path=/about` | 依路徑取頁面與其區塊，只有 `published` 解得開 |
 | GET | `/api/categories` | 分類清單，含上架商品數量 |
 | GET | `/api/categories/{slugs}` | 分類頁。`a,b` 是任一、`a+b` 是兩者皆是 |
 | POST | `/api/cart/validate` | 依購物車內容重算價格、庫存與運費 |
@@ -141,6 +145,12 @@ docs/superpowers/specs/  設計文件
 | GET / POST | `/api/categories` | 分類列表與新增 |
 | PUT | `/api/categories/order` | 排序，必須排在 `{id}` 路由之前 |
 | PUT / DELETE | `/api/categories/{id}` | 單一分類 |
+| GET / POST | `/api/pages` | 頁面列表與新增 |
+| PUT | `/api/pages/order` | 排序，必須排在 `{id}` 路由之前 |
+| GET / PUT / DELETE | `/api/pages/{id}` | 單一頁面與其區塊 |
+| POST | `/api/pages/{id}/blocks` | 新增區塊 |
+| PUT | `/api/pages/{id}/blocks/order` | 區塊排序 |
+| PUT / DELETE | `/api/blocks/{id}` | 單一區塊 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -200,7 +210,7 @@ Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `p
 
 **錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
 
-匯出清單在 workflow 的 `TABLES`：bio link 三張、`folder_print_settings`、商城的 `products`／`product_variants`／`product_images`／`shipping_methods`／`product_categories`／`product_category_links`，以及交易相關的 `customers`／`orders`／`order_items`／`payment_attempts`／`order_audit_log`。刻意排除的是：
+匯出清單在 workflow 的 `TABLES`：bio link 三張、`folder_print_settings`、商城的 `products`／`product_variants`／`product_images`／`shipping_methods`／`product_categories`／`product_category_links`、自訂頁的 `pages`／`page_blocks`，以及交易相關的 `customers`／`orders`／`order_items`／`payment_attempts`／`order_audit_log`。刻意排除的是：
 
 - `admin_sessions`、`admin_oauth_states`、`customer_sessions`、`customer_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
 - `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
