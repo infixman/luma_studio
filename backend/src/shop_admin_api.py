@@ -6,6 +6,7 @@ the way in: these rows end up in customer-facing pages and, before long, in
 the amount charged to a card.
 """
 
+import categories
 import shipping
 import shop
 from responses import Ctx
@@ -25,6 +26,7 @@ async def _detail(ctx: Ctx, product: dict) -> dict:
         "product": product,
         "variants": await shop.list_variants(ctx.env, product["id"]),
         "images": await shop.list_images(ctx.env, product["id"]),
+        "categories": await categories.of_product(ctx.env, product["id"]),
     }
 
 
@@ -37,6 +39,32 @@ def _product_fields(body: dict) -> dict:
         ),
         "status": shop.validate_status(str(body.get("status") or "draft")),
     }
+
+
+def _category_fields(body: dict) -> dict:
+    return {
+        "slug": shop.validate_slug(str(body.get("slug") or "")),
+        "title": shop.validate_text(str(body.get("title") or ""), categories.MAX_TITLE, "Title"),
+        "description": shop.validate_text(
+            str(body.get("description") or ""), categories.MAX_DESCRIPTION, "Description", required=False
+        ),
+    }
+
+
+def _category_ids(body: dict) -> list[str] | None:
+    """The product's categories, or None when the caller did not mention them.
+
+    None and [] mean different things: the first leaves the categories alone,
+    the second clears them. A PUT that forgot the field must not silently
+    strip a product out of every category it was in.
+    """
+
+    raw = body.get("categoryIds")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise ValueError("categoryIds must be a list")
+    return [categories.validate_id(str(value)) for value in raw]
 
 
 def _variant_fields(body: dict) -> dict:
@@ -77,6 +105,54 @@ async def handle(ctx: Ctx):
             await shipping.save_method(env, update.pop("method"), **update)
         return ctx.json({"methods": await shipping.list_methods(env)})
 
+    if path == "/api/categories" and method == "GET":
+        return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)})
+
+    if path == "/api/categories" and method == "POST":
+        try:
+            fields = _category_fields(await _read_json(ctx))
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid category", 400)
+        if await categories.slug_taken(env, fields["slug"]):
+            return ctx.error("Another category already uses that slug", 409)
+        await categories.create(env, **fields)
+        return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)}, 201)
+
+    # Before the {id} route below, or "order" would be read as a category id.
+    if path == "/api/categories/order" and method == "PUT":
+        try:
+            raw_ids = (await _read_json(ctx)).get("ids")
+            if not isinstance(raw_ids, list):
+                raise ValueError("Expected an array of category ids")
+            ordered = [categories.validate_id(str(value)) for value in raw_ids]
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid ordering", 400)
+        await categories.reorder(env, ordered)
+        return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)})
+
+    if path.startswith("/api/categories/") and method in {"PUT", "DELETE"}:
+        try:
+            category_id = categories.validate_id(path.removeprefix("/api/categories/"))
+        except ValueError as error:
+            return ctx.error(str(error), 400)
+        if await categories.get(env, category_id) is None:
+            return ctx.error("Category not found", 404)
+
+        if method == "DELETE":
+            # Links go, products stay: a category is a label, and peeling it
+            # off is not supposed to throw the product away.
+            await categories.remove(env, category_id)
+            return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)})
+
+        try:
+            fields = _category_fields(await _read_json(ctx))
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid category", 400)
+        if await categories.slug_taken(env, fields["slug"], excluding=category_id):
+            return ctx.error("Another category already uses that slug", 409)
+        await categories.update(env, category_id, **fields)
+        return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)})
+
     if path == "/api/products" and method == "GET":
         products = await shop.list_products(env)
         return ctx.json(
@@ -84,17 +160,23 @@ async def handle(ctx: Ctx):
                 "products": products,
                 "variants": {p["id"]: await shop.list_variants(env, p["id"]) for p in products},
                 "images": {p["id"]: await shop.list_images(env, p["id"]) for p in products},
+                "categories": await categories.list_all(env),
+                "productCategories": {p["id"]: await categories.of_product(env, p["id"]) for p in products},
             }
         )
 
     if path == "/api/products" and method == "POST":
         try:
-            fields = _product_fields(await _read_json(ctx))
+            body = await _read_json(ctx)
+            fields = _product_fields(body)
+            category_ids = _category_ids(body)
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid product", 400)
         if await shop.slug_taken(env, fields["slug"]):
             return ctx.error("Another product already uses that slug", 409)
         product_id = await shop.create_product(env, **fields)
+        if category_ids is not None:
+            await categories.set_for_product(env, product_id, category_ids)
         return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)), 201)
 
     # Before the {id} routes below, or "order" would be read as a product id.
@@ -126,12 +208,16 @@ async def handle(ctx: Ctx):
 
         if not tail and method == "PUT":
             try:
-                fields = _product_fields(await _read_json(ctx))
+                body = await _read_json(ctx)
+                fields = _product_fields(body)
+                category_ids = _category_ids(body)
             except (ValueError, AttributeError) as error:
                 return ctx.error(str(error) or "Invalid product", 400)
             if await shop.slug_taken(env, fields["slug"], excluding=product_id):
                 return ctx.error("Another product already uses that slug", 409)
             await shop.update_product(env, product_id, **fields)
+            if category_ids is not None:
+                await categories.set_for_product(env, product_id, category_ids)
             return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)))
 
         if not tail and method == "DELETE":

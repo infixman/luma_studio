@@ -66,6 +66,8 @@ async def dispatch(ctx: Ctx):
         or path.startswith("/api/variants/")
         or path.startswith("/api/images/")
         or path == "/api/shipping-methods"
+        or path == "/api/categories"
+        or path.startswith("/api/categories/")
     ):
         return await shop_admin_api.handle(ctx)
 

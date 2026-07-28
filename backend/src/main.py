@@ -20,6 +20,7 @@ from workers import WorkerEntrypoint
 import auth_customer
 import bio_link
 import cart
+import categories
 import orders
 import rate_limit
 import router
@@ -191,6 +192,65 @@ async def shop_index_response(ctx: Ctx):
             )
         )
     return ctx.json({"products": cards})
+
+
+async def category_index_response(ctx: Ctx):
+    """Every category, with how many active products each one holds."""
+
+    counts = await categories.counts(ctx.env)
+    return ctx.json(
+        {
+            "categories": [
+                {
+                    "slug": category["slug"],
+                    "title": category["title"],
+                    "productCount": counts.get(category["id"], 0),
+                }
+                for category in await categories.list_all(ctx.env)
+            ]
+        }
+    )
+
+
+async def category_page_response(ctx: Ctx, raw: str):
+    """One category, or a combination of them.
+
+    `a,b` is either, `a+b` is both. A URL naming an unknown slug is a 404;
+    one naming a real but empty category is not — the owner may be about to
+    put something in it, and 404 would read as a broken category.
+    """
+
+    try:
+        slugs, mode = categories.parse_filter(unquote(raw))
+    except ValueError:
+        return ctx.error("Category not found", 404)
+
+    found = await categories.by_slugs(ctx.env, slugs)
+    if len(found) != len(slugs):
+        return ctx.error("Category not found", 404)
+
+    products = await categories.products_in(ctx.env, [category["id"] for category in found], mode)
+    cards = []
+    for product in products:
+        cards.append(
+            shop.public_summary(
+                product,
+                await shop.list_variants(ctx.env, product["id"]),
+                await shop.list_images(ctx.env, product["id"]),
+            )
+        )
+
+    return ctx.json(
+        {
+            "title": categories.filter_title(found, mode),
+            # Only a single category has a description of its own; no one
+            # category's blurb describes a combination.
+            "description": found[0]["description"] if len(found) == 1 else "",
+            "mode": mode,
+            "categories": [{"slug": category["slug"], "title": category["title"]} for category in found],
+            "products": cards,
+        }
+    )
 
 
 async def shop_product_response(ctx: Ctx, slug: str):
@@ -499,6 +559,16 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
             return ctx.too_many_requests()
         return ctx.json({"methods": await shipping.list_methods(ctx.env, only_enabled=True)})
+
+    if path == "/api/categories" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await category_index_response(ctx)
+
+    if path.startswith("/api/categories/") and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await category_page_response(ctx, path.removeprefix("/api/categories/"))
 
     if path == "/api/products" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

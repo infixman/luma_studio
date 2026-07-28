@@ -297,6 +297,34 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_order_audit_log_order ON order_audit_log (order_id, created_at)",
         ],
     },
+    {
+        # Categories are flat and many-to-many, which makes them tags. The
+        # menu's nesting is arranged by hand rather than grown from here.
+        "name": "0010_create_product_categories",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS product_categories (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 slug TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 description TEXT NOT NULL DEFAULT '',
+                 position INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_categories_slug ON product_categories (slug)",
+            "CREATE INDEX IF NOT EXISTS idx_product_categories_position ON product_categories (position)",
+            """CREATE TABLE IF NOT EXISTS product_category_links (
+                 product_id TEXT NOT NULL,
+                 category_id TEXT NOT NULL,
+                 PRIMARY KEY (product_id, category_id)
+               )""",
+            # The primary key answers "which categories is this product in".
+            # A category page asks the opposite, which without this index
+            # means scanning the whole table.
+            "CREATE INDEX IF NOT EXISTS idx_product_category_links_category"
+            " ON product_category_links (category_id, product_id)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

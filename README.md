@@ -58,6 +58,7 @@ backend/
     bio_link.py       Bio link 的設定、連結、匿名點擊記錄
     bio_link_api.py   管理端 /api/bio-link* 端點
     shop.py           商品、規格、庫存與照片
+    categories.py     商品分類與 AND/OR 篩選
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -100,6 +101,8 @@ docs/superpowers/specs/  設計文件
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
 | GET | `/api/products` | 上架商品列表 |
 | GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
+| GET | `/api/categories` | 分類清單，含上架商品數量 |
+| GET | `/api/categories/{slugs}` | 分類頁。`a,b` 是任一、`a+b` 是兩者皆是 |
 | POST | `/api/cart/validate` | 依購物車內容重算價格、庫存與運費 |
 | GET | `/api/shipping-methods` | 啟用中的配送方式與運費 |
 | GET | `/shop-assets/{file}` | 商品照片 |
@@ -135,6 +138,9 @@ docs/superpowers/specs/  設計文件
 | PUT / DELETE | `/api/variants/{id}` | 規格 |
 | DELETE | `/api/images/{id}` | 照片 |
 | GET / PUT | `/api/shipping-methods` | 運費與免運門檻 |
+| GET / POST | `/api/categories` | 分類列表與新增 |
+| PUT | `/api/categories/order` | 排序，必須排在 `{id}` 路由之前 |
+| PUT / DELETE | `/api/categories/{id}` | 單一分類 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -194,7 +200,7 @@ Account Resources 選 Include 你的帳號。建立後把值存進 GitHub 的 `p
 
 **錯誤代碼的分辨**：`10000` 是 token 權限不足，`7403` 是帳號無權存取該服務——後者通常代表 token 值或 `CLOUDFLARE_ACCOUNT_ID` 與儀表板上看到的那一組對不起來，加權限沒有用。工作的第一步會跑 `wrangler whoami`，就是為了先分辨這兩種情況。
 
-匯出清單在 workflow 的 `TABLES`：bio link 三張、`folder_print_settings`、商城的 `products`／`product_variants`／`product_images`／`shipping_methods`，以及交易相關的 `customers`／`orders`／`order_items`／`payment_attempts`／`order_audit_log`。刻意排除的是：
+匯出清單在 workflow 的 `TABLES`：bio link 三張、`folder_print_settings`、商城的 `products`／`product_variants`／`product_images`／`shipping_methods`／`product_categories`／`product_category_links`，以及交易相關的 `customers`／`orders`／`order_items`／`payment_attempts`／`order_audit_log`。刻意排除的是：
 
 - `admin_sessions`、`admin_oauth_states`、`customer_sessions`、`customer_oauth_states` — 裡面是**有效的憑證**，備份等於把祕密多存一份，而且重登入就能重建
 - `ibon_print_cache` — 24 小時就過期，重跑一次上傳即可
@@ -494,6 +500,7 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 | --- | --- |
 | 商品列表 | `luma-studio.tw/shop` |
 | 單一商品 | `luma-studio.tw/shop/{slug}` |
+| 分類頁 | `luma-studio.tw/shop/c/{slugs}` |
 | 購物車 | `luma-studio.tw/cart` |
 | 結帳 | `luma-studio.tw/checkout` |
 | 我的訂單 | `luma-studio.tw/orders` |
@@ -503,6 +510,26 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態，以及設定每種配送方式的運費與免運門檻。
 
 前台**只看得到 `active` 的商品**。草稿即使有人猜中 slug 也解不開，已下架的則會停止販售——兩者都回 404，因為對顧客而言那就是同一件事。
+
+### 分類
+
+分類是**扁平的多對多**，也就是 tag。沒有階層——之後選單的三層是在選單編輯器裡手排的，不會從分類長出來。兩者刻意獨立：選單想怎麼分組就怎麼分組，不必先說服目錄同意。
+
+分類頁可以一次指定多個：
+
+| 網址 | 意思 |
+| --- | --- |
+| `/shop/c/candles` | 這個分類 |
+| `/shop/c/candles,art-kits` | 任一（OR） |
+| `/shop/c/candles+gift` | 兩者皆是（AND） |
+
+**不支援混用。** `a,b+c` 一旦有意義，就得定義優先順序、寫解析器，並在後台介面上讓人表達那個優先順序。那不是篩選，是查詢語言。遇到混用回 404。上限五個 slug——沒有上限的話，一個手工構造帶兩百個 slug 的網址就是一次大查詢。
+
+`/c/` 這一段是刻意的：分類 slug 與商品 slug 從此不可能相撞。
+
+`/shop/c/a,b` 與 `/shop/c/b,a` 是同一批商品的兩個網址。程式產生連結時一律排序 slug；整站目前是 `noindex`，所以重複網址沒有代價。**決定讓商城被收錄時**，這裡要補 canonical 或在 Worker 做 301。
+
+同一個篩選函式之後會被自訂頁的商城區塊沿用，所以網址解析出來的和後台設定的是同一組值，兩邊不會對「兩者皆是」有不同解釋。
 
 ### 購物車
 
