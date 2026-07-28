@@ -10,8 +10,11 @@
 const KEY = 'luma-cart'
 const CHANGED = 'luma-cart-changed'
 
+/* Both mirror backend/src/cart.py. The browser's copy only decides what the
+   number field will accept; the one that matters is the server's, which
+   re-checks every line at checkout. */
 export const MAX_LINES = 20
-export const MAX_QUANTITY = 20
+export const MAX_QUANTITY = 99
 
 export interface CartLine {
   variantId: string

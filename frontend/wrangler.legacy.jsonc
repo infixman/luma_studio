@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Keeps the name `luma-studio` alive, and nothing else. A workers.dev
+  // hostname is the Worker's name, and
+  // https://luma-studio.infixman.workers.dev/ibon_print/{id} was handed out
+  // before the site had a domain of its own.
+  //
+  // DO NOT DEPLOY THIS UNTIL api.luma-studio.tw HAS MOVED to
+  // luma-studio-web-api. Deploying under this name replaces whatever is
+  // currently called `luma-studio` — which, until the custom domain moves, is
+  // the live public API.
+  //
+  // Deliberately empty: no D1, no R2, no secrets, and no triggers. Two
+  // Workers sharing a schedule would sweep expired orders and drain the mail
+  // queue twice.
+  "name": "luma-studio",
+  "main": "worker/legacy.ts",
+  "compatibility_date": "2026-07-21",
+  // The whole reason this exists. The public API's own subdomain stays off.
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  }
+}

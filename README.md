@@ -83,6 +83,7 @@ frontend/
   worker/
     storefront.ts     供應前台 SPA、為 /card 注入分享預覽標籤、轉走舊的 /admin
     admin.ts          供應後台 SPA
+    legacy.ts         只做一件事：把發出去的 workers.dev 舊網址轉到正式網域
   public/assets/      logo 與教學圖
   src/
     shared/           兩邊共用：api、types、markdown、區塊元件、SocialIcon、base.css
@@ -361,9 +362,30 @@ DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CN
    `VISITOR_SALT` **一定要用原本那一組**。換了，bio link 的訪客雜湊就變了，同一個人會被算成新訪客——而且不會有任何錯誤訊息，統計只是從那天起悄悄失真。
 3. **搬網域**：舊 Worker → Settings → Domains & Routes 移除 `api.luma-studio.tw`，然後在新 Worker 加回去。一個 Custom Domain 同時只能綁一個 Worker，所以中間會有幾十秒打不開。挑沒人的時間做。
 4. **驗證**：`https://api.luma-studio.tw/api/health` 回得出 migration 清單就對了。順手開一次前台跟結帳。
-5. **刪掉舊的 Worker**。這一步不是收尾，是必要的：舊的那個身上還有 `crons = ["*/5 * * * *"]`，不刪就會有兩個 Worker 同時掃逾期訂單、同時排空信件佇列。
+5. **把舊的 `luma-studio` 換成跳轉 Worker**（見上一節），不要刪掉它——那個名字撐著已經發出去的 workers.dev 網址。這一步不是收尾，是必要的：舊的那個身上還有 `crons = ["*/5 * * * *"]`，不換掉就會有兩個 Worker 同時掃逾期訂單、同時排空信件佇列。跳轉 Worker 沒有 cron，蓋上去等於把排程拿掉。
 
 Google OAuth 那邊**不用動**。redirect URI 綁的是網域不是 Worker 名字，`https://api.luma-studio.tw/auth/callback` 從頭到尾沒變。D1、R2 與速率限制的 binding 都寫在 `wrangler.toml` 裡，跟著部署走。
+
+### 已經發出去的 workers.dev 網址
+
+`https://luma-studio.infixman.workers.dev/ibon_print/20260721_soda` 印出去過。
+
+**workers.dev 的主機名就是 Worker 的名字**，所以那個網址只在有一個叫 `luma-studio` 的 Worker 時才存在。改名之後如果把舊的刪掉，那條連結就永遠救不回來——`luma-studio-web-api.infixman.workers.dev` 是另一個網址。
+
+所以 `luma-studio` 這個名字留著，但裡面換成一個只會跳轉的小 Worker（[frontend/worker/legacy.ts](frontend/worker/legacy.ts)、[frontend/wrangler.legacy.jsonc](frontend/wrangler.legacy.jsonc)）。它沒有 D1、沒有 R2、沒有 secrets，**也沒有 cron**——兩個 Worker 共用同一個排程會讓逾期訂單被掃兩次、信件佇列被排空兩次。
+
+只有 `/ibon_print/{id}` 會帶著路徑過去，其他一律送到首頁：舊主機是 API，它的其他路徑在網站上意義不同，照著轉會落在一個看起來像我們壞掉的 404。
+
+用 302 不用 301。這是**臨時**的——等到沒有人手上還拿著印了舊網址的紙就可以撤掉——而 301 會被瀏覽器快取到你改變主意也沒用。
+
+⚠️ **`api.luma-studio.tw` 搬到 `luma-studio-web-api` 之前不要部署它。** 用這個名字部署會蓋掉目前叫 `luma-studio` 的東西，而在網域搬走之前，那就是線上的公開 API。
+
+```powershell
+cd frontend
+npx wrangler deploy -c wrangler.legacy.jsonc
+```
+
+刻意沒有放進 CI，就是為了不讓它在搬移完成前被自動部署出去。搬完之後要不要加進 `deploy.yml` 隨你——它幾乎不會再改。
 
 ### Worker secrets
 

@@ -13,10 +13,16 @@ by two pieces of code that disagree.
 import shop
 
 
-# Enough for a real order, small enough that a scripted request cannot make
-# the Worker walk a thousand rows.
+# How many different items a cart may hold. This one is about the Worker: one
+# line is one row to look up, and a scripted request should not be able to ask
+# for a thousand.
 MAX_LINES = 20
-MAX_QUANTITY = 20
+
+# How many of one thing. This one is about the shelf, not the Worker — the
+# quantity is a single number and costs nothing to read. Stock is taken when
+# the order is created and held for fifteen minutes, so with no cap one click
+# can put every last unit on hold and show everyone else "sold out".
+MAX_QUANTITY = 99
 
 
 class CartError(Exception):
