@@ -46,13 +46,14 @@ body.admin .shop h3 {
 
 /* --- forms still on plain markup elsewhere in the back office ---
 
-   The site and block editors have not been moved onto the component set yet,
-   and these are the shapes they draw with. They stay until those pages are
-   migrated: deleting them here would quietly flatten two pages this change
-   never touched. */
+   The site editor has not been moved onto the component set yet, and this is
+   the shape it draws with. It stays until that page is migrated: deleting it
+   here would quietly flatten a page this change never touched.
 
-body.admin .new-product,
-body.admin .new-variant {
+   `.new-variant` and the whole delivery block went when ShippingPage and the
+   variant editor moved to Panel/TextField/Toggle — nothing emits them. */
+
+body.admin .new-product {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -228,45 +229,6 @@ body.admin .photo-grid .ui-icon-button {
   right: var(--space-1);
   background: var(--surface);
   box-shadow: var(--shadow-1);
-}
-
-/* --- delivery settings --- */
-
-body.admin .shipping-form {
-  display: grid;
-  gap: var(--space-4);
-  max-width: 40rem;
-}
-
-body.admin .shipping-form .method {
-  display: grid;
-  gap: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-}
-
-/* A method that is switched off keeps its numbers visible: they are what the
-   owner comes back to when turning it on again. */
-body.admin .shipping-form .method.off {
-  opacity: 0.6;
-}
-
-body.admin .shipping-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--font-base);
-}
-
-body.admin .shipping-form .toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-body.admin .shipping-form input[type='number'] {
-  width: 8rem;
 }
 
 /* --- categories --- */

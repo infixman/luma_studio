@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { IconButton, TextField } from './ui'
-import { ApiError, api } from '../../shared/api'
+import { api } from '../../shared/api'
 import type { MediaItem } from '../../shared/types'
 
 /**
@@ -38,7 +38,7 @@ export function useMediaLibrary(active: boolean, onError: (error: unknown) => vo
       } catch (error) {
         // A 401 has already sent the browser to Google; saying so as well
         // would put an error on screen on the way out of the page.
-        if (!(error instanceof ApiError && error.status === 401)) onError(error)
+        onError(error)
       }
     },
     [onError],

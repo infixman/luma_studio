@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { OrderStatus, OrderDetail } from '../../shared/types'
 import '../styles/shop.css'
+import { dateTime } from '../../shared/dates'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -30,16 +31,6 @@ const STEPS: { label: string; reached: OrderStatus[] }[] = [
 function minutesLeft(reservedUntil: number | null): number | null {
   if (reservedUntil === null) return null
   return Math.max(0, Math.ceil((reservedUntil * 1000 - Date.now()) / 60000))
-}
-
-function stamp(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 export function OrderPage({ id }: { id: string }) {
@@ -195,7 +186,7 @@ export function OrderPage({ id }: { id: string }) {
           </div>
         </dl>
 
-        <p class="placed-at">成立時間：{stamp(order.createdAt)}</p>
+        <p class="placed-at">成立時間：{dateTime(order.createdAt)}</p>
       </section>
     </main>
   )

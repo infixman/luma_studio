@@ -10,7 +10,9 @@
  * styles/tokens.css, keyed off the `data-theme` attribute this sets.
  */
 
-const KEY = 'luma-admin-theme'
+import { read, write } from './storage'
+
+const KEY = 'theme'
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
@@ -19,14 +21,10 @@ function isChoice(value: unknown): value is ThemeChoice {
 }
 
 export function readChoice(): ThemeChoice {
-  try {
-    const stored = localStorage.getItem(KEY)
-    return isChoice(stored) ? stored : 'system'
-  } catch {
-    // Private modes can refuse storage. Following the system is a working
-    // back office; a thrown error on the first paint is not.
-    return 'system'
-  }
+  // A browser that refuses storage still gets a working back office: following
+  // the system is a fine answer, and an exception on the first paint is not.
+  const stored = read(KEY)
+  return isChoice(stored) ? stored : 'system'
 }
 
 /**
@@ -42,11 +40,8 @@ export function applyChoice(choice: ThemeChoice): void {
 
 export function saveChoice(choice: ThemeChoice): void {
   applyChoice(choice)
-  try {
-    localStorage.setItem(KEY, choice)
-  } catch {
-    /* The theme still applies for this tab; it just will not be remembered. */
-  }
+  // The theme still applies for this tab even if it cannot be remembered.
+  write(KEY, choice)
 }
 
 /** What the page is actually showing, once the system has had its say. */

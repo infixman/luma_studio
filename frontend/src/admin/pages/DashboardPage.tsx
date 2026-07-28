@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { Badge, EmptyState, Panel, Spinner, TableWrap } from '../components/ui'
-import { ApiError, STOREFRONT_ORIGIN, api, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api, clearLoginAttempt } from '../../shared/api'
 import type { DashboardSummary } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/dashboard.css'
@@ -37,11 +37,8 @@ export function DashboardPage() {
       setSummary(await api<DashboardSummary>('/api/dashboard'))
       clearLoginAttempt()
     } catch (error) {
-      // The gate has already sent an unauthenticated caller to Google.
-      if (!(error instanceof ApiError && error.status === 401)) {
-        setFailed(true)
-        showError(error)
-      }
+      setFailed(true)
+      showError(error)
     }
   }, [showError])
 

@@ -1,3 +1,4 @@
+import { forget, key, read, write } from './storage'
 import type { BlockConfig, BlockType } from '../../shared/types'
 
 /**
@@ -14,7 +15,10 @@ import type { BlockConfig, BlockType } from '../../shared/types'
  * this is a copy and not a cut.
  */
 
-const KEY = 'luma.block-clipboard'
+const NAME = 'block-clipboard'
+
+/** The full key, for the storage event — which reports keys, not names. */
+export const CLIPBOARD_KEY = key(NAME)
 
 /** Bumped when the stored shape changes, so an old entry is ignored rather than misread. */
 const VERSION = 1
@@ -65,24 +69,21 @@ export function parseCopiedBlock(raw: string | null, known: readonly string[]): 
 }
 
 /* Storage itself can throw — Safari's private mode does — and a clipboard is
-   not worth taking the editor down for. Both sides answer "no" instead. */
+   not worth taking the editor down for. `lib/storage` swallows that; these two
+   only have to decide what "nothing there" means. */
 
 export function writeCopiedBlock(block: CopiedBlock): boolean {
-  try {
-    localStorage.setItem(KEY, serialiseBlock(block))
-    return true
-  } catch {
-    return false
-  }
+  write(NAME, serialiseBlock(block))
+  // A write that went nowhere reads back as nothing, which is the honest
+  // answer to "is there something to paste".
+  return read(NAME) !== null
 }
 
 export function readCopiedBlock(known: readonly string[]): CopiedBlock | null {
-  try {
-    return parseCopiedBlock(localStorage.getItem(KEY), known)
-  } catch {
-    return null
-  }
+  return parseCopiedBlock(read(NAME), known)
 }
 
-/** Exported so a `storage` event can tell whether it was this key that moved. */
-export const CLIPBOARD_KEY = KEY
+/** Clears an entry this build cannot use, so the menu stops offering it. */
+export function clearCopiedBlock(): void {
+  forget(NAME)
+}

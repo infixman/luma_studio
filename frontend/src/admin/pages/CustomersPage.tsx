@@ -23,11 +23,12 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
-import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { AdminCustomer, AdminCustomerDetail, Order, OrderStatus } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
+import { dateOnly } from '../../shared/dates'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -74,10 +75,6 @@ const FIELDS: FilterField[] = [
   { name: 'createdAt', label: '加入時間', type: 'date' },
 ]
 
-function when(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
-
 export function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -101,7 +98,7 @@ export function CustomersPage() {
       setTruncated(data.truncated)
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [search, showError])
 
@@ -273,7 +270,7 @@ export function CustomersPage() {
     { key: 'displayName', label: '稱呼', render: (customer) => customer.displayName || '—' },
     { key: 'orderCount', label: '訂單', numeric: true, render: (customer) => customer.orderCount },
     { key: 'paidTotal', label: '已付金額', numeric: true, render: (customer) => `NT$${customer.paidTotal}` },
-    { key: 'createdAt', label: '加入', render: (customer) => when(customer.createdAt) },
+    { key: 'createdAt', label: '加入', render: (customer) => dateOnly(customer.createdAt) },
   ]
 
   return (
@@ -402,11 +399,11 @@ export function CustomersPage() {
             <dt>預設地址</dt>
             <dd>{detail.customer.address || '—'}</dd>
             <dt>加入時間</dt>
-            <dd>{when(detail.customer.createdAt)}</dd>
+            <dd>{dateOnly(detail.customer.createdAt)}</dd>
             {detail.customer.anonymizedAt ? (
               <>
                 <dt>清除時間</dt>
-                <dd>{when(detail.customer.anonymizedAt)}</dd>
+                <dd>{dateOnly(detail.customer.anonymizedAt)}</dd>
               </>
             ) : null}
           </dl>
@@ -434,7 +431,7 @@ export function CustomersPage() {
                     <td>
                       <Badge tone={STATUS_TONES[order.status]}>{STATUS_LABELS[order.status]}</Badge>
                     </td>
-                    <td>{when(order.createdAt)}</td>
+                    <td>{dateOnly(order.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

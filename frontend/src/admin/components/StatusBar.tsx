@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
+import { ApiError } from '../../shared/api'
+
 export type StatusKind = 'ok' | 'error' | 'plain'
 
 interface StatusMessage {
@@ -19,11 +21,51 @@ export function useStatus() {
     timer.current = setTimeout(() => setMessage(null), VISIBLE_MS)
   }, [])
 
-  const showError = useCallback((error: unknown) => show(error instanceof Error ? error.message : '操作失敗', 'error'), [show])
+  /**
+   * Says what went wrong — except when nothing did.
+   *
+   * A 401 means the api client has already sent the visitor to Google, and
+   * the page is about to be replaced. Announcing it would flash an error at
+   * somebody who is being signed in, which is not a failure they can act on.
+   *
+   * This lived at every call site as `if (!(error instanceof ApiError &&
+   * error.status === 401))`, twelve times, and every new page had to remember
+   * it. No caller has a reason to know about that rule.
+   */
+  const showError = useCallback(
+    (error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) return
+      show(error instanceof Error ? error.message : '操作失敗', 'error')
+    },
+    [show],
+  )
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  return { message, show, showError }
+  /**
+   * The wrapper six pages had copied verbatim: refuse while something else is
+   * running, report either way, and say whether it worked.
+   */
+  const [busy, setBusy] = useState(false)
+  const run = useCallback(
+    async (work: () => Promise<void>, done: string): Promise<boolean> => {
+      if (busy) return false
+      setBusy(true)
+      try {
+        await work()
+        show(done, 'ok')
+        return true
+      } catch (error) {
+        showError(error)
+        return false
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, show, showError],
+  )
+
+  return { message, show, showError, busy, run }
 }
 
 export function StatusBar({ message }: { message: StatusMessage | null }) {

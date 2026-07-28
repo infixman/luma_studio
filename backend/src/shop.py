@@ -261,9 +261,6 @@ async def slug_taken(env, slug: str, *, excluding: str | None = None) -> bool:
     return bool(rows)
 
 
-async def count_products(env) -> int:
-    rows = await d1_rows(env.DB.prepare("SELECT COUNT(*) AS total FROM products"))
-    return int(rows[0]["total"]) if rows else 0
 
 
 async def create_product(env, *, slug: str, title: str, description: str, status: str) -> str:

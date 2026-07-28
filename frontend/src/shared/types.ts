@@ -180,12 +180,6 @@ export interface Category {
   position: number
 }
 
-/** The back office's view: every category, and how many active products each holds. */
-export interface CategoryListing {
-  categories: Category[]
-  counts: Record<string, number>
-}
-
 /** What an anonymous visitor is told about a variant. Stock is deliberately vague above the low-stock threshold. */
 export interface PublicVariant {
   id: string

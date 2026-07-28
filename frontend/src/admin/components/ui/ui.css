@@ -863,9 +863,6 @@
   right: 0;
 }
 
-.ui-menu.align-start {
-  left: 0;
-}
 
 .ui-menu-item {
   display: flex;

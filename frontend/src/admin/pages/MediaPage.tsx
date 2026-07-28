@@ -18,12 +18,13 @@ import {
 } from '../components/ui'
 import { api, apiJson, apiUrl, uploadMedia } from '../../shared/api'
 import { srcSetFor } from '../../shared/srcset'
-import { fileSize, mediaDate, mediaDimensions, mediaFormat, mediaName } from '../lib/mediaFacts'
+import { fileSize, mediaDimensions, mediaFormat, mediaName } from '../lib/mediaFacts'
 import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/media-admin.css'
+import { dateOnly } from '../../shared/dates'
 
 type Usage = { id: string; title: string; path: string }
 
@@ -499,7 +500,7 @@ export function MediaPage() {
               </div>
               <div>
                 <dt>上傳日期</dt>
-                <dd>{mediaDate(selected.createdAt)}</dd>
+                <dd>{dateOnly(selected.createdAt)}</dd>
               </div>
               <div>
                 <dt>響應式寬度</dt>

@@ -27,11 +27,12 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
-import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { AdminOrder, AdminOrderDetail, AdminOrderList, OrderStatus } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
+import { dateTime } from '../../shared/dates'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -103,16 +104,6 @@ const TAB_RULE = 'tab-'
  * read when something has gone wrong, not on the way past.
  */
 const DEFAULT_HIDDEN = ['recipientPhone', 'recipientEmail', 'shippingMethod', 'adminNote']
-
-function when(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 /**
  * The filter rules, as the query string the admin API takes.
@@ -187,7 +178,7 @@ export function OrdersAdminPage() {
       setList(await api<AdminOrderList>(`/api/orders${query ? `?${query}` : ''}`))
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [query, showError])
 
@@ -339,7 +330,7 @@ export function OrdersAdminPage() {
       label: '狀態',
       render: (order) => <Badge tone={STATUS_TONES[order.status]}>{STATUS_LABELS[order.status]}</Badge>,
     },
-    { key: 'createdAt', label: '成立時間', render: (order) => when(order.createdAt) },
+    { key: 'createdAt', label: '成立時間', render: (order) => dateTime(order.createdAt) },
     { key: 'recipientPhone', label: '電話', render: (order) => order.recipientPhone || '—' },
     { key: 'recipientEmail', label: 'Email', render: (order) => order.recipientEmail || '—' },
     { key: 'shippingMethod', label: '配送', render: (order) => order.shippingMethod },
@@ -612,7 +603,7 @@ export function OrdersAdminPage() {
                 {detail.attempts.map((attempt) => (
                   <li key={attempt.merTradeNo}>
                     <code>{attempt.merTradeNo}</code> NT${attempt.amount}．{attempt.status}．
-                    {when(attempt.createdAt)}
+                    {dateTime(attempt.createdAt)}
                   </li>
                 ))}
               </ul>
@@ -630,7 +621,7 @@ export function OrdersAdminPage() {
               {detail.emails.map((email, index) => (
                 <li key={index}>
                   {MAIL_STATUS[email.status] ?? email.status}．{email.subject}．{email.recipient}
-                  {email.sentAt ? `．${when(email.sentAt)}` : ''}
+                  {email.sentAt ? `．${dateTime(email.sentAt)}` : ''}
                   {email.lastError ? `．${email.lastError}` : ''}
                 </li>
               ))}
@@ -643,7 +634,7 @@ export function OrdersAdminPage() {
           <ul class="audit">
             {detail.audit.map((entry, index) => (
               <li key={index}>
-                {when(entry.createdAt)}．<strong>{entry.actor}</strong>．{entry.action}
+                {dateTime(entry.createdAt)}．<strong>{entry.actor}</strong>．{entry.action}
                 {entry.fromStatus && entry.toStatus ? `（${entry.fromStatus} → ${entry.toStatus}）` : ''}
                 {entry.detail ? `．${entry.detail}` : ''}
               </li>

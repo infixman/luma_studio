@@ -22,7 +22,7 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
-import { ApiError, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type { Category, Product, ProductListing, ProductStatus } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -72,7 +72,7 @@ export function ProductsPage() {
       setListing(await api<ProductListing>('/api/products'))
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [showError])
 

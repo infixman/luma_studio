@@ -4,12 +4,12 @@ import { srcSetFor } from '../../shared/srcset'
 import {
   fileSize,
   mediaCaption,
-  mediaDate,
   mediaDimensions,
   mediaFormat,
   mediaName,
 } from '../lib/mediaFacts'
 import type { MediaItem } from '../../shared/types'
+import { dateOnly } from '../../shared/dates'
 
 /**
  * The library, as a grid of thumbnails or as a table.
@@ -123,7 +123,7 @@ export function MediaTable({ items, selectedId, onSelect, selection, empty = 'åª
             <td>{mediaFormat(item)}</td>
             <td class="numeric">{fileSize(item.byteSize)}</td>
             <td>{mediaDimensions(item) || 'â€”'}</td>
-            <td>{mediaDate(item.createdAt)}</td>
+            <td>{dateOnly(item.createdAt)}</td>
           </tr>
         ))}
       </tbody>

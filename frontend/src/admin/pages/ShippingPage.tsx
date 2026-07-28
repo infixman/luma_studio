@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { Button, Panel, Spinner, TextField, Toggle } from '../components/ui'
-import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { ShippingMethod } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -36,7 +36,7 @@ export function ShippingPage() {
       setDrafts(data.methods.map(toDraft))
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [showError])
 

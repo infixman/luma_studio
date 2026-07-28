@@ -56,14 +56,6 @@ export function mediaCaption(item: MediaItem): string {
   return [mediaFormat(item), mediaDimensions(item)].filter(Boolean).join(' · ')
 }
 
-export function mediaDate(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleDateString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-}
-
 /**
  * The srcset for an image, widths and all, with the original as the last entry.
  *

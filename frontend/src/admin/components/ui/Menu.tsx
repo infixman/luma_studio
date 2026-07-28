@@ -23,14 +23,12 @@ interface MenuProps {
   trigger?: ComponentChildren
   /** `icon` is the square `⋯`; `button` is a normal labelled button. */
   variant?: 'icon' | 'button'
-  /** Which edge the popover lines up with. */
-  align?: 'start' | 'end'
   children: ComponentChildren
 }
 
 const ITEM_SELECTOR = '.ui-menu-item:not([disabled])'
 
-export function Menu({ label, trigger, variant = 'icon', align = 'end', children }: MenuProps) {
+export function Menu({ label, trigger, variant = 'icon', children }: MenuProps) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
@@ -125,7 +123,7 @@ export function Menu({ label, trigger, variant = 'icon', align = 'end', children
       </button>
 
       {open && (
-        <div id={id} ref={list} class={`ui-menu align-${align}`} role="menu" aria-label={label} onKeyDown={onKeyDown}>
+        <div id={id} ref={list} class={'ui-menu'} role="menu" aria-label={label} onKeyDown={onKeyDown}>
           <Close.Provider value={close}>{children}</Close.Provider>
         </div>
       )}

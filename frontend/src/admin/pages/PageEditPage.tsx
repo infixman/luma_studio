@@ -30,7 +30,7 @@ import { CLIPBOARD_KEY, readCopiedBlock, writeCopiedBlock } from '../lib/blockCl
 import type { CopiedBlock } from '../lib/blockClipboard'
 import { followsTitle, nextPath } from '../lib/slug'
 import { Blocks } from '../../shared/components/Blocks'
-import { ApiError, STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -184,7 +184,7 @@ export function PageEditPage({ id }: { id: string }) {
       setPathLocked(followsTitle(next.page.title, next.page.path))
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [apply, id, showError])
 

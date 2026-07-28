@@ -21,20 +21,16 @@ export interface ColumnSpec {
   numeric?: boolean
 }
 
-const PREFIX = 'luma-admin-columns:'
+import { read, write } from '../../lib/storage'
 
 /**
- * Storage can throw: private mode, a full quota, a browser that has switched
- * it off. Losing a column preference is not worth taking the page down for, so
- * every access here fails quietly back to the default.
+ * One key per page, under the back office's single naming scheme.
+ *
+ * Exported so a test can plant a malformed value without hard-coding the key
+ * — which it did, and which turned a rename into a failing test rather than
+ * the behaviour change it was.
  */
-function storage(): Storage | null {
-  try {
-    return globalThis.localStorage ?? null
-  } catch {
-    return null
-  }
-}
+export const columnsName = (page: string) => `columns-${page}`
 
 /**
  * What this page has hidden, or `null` when nobody has ever said.
@@ -45,30 +41,24 @@ function storage(): Storage | null {
  * Written as `readHidden(page) ?? DEFAULTS` at every call site.
  */
 export function readHidden(page: string): string[] | null {
-  const store = storage()
-  if (!store) return null
+  const raw = read(columnsName(page))
+  if (!raw) return null
   try {
-    const raw = store.getItem(PREFIX + page)
-    if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return null
     return parsed.filter((key): key is string => typeof key === 'string')
   } catch {
+    // Something else wrote here, or a half-written value survived a crash.
+    // Falling back to the defaults beats refusing to draw the table.
     return null
   }
 }
 
 export function writeHidden(page: string, hidden: string[]): void {
-  const store = storage()
-  if (!store) return
-  try {
-    // An empty list is written rather than removed, because removing it would
-    // read back as "never chosen" and hand the defaults to somebody who has
-    // just deliberately switched every column on.
-    store.setItem(PREFIX + page, JSON.stringify(hidden))
-  } catch {
-    /* A preference that could not be saved is not an error worth showing. */
-  }
+  // An empty list is written rather than removed, because removing it would
+  // read back as "never chosen" and hand the defaults to somebody who has
+  // just deliberately switched every column on.
+  write(columnsName(page), JSON.stringify(hidden))
 }
 
 /** The columns actually drawn, in the table's own order. */

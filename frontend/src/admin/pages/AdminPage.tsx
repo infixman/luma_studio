@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { CopyButton, OpenButton } from '../components/IconButtons'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
+import { useConfirm } from '../components/ui'
+import { api, apiJson, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
 import {
   applyChoice,
   defaultPrintChoice,
@@ -27,6 +28,7 @@ interface UploadProgress {
 
 export function AdminPage() {
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
   const [ready, setReady] = useState(false)
   const [folders, setFolders] = useState<string[]>([])
   const [folder, setFolder] = useState<string | null>(null)
@@ -90,7 +92,7 @@ export function AdminPage() {
         await loadFolders()
       } catch (error) {
         // A 401 has already redirected to Google inside the API wrapper.
-        if (!cancelled && !(error instanceof ApiError && error.status === 401)) showError(error)
+        if (!cancelled) showError(error)
       }
     }
     void start()
@@ -114,7 +116,18 @@ export function AdminPage() {
   }
 
   const deleteFolder = async () => {
-    if (folder === null || !confirm('只可刪除沒有圖檔的資料夾。要繼續？')) return
+    if (folder === null) return
+    const ok = await ask({
+      title: '刪除資料夾',
+      body: (
+        <>
+          <p>確定要刪除「{folder}」嗎？</p>
+          <p>只有沒有圖檔的資料夾刪得掉；裡面還有東西的話伺服器會拒絕。</p>
+        </>
+      ),
+      confirmLabel: '刪除資料夾',
+    })
+    if (!ok) return
     try {
       await api(`/api/folders/${encodeURIComponent(folder)}`, { method: 'DELETE' })
       show('資料夾已刪除。', 'ok')
@@ -129,7 +142,18 @@ export function AdminPage() {
   }
 
   const deleteFile = async (item: StoredObject) => {
-    if (folder === null || !confirm(`刪除 ${item.name}？`)) return
+    if (folder === null) return
+    const ok = await ask({
+      title: '刪除圖片',
+      body: (
+        <>
+          <p>確定要刪除「{item.name}」嗎？</p>
+          <p>取件編號的快取會一併清除，下一次公開列印會產生新的編號。</p>
+        </>
+      ),
+      confirmLabel: '刪除圖片',
+    })
+    if (!ok) return
     try {
       await api(`/api/objects?key=${encodeURIComponent(item.key)}`, { method: 'DELETE' })
       show('已刪除圖片，pincode 快取已清除；下次公開列印會建立新的取件編號。', 'ok')
@@ -205,6 +229,7 @@ export function AdminPage() {
 
   return (
     <AdminShell current="/ibon" message={message} onError={showError}>
+      {dialog}
 
       <section class="grid">
         <div class="card">

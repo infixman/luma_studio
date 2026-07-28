@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { OrderCard, OrderStatus } from '../../shared/types'
 import '../styles/shop.css'
+import { dateOnly } from '../../shared/dates'
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: '等待付款',
@@ -30,10 +31,6 @@ const TABS: { key: string; label: string; matches: (status: OrderStatus) => bool
   { key: 'completed', label: '已完成', matches: (status) => status === 'completed' },
   { key: 'closed', label: '不成立', matches: (status) => status === 'cancelled' || status === 'expired' },
 ]
-
-function orderDate(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
 
 export function OrdersPage() {
   const [orders, setOrders] = useState<OrderCard[] | null>(null)
@@ -96,7 +93,7 @@ export function OrdersPage() {
                 <li key={order.id} class="order-card">
                   <div class="card-head">
                     <span class="id">{order.id}</span>
-                    <span class="date">{orderDate(order.createdAt)}</span>
+                    <span class="date">{dateOnly(order.createdAt)}</span>
                     <span class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
                   </div>
 

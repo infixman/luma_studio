@@ -5,7 +5,7 @@ import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
 import { nextPath, suggestPath } from '../lib/slug'
-import { ApiError, STOREFRONT_ORIGIN, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { Page } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -26,7 +26,7 @@ export function PagesPage() {
       setPages(data.pages)
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [showError])
 

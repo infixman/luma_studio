@@ -6,7 +6,7 @@ import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../shared/components/SocialIcon'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { ApiError, api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../shared/api'
+import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/bio-link-admin.css'
@@ -65,7 +65,7 @@ export function BioLinkAdminPage() {
       })
       .catch((error: unknown) => {
         // A 401 has already redirected to Google inside the API wrapper.
-        if (!cancelled && !(error instanceof ApiError && error.status === 401)) showError(error)
+        if (!cancelled) showError(error)
       })
     return () => {
       cancelled = true

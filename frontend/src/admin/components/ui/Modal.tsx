@@ -6,12 +6,16 @@ import { Button, type ButtonTone } from './Button'
 /**
  * A dialog, and the confirmation prompt built on it.
  *
- * The back office asked seventeen questions through `confirm()`. That call
- * freezes the tab, looks like whatever the operating system feels like, and
- * can only carry one string — so every one of those prompts had to describe
- * what was about to be deleted inside a sentence, or not at all. A dialog can
- * show the thing itself, and can tell the destructive button apart from the
- * one that backs out.
+ * The back office asked its questions through `confirm()`. That call freezes
+ * the tab, looks like whatever the operating system feels like, and can only
+ * carry one string — so every prompt had to describe what was about to be
+ * deleted inside a sentence, or not at all. A dialog can show the thing
+ * itself, and can tell the destructive button apart from the one that backs
+ * out.
+ *
+ * Four are left, all in BioLinkAdminPage: three ordinary ones and one behind
+ * `AdminShell`'s `confirmLeave`, which is synchronous and so cannot await an
+ * answer. Widening that signature is what unblocks the last of them.
  *
  * Focus is the part that has to be right: it moves into the dialog on open,
  * cannot leave it while it is up, and goes back to whatever opened it on

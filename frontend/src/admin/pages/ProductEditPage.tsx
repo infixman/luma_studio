@@ -18,7 +18,7 @@ import {
   Toggle,
   useConfirm,
 } from '../components/ui'
-import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
+import { api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -68,7 +68,7 @@ export function ProductEditPage({ id }: { id: string }) {
       apply(detailed)
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [apply, id, showError])
 

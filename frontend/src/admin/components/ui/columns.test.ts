@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { choosableColumns, readHidden, toggleHidden, visibleColumns, writeHidden } from './columns'
+import { choosableColumns, columnsName, readHidden, toggleHidden, visibleColumns, writeHidden } from './columns'
 import type { ColumnSpec } from './columns'
+import { key } from '../../lib/storage'
 
 const COLUMNS: ColumnSpec[] = [
   { key: 'id', label: '訂單', fixed: true },
@@ -75,14 +76,14 @@ describe('remembering', () => {
   })
 
   it('falls back to the defaults when what was stored is not a list of keys', () => {
-    localStorage.setItem('luma-admin-columns:orders', '{ this is not json')
+    localStorage.setItem(key(columnsName('orders')), '{ this is not json')
     expect(readHidden('orders')).toBeNull()
-    localStorage.setItem('luma-admin-columns:orders', '{"note":true}')
+    localStorage.setItem(key(columnsName('orders')), '{"note":true}')
     expect(readHidden('orders')).toBeNull()
   })
 
   it('drops anything in storage that is not a string', () => {
-    localStorage.setItem('luma-admin-columns:orders', '["note", 7, null]')
+    localStorage.setItem(key(columnsName('orders')), '["note", 7, null]')
     expect(readHidden('orders')).toEqual(['note'])
   })
 

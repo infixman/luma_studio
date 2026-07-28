@@ -3,9 +3,10 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { MenuEditor } from '../components/MenuEditor'
 import { useStatus } from '../components/StatusBar'
+import { Button, Modal, TextField, useConfirm } from '../components/ui'
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../shared/components/SocialIcon'
-import { ApiError, api, apiJson, apiUrl, clearLoginAttempt, uploadHeaderImage } from '../../shared/api'
+import { api, apiJson, apiUrl, clearLoginAttempt, uploadHeaderImage } from '../../shared/api'
 import type { MenuItem, MenuState, SiteSettings } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -55,8 +56,11 @@ export function SitePage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [draft, setDraft] = useState(EMPTY_ITEM)
+  /** The item being renamed, and what it is being renamed to. Null when closed. */
+  const [renaming, setRenaming] = useState<{ item: MenuItem; label: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     try {
@@ -68,7 +72,7 @@ export function SitePage() {
       setMenu(menuState)
       clearLoginAttempt()
     } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) showError(error)
+      showError(error)
     }
   }, [showError])
 
@@ -184,24 +188,48 @@ export function SitePage() {
     void run(async () => setMenu(await apiJson<MenuState>('/api/menu/order', 'PUT', { items })), '選單已更新。')
   }
 
-  function removeItem(item: MenuItem) {
-    if (!confirm(`確定要刪除「${item.label}」？它底下的子項目也會一起刪除。`)) return
+  async function removeItem(item: MenuItem) {
+    const ok = await ask({
+      title: '刪除選單項目',
+      body: (
+        <>
+          <p>確定要刪除「{item.label}」嗎？</p>
+          <p>它底下的子項目會一起刪除。</p>
+        </>
+      ),
+      confirmLabel: '刪除',
+    })
+    if (!ok) return
     void run(
       async () => setMenu(await api<MenuState>(`/api/menu/${encodeURIComponent(item.id)}`, { method: 'DELETE' })),
       '選單項目已刪除。',
     )
   }
 
+  /**
+   * Renaming was a `prompt()` — the last one in the codebase.
+   *
+   * Beyond looking like the operating system, that box cannot say how long a
+   * label may be, cannot show the one that is being replaced next to the one
+   * being typed, and cannot be cancelled with anything but its own button.
+   */
   function editItem(item: MenuItem) {
-    const label = prompt('選單文字', item.label)
-    if (label === null) return
+    setRenaming({ item, label: item.label })
+  }
+
+  function commitRename() {
+    const pending = renaming
+    if (!pending) return
+    const label = pending.label.trim()
+    if (!label) return
+    setRenaming(null)
     void run(
       async () =>
         setMenu(
-          await apiJson<MenuState>(`/api/menu/${encodeURIComponent(item.id)}`, 'PUT', {
+          await apiJson<MenuState>(`/api/menu/${encodeURIComponent(pending.item.id)}`, 'PUT', {
             label,
-            targetKind: item.targetKind,
-            target: item.target,
+            targetKind: pending.item.targetKind,
+            target: pending.item.target,
           }),
         ),
       '選單項目已更新。',
@@ -222,6 +250,36 @@ export function SitePage() {
 
   return (
     <AdminShell current="/site" message={message} onError={showError}>
+      {dialog}
+
+      <Modal
+        title="改選單文字"
+        open={renaming !== null}
+        onClose={() => setRenaming(null)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setRenaming(null)}>
+              取消
+            </Button>
+            <Button tone="primary" disabled={!renaming?.label.trim()} onClick={commitRename}>
+              儲存
+            </Button>
+          </>
+        }
+      >
+        <TextField
+          label="選單文字"
+          value={renaming?.label ?? ''}
+          maxLength={30}
+          hint={renaming ? `原本是「${renaming.item.label}」` : undefined}
+          onInput={(event) =>
+            setRenaming((current) =>
+              current ? { ...current, label: (event.currentTarget as HTMLInputElement).value } : current,
+            )
+          }
+        />
+      </Modal>
+
       <section class="stack shop">
         <div class="card">
           <h2>預覽</h2>
