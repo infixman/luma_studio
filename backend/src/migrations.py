@@ -557,6 +557,65 @@ MIGRATIONS = [
         "add_columns": [("site_settings", "footer_blurb", "TEXT NOT NULL DEFAULT ''")],
         "statements": [],
     },
+    {
+        # Published versions of a page.
+        #
+        # `pages` and `page_blocks` do not change shape; what changes is what
+        # they mean. They were "the page" and they are now "the page's draft".
+        # Publishing serialises that draft into one row here, and a customer
+        # reads the row with `is_current = 1` — never the draft. Editing a
+        # published page therefore stops being something customers watch
+        # happen.
+        #
+        # `payload` is the blocks as JSON: type and config, in order. Not the
+        # hydrated response — that would freeze the prices and stock levels of
+        # the moment into a record that is about layout.
+        "name": "0020_page_versions",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS page_versions (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 page_id TEXT NOT NULL,
+                 payload TEXT NOT NULL,
+                 published_at INTEGER NOT NULL,
+                 published_by TEXT NOT NULL DEFAULT '',
+                 is_current INTEGER NOT NULL DEFAULT 0
+               )""",
+            # Every read is "this page's versions, newest first", and the one
+            # read that matters most is "this page's current version".
+            "CREATE INDEX IF NOT EXISTS idx_page_versions_page ON page_versions(page_id, published_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_page_versions_current ON page_versions(page_id, is_current)",
+        ],
+    },
+    {
+        # Every page that was already published had no version row, so it
+        # would have gone dark the moment the storefront started reading
+        # versions instead of blocks. This publishes each one as it stands.
+        #
+        # Written as one INSERT..SELECT rather than a loop because a migration
+        # cannot call the application code that would normally do it, and two
+        # implementations of "serialise a page" is one more than can be kept
+        # in step. The shape it writes is the one `pages.snapshot_of` reads:
+        # a JSON array of {type, config}. json_group_array over an ordered
+        # subquery is what keeps the block order.
+        "name": "0021_publish_existing_pages",
+        "statements": [
+            """INSERT INTO page_versions (id, page_id, payload, published_at, published_by, is_current)
+                 SELECT 'v0-' || p.id,
+                        p.id,
+                        COALESCE(
+                          (SELECT json_group_array(json_object('type', b.type, 'config', json(b.config)))
+                             FROM (SELECT type, config FROM page_blocks
+                                    WHERE page_id = p.id
+                                    ORDER BY position, rowid) AS b),
+                          '[]'),
+                        p.updated_at,
+                        '',
+                        1
+                   FROM pages p
+                  WHERE p.status = 'published'
+                    AND NOT EXISTS (SELECT 1 FROM page_versions v WHERE v.page_id = p.id)"""
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

@@ -23,7 +23,15 @@ async def _detail(ctx: Ctx, page: dict) -> dict:
     # with the storefront's own components — a preview fed different data is
     # a preview of something else.
     blocks = await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"]))
-    return {"page": page, "blocks": blocks}
+    return {
+        "page": page,
+        "blocks": blocks,
+        # Three states, not two. `modified` is the one that was invisible
+        # before versions existed: edited since it was last published, with
+        # nothing on screen saying so.
+        "publishState": await pages.publish_state(ctx.env, page["id"]),
+        "versions": await pages.list_versions(ctx.env, page["id"]),
+    }
 
 
 def _page_fields(body: dict) -> dict:
@@ -142,6 +150,36 @@ async def handle(ctx: Ctx):
         if tail == "preview-token" and method == "POST":
             token = await pages.mint_preview_token(env, page_id)
             return ctx.json({"token": token, "expiresIn": pages.PREVIEW_TTL_SECONDS})
+
+        if tail == "publish" and method == "POST":
+            # Publishing a page with nothing on it would take an empty page
+            # live, and the reason to do that is hard to imagine next to the
+            # reason to do it by accident.
+            if not await pages.list_blocks(env, page_id):
+                return ctx.error("這一頁還沒有任何區塊，先加一個再發布", 409)
+            await pages.publish(env, page_id, getattr(ctx, "admin_email", ""))
+            return ctx.json(await _detail(ctx, await pages.get_page(env, page_id)))
+
+        if tail == "unpublish" and method == "POST":
+            await pages.unpublish(env, page_id)
+            return ctx.json(await _detail(ctx, await pages.get_page(env, page_id)))
+
+        if tail.startswith("versions/") and method == "GET":
+            # What this version would cost to restore, asked before the
+            # dialog is drawn so it can say "2 of the 5 products it names are
+            # gone" rather than leaving it to be discovered afterwards.
+            version_id = tail.removeprefix("versions/").removesuffix("/changes")
+            payload = await pages.version_payload(env, page_id, version_id)
+            if payload is None:
+                return ctx.error("Version not found", 404)
+            return ctx.json({"missing": await block_data.missing(env, pages.blocks_of_snapshot(payload))})
+
+        if tail.startswith("versions/") and method == "POST":
+            version_id = tail.removeprefix("versions/").removesuffix("/restore")
+            if not await pages.restore(env, page_id, version_id):
+                return ctx.error("Version not found", 404)
+            # Into the draft, not onto the site. The 發布 button finishes it.
+            return ctx.json(await _detail(ctx, await pages.get_page(env, page_id)))
 
         if tail == "blocks" and method == "POST":
             try:

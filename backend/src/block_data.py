@@ -149,3 +149,36 @@ async def _products_by_filter(env, raw: str) -> list[dict]:
     if len(matched) != len(slugs):
         return []
     return await categories.products_in(env, [category["id"] for category in matched], mode)
+
+
+async def missing(env, blocks: list[dict]) -> dict:
+    """What a set of blocks points at that is no longer there.
+
+    Everywhere else the rule is "when it is not there, do not draw it": a
+    missing product is left out, a missing image drops its slide. Restoring an
+    old version keeps that rule but says so first — a restore is a deliberate
+    look backwards, and quietly coming back one product short is exactly the
+    situation where silence reads as "the restore failed".
+
+    It walks the blocks through `_media_ids`, the same function that finds the
+    pictures to draw. A second list of where the ids live would be a second
+    thing to forget the day a block type gains one.
+    """
+
+    media_ids, slugs = set(), set()
+    for block in blocks:
+        media_ids.update(media_id for media_id in _media_ids(block) if media_id)
+        if block["type"] == "shop":
+            slugs.update(str(slug) for slug in (block.get("config") or {}).get("slugs") or () if slug)
+
+    library = await media.resolve(env, sorted(media_ids)) if media_ids else {}
+    gone_images = sorted(media_ids - set(library))
+
+    gone_products = []
+    for slug in sorted(slugs):
+        product = await shop.get_product_by_slug(env, slug)
+        # Archived counts as gone: the block would not draw it either.
+        if product is None or product["status"] != "active":
+            gone_products.append(slug)
+
+    return {"images": gone_images, "products": gone_products}

@@ -161,9 +161,24 @@ def call():
     return run
 
 
+def version(payload="[]", current=1):
+    """The row a customer's page actually comes from now."""
+
+    return {
+        "id": "v1",
+        "page_id": "p1",
+        "payload": payload,
+        "published_at": 1700000000,
+        "published_by": "owner@luma",
+        "is_current": current,
+    }
+
+
 class TestPublicPages:
     def test_a_published_page_is_served(self, call):
-        database = FakeDatabase({"FROM pages WHERE path": [page_record()]})
+        database = FakeDatabase(
+            {"FROM pages WHERE path": [page_record()], "FROM page_versions": [version()]}
+        )
         response = call(FakeRequest("/api/pages?path=/about"), database)
         assert response.status == 200
         assert response.json()["title"] == "關於我們"
@@ -173,7 +188,10 @@ class TestPublicPages:
         so they have to be in the public payload rather than behind the admin."""
 
         database = FakeDatabase(
-            {"FROM pages WHERE path": [page_record(description="台中的繪畫教室", image_key="_media/abc.jpg")]}
+            {
+                "FROM pages WHERE path": [page_record(description="台中的繪畫教室", image_key="_media/abc.jpg")],
+                "FROM page_versions": [version()],
+            }
         )
         body = call(FakeRequest("/api/pages?path=/about"), database).json()
         assert body["shareDescription"] == "台中的繪畫教室"
@@ -185,6 +203,30 @@ class TestPublicPages:
 
         database = FakeDatabase({"FROM pages WHERE path": [page_record(status="draft")]})
         assert call(FakeRequest("/api/pages?path=/about"), database).status == 404
+
+    def test_a_page_marked_published_with_no_version_is_not_served(self, call):
+        """Nothing has ever been published, so there is nothing to serve. The
+        status column alone used to be enough, and would now hand back a page
+        with no blocks on it."""
+
+        database = FakeDatabase({"FROM pages WHERE path": [page_record()]})
+        assert call(FakeRequest("/api/pages?path=/about"), database).status == 404
+
+    def test_the_blocks_come_from_the_version_not_the_draft(self, call):
+        """The draft is what the owner is editing. A customer reading it is
+        the problem versions exist to solve."""
+
+        published = '[{"type": "text", "config": {"body": "已發布"}}]'
+        database = FakeDatabase(
+            {
+                "FROM pages WHERE path": [page_record()],
+                "FROM page_versions": [version(published)],
+                # The draft says something else entirely, and must not appear.
+                "FROM page_blocks": [{"id": "b1", "type": "text", "config": '{"markdown": "草稿"}', "position": 0}],
+            }
+        )
+        body = call(FakeRequest("/api/pages?path=/about"), database).json()
+        assert [block["config"]["body"] for block in body["blocks"]] == ["已發布"]
 
     def test_an_unknown_path_is_not_found(self, call):
         assert call(FakeRequest("/api/pages?path=/nope")).status == 404
@@ -200,7 +242,9 @@ class TestPublicPages:
         assert call(FakeRequest("/api/pages/home")).status == 404
 
     def test_a_home_page_is_served_without_naming_its_path(self, call):
-        database = FakeDatabase({"FROM pages WHERE is_home": [page_record(path="/welcome", is_home=1)]})
+        database = FakeDatabase(
+            {"FROM pages WHERE is_home": [page_record(path="/welcome", is_home=1)], "FROM page_versions": [version()]}
+        )
         response = call(FakeRequest("/api/pages/home"), database)
         assert response.status == 200
         assert response.json()["path"] == "/welcome"

@@ -240,16 +240,26 @@ async def site_response(ctx: Ctx):
 
 
 async def page_response(ctx: Ctx, page: dict | None):
-    """One published page and its blocks.
+    """One published page, as it was when it was published.
 
-    A draft is 404 here. The one way to see an unpublished page on this host
-    is `preview_response` below, which needs a token the back office had to
-    be signed in to mint.
+    Not the draft. `pages` and `page_blocks` are what the owner is editing;
+    what a customer gets is the snapshot taken the last time 發布 was pressed.
+    That difference is the whole point of versions — editing a live page used
+    to be something customers watched happen.
+
+    A page with no current version is 404 whatever its status says, because a
+    page nobody has published has nothing to serve. The one way to see an
+    unpublished page on this host is `preview_response` below, which needs a
+    token the back office had to be signed in to mint.
     """
 
     if page is None or page["status"] != "published":
         return ctx.error("Page not found", 404)
-    return ctx.json(_page_payload(page, await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"]))))
+    version = await pages.current_version(ctx.env, page["id"])
+    if version is None:
+        return ctx.error("Page not found", 404)
+    blocks = pages.blocks_of_snapshot(version["payload"])
+    return ctx.json(_page_payload(page, await block_data.hydrate(ctx.env, blocks)))
 
 
 async def preview_response(ctx: Ctx, token: str):
@@ -259,6 +269,10 @@ async def preview_response(ctx: Ctx, token: str):
     not inside the site's chrome or on its background — so it can show what a
     block looks like and not what the page looks like. This is what lets it
     frame the real storefront instead.
+
+    This one reads the draft, which is exactly what makes it a preview: the
+    question it answers is "what will customers see once I publish this", and
+    the published version is already reachable at the page's own address.
 
     The token is spent on arrival, whether or not it turns out to be valid.
     Everything else about this response is an ordinary page: the storefront
