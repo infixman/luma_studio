@@ -1,11 +1,14 @@
 import { AdminGate } from './components/AdminGate'
 import { AdminPage } from './pages/AdminPage'
 import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
+import { PageEditPage } from './pages/PageEditPage'
+import { PagesPage } from './pages/PagesPage'
 import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ShippingPage } from './pages/ShippingPage'
 
 const PRODUCT_PATH = /^\/products\/([^/]+)$/
+const PAGE_PATH = /^\/pages\/([^/]+)$/
 
 /**
  * The back office is its own deployment, so its paths carry no /admin
@@ -21,6 +24,10 @@ function Routed() {
   if (path === '/card') return <BioLinkAdminPage />
   if (path === '/products') return <ProductsPage />
   if (path === '/shipping') return <ShippingPage />
+  if (path === '/pages') return <PagesPage />
+
+  const page = PAGE_PATH.exec(path)
+  if (page) return <PageEditPage id={decodeURIComponent(page[1]!)} />
 
   const product = PRODUCT_PATH.exec(path)
   if (product) return <ProductEditPage id={decodeURIComponent(product[1]!)} />

@@ -318,3 +318,42 @@ export interface OrderDetail {
   order: Order
   items: OrderItem[]
 }
+
+// --- custom pages -------------------------------------------------------
+
+export type PageStatus = 'draft' | 'published'
+
+export interface Page {
+  id: string
+  path: string
+  title: string
+  status: PageStatus
+  isHome: boolean
+  position: number
+  updatedAt: number
+}
+
+/** A block's config shape depends on its type; today there is one type. */
+export interface TextBlockConfig {
+  body: string
+}
+
+export interface PageBlock {
+  id: string
+  type: 'text'
+  config: TextBlockConfig
+  position: number
+}
+
+/** What the back office edits. */
+export interface PageDetail {
+  page: Page
+  blocks: PageBlock[]
+}
+
+/** What the storefront renders. Drafts never reach this shape. */
+export interface PageContent {
+  title: string
+  path: string
+  blocks: PageBlock[]
+}

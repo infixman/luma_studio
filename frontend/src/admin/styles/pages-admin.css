@@ -1,0 +1,122 @@
+/* Page and block editing. */
+
+body.admin .page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+body.admin .page-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 8px;
+}
+
+/* A draft is not live, so it reads quieter than the rest of the list. */
+body.admin .page-row.draft {
+  opacity: 0.72;
+}
+
+body.admin .page-row .name {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+body.admin .page-row .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+body.admin .page-row .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+body.admin .page-row .toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+/* --- the editor --- */
+
+body.admin .editor-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+body.admin .block-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+body.admin .block-list li {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 8px;
+}
+
+body.admin .block-head {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+body.admin .block-head .kind {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+body.admin .block-list textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* The preview holds the storefront's background so the blocks are read
+   against what they will actually sit on, not against the admin's card. */
+body.admin .preview-surface {
+  background: #faf7f2;
+  border-radius: 8px;
+  padding: 1.2rem 1rem;
+  min-height: 12rem;
+}
+
+body.admin .preview-surface .block {
+  margin-bottom: 1.2rem;
+}
+
+body.admin .preview-surface .block:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  body.admin .editor-split {
+    grid-template-columns: 1fr;
+  }
+}

@@ -3,6 +3,7 @@ import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 import { CartPage } from './pages/CartPage'
 import { CategoryPage } from './pages/CategoryPage'
+import { CustomPage } from './pages/CustomPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { ProductPage } from './pages/ProductPage'
 import { OrderPage } from './pages/OrderPage'
@@ -28,9 +29,12 @@ function markBody(page: string): void {
 export function App() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
+  // A page flagged as home takes over /, and the built-in one is the
+  // fallback rather than the other way round — so nothing goes blank before
+  // anyone has built a home page.
   if (path === '/') {
-    markBody('home')
-    return <HomePage />
+    markBody('custom-page')
+    return <CustomPage path="/" onMissing={() => { markBody('home'); return <HomePage /> }} />
   }
 
   if (path === '/card') {
@@ -82,6 +86,15 @@ export function App() {
     return <PrintPage id={decodeURIComponent(print[1]!)} />
   }
 
+  // Last: anything the routes above did not claim might be a built page, so
+  // ask before saying it does not exist. A 404 is not a hot path, and the
+  // alternative — baking every page path into the bundle — would make adding
+  // a page a deploy.
+  markBody('custom-page')
+  return <CustomPage path={path} onMissing={notFound} />
+}
+
+function notFound() {
   markBody('landing')
   return (
     <main class="landing">

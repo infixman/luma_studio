@@ -1,0 +1,22 @@
+/* The frame a built page sits in. The blocks bring their own typography from
+   shared/components/blocks.css, so this is only the page around them. */
+
+body.custom-page {
+  background: #faf7f2;
+  color: #2b2622;
+}
+
+.custom-page {
+  max-width: 62rem;
+  margin: 0 auto;
+  /* No bottom padding: the last block's own margin provides it, and adding
+     more here leaves a gap that looks like something failed to load. */
+  padding: 2.5rem 1.1rem 1rem;
+  min-height: 40vh;
+}
+
+.custom-page .empty {
+  padding: 2.5rem 0;
+  text-align: center;
+  opacity: 0.8;
+}

@@ -1,0 +1,61 @@
+/* Block typography, shared by the storefront and the back office's preview.
+   Deliberately self-contained: the preview must look like the page without
+   the admin build having to pull in the storefront's stylesheets. */
+
+.block {
+  max-width: 46rem;
+  margin: 0 auto 2rem;
+}
+
+.block-text {
+  line-height: 1.8;
+  color: #2b2622;
+}
+
+.block-text h2 {
+  margin: 2rem 0 0.8rem;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.block-text h3 {
+  margin: 1.6rem 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.block-text h4 {
+  margin: 1.3rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+/* The first heading in a block should not push it away from what came
+   before — the gap between blocks already does that. */
+.block-text > :first-child {
+  margin-top: 0;
+}
+
+.block-text p {
+  margin: 0 0 1rem;
+}
+
+.block-text ul,
+.block-text ol {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+}
+
+.block-text li {
+  margin: 0 0 0.35rem;
+}
+
+.block-text a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+.block-text strong {
+  font-weight: 650;
+}

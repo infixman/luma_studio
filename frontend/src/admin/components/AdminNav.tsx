@@ -6,6 +6,7 @@ import '../styles/admin-nav.css'
  */
 const tabs = [
   { href: '/card', label: '名片頁' },
+  { href: '/pages', label: '頁面' },
   { href: '/', label: 'ibon 列印' },
   { href: '/products', label: '商城' },
   { href: '/shipping', label: '運費' },

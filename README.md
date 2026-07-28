@@ -77,9 +77,9 @@ frontend/
     admin.ts          供應後台 SPA
   public/assets/      logo 與教學圖
   src/
-    shared/           兩邊共用：api、types、SocialIcon、base.css
-    storefront/       main、app、HomePage、PrintPage、BioLinkPage、行事曆
-    admin/            main、app、AdminPage、BioLinkAdminPage、列印規格
+    shared/           兩邊共用：api、types、markdown、區塊元件、SocialIcon、base.css
+    storefront/       main、app、HomePage、PrintPage、BioLinkPage、商城、自訂頁
+    admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
 docs/superpowers/specs/  設計文件
@@ -520,6 +520,26 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態，以及設定每種配送方式的運費與免運門檻。
 
 前台**只看得到 `active` 的商品**。草稿即使有人猜中 slug 也解不開，已下架的則會停止販售——兩者都回 404，因為對顧客而言那就是同一件事。
+
+### 自訂頁面
+
+後台可以建頁面、設定路徑與公開狀態，並由多個區塊組成。目前只有一種區塊：**文字**（Markdown）。之後的輪播、相簿、商城區塊都是往同一個骨架上加。
+
+| 位置 | |
+| --- | --- |
+| 頁面清單 | `admin.luma-studio.tw/pages` |
+| 頁面編輯器 | `admin.luma-studio.tw/pages/{id}` |
+| 前台 | 頁面設定的路徑，例如 `luma-studio.tw/about` |
+
+**首頁由「設為首頁」旗標接管**，不是把路徑填成 `/`。只有一頁能是首頁，由部分唯一索引（`WHERE is_home = 1`）在資料庫層保證。沒有任何一頁勾首頁時，`/` 落回內建的歡迎頁——所以這套上線不會讓前門突然變空白。
+
+**保留路徑不能被佔用**：`/shop`、`/cart`、`/checkout`、`/orders`、`/card`、`/ibon_print`、`/admin`、`/api`、`/images`、`/r` 及其子路徑。不擋的話，一個 path 是 `/shop` 的頁面會安靜地蓋掉整個商城。
+
+**草稿在公開端一律 404，沒有例外。** 前台 Worker 認不出店主——管理者的 cookie 是 host-only 綁在 `admin-api`，那是刻意的隔離。所以預覽做在後台裡：區塊的渲染元件放在 `shared/`，編輯器和前台用**同一份**，你在編輯器看到的就是公開後的樣子。考慮過預覽權杖（`?preview=xxx`），沒有採用——那會在公開 API 上多一條會回傳草稿的路徑，而那裡出一次錯就是草稿外流。
+
+**Markdown 在前端轉換**（[shared/markdown.ts](frontend/src/shared/markdown.ts)），**先把整段輸入逃脫，再套用規則**。原始碼裡的 `<script>` 只可能變成文字 `&lt;script&gt;`——安全性來自那個順序，不是來自一份要維護的黑名單。連結只接受 `http`、`https`、`mailto` 與站內路徑；`javascript:` 會被丟掉但保留文字，因為弄丟字比弄丟連結更讓人意外。
+
+**區塊設定存 JSON**，所以驗證做兩次：寫入時擋掉壞的，讀取時擋掉舊版本寫進去的。讀取時解不開的區塊會被跳過而不是拋錯——少一段文字比整頁空白好——但後台仍然看得到它，因為看不到的區塊等於刪不掉。
 
 ### 分類
 
