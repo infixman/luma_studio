@@ -242,14 +242,41 @@ async def site_response(ctx: Ctx):
 async def page_response(ctx: Ctx, page: dict | None):
     """One published page and its blocks.
 
-    Drafts are 404 rather than gated: the back office previews them with the
-    same components the storefront uses, so there is no reason for an
-    unpublished page to be reachable here at all.
+    A draft is 404 here. The one way to see an unpublished page on this host
+    is `preview_response` below, which needs a token the back office had to
+    be signed in to mint.
     """
 
     if page is None or page["status"] != "published":
         return ctx.error("Page not found", 404)
-    return ctx.json(
+    return ctx.json(_page_payload(page, await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"]))))
+
+
+async def preview_response(ctx: Ctx, token: str):
+    """One page, published or not, in exchange for a one-shot token.
+
+    The back office renders blocks with the storefront's own components, but
+    not inside the site's chrome or on its background — so it can show what a
+    block looks like and not what the page looks like. This is what lets it
+    frame the real storefront instead.
+
+    The token is spent on arrival, whether or not it turns out to be valid.
+    Everything else about this response is an ordinary page: the storefront
+    route that reads it renders and nothing more, so a preview cannot be
+    talked into doing anything.
+    """
+
+    page_id = await pages.redeem_preview_token(ctx.env, token)
+    if page_id is None:
+        return ctx.error("Preview link has expired", 404)
+    page = await pages.get_page(ctx.env, page_id)
+    if page is None:
+        return ctx.error("Page not found", 404)
+    return ctx.json(_page_payload(page, await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page_id))))
+
+
+def _page_payload(page: dict, blocks: list) -> dict:
+    return (
         {
             "title": page["title"],
             "path": page["path"],
@@ -261,7 +288,7 @@ async def page_response(ctx: Ctx, page: dict | None):
             # what leaves is the URL it points at.
             "shareDescription": page["shareDescription"],
             "shareImagePath": page["shareImagePath"],
-            "blocks": await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"])),
+            "blocks": blocks,
         }
     )
 
@@ -710,6 +737,13 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "site"):
             return ctx.too_many_requests()
         return await site_response(ctx)
+
+    # Before /api/pages/home, because a token is not a page path and the two
+    # would otherwise both want the same prefix.
+    if path.startswith("/api/pages/preview/") and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
+            return ctx.too_many_requests()
+        return await preview_response(ctx, path.removeprefix("/api/pages/preview/"))
 
     if path == "/api/pages/home" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

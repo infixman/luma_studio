@@ -488,6 +488,28 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags (tag)",
         ],
     },
+    {
+        # Lets the back office frame the real storefront showing a draft.
+        #
+        # A row rather than a signed token, because the two Workers already
+        # share this database: no second secret to distribute, no HMAC to get
+        # wrong, and — the part signing cannot do — a token that can be
+        # revoked and spent exactly once.
+        #
+        # Scope is one page and the life is minutes. A leaked token shows one
+        # unpublished page for a few minutes, which is the whole blast radius.
+        "name": "0017_create_preview_tokens",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS preview_tokens (
+                 token TEXT PRIMARY KEY NOT NULL,
+                 page_id TEXT NOT NULL,
+                 expires_at INTEGER NOT NULL
+               )""",
+            # Swept by expiry, not by page, so minting can clear the dead ones
+            # without a second table scan.
+            "CREATE INDEX IF NOT EXISTS idx_preview_tokens_expiry ON preview_tokens (expires_at)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

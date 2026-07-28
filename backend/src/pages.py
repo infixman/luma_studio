@@ -388,6 +388,60 @@ async def count_blocks(env, page_id: str) -> int:
     return int(rows[0]["total"]) if rows else 0
 
 
+# --- preview tokens ------------------------------------------------------
+
+# Long enough to walk to the browser and look, short enough that a token left
+# in a chat window is worthless by the time anybody tries it.
+PREVIEW_TTL_SECONDS = 10 * 60
+
+PREVIEW_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,64}$")
+
+
+async def mint_preview_token(env, page_id: str) -> str:
+    """A one-shot pass to look at one unpublished page on the real storefront.
+
+    The back office cannot show what the storefront will actually do — it
+    renders the blocks with the same components, but not inside the site's
+    own chrome and background. Framing the real thing is the only way to see
+    the real thing, and the real thing refuses to serve a draft, so it needs
+    to be handed something.
+
+    Bounded on three sides: one page, ten minutes, and spent on use. None of
+    the three is load-bearing on its own.
+    """
+
+    now = utc_timestamp()
+    # Cheap enough to do on every mint, and it means nothing has to remember
+    # to sweep this table on a schedule.
+    await env.DB.prepare("DELETE FROM preview_tokens WHERE expires_at < ?1").bind(now).run()
+
+    token = urlsafe_token(32)
+    await env.DB.prepare("INSERT INTO preview_tokens (token, page_id, expires_at) VALUES (?1, ?2, ?3)").bind(
+        token, page_id, now + PREVIEW_TTL_SECONDS
+    ).run()
+    return token
+
+
+async def redeem_preview_token(env, token: str) -> str | None:
+    """The page id a token stands for, or None. Spends the token either way.
+
+    Deleting before the expiry check rather than after: a token that arrives
+    late is still a token that has now been used, and leaving it behind would
+    let a slow attempt be retried until it raced a clock.
+    """
+
+    if not PREVIEW_TOKEN_PATTERN.fullmatch(token or ""):
+        return None
+
+    rows = await d1_rows(env.DB.prepare("SELECT * FROM preview_tokens WHERE token = ?1").bind(token))
+    await env.DB.prepare("DELETE FROM preview_tokens WHERE token = ?1").bind(token).run()
+    if not rows:
+        return None
+    if int(rows[0]["expires_at"]) < utc_timestamp():
+        return None
+    return str(rows[0]["page_id"])
+
+
 async def resolve_share_image_key(env, raw) -> str:
     """Turn the media id the picker handed the editor into a stored key.
 

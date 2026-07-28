@@ -16,7 +16,7 @@ import { useMediaPicker } from '../components/MediaPicker'
 import { useStatus } from '../components/StatusBar'
 import { Button, Panel, RadioGroup, Spinner, TextArea, TextField, Toggle, useConfirm } from '../components/ui'
 import { Blocks } from '../../shared/components/Blocks'
-import { ApiError, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
+import { ApiError, STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -52,6 +52,16 @@ interface ShareImage {
   path: string | null
 }
 
+/* Widths, not device names dressed up as them: what changes the layout is
+   how many pixels there are, and 390 is what a phone actually gives you. */
+const VIEWPORTS = [
+  { id: 'desktop', label: '桌機', width: '100%' },
+  { id: 'tablet', label: '平板', width: '820px' },
+  { id: 'mobile', label: '手機', width: '390px' },
+] as const
+
+type ViewportId = (typeof VIEWPORTS)[number]['id']
+
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
   const [form, setForm] = useState({
@@ -71,6 +81,10 @@ export function PageEditPage({ id }: { id: string }) {
   /** Where the type picker is open, as an index in the block list; null when closed. */
   const [inserting, setInserting] = useState<number | null>(null)
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
+  const [viewport, setViewport] = useState<ViewportId>('desktop')
+  /** The framed preview URL, or null while the block renderer is showing instead. */
+  const [frame, setFrame] = useState<string | null>(null)
+  const [framing, setFraming] = useState(false)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -128,6 +142,32 @@ export function PageEditPage({ id }: { id: string }) {
     if (item) setLibrary((current) => (current.some((entry) => entry.id === item.id) ? current : [item, ...current]))
     return item
   }, [picker])
+
+  /**
+   * Mints a fresh token and points the frame at it.
+   *
+   * A new one every time rather than a stored URL: the token is spent by the
+   * load, so reusing it would show an expired page. That also means this is
+   * the refresh button — there is nothing else to refresh with.
+   */
+  async function openLivePreview() {
+    if (framing) return
+    setFraming(true)
+    try {
+      const { token } = await apiJson<{ token: string }>(
+        `/api/pages/${encodeURIComponent(id)}/preview-token`,
+        'POST',
+        {},
+      )
+      // Cache-busted because the browser will happily reuse the previous
+      // frame for the same URL, and the URL is the only thing that changed.
+      setFrame(`${STOREFRONT_ORIGIN}/__preview/${encodeURIComponent(token)}`)
+    } catch (error) {
+      showError(error)
+    } finally {
+      setFraming(false)
+    }
+  }
 
   /** Picking may upload, so this is the pick that also updates the preview. */
   async function chooseShareImage() {
@@ -243,6 +283,7 @@ export function PageEditPage({ id }: { id: string }) {
     )
   }
 
+  const viewportWidth = VIEWPORTS.find((size) => size.id === viewport)!.width
   const dirty = dirtyIds(detail)
   const pageChanged =
     form.title !== detail.page.title ||
@@ -424,13 +465,56 @@ export function PageEditPage({ id }: { id: string }) {
             )}
           </Panel>
 
-          <Panel title="預覽">
-            <p class="muted">
-              這裡用的是前台渲染區塊的同一份程式，所以看到的就是公開後的樣子。商城區塊的商品要儲存後才會更新。
-            </p>
-            <div class="preview-surface">
-              {previewBlocks.length === 0 ? <p class="muted">還沒有內容。</p> : <Blocks blocks={previewBlocks} />}
-            </div>
+          <Panel
+            title="預覽"
+            actions={
+              <>
+                <div class="viewport-picker" role="group" aria-label="預覽寬度">
+                  {VIEWPORTS.map((size) => (
+                    <button
+                      key={size.id}
+                      type="button"
+                      class={size.id === viewport ? 'current' : ''}
+                      aria-pressed={size.id === viewport}
+                      onClick={() => setViewport(size.id)}
+                    >
+                      {size.label}
+                    </button>
+                  ))}
+                </div>
+                <Button size="sm" busy={framing} onClick={() => void openLivePreview()}>
+                  {frame ? '重新整理' : '看真實畫面'}
+                </Button>
+              </>
+            }
+          >
+            {frame ? (
+              <>
+                {/* The real storefront, on its own host, wearing its own
+                    header and footer. Sandboxed to scripts and same-origin —
+                    it needs both to render, and nothing else. */}
+                <div class="live-frame" style={{ maxWidth: viewportWidth }}>
+                  <iframe
+                    src={frame}
+                    title="頁面預覽"
+                    sandbox="allow-scripts allow-same-origin"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <p class="muted">
+                  這是真的前台，連結只能用一次、十分鐘後失效。未儲存的修改不會出現在這裡——它讀的是伺服器上的版本。
+                </p>
+              </>
+            ) : (
+              <>
+                <div class="preview-surface" style={{ maxWidth: viewportWidth }}>
+                  {previewBlocks.length === 0 ? <p class="muted">還沒有內容。</p> : <Blocks blocks={previewBlocks} />}
+                </div>
+                <p class="muted">
+                  這裡用的是前台渲染區塊的同一份程式，所以區塊本身就是公開後的樣子——但沒有站台的頁首頁尾與底色。要看整頁，按「看真實畫面」。
+                </p>
+              </>
+            )}
           </Panel>
         </div>
 

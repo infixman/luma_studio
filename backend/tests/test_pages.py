@@ -326,3 +326,74 @@ class TestEditingTheSharePreview:
     def test_a_description_no_card_could_show_is_refused(self):
         response, _ = edit({**SAVED, "shareDescription": "字" * 400})
         assert response.status == 400
+
+
+def run(coroutine):
+    return asyncio.run(coroutine)
+
+
+@pytest.fixture
+def pages_module():
+    import pages as module
+
+    return module
+
+
+class TestPreviewTokens:
+    """The one way an unpublished page is reachable on the public host.
+
+    Three bounds, and the tests are here because no single one of them is
+    load-bearing on its own: one page, ten minutes, spent on use.
+    """
+
+    def test_minting_stores_a_token_against_one_page(self, pages_module):
+        database = FakeDatabase()
+        token = run(pages_module.mint_preview_token(make_env(database), "p1"))
+
+        assert pages_module.PREVIEW_TOKEN_PATTERN.fullmatch(token)
+        insert = [write for write in database.writes if "INSERT INTO preview_tokens" in write[0]]
+        assert len(insert) == 1
+        assert insert[0][1][0] == token
+        assert insert[0][1][1] == "p1"
+
+    def test_minting_clears_tokens_that_have_expired(self, pages_module):
+        """Nothing has to remember to sweep this table on a schedule."""
+
+        database = FakeDatabase()
+        run(pages_module.mint_preview_token(make_env(database), "p1"))
+        assert any("DELETE FROM preview_tokens WHERE expires_at" in write[0] for write in database.writes)
+
+    def test_a_valid_token_names_its_page(self, pages_module):
+        token = "a" * 32
+        database = FakeDatabase(
+            {"FROM preview_tokens WHERE token": [{"token": token, "page_id": "p1", "expires_at": 4_000_000_000}]}
+        )
+        assert run(pages_module.redeem_preview_token(make_env(database), token)) == "p1"
+
+    def test_redeeming_spends_the_token(self, pages_module):
+        """A preview URL must not become a way to read the draft later."""
+
+        token = "a" * 32
+        database = FakeDatabase(
+            {"FROM preview_tokens WHERE token": [{"token": token, "page_id": "p1", "expires_at": 4_000_000_000}]}
+        )
+        run(pages_module.redeem_preview_token(make_env(database), token))
+        assert any("DELETE FROM preview_tokens WHERE token" in write[0] for write in database.writes)
+
+    def test_an_expired_token_is_refused_and_still_spent(self, pages_module):
+        """Deleting before the expiry check: a late arrival is still a use, and
+        leaving it behind would let a slow attempt be retried against a clock."""
+
+        token = "a" * 32
+        database = FakeDatabase({"FROM preview_tokens WHERE token": [{"token": token, "page_id": "p1", "expires_at": 1}]})
+        assert run(pages_module.redeem_preview_token(make_env(database), token)) is None
+        assert any("DELETE FROM preview_tokens WHERE token" in write[0] for write in database.writes)
+
+    def test_an_unknown_token_is_refused(self, pages_module):
+        assert run(pages_module.redeem_preview_token(make_env(FakeDatabase()), "a" * 32)) is None
+
+    @pytest.mark.parametrize("bad", ["", "short", "../../etc/passwd", "a" * 200, "has spaces in it!!"])
+    def test_a_token_that_is_not_one_never_reaches_the_database(self, pages_module, bad):
+        database = FakeDatabase()
+        assert run(pages_module.redeem_preview_token(make_env(database), bad)) is None
+        assert database.statements == []

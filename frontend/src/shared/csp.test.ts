@@ -54,3 +54,30 @@ describe('content security policy', () => {
     expect(directive(contentSecurityPolicy(PUBLIC_API, PUBLIC_API), 'script-src')).not.toContain('unsafe-inline')
   })
 })
+
+/**
+ * The preview route is the one path the storefront lets itself be framed on.
+ *
+ * These exist because the tempting fix — relaxing frame-ancestors on `/*` —
+ * would put /cart, /checkout and /orders back inside somebody else's page,
+ * and nothing about the preview working would look any different.
+ */
+describe('who may frame the storefront', () => {
+  const ADMIN = 'https://admin.luma-studio.tw'
+
+  it('refuses every frame by default', () => {
+    expect(contentSecurityPolicy(PUBLIC_API, PUBLIC_API)).toContain("frame-ancestors 'none'")
+  })
+
+  it('names the back office, and only the back office, when asked', () => {
+    const policy = contentSecurityPolicy(PUBLIC_API, PUBLIC_API, { framedBy: ADMIN })
+    expect(directive(policy, 'frame-ancestors')).toBe(`frame-ancestors ${ADMIN}`)
+  })
+
+  it('gives up nothing else to be framed', () => {
+    const framed = contentSecurityPolicy(PUBLIC_API, PUBLIC_API, { framedBy: ADMIN })
+    const closed = contentSecurityPolicy(PUBLIC_API, PUBLIC_API)
+    const strip = (policy: string) => policy.split('; ').filter((part) => !part.startsWith('frame-ancestors'))
+    expect(strip(framed)).toEqual(strip(closed))
+  })
+})

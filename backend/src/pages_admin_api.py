@@ -136,6 +136,13 @@ async def handle(ctx: Ctx):
             await pages.delete_page(env, page_id)
             return ctx.json({"id": page_id, "deleted": True})
 
+        # Only reachable behind this host's sign-in gate, which is what makes
+        # the token safe to hand out: the storefront trusts the token because
+        # only somebody already signed in here could have been given one.
+        if tail == "preview-token" and method == "POST":
+            token = await pages.mint_preview_token(env, page_id)
+            return ctx.json({"token": token, "expiresIn": pages.PREVIEW_TTL_SECONDS})
+
         if tail == "blocks" and method == "POST":
             try:
                 body = await _read_json(ctx)

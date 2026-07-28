@@ -1,4 +1,5 @@
 import { BioLinkPage } from './pages/BioLinkPage'
+import { PreviewPage } from './pages/PreviewPage'
 import { PrintPage } from './pages/PrintPage'
 import { Chrome } from './components/Chrome'
 import { CartPage } from './pages/CartPage'
@@ -11,6 +12,10 @@ import { OrdersPage } from './pages/OrdersPage'
 import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
+// Underscores are what keep this from colliding with a page somebody builds:
+// a page path is letters, digits and single hyphens (see PATH_PATTERN in
+// backend/src/pages.py), so no page can ever be created at this address.
+const PREVIEW_PATH = /^\/__preview\/([A-Za-z0-9_-]{20,64})$/
 // /shop/c/... is matched first, so a category filter is never read as a
 // product slug. The `c` segment exists to make that impossible either way.
 const CATEGORY_PATH = /^\/shop\/c\/(.+)$/
@@ -63,6 +68,14 @@ function route() {
   if (path === '/') {
     markBody('custom-page')
     return <CustomPage path="/" onMissing={noHomeYet} />
+  }
+
+  // Before everything else: it is the one route the site lets itself be
+  // framed on, so it must not be reachable by accident from another match.
+  const preview = PREVIEW_PATH.exec(path)
+  if (preview) {
+    markBody('custom-page')
+    return <PreviewPage token={preview[1]!} />
   }
 
   if (path === '/card') {

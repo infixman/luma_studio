@@ -651,6 +651,26 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 
 **存的是媒體物件的 key，不是媒體 id。** 每一次爬取都要一個網址，而 key 離網址只差一個前綴。編輯器手上只有網址，所以儲存時不提 `shareImageId` 就代表「沒有動過」——否則改個標題就會把分享圖洗掉。
 
+### 真實預覽（iframe）
+
+後台會用區塊的同一份元件畫預覽，但那畫得出**區塊**，畫不出**整頁**——沒有站台頁首頁尾，也不是前台的底色。所以編輯器另外提供「看真實畫面」：在 iframe 裡開真的前台。
+
+草稿在公開 API 上是 404，所以要交換一張通行證：
+
+| | |
+|---|---|
+| 發放 | `POST /api/pages/{id}/preview-token`，只在管理主機上，也就是登入閘門後面 |
+| 兌換 | 前台 `/__preview/{token}` → `GET /api/pages/preview/{token}` |
+| 範圍 | **一頁**、**十分鐘**、**用一次就沒了** |
+
+**用資料表而不是簽章**（`preview_tokens`）。兩個 Worker 本來就共用同一個 D1，所以不需要再發一把共享密鑰，也不用自己寫 HMAC 與常數時間比較——而且簽章做不到的兩件事這裡都要：**可撤銷**、**只能用一次**。兌換時先刪再檢查效期：遲到的請求也是一次使用，留著它等於讓人拿同一張票去賭時鐘。
+
+**framing 的放寬只在 `/__preview/*`，不是全站。** 這是這件事唯一危險的地方：`/*` 維持 `X-Frame-Options: DENY` 與 `frame-ancestors 'none'`，因為 `/cart`、`/checkout`、`/orders` 上有值得騙人點的按鈕。預覽路由本身**只渲染**——沒有購物車、沒有結帳、不讀 session——所以就算被框住也沒有東西可以被騙著點，何況要先有一張一次性通行證才打得開。
+
+`X-Frame-Options` 是**移除**不是放寬：它的允許清單最多只到 `SAMEORIGIN`，講不出「我們另一台主機」，留著還會蓋掉講得出來的 CSP。這條規則由 [vite.config.ts](frontend/vite.config.ts) 產生，測試在 [csp.test.ts](frontend/src/shared/csp.test.ts)。
+
+頁面路徑不可能撞到 `/__preview`：頁面路徑只允許字母、數字與單一連字號，底線根本進不去。
+
 ### 站台外框與選單
 
 頁首與頁尾是**站台設定**，不是頁面插入的區塊。每一頁自動套用，`pages` 上有 `show_header` 與 `show_footer` 兩個開關（預設開）給例外情況。

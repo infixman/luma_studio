@@ -562,3 +562,54 @@ body.admin .add-block {
   align-items: center;
   gap: 0.6rem;
 }
+
+/* --- the framed preview --- */
+
+body.admin .viewport-picker {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+body.admin .viewport-picker button {
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+body.admin .viewport-picker button + button {
+  border-left: 1px solid var(--border);
+}
+
+body.admin .viewport-picker button.current {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* Centred, because a 390px frame pinned to the left of a wide panel reads as
+   a broken layout rather than a phone. */
+body.admin .live-frame {
+  margin: 0 auto var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+body.admin .live-frame iframe {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  border: none;
+}
+
+body.admin .preview-surface {
+  margin: 0 auto var(--space-3);
+}
