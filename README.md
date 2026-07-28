@@ -52,24 +52,33 @@ backend/
     main.py           公開路由
     admin_main.py     管理路由
     responses.py      Ctx、CORS 與回應建構
+    rate_limit.py     以 D1 計數的節流，登入與結帳都走這裡
+    auth_core.py      session cookie 的簽章與驗證，兩種身分共用
     auth_admin.py     Google OAuth 與管理者 session
+    auth_customer.py  顧客的 Google 登入與 session
     admin_api.py      圖檔與列印設定管理
     ibon.py           ibon 上傳流程、D1 快取、列印規格
     bio_link.py       Bio link 的設定、連結、匿名點擊記錄
     bio_link_api.py   管理端 /api/bio-link* 端點
+    ics.py            名片頁行事曆訂閱的 .ics 產生
     shop.py           商品、規格、庫存與照片
     categories.py     商品分類與 AND/OR 篩選
-    pages.py          自訂頁面與區塊
+    cart.py           購物車：內容、上限與庫存檢查
+    shipping.py       運送方式與運費級距
+    orders.py         訂單本身：建立、狀態、稽核記錄
+    pages.py          自訂頁面與區塊、分享資訊、一次性預覽 token
+    block_data.py     區塊設定的驗證與正規化，頁面與預覽共用
     pages_admin_api.py 管理端頁面端點
     site_chrome.py    頁首頁尾設定與三層選單
     site_admin_api.py 管理端外框端點
-    media.py          媒體庫：上傳的圖片與誰在用它
+    media.py          媒體庫：上傳的圖片、標題、標籤與誰在用它
     media_admin_api.py 管理端媒體端點
     orders_admin_api.py 管理端訂單端點
     customers.py      會員名單、封鎖與個資清除
     mail.py           通知信樣板、佇列與寄送
     customers_admin_api.py 管理端會員端點
     shop_admin_api.py 管理端商品端點
+    dashboard.py      後台首頁的四個數字：待出貨、待付款、近 30 天收款、低庫存
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
 frontend/
@@ -86,16 +95,24 @@ frontend/
     legacy.ts         只做一件事：把發出去的 workers.dev 舊網址轉到正式網域
   public/assets/      logo 與教學圖
   src/
-    shared/           兩邊共用：api、types、markdown、區塊元件、SocialIcon、base.css
-    storefront/       main、app、PrintPage、BioLinkPage、商城、訂單、自訂頁
-    admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器、外框、媒體庫
+    shared/           兩邊共用：api、types、markdown、money、dates、srcset、
+                      區塊元件、SiteChrome、SocialIcon、base.css
+    storefront/       main、app、PrintPage、BioLinkPage、商城、訂單、自訂頁、預覽頁
+    admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器、外框、
+                      媒體庫、儀表板
+      components/ui/  後台自己的元件庫，見下方「後台的設計系統」
+      styles/tokens.css 顏色、間距、圓角，深淺兩套共用一組名字
+      lib/            不碰 DOM 的小工具：storage、theme、latest、slug、
+                      mediaFacts、mediaResize、blockClipboard、menu-tree、printSpec
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
 docs/superpowers/specs/  設計文件
 .github/workflows/    main branch 自動部署
 ```
 
-`src/` 底下只有三個目錄，規則很簡單：東西放在**用到它的那一邊**，兩邊都用到才進 `shared/`。目前 `shared/` 只有 API client、型別、社群圖示與基礎樣式。
+`src/` 底下只有三個目錄，規則很簡單：東西放在**用到它的那一邊**，兩邊都用到才進 `shared/`。
+方向是單向的：`shared/` 不可以 import `admin/` 或 `storefront/`，否則前台的 bundle 會被
+後台的程式碼拖進去。
 
 ## 後端 API
 
@@ -117,6 +134,7 @@ docs/superpowers/specs/  設計文件
 | GET | `/media-assets/{file}` | 媒體庫圖片，key 必須在 `media` 表裡 |
 | GET | `/api/pages/home` | 目前設為首頁的那一頁，沒有就 404 |
 | GET | `/api/pages?path=/about` | 依路徑取頁面與其區塊，只有 `published` 解得開 |
+| GET | `/api/pages/preview/{token}` | 兌換一次性預覽票，草稿也看得到；用過即失效 |
 | GET | `/api/categories` | 分類清單，含上架商品數量 |
 | GET | `/api/categories/{slugs}` | 分類頁。`a,b` 是任一、`a+b` 是兩者皆是 |
 | POST | `/api/cart/validate` | 依購物車內容重算價格、庫存與運費 |
@@ -140,6 +158,7 @@ docs/superpowers/specs/  設計文件
 | --- | --- | --- |
 | GET | `/api/health` | 存活檢查，並套用 migration |
 | GET | `/api/session` | 已登入回 `{email}`，否則 401 |
+| GET | `/api/dashboard` | 後台首頁的四個數字、低庫存規格與最近編輯過的頁面 |
 | GET | `/auth/login?next=` | 導向 Google OAuth，`next` 必須在允許來源內 |
 | GET | `/auth/callback` | 建立 session 後導回 `next` |
 | POST | `/auth/logout` | 清除 session |
@@ -160,6 +179,7 @@ docs/superpowers/specs/  設計文件
 | GET / POST | `/api/pages` | 頁面列表與新增 |
 | PUT | `/api/pages/order` | 排序，必須排在 `{id}` 路由之前 |
 | GET / PUT / DELETE | `/api/pages/{id}` | 單一頁面與其區塊 |
+| POST | `/api/pages/{id}/preview-token` | 換一張一次性預覽票，見「真實預覽（iframe）」 |
 | POST | `/api/pages/{id}/blocks` | 新增區塊 |
 | PUT | `/api/pages/{id}/blocks/order` | 區塊排序 |
 | PUT / DELETE | `/api/blocks/{id}` | 單一區塊 |
@@ -588,6 +608,66 @@ https://admin.luma-studio.tw
 前端的 API 網址不再由 CI 變數提供，改放在 [frontend/.env.production](frontend/.env.production) 與 [frontend/.env.admin](frontend/.env.admin)。兩份建置需要不同的值，一個 shell 變數同時餵兩邊會讓後台連錯 API，而那是一種不會報錯的壞法。
 
 Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持有它們。
+
+## 後台的設計系統
+
+後台原本是原生 HTML 元素加上散在各頁的樣式：每個列表自己排版、每個對話框是 `confirm()`、
+每個下拉是 `<select>`。改成一組共用元件，參考的是 Strapi 的排版與 Payload 的編輯體驗——
+抄的是 UI/UX，不是功能。
+
+### 顏色與間距
+
+[styles/tokens.css](frontend/src/admin/styles/tokens.css) 是唯一的來源。名字說的是**用途**不是長相
+（`--surface` 換了配色還活著，`--grey-100` 換配色那天要全站改名）。深淺兩套共用同一組名字：
+
+```text
+:root                        淺色，也是預設
+prefers-color-scheme: dark   系統偏好，僅在沒有 data-theme 時生效
+[data-theme="dark"|"light"]  店主自己選的，蓋過系統
+```
+
+系統那條被 `:not([data-theme])` 擋著。少了這個保護，系統設深色時會贏過店主剛選的淺色，
+切換鈕就只有單向有效。三態不是兩態：「跟隨系統」是真的選項，也是沒碰過切換鈕的人的現況。
+存取在 [lib/theme.ts](frontend/src/admin/lib/theme.ts)，在 render 之前就套用，否則會先閃一下淺色。
+
+顏色對比全部量過，AA 以上。`--on-danger` / `--on-success` / `--on-warning` 這幾個存在的原因是
+深色主題的紅綠橘都比較亮，白字踩在上面只有 2.6～3.3:1。
+
+### 元件
+
+`import { ... } from '../components/ui'` 一次拿到全部，樣式也是在那支 barrel 裡引入的。
+
+| 元件 | 用途 |
+| --- | --- |
+| `Button` / `IconButton` / `ButtonRow` | 四種 tone：primary、neutral、ghost、danger |
+| `Field` / `TextField` / `TextArea` | 標籤、說明、錯誤訊息的固定排法 |
+| `Select` | 自繪下拉。方向鍵、Home/End、輸入字首跳選、Enter 選定、Escape 還原 |
+| `Choice`：`Checkbox` / `RadioGroup` / `Toggle` | |
+| `TagInput` | 媒體庫的標籤，含既有標籤的自動完成 |
+| `Modal` / `useConfirm` | 對話框與 `await ask({...})`；焦點進得去、出不來、關掉會還回去 |
+| `Bits`：`Panel` / `Badge` / `EmptyState` / `Spinner` / `TableWrap` / `Truncated` | |
+| `DataTable` / `Toolbar` / `BulkBar` | 列表、工具列與「已選 N 筆」的批次列 |
+| `ColumnChooser` | 顯示哪些欄，選擇記在 localStorage |
+| `FilterBar` | 疊加式篩選規則，AND 相接 |
+| `Menu` / `MenuItem` / `MenuGroup` | 區塊列尾端的 `⋯` |
+
+不碰 DOM 的部分（[columns.ts](frontend/src/admin/components/ui/columns.ts)、
+[filters.ts](frontend/src/admin/components/ui/filters.ts)）獨立成模組，所以測得到。
+
+### 排版
+
+左邊是 56px 的圖示欄，右邊是 232px 的側欄，上面是會跟著捲動的標題列——這是 Strapi 的比例。
+[AdminShell](frontend/src/admin/components/AdminShell.tsx) 把三者包起來，每一頁只交出內容與標題列
+上的按鈕。
+
+### 幾條規則
+
+- **CSS 選擇器要指明是誰。** `.cart`、`.custom-page`、`body.admin li` 這三次都出過事：
+  為某一頁寫的樣式，套到了每一個穿著那個 class 的東西上。容器一律寫成 `main.x` 這種形式。
+- **localStorage 的 key 只有一種取法**，[lib/storage.ts](frontend/src/admin/lib/storage.ts) 的
+  `key()`。同一天長出三種命名法就是第四種出現的原因。
+- **會被覆蓋的請求要記票號**，[lib/latest.ts](frontend/src/admin/lib/latest.ts) 的 `useLatest()`。
+  搜尋框輸入很快時，先發的慢答案會蓋在後發的快答案上面。
 
 ## 商城
 
