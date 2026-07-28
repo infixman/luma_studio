@@ -29,7 +29,7 @@ async def _detail(ctx: Ctx, page: dict) -> dict:
         # Three states, not two. `modified` is the one that was invisible
         # before versions existed: edited since it was last published, with
         # nothing on screen saying so.
-        "publishState": await pages.publish_state(ctx.env, page["id"]),
+        "publishState": await pages.publish_state(ctx.env, page["id"], blocks),
         "versions": await pages.list_versions(ctx.env, page["id"]),
     }
 

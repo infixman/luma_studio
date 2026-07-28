@@ -903,16 +903,29 @@ async def restore(env, page_id: str, version_id: str) -> bool:
     return True
 
 
-async def publish_state(env, page_id: str) -> str:
+async def publish_state(env, page_id: str, blocks: list[dict] | None = None) -> str:
     """One of three: `draft`, `published`, `modified`.
 
     The third is the one that was invisible before any of this existed: edited
     since it was last published, with nothing anywhere saying so. It is also
     what makes the editor's 草稿 / 已發布 tabs worth having — until now they
     would have shown the same thing twice.
+
+    Both sides are put through `snapshot_of` rather than comparing the stored
+    string directly. Two encodings of the same page are not the same string:
+    migration 0021 built its payloads with SQLite's `json_object`, which
+    writes keys in the order given and no spaces, while `json.dumps` here
+    sorts them and spaces them. Comparing raw would have told every page that
+    already existed it had unpublished changes, on the first request after
+    deploying, forever.
+
+    `blocks` is accepted so a caller that has already read them — the editor's
+    detail response has — does not read them twice.
     """
 
     current = await current_version(env, page_id)
     if current is None:
         return "draft"
-    return "published" if current["payload"] == snapshot_of(await list_blocks(env, page_id)) else "modified"
+    stored = snapshot_of(blocks_of_snapshot(current["payload"]))
+    draft = snapshot_of(await list_blocks(env, page_id) if blocks is None else blocks)
+    return "published" if stored == draft else "modified"

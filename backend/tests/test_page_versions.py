@@ -187,6 +187,32 @@ class TestTheThreeStates:
         )
         assert run(pages.publish_state(make_env(database), "p1")) == "published"
 
+    def test_a_payload_written_by_the_migration_is_not_read_as_modified(self, pages):
+        """Migration 0021 built its payloads with SQLite's `json_object`,
+        which writes the keys in the order given and no spaces. `json.dumps`
+        here sorts and spaces them. Comparing the stored string directly told
+        every page that already existed it had unpublished changes, on the
+        first request after deploying, forever."""
+
+        # Exactly what `json_group_array(json_object('type', ..., 'config',
+        # json(...)))` produces.
+        migrated = '[{"type":"text","config":{"body":"哈囉"}}]'
+        assert migrated != pages.snapshot_of([{"type": "text", "config": {"body": "哈囉"}, "position": 0}])
+
+        database = FakeDatabase(
+            {"FROM page_versions": [{"payload": migrated, "is_current": 1}], "FROM page_blocks": [text_block()]}
+        )
+        assert run(pages.publish_state(make_env(database), "p1")) == "published"
+
+    def test_the_blocks_can_be_handed_in_rather_than_read_twice(self, pages):
+        """The editor's detail response has already read them."""
+
+        published = pages.snapshot_of([{"type": "text", "config": {"body": "哈囉"}, "position": 0}])
+        database = FakeDatabase({"FROM page_versions": [{"payload": published, "is_current": 1}]})
+        blocks = [{"id": "b0", "type": "text", "config": {"body": "哈囉"}, "position": 0}]
+        assert run(pages.publish_state(make_env(database), "p1", blocks)) == "published"
+        assert not any("FROM page_blocks" in statement for statement in database.statements)
+
     def test_an_edited_draft_is_modified(self, pages):
         """The state that was invisible before any of this existed: edited
         since it was published, with nothing on screen saying so."""
