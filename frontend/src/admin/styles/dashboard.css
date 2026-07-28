@@ -1,0 +1,92 @@
+/* The back office's front page. Four figures, then two lists. */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.stat:hover {
+  border-color: var(--primary);
+}
+
+/* Only when there is something to do. A permanent red badge is one nobody
+   looks at by the second week. */
+.stat.is-urgent {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.stat.is-urgent .stat-value {
+  color: var(--warning);
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.stat-label {
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.recent-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.recent-list li:last-child {
+  border-bottom: none;
+}
+
+.recent-list a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.recent-list code {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.recent-list .when {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}

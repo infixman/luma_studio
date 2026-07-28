@@ -589,3 +589,23 @@ export interface MediaItem {
   byteSize: number
   createdAt: number
 }
+
+// --- back-office dashboard ----------------------------------------------
+
+/** What the shop looks like right now, in one answer. */
+export interface DashboardSummary {
+  orders: {
+    pending: number
+    paid: number
+    shipped: number
+    completed: number
+    /** Paid and not yet shipped — somebody has given the shop money and is waiting. */
+    waiting: number
+  }
+  /** Taken in the last thirty days, counted from when payment landed. */
+  revenue: { orders: number; total: number }
+  lowStock: { id: string; productTitle: string; variantTitle: string; slug: string; stock: number }[]
+  recentPages: { id: string; title: string; path: string; status: PageStatus; updatedAt: number }[]
+  /** The threshold the shop is being warned against, so the UI can say it. */
+  lowStockAt: number
+}

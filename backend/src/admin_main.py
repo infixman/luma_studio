@@ -18,6 +18,7 @@ import admin_api
 import auth_admin
 import bio_link_api
 import customers_admin_api
+import dashboard
 import media_admin_api
 import orders_admin_api
 import pages_admin_api
@@ -65,6 +66,9 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/session" and method == "GET":
         return ctx.json({"email": email})
+
+    if path == "/api/dashboard" and method == "GET":
+        return ctx.json(await dashboard.summary(ctx.env))
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):
         return await bio_link_api.handle(ctx)

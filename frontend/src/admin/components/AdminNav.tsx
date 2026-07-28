@@ -80,9 +80,14 @@ export const areas: NavArea[] = [
         <path d="M7 15h10v5H7z" />
       </svg>
     ),
-    pages: [{ href: '/', label: 'ibon 列印' }],
+    pages: [{ href: '/ibon', label: 'ibon 列印' }],
   },
 ]
+
+/* The dashboard is not in an area. It is what the rail's mark leads back to,
+   and putting it in a list would make it look like one page among several
+   rather than the place you start. */
+export const HOME = '/'
 
 /** Which area a page belongs to. An unknown path lands in the first one. */
 export function areaOf(href: string): NavArea {
@@ -90,6 +95,7 @@ export function areaOf(href: string): NavArea {
 }
 
 export function labelOf(href: string): string {
+  if (href === HOME) return '總覽'
   for (const area of areas) {
     const page = area.pages.find((entry) => entry.href === href)
     if (page) return page.label
@@ -100,7 +106,9 @@ export function labelOf(href: string): string {
 export function AreaRail({ current, children }: { current: NavArea; children?: ComponentChildren }) {
   return (
     <nav class="admin-rail" aria-label="管理區域">
-      <img class="rail-mark" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
+      <a class="rail-home" href={HOME} aria-label="總覽">
+        <img class="rail-mark" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
+      </a>
       <ul class="rail-areas">
         {areas.map((area) => (
           <li key={area.id}>

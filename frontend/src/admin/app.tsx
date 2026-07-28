@@ -1,5 +1,6 @@
 import { AdminGate } from './components/AdminGate'
 import { AdminPage } from './pages/AdminPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
 import { PageEditPage } from './pages/PageEditPage'
 import { PagesPage } from './pages/PagesPage'
@@ -25,6 +26,8 @@ function markBody(page: string): void {
 function Routed() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
+  if (path === '/') return <DashboardPage />
+  if (path === '/ibon') return <AdminPage />
   if (path === '/card') return <BioLinkAdminPage />
   if (path === '/products') return <ProductsPage />
   if (path === '/shipping') return <ShippingPage />
@@ -40,10 +43,10 @@ function Routed() {
   const product = PRODUCT_PATH.exec(path)
   if (product) return <ProductEditPage id={decodeURIComponent(product[1]!)} />
 
-  // Anything else lands on the folder manager rather than a dead end. The
-  // old /admin and /admin/bio-link URLs arrive here through the storefront's
+  // Anything else lands on the dashboard rather than a dead end. The old
+  // /admin and /admin/bio-link URLs arrive here through the storefront's
   // redirect, and a bookmark that lands on a blank page reads as a fault.
-  return <AdminPage />
+  return <DashboardPage />
 }
 
 export function App() {
