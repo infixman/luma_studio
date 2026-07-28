@@ -26,13 +26,34 @@ function markBody(page: string): void {
   document.body.className = page
 }
 
+/**
+ * Which pages wear no site header or footer.
+ *
+ * Two reasons, and they are different ones:
+ *
+ * Paying — a navigation bar part way through checkout only offers ways to
+ * stop.
+ *
+ * Standing alone — the name card and the ibon pickup page are not pages of a
+ * shop. One is a link handed out on its own; the other is opened at a counter
+ * in a convenience store, on a phone, to read one number off it. Both already
+ * carry the studio's own mark, so the site chrome puts a second logo above
+ * the first and a shopping cart in front of someone who is trying to print.
+ */
+export function isBare(path: string): boolean {
+  return (
+    path === '/checkout' ||
+    path === '/orders' ||
+    path.startsWith('/orders/') ||
+    path === '/card' ||
+    path.startsWith('/ibon_print/')
+  )
+}
+
 /** A handful of entry points, no in-app navigation, so matching the path is enough. */
 export function App() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
-  // Paying is the one thing the chrome stays out of: a navigation bar part
-  // way through checkout only offers ways to stop.
-  const bare = path === '/checkout' || path === '/orders' || path.startsWith('/orders/')
-  return <Chrome bare={bare}>{route()}</Chrome>
+  return <Chrome bare={isBare(path)}>{route()}</Chrome>
 }
 
 function route() {
