@@ -23,6 +23,13 @@ def dashboard():
     return module
 
 
+@pytest.fixture
+def shop():
+    import shop as module
+
+    return module
+
+
 class TestOrderCounts:
     def test_waiting_means_paid_but_not_shipped(self, dashboard):
         """The one number worth acting on: somebody has paid and has nothing yet."""
@@ -67,17 +74,38 @@ class TestRevenue:
 
 
 class TestLowStock:
-    def test_only_things_a_customer_could_actually_buy(self, dashboard):
-        """A product nobody can reach cannot disappoint anybody by running out."""
+    def test_only_things_a_customer_could_actually_buy(self, dashboard, shop):
+        """A product nobody can reach cannot disappoint anybody by running out.
+
+        The status is compared against the shop's own vocabulary rather than a
+        literal repeated here. This assertion used to hold a hard-coded
+        'published' — the pages word — and passed for weeks against a query
+        that matched no row in the database.
+        """
 
         database = FakeDatabase()
         run(dashboard._low_stock(make_env(database)))
 
         query = database.statements[0]
         assert "v.enabled = 1" in query
-        assert "p.status = 'published'" in query
+        assert "p.status = 'active'" in query
+        assert "active" in shop.PRODUCT_STATUSES
         # Worst first: the ones already at zero are turning customers away now.
         assert "ORDER BY v.stock" in query
+
+    def test_a_low_variant_of_an_active_product_is_reported(self, dashboard):
+        """The behaviour the SQL assertion above cannot see: a real row arrives."""
+
+        database = FakeDatabase(
+            {
+                "FROM product_variants v": [
+                    {"id": "v1", "variant_title": "M", "stock": 0, "product_title": "蘇打托特包", "slug": "soda-tote"}
+                ]
+            }
+        )
+        found = run(dashboard._low_stock(make_env(database)))
+        assert [item["productTitle"] for item in found] == ["蘇打托特包"]
+        assert found[0]["stock"] == 0
 
     def test_the_threshold_is_not_zero(self, dashboard):
         """By the time it is zero, restocking is already late."""

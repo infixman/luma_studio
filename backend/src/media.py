@@ -33,10 +33,11 @@ MAX_FILE_NAME = 120
 MAX_ITEMS = 300
 MAX_SEARCH = 60
 
-# One screenful of a grid, generously. Select-all selects what is on screen,
-# and what is on screen is capped by MAX_ITEMS, so this only has to be larger
-# than any selection a person makes on purpose.
-MAX_BULK = 100
+# Select-all selects everything on screen, and what is on screen is capped by
+# MAX_ITEMS — so anything smaller than MAX_ITEMS makes select-all-then-delete
+# refuse itself. It was 100 against a 300-row page, which failed before the
+# confirmation dialog was even drawn.
+MAX_BULK = MAX_ITEMS
 
 # Short enough that a tag stays a label rather than becoming a sentence, and
 # few enough that the list under an image is still readable at a glance.
@@ -601,9 +602,10 @@ async def delete(env, media_id: str) -> list[str] | None:
     caller deletes what it is handed; a variant left behind would be storage
     nobody can reach, since the row that named it is gone.
 
-    The rows go first. An orphaned object costs storage; an orphaned row is a
-    picture the library offers and the site cannot draw. `None` means there
-    was no such image, which is not the same as an image with no variants.
+    The rows go first, children before parents. An orphaned object costs
+    storage; an orphaned row is a picture the library offers and the site
+    cannot draw. `None` means there was no such image, which is not the same
+    as an image with no variants.
     """
 
     key = await object_key_of(env, media_id)
@@ -612,11 +614,14 @@ async def delete(env, media_id: str) -> list[str] | None:
     variants = await d1_rows(
         env.DB.prepare("SELECT object_key FROM media_sizes WHERE media_id = ?1").bind(media_id)
     )
-    await env.DB.prepare("DELETE FROM media WHERE id = ?1").bind(media_id).run()
     # D1 does not enforce foreign keys here, so the tags and the sizes have to
-    # be cleared by hand. A tag left behind would keep being offered by the
-    # autocomplete with no image carrying it; a size left behind would keep
-    # the public image route serving a variant of a deleted picture.
+    # be cleared by hand — and they go BEFORE the row that names them. There
+    # is no transaction: if the isolate dies between two of these statements,
+    # deleting the parent first would leave `media_sizes` rows pointing at R2
+    # objects that `key_is_known` still vouches for, with nothing left in the
+    # library able to name them. Children first means the worst case is an
+    # image that is still listed and can be deleted again.
     await env.DB.prepare("DELETE FROM media_tags WHERE media_id = ?1").bind(media_id).run()
     await env.DB.prepare("DELETE FROM media_sizes WHERE media_id = ?1").bind(media_id).run()
+    await env.DB.prepare("DELETE FROM media WHERE id = ?1").bind(media_id).run()
     return [key, *(row["object_key"] for row in variants)]

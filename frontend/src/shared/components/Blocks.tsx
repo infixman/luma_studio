@@ -72,6 +72,23 @@ function Block({ block }: { block: PageBlock }) {
   }
 }
 
+/**
+ * What a picture is actually asked to be, so the browser can pick a width.
+ *
+ * `100vw` was the default and it was wrong everywhere: blocks live inside a
+ * 68rem column (see blocks.css), so on any desktop the widest candidate — the
+ * original — was always chosen, and the narrower copies were never fetched.
+ * A wrong `sizes` does not break the page, it just silently wastes the whole
+ * feature, which is why it is stated at every call site now.
+ */
+const FULL_WIDTH = '(max-width: 68rem) 100vw, 68rem'
+
+/** One tile of an N-column grid inside that same column. */
+const columnWidth = (columns: number) => `(max-width: 620px) 50vw, calc(68rem / ${columns})`
+
+/** A picture beside its words, so half the column on anything but a phone. */
+const HALF_WIDTH = '(max-width: 720px) 100vw, 34rem'
+
 function Picture({ image, className, sizes }: { image: MediaRef; className?: string; sizes?: string }) {
   return (
     <img
@@ -82,7 +99,7 @@ function Picture({ image, className, sizes }: { image: MediaRef; className?: str
       // know their own width pass it; the default is the safe reading of a
       // full-width block.
       srcset={srcSetFor(image)}
-      sizes={sizes ?? '100vw'}
+      sizes={sizes ?? FULL_WIDTH}
       alt={image.alt}
       loading="lazy"
     />
@@ -177,7 +194,7 @@ function Album({ images, columns, ratio }: { images: MediaRef[]; columns: number
                 a lightbox is a modal to build, trap focus in and dismiss, and
                 the browser already has a perfectly good way to show a photo. */}
             <a href={apiUrl(image.path)} target="_blank" rel="noopener">
-              <Picture image={image} />
+              <Picture image={image} sizes={columnWidth(columns)} />
             </a>
           </li>
         ))}
@@ -322,7 +339,7 @@ function Contact({ block }: { block: Extract<PageBlock, { type: 'contact' }> }) 
       {hasAside && (
         <div class="aside">
           {aside === 'image' && image ? (
-            <Picture image={image} />
+            <Picture image={image} sizes={HALF_WIDTH} />
           ) : (
             // Same escape-first renderer as everywhere else, so a paragraph
             // behaves the same wherever it is written.
@@ -342,7 +359,7 @@ function About({ block }: { block: Extract<PageBlock, { type: 'about' }> }) {
     <section class={`block block-about ${image ? `image-${imageSide}` : 'no-image'}`}>
       {image && (
         <div class="portrait">
-          <Picture image={image} />
+          <Picture image={image} sizes={HALF_WIDTH} />
         </div>
       )}
       <div class="words">

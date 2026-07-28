@@ -349,3 +349,53 @@ describe('link previews on product pages', () => {
     }
   })
 })
+
+/**
+ * Who may frame this site, checked on the response that is actually sent.
+ *
+ * These exist because the rule used to live in `_headers` as a `/__preview/*`
+ * block, and could never fire: every SPA route is served by fetching
+ * `/index.html`, so Pages matches the headers against *that* path and only the
+ * `/*` block applies. The generator had tests, they passed, and the feature
+ * was dead. Assert the header on the Response or assert nothing.
+ */
+describe('who may frame the storefront', () => {
+  const shellWithHeaders = {
+    '/index.html': {
+      status: 200,
+      body: SHELL,
+      headers: {
+        'x-frame-options': 'DENY',
+        'content-security-policy': "default-src 'self'; frame-ancestors 'none'",
+      },
+    },
+  }
+
+  it('refuses every frame on an ordinary page', async () => {
+    const response = await worker.fetch(get('/about'), env(shellWithHeaders))
+    expect(response.headers.get('x-frame-options')).toBe('DENY')
+    expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+  })
+
+  it('lets the back office frame the preview route', async () => {
+    const response = await worker.fetch(get('/__preview/abcdefghijklmnopqrstuvwx'), env(shellWithHeaders))
+    // X-Frame-Options cannot name another host, so it has to go entirely.
+    expect(response.headers.get('x-frame-options')).toBeNull()
+    expect(response.headers.get('content-security-policy')).toContain(
+      'frame-ancestors https://admin.luma-studio.tw',
+    )
+  })
+
+  it('gives up nothing else to allow it', async () => {
+    const response = await worker.fetch(get('/__preview/abcdefghijklmnopqrstuvwx'), env(shellWithHeaders))
+    const policy = response.headers.get('content-security-policy') ?? ''
+    expect(policy).toContain("default-src 'self'")
+    expect(policy).not.toContain("frame-ancestors 'none'")
+  })
+
+  it('does not relax a path that merely starts the same way', async () => {
+    // `/__previewer` is not the preview route, and the check is a prefix.
+    const response = await worker.fetch(get('/__previewing'), env(shellWithHeaders))
+    expect(response.headers.get('x-frame-options')).toBe('DENY')
+  })
+})

@@ -143,7 +143,19 @@ export function PageEditPage({ id }: { id: string }) {
 
   const byId = useMemo(() => new Map(library.map((item) => [item.id, item])), [library])
 
-  const apply = useCallback((next: PageDetail) => {
+  /**
+   * Take the server's answer, without throwing away work in progress.
+   *
+   * `keepDrafts` is the whole point. Every mutation answers with the full page
+   * — adding a block, reordering, deleting one — and this used to overwrite
+   * the local drafts each time. So dragging a block would silently revert
+   * unsaved edits in every other block, and duplicating a block you had just
+   * edited put your text on the copy and reverted the original.
+   *
+   * Only a load and a save are entitled to replace what is on screen: those
+   * are the two moments the server's copy IS the truth.
+   */
+  const apply = useCallback((next: PageDetail, keepDrafts = false) => {
     setDetail(next)
     setForm({
       title: next.page.title,
@@ -154,9 +166,11 @@ export function PageEditPage({ id }: { id: string }) {
       shareDescription: next.page.shareDescription,
     })
     setShareImage({ id: null, path: next.page.shareImagePath })
-    // Block configs are edited locally and saved on demand, so they are kept
-    // beside the server's copy rather than derived from it on every render.
-    setDrafts(Object.fromEntries(next.blocks.map((block) => [block.id, block.config])))
+    setDrafts((current) =>
+      Object.fromEntries(
+        next.blocks.map((block) => [block.id, keepDrafts ? current[block.id] ?? block.config : block.config]),
+      ),
+    )
   }, [])
 
   const load = useCallback(async () => {
@@ -177,6 +191,20 @@ export function PageEditPage({ id }: { id: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * The browser asks before the work is lost.
+   *
+   * 「有未儲存的修改」 in the title bar is passive, and every way out of this
+   * page — the rail, the sidebar, 回到頁面清單 — is an ordinary link. Without
+   * this, three edited blocks vanish on one misplaced click, silently.
+   */
+  useEffect(() => {
+    if (!unsaved) return
+    const ask = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', ask)
+    return () => window.removeEventListener('beforeunload', ask)
+  })
 
   /* The clipboard is a place, not a message, so it is read rather than
      received. Re-read on focus and on the storage event because the copy that
@@ -251,12 +279,21 @@ export function PageEditPage({ id }: { id: string }) {
   }
 
   /** Answers whether the work went through, which is what "and then refresh the frame" needs to know. */
-  async function run(work: () => Promise<PageDetail | void>, done: string): Promise<boolean> {
+  /**
+   * `keepDrafts` defaults to true because most of what goes through here is a
+   * structural change — add, delete, reorder — and none of those are a reason
+   * to discard text somebody is in the middle of typing. Saving passes false.
+   */
+  async function run(
+    work: () => Promise<PageDetail | void>,
+    done: string,
+    { keepDrafts = true }: { keepDrafts?: boolean } = {},
+  ): Promise<boolean> {
     if (busy) return false
     setBusy(true)
     try {
       const next = await work()
-      if (next) apply(next)
+      if (next) apply(next, keepDrafts)
       show(done, 'ok')
       return true
     } catch (error) {
@@ -301,7 +338,7 @@ export function PageEditPage({ id }: { id: string }) {
       // The last write already answered with the whole page; only ask again
       // when there were no blocks to write.
       return latest ?? (await api<PageDetail>(`/api/pages/${encodeURIComponent(id)}`))
-    }, dirty.length ? `已儲存，包含 ${dirty.length} 個區塊。` : '頁面已儲存。').then((ok) => {
+    }, dirty.length ? `已儲存，包含 ${dirty.length} 個區塊。` : '頁面已儲存。', { keepDrafts: false }).then((ok) => {
       // The frame reads the server, so what it is showing is now one save out
       // of date. Refreshing it means minting another token, because the one
       // that loaded it was spent by that load — reusing the URL would put an

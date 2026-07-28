@@ -263,12 +263,41 @@ function adminRedirect(path: string, env: Env): Response | null {
   return Response.redirect(`${env.ADMIN_ORIGIN.replace(/\/+$/, '')}${rest}`, 301)
 }
 
+/**
+ * The one path this site allows itself to be framed on.
+ *
+ * It has to be applied here rather than in `_headers`, and that is the whole
+ * reason this function takes a path. Every SPA route is served by fetching
+ * `/index.html` — so the headers that come back are the ones matched against
+ * `/index.html`, which is the `/*` block, whatever a more specific rule in
+ * `_headers` says about `/__preview/*`. The rule was written and never fired.
+ */
+function framingFor(path: string, env: Env): { xfo: boolean; ancestors: string } {
+  if (!path.startsWith('/__preview/')) return { xfo: true, ancestors: "'none'" }
+  return { xfo: false, ancestors: env.ADMIN_ORIGIN.replace(/\/+$/, '') }
+}
+
 /** The shell is served for any unknown path, so the SPA can route it. */
-function shellResponse(html: string, source: Response): Response {
+function shellResponse(html: string, source: Response, path: string, env: Env): Response {
   const headers = new Headers(source.headers)
   headers.set('content-type', 'text/html; charset=utf-8')
   headers.delete('content-length')
   headers.delete('etag')
+
+  const framing = framingFor(path, env)
+  // X-Frame-Options cannot name another host — its allow-list stops at
+  // SAMEORIGIN — so on the preview path it is removed and the CSP does the
+  // work. Everywhere else it stays, and says DENY.
+  if (framing.xfo) headers.set('x-frame-options', 'DENY')
+  else headers.delete('x-frame-options')
+
+  const policy = headers.get('content-security-policy')
+  if (policy) {
+    headers.set(
+      'content-security-policy',
+      policy.replace(/frame-ancestors[^;]*/, `frame-ancestors ${framing.ancestors}`),
+    )
+  }
   return new Response(html, { status: 200, headers })
 }
 
@@ -317,12 +346,12 @@ export default {
 
     const path = url.pathname.replace(/\/+$/, '') || '/'
     if (!isLinkPreviewer(request.headers.get('user-agent') ?? '')) {
-      return shellResponse(await shell.text(), shell)
+      return shellResponse(await shell.text(), shell, path, env)
     }
 
     const preview = await previewFor(path, url, env)
     const html = await shell.text()
-    if (!preview) return shellResponse(html, shell)
-    return shellResponse(inject(html, preview), shell)
+    if (!preview) return shellResponse(html, shell, path, env)
+    return shellResponse(inject(html, preview), shell, path, env)
   },
 }

@@ -80,8 +80,13 @@ async def _revenue(env, since: int) -> dict:
 async def _low_stock(env) -> list[dict]:
     """Variants close to running out, on sale, worst first.
 
-    Disabled variants and unpublished products are left out: a product nobody
-    can buy cannot disappoint anybody by being out of stock.
+    Disabled variants and products that are not on sale are left out: a
+    product nobody can buy cannot disappoint anybody by being out of stock.
+
+    `active` is the shop's word — see shop.PRODUCT_STATUSES. `published` is the
+    pages vocabulary, and it was what this said until somebody noticed the
+    panel was permanently empty. Two vocabularies, one wrong literal, and no
+    error anywhere: the query simply matched nothing.
     """
 
     rows = await d1_rows(
@@ -89,7 +94,7 @@ async def _low_stock(env) -> list[dict]:
             "SELECT v.id, v.title AS variant_title, v.stock, p.title AS product_title, p.slug"
             " FROM product_variants v"
             " JOIN products p ON p.id = v.product_id"
-            " WHERE v.enabled = 1 AND p.status = 'published' AND v.stock <= ?1"
+            " WHERE v.enabled = 1 AND p.status = 'active' AND v.stock <= ?1"
             " ORDER BY v.stock, p.title LIMIT ?2"
         ).bind(LOW_STOCK_AT, MAX_LOW_STOCK)
     )

@@ -49,7 +49,16 @@ function markBody(page: string): void {
  * harder to get back to.
  */
 export function isBare(path: string): boolean {
-  return path === '/checkout' || path === '/card' || path.startsWith('/ibon_print/')
+  return (
+    path === '/checkout' ||
+    path === '/card' ||
+    path.startsWith('/ibon_print/') ||
+    // The preview is the one path this site lets itself be framed on, and the
+    // argument for allowing that is that it renders and offers nothing. The
+    // header carries a cart, a login link and the owner's own call to action,
+    // so wearing it would have made that argument false.
+    path.startsWith('/__preview/')
+  )
 }
 
 /** A handful of entry points, no in-app navigation, so matching the path is enough. */

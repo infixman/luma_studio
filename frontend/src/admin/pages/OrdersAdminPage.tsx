@@ -94,6 +94,9 @@ const CANCELLABLE: OrderStatus[] = ['pending', 'paid', 'shipped']
 
 const COLUMN_PAGE = 'orders'
 
+/** Marks the rule a status tab owns, so the next click can clear its own. */
+const TAB_RULE = 'tab-'
+
 /**
  * Nine columns is more than fits comfortably, so four start switched off.
  * They are the ones you go looking for rather than scan — a phone number is
@@ -354,9 +357,20 @@ export function OrdersAdminPage() {
   }
 
   /** Puts the tabs and the filter rows on one model, so they cannot disagree. */
+  /**
+   * A tab click is a filter rule, which is what keeps the tabs and the list
+   * from ever disagreeing.
+   *
+   * Every rule this function put there is cleared first, not only the ones
+   * still shaped like `狀態 是 X`. Changing a tab rule's operator by hand left
+   * it behind, and clicking the same tab again appended a second rule with the
+   * same id — after which editing one row rewrote both, deleting one deleted
+   * both, and the query asked for status=paid AND statusNot=paid, which can
+   * never match anything.
+   */
   function chooseTab(status: OrderStatus | '') {
-    const others = rules.filter((rule) => !(rule.field === 'status' && rule.operator === 'eq'))
-    setRules(status ? [...others, { id: `tab-${status}`, field: 'status', operator: 'eq', value: status }] : others)
+    const others = rules.filter((rule) => !rule.id.startsWith(TAB_RULE))
+    setRules(status ? [...others, { id: `${TAB_RULE}${status}`, field: 'status', operator: 'eq', value: status }] : others)
     setSelected([])
   }
 

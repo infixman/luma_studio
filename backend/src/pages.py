@@ -479,18 +479,24 @@ async def mint_preview_token(env, page_id: str) -> str:
 async def redeem_preview_token(env, token: str) -> str | None:
     """The page id a token stands for, or None. Spends the token either way.
 
-    Deleting before the expiry check rather than after: a token that arrives
-    late is still a token that has now been used, and leaving it behind would
-    let a slow attempt be retried until it raced a clock.
+    A token that matched is spent whether or not it had expired: one that
+    arrives late has still been used, and leaving it behind would let a slow
+    attempt be retried until it raced a clock. A token that matched nothing is
+    not written about at all — see below.
     """
 
     if not PREVIEW_TOKEN_PATTERN.fullmatch(token or ""):
         return None
 
     rows = await d1_rows(env.DB.prepare("SELECT * FROM preview_tokens WHERE token = ?1").bind(token))
-    await env.DB.prepare("DELETE FROM preview_tokens WHERE token = ?1").bind(token).run()
     if not rows:
+        # No write for a token that never existed. This route is public, and a
+        # delete on every guess would let anyone spend the D1 write quota that
+        # sessions and checkout draw on — the same reason /auth/login is
+        # rate-limited harder than the rest.
         return None
+
+    await env.DB.prepare("DELETE FROM preview_tokens WHERE token = ?1").bind(token).run()
     if int(rows[0]["expires_at"]) < utc_timestamp():
         return None
     return str(rows[0]["page_id"])

@@ -204,7 +204,7 @@ export function AdminPage() {
   }
 
   return (
-    <AdminShell current="/" message={message} onError={showError}>
+    <AdminShell current="/ibon" message={message} onError={showError}>
 
       <section class="grid">
         <div class="card">

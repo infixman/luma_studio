@@ -148,7 +148,14 @@ export function BlockRow({
             tabIndex={0}
             aria-label="拖曳以調整順序"
             title="拖曳以調整順序"
-            onDragStart={onDragStart}
+            onDragStart={(event) => {
+              // Firefox refuses to begin a drag unless something is written to
+              // the transfer. The payload is unused — the row being moved is
+              // held in state — but without this line reordering does nothing
+              // in that browser at all.
+              event.dataTransfer?.setData('text/plain', block.id)
+              onDragStart()
+            }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="9" cy="6" r="1.4" />
