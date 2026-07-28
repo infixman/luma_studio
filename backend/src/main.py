@@ -27,6 +27,7 @@ import rate_limit
 import router
 import shipping
 import shop
+import site_chrome
 from common import (
     IDENTIFIER_PATTERN,
     IMAGE_CONTENT_TYPES,
@@ -193,6 +194,44 @@ async def shop_index_response(ctx: Ctx):
             )
         )
     return ctx.json({"products": cards})
+
+
+async def site_response(ctx: Ctx):
+    """The chrome every page wears, and the menu inside it.
+
+    One endpoint rather than two: every page needs both, and splitting them
+    only makes each page wait for an extra round trip.
+
+    Menu targets are resolved here so the frontend never has to know how an
+    id becomes a URL. An item pointing at a draft, a deleted page or a
+    vanished category is left out entirely — a menu entry that leads to a 404
+    is worse than a menu with one fewer entry.
+    """
+
+    env = ctx.env
+    by_id = {page["id"]: page for page in await pages.list_pages(env, only_published=True)}
+    slugs = {category["slug"] for category in await categories.list_all(env)}
+
+    resolved = []
+    for item in await site_chrome.list_menu(env):
+        href = None
+        if item["targetKind"] == "page":
+            page = by_id.get(item["target"])
+            if page is not None:
+                href = "/" if page["isHome"] else page["path"]
+        elif item["targetKind"] == "category":
+            # A combination like `a,b` is only offered when every part of it
+            # still exists; half a filter would quietly change what it shows.
+            wanted = [part for part in item["target"].replace("+", ",").split(",") if part]
+            if wanted and all(slug in slugs for slug in wanted):
+                href = f"/shop/c/{item['target']}"
+        else:
+            href = item["target"]
+
+        if href is not None:
+            resolved.append({"id": item["id"], "parentId": item["parentId"], "label": item["label"], "href": href})
+
+    return ctx.json({"settings": await site_chrome.get_settings(env), "menu": resolved})
 
 
 async def page_response(ctx: Ctx, page: dict | None):
@@ -446,6 +485,37 @@ async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
     return ctx.json({"order": await orders.get_order(ctx.env, order_id)})
 
 
+async def site_image_response(ctx: Ctx, file_name: str):
+    """Serve the header background.
+
+    The key is read from the settings row rather than assembled from the URL,
+    so a stale link cannot be used to fish for other objects in the bucket.
+    """
+
+    file_name = unquote(file_name)
+    try:
+        site_chrome.validate_image_suffix(file_name)
+    except site_chrome.SiteError:
+        return ctx.error("Invalid image URL", 400)
+
+    key = await site_chrome.header_image_key(ctx.env)
+    if key != f"{site_chrome.IMAGE_PREFIX}/{file_name}":
+        return ctx.error("Image not found", 404)
+    stored = await ctx.env.IBON_IMAGES.get(key)
+    if stored is None:
+        return ctx.error("Image not found", 404)
+    content = bytes(Uint8Array.new(await stored.arrayBuffer()).to_py())
+    suffix = file_name[file_name.rfind(".") :].lower()
+    return ctx.binary(
+        content,
+        {
+            "content-type": site_chrome.IMAGE_CONTENT_TYPES[suffix],
+            "cache-control": "public, max-age=3600",
+            "x-content-type-options": "nosniff",
+        },
+    )
+
+
 async def shop_image_response(ctx: Ctx, file_name: str):
     """Serve one product photo.
 
@@ -581,6 +651,11 @@ async def dispatch(ctx: Ctx):
             return ctx.too_many_requests()
         return ctx.json({"methods": await shipping.list_methods(ctx.env, only_enabled=True)})
 
+    if path == "/api/site" and method == "GET":
+        if not await rate_limit.allows(ctx.env, rate_limit.PUBLIC, ctx.request, "site"):
+            return ctx.too_many_requests()
+        return await site_response(ctx)
+
     if path == "/api/pages/home" and method == "GET":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
             return ctx.too_many_requests()
@@ -617,6 +692,13 @@ async def dispatch(ctx: Ctx):
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):
             return ctx.too_many_requests()
         return await shop_product_response(ctx, path.removeprefix("/api/products/"))
+
+    if path.startswith(f"{site_chrome.IMAGE_URL_PREFIX}/"):
+        if method != "GET":
+            return ctx.error(f"Use GET {site_chrome.IMAGE_URL_PREFIX}/{{file}}", 404)
+        if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "asset"):
+            return ctx.too_many_requests()
+        return await site_image_response(ctx, path.removeprefix(f"{site_chrome.IMAGE_URL_PREFIX}/"))
 
     if path.startswith(f"{shop.IMAGE_URL_PREFIX}/"):
         if method != "GET":

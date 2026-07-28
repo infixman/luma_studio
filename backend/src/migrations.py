@@ -358,6 +358,54 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks (page_id, position)",
         ],
     },
+    {
+        # The header and footer every page wears, and the menu inside the
+        # header. Settings rather than blocks: a header you have to remember
+        # to insert is a header you will one day forget to insert.
+        "name": "0012_create_site_chrome",
+        "add_columns": [
+            # Default on, so no existing page loses its chrome when this lands.
+            ("pages", "show_header", "INTEGER NOT NULL DEFAULT 1"),
+            ("pages", "show_footer", "INTEGER NOT NULL DEFAULT 1"),
+        ],
+        "statements": [
+            # One row, always id = 1 — the same shape as bio_link_settings,
+            # because the site is likewise singular.
+            """CREATE TABLE IF NOT EXISTS site_settings (
+                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                 header_background TEXT NOT NULL DEFAULT 'solid',
+                 header_colour TEXT NOT NULL DEFAULT 'cream',
+                 header_image_key TEXT,
+                 header_height TEXT NOT NULL DEFAULT 'medium',
+                 header_text TEXT NOT NULL DEFAULT 'dark',
+                 header_logo_size TEXT NOT NULL DEFAULT 'medium',
+                 header_sticky INTEGER NOT NULL DEFAULT 1,
+                 header_show_cart INTEGER NOT NULL DEFAULT 1,
+                 header_show_login INTEGER NOT NULL DEFAULT 1,
+                 header_cta_label TEXT NOT NULL DEFAULT '',
+                 header_cta_url TEXT NOT NULL DEFAULT '',
+                 footer_colour TEXT NOT NULL DEFAULT 'ink',
+                 footer_text TEXT NOT NULL DEFAULT 'light',
+                 footer_copyright TEXT NOT NULL DEFAULT '',
+                 -- JSON, for the same reason page_blocks.config is: edited and
+                 -- saved as a whole, never queried into.
+                 footer_columns TEXT NOT NULL DEFAULT '[]',
+                 footer_socials TEXT NOT NULL DEFAULT '[]',
+                 updated_at INTEGER NOT NULL
+               )""",
+            # `target_kind` plus `target` rather than a finished URL: renaming
+            # a page's path must not silently break the menu that points at it.
+            """CREATE TABLE IF NOT EXISTS menu_items (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 parent_id TEXT,
+                 label TEXT NOT NULL,
+                 target_kind TEXT NOT NULL,
+                 target TEXT NOT NULL,
+                 position INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_menu_items_parent ON menu_items (parent_id, position)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

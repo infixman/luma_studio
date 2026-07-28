@@ -61,6 +61,8 @@ backend/
     categories.py     商品分類與 AND/OR 篩選
     pages.py          自訂頁面與區塊
     pages_admin_api.py 管理端頁面端點
+    site_chrome.py    頁首頁尾設定與三層選單
+    site_admin_api.py 管理端外框端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -103,6 +105,8 @@ docs/superpowers/specs/  設計文件
 | GET | `/bio-link-assets/{file}` | Bio link 頭像 |
 | GET | `/api/products` | 上架商品列表 |
 | GET | `/api/products/{slug}` | 單一商品，只有 `active` 的解得開 |
+| GET | `/api/site` | 頁首頁尾設定與選單，一次取回 |
+| GET | `/site-assets/{file}` | 頁首背景圖 |
 | GET | `/api/pages/home` | 目前設為首頁的那一頁，沒有就 404 |
 | GET | `/api/pages?path=/about` | 依路徑取頁面與其區塊，只有 `published` 解得開 |
 | GET | `/api/categories` | 分類清單，含上架商品數量 |
@@ -151,6 +155,11 @@ docs/superpowers/specs/  設計文件
 | POST | `/api/pages/{id}/blocks` | 新增區塊 |
 | PUT | `/api/pages/{id}/blocks/order` | 區塊排序 |
 | PUT / DELETE | `/api/blocks/{id}` | 單一區塊 |
+| GET / PUT | `/api/site` | 頁首頁尾設定 |
+| POST / DELETE | `/api/site/header-image` | 頁首背景圖 |
+| GET / POST | `/api/menu` | 選單項目 |
+| PUT | `/api/menu/order` | 排序與改層級，必須排在 `{id}` 之前 |
+| PUT / DELETE | `/api/menu/{id}` | 單一項目 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -540,6 +549,20 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 **Markdown 在前端轉換**（[shared/markdown.ts](frontend/src/shared/markdown.ts)），**先把整段輸入逃脫，再套用規則**。原始碼裡的 `<script>` 只可能變成文字 `&lt;script&gt;`——安全性來自那個順序，不是來自一份要維護的黑名單。連結只接受 `http`、`https`、`mailto` 與站內路徑；`javascript:` 會被丟掉但保留文字，因為弄丟字比弄丟連結更讓人意外。
 
 **區塊設定存 JSON**，所以驗證做兩次：寫入時擋掉壞的，讀取時擋掉舊版本寫進去的。讀取時解不開的區塊會被跳過而不是拋錯——少一段文字比整頁空白好——但後台仍然看得到它，因為看不到的區塊等於刪不掉。
+
+### 站台外框與選單
+
+頁首與頁尾是**站台設定**，不是頁面插入的區塊。每一頁自動套用，`pages` 上有 `show_header` 與 `show_footer` 兩個開關（預設開）給例外情況。
+
+考慮過讓它們成為「可插入的共用頁面」。沒有採用的理由只有一個：**你會忘記插**，而且不是偶爾。忘了插頁尾的那一頁就是客人看到的那一頁。
+
+**外觀是從固定清單選，不是填值** —— 與名片頁同一條規則、同一個理由。背景（透明／純色／圖片）、底色（五色調色盤）、高度與 logo 大小（小／中／大）、文字色（深／淺）。做不到的事講清楚：不能填 hex 色碼、不能把頁首設成 137px。自由填色遲早會做出一個自己看得到、客人看不清楚的選單，而那種錯誤不會在建立當下出現，是在別人的手機上出現。
+
+**選單存「指向什麼」而不是完成的網址。** `target_kind` 是 `page` 時存頁面 id，`category` 時存分類 slug，`url` 時才是絕對網址。所以改頁面路徑時選單會跟著走，不用回頭改。
+
+公開回應**不包含**指向草稿頁、已刪除頁面或消失分類的項目 —— 一個通往 404 的選單項目比少一個選單項目糟。但後台看得到它們，因為看不到的項目就是刪不掉的項目。
+
+模組叫 `site_chrome.py` 而不是 `site.py`：`site` 是 Python 直譯器啟動時就載入的標準函式庫模組，`import site` 永遠會拿到那一個。
 
 ### 分類
 

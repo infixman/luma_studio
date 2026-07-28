@@ -21,6 +21,7 @@ import pages_admin_api
 import rate_limit
 import router
 import shop_admin_api
+import site_admin_api
 from common import OAuthError
 from migrations import apply_migrations
 from responses import Ctx
@@ -63,6 +64,9 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/pages" or path.startswith("/api/pages/") or path.startswith("/api/blocks/"):
         return await pages_admin_api.handle(ctx)
+
+    if path == "/api/site" or path.startswith("/api/site/") or path == "/api/menu" or path.startswith("/api/menu/"):
+        return await site_admin_api.handle(ctx)
 
     if (
         path == "/api/products"
