@@ -10,6 +10,7 @@ Keeping a copy per Worker would let the copies drift apart, and the copy that
 drifts is the one nobody was looking at.
 """
 
+import traceback
 from urllib.parse import parse_qs
 
 from common import MigrationError
@@ -54,4 +55,13 @@ async def serve(env, request, dispatch, *, owns_schema: bool):
         except MigrationError as error:
             return ctx.json({"error": "Database migration failed", "migration": error.name}, 503)
 
-    return await dispatch(ctx)
+    try:
+        return await dispatch(ctx)
+    except Exception as error:
+        # An exception that escapes a handler becomes Cloudflare's 1101 page,
+        # which tells the caller nothing and the owner only that something
+        # threw. Answering with our own 500 keeps the response readable and
+        # keeps the traceback in the Worker's logs where it can be read; the
+        # path is included because a 1101 does not even say which route.
+        traceback.print_exc()
+        return ctx.json({"error": "Unexpected Worker failure", "path": path}, 500)

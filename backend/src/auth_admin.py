@@ -7,13 +7,15 @@ holding the other.
 """
 
 import auth_core
-from common import ALLOWED_ADMIN_EMAILS, SESSION_ID_PATTERN, SESSION_TTL_SECONDS, d1_rows, urlsafe_token, utc_timestamp
+from common import env_var, ALLOWED_ADMIN_EMAILS, SESSION_ID_PATTERN, SESSION_TTL_SECONDS, d1_rows, urlsafe_token, utc_timestamp
 from responses import Ctx
 
 
 SESSION_COOKIE_NAME = "luma_admin_session"
 STATES_TABLE = "admin_oauth_states"
 DEFAULT_PATH = "/"
+
+CLIENT_ID, CLIENT_SECRET, REDIRECT_URI = "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_OAUTH_REDIRECT_URI"
 
 
 async def get_admin_email(env, request) -> str | None:
@@ -28,25 +30,36 @@ async def get_admin_email(env, request) -> str | None:
     return rows[0]["email"] if rows else None
 
 
+def settings(env) -> dict:
+    return {name: env_var(env, name) for name in (CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)}
+
+
 async def begin_google_login(ctx: Ctx):
-    env = ctx.env
+    configured = settings(ctx.env)
+    missing = auth_core.missing_settings(configured)
+    if missing:
+        return ctx.error(f"Backend is missing {', '.join(missing)}", 500)
     return await auth_core.begin_login(
         ctx,
         states_table=STATES_TABLE,
-        client_id=env.GOOGLE_CLIENT_ID,
-        redirect_uri=env.GOOGLE_OAUTH_REDIRECT_URI,
+        client_id=configured[CLIENT_ID],
+        redirect_uri=configured[REDIRECT_URI],
         default_path=DEFAULT_PATH,
     )
 
 
 async def complete_google_login(ctx: Ctx):
     env = ctx.env
+    configured = settings(env)
+    missing = auth_core.missing_settings(configured)
+    if missing:
+        return ctx.error(f"Backend is missing {', '.join(missing)}", 500)
     profile, next_url = await auth_core.complete_login(
         ctx,
         states_table=STATES_TABLE,
-        client_id=env.GOOGLE_CLIENT_ID,
-        client_secret=env.GOOGLE_CLIENT_SECRET,
-        redirect_uri=env.GOOGLE_OAUTH_REDIRECT_URI,
+        client_id=configured[CLIENT_ID],
+        client_secret=configured[CLIENT_SECRET],
+        redirect_uri=configured[REDIRECT_URI],
     )
     if profile is None:
         return ctx.error("Google login was cancelled or expired; try again", 400)

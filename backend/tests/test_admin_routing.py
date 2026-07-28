@@ -138,3 +138,33 @@ class TestRateLimits:
 
         response = call(FakeRequest("/auth/login", headers={"CF-Connecting-IP": "203.0.113.7"}, host=ADMIN_HOST))
         assert response.status == 302
+
+
+class TestConfigurationFailures:
+    """A deployment missing a secret must say so, not throw.
+
+    An exception escaping a handler becomes Cloudflare's 1101 page, which
+    reports only that something went wrong somewhere — the exact shape of the
+    bug these two tests exist to prevent recurring.
+    """
+
+    def test_signing_in_without_oauth_secrets_names_them(self, call):
+        env = make_env(origins=ADMIN_ORIGIN, frontend=ADMIN_ORIGIN)
+        response = call(FakeRequest("/auth/login", host=ADMIN_HOST), env)
+        assert response.status == 500
+        assert "GOOGLE_CLIENT_ID" in response.json()["error"]
+        assert "GOOGLE_OAUTH_REDIRECT_URI" in response.json()["error"]
+
+    def test_an_unexpected_failure_answers_rather_than_throws(self, call, monkeypatch):
+        import admin_main
+
+        async def explode(_ctx):
+            raise RuntimeError("something nobody predicted")
+
+        monkeypatch.setattr(admin_main, "dispatch", explode)
+        response = call(FakeRequest("/api/health", host=ADMIN_HOST))
+        assert response.status == 500
+        body = response.json()
+        assert body["error"] == "Unexpected Worker failure"
+        # A 1101 does not even say which route was being served.
+        assert body["path"] == "/api/health"

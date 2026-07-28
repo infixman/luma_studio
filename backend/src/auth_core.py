@@ -21,6 +21,18 @@ from ibon import fetch_json
 from responses import Ctx, frontend_origin
 
 
+def missing_settings(settings: dict) -> list[str]:
+    """Which of these OAuth variables the running deployment has not been given.
+
+    Secrets are per-Worker, so a Worker deployed before its secrets were set
+    reads them as absent. Reporting that by name beats the alternative: an
+    AttributeError deep in the login handler surfaces as Cloudflare's 1101
+    page, which says only that something threw.
+    """
+
+    return sorted(name for name, value in settings.items() if not value)
+
+
 def get_cookie(request, name: str) -> str | None:
     cookie_header = request.headers.get("Cookie") or ""
     for item in cookie_header.split(";"):
