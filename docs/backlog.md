@@ -76,6 +76,26 @@ Linktree 有。連結多的時候辨識度差很多。
 
 目前只能在後台看，無法帶走或自己分析。
 
+### 15. 商城的 SEO，以及拿掉整站的 `noindex`
+
+`frontend/index.html` 有 `<meta name="robots" content="noindex, nofollow">`。那是 ibon 列印工具時期的設定——當時整個站就是給特定客人用的。商城要被找到就得拿掉它。
+
+**刻意還沒做。** 網址結構正在變：頁面系統、選單與自訂頁還會新增和改動路由。現在被收錄，之後改網址就要處理 301 與排名重置；現在沒被收錄，改動是零成本的。而且資料庫裡還沒有商品，收錄一間空店只會讓爬蟲抓到空殼，真的上貨後還得等重抓。
+
+拿掉那一行只是開始。真正要做的是：
+
+- 每頁的 `<title>` 與 `meta description`
+- 商品的 JSON-LD（Product / Offer），讓價格與庫存出現在搜尋結果
+- `sitemap.xml`
+- canonical——分類頁的 `/shop/c/a,b` 與 `/shop/c/b,a` 是同一批商品的兩個網址
+- 各頁的 OG 分享卡片
+
+**不需要改成 SSR。** [frontend/worker/storefront.ts](../frontend/worker/storefront.ts) 已經在為名片頁做這件事：偵測到爬蟲時，先打 API 取內容再把標籤注入 `<head>`，一般瀏覽器不必等那次往返。商品頁與分類頁用同一套擴充即可。「SPA 沒辦法做 SEO」的直覺在這個架構下不成立，值得寫下來，免得有人為此提議重寫。
+
+`noindex` 要保留在後台（`admin.html`）與 `/checkout`、`/orders` 這類頁面上。
+
+時機：自訂頁那幾塊做完、有真實商品、準備開賣前，一次做完。
+
 ## 已完成
 
 留下紀錄，避免再被提出來。
