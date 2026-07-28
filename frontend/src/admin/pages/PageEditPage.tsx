@@ -15,13 +15,13 @@ import {
 import type { Catalogue } from '../components/BlockEditors'
 import { BlockPicker, BlockRow } from '../components/BlockRow'
 import { useMediaPicker } from '../components/MediaPicker'
+import { PublishPanel } from '../components/PublishPanel'
 import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import {
   Button,
   EmptyState,
   Panel,
-  RadioGroup,
   Spinner,
   TextArea,
   TextField,
@@ -32,6 +32,7 @@ import { CLIPBOARD_KEY, readCopiedBlock, writeCopiedBlock } from '../lib/blockCl
 import type { CopiedBlock } from '../lib/blockClipboard'
 import { followsTitle, nextPath } from '../lib/slug'
 import { Blocks } from '../../shared/components/Blocks'
+import { dateTime } from '../../shared/dates'
 import { STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type {
   AboutConfig,
@@ -43,7 +44,7 @@ import type {
   MediaRef,
   PageBlock,
   PageDetail,
-  PageStatus,
+  PageVersion,
   ShopBlockConfig,
   TextBlockConfig,
 } from '../../shared/types'
@@ -51,11 +52,6 @@ import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
 import '../styles/media-admin.css'
-
-const STATUSES: { value: PageStatus; label: string; hint: string }[] = [
-  { value: 'draft', label: '草稿', hint: '只有你看得到' },
-  { value: 'published', label: '公開', hint: '任何人都能開啟這個網址' },
-]
 
 const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.label]))
 
@@ -108,7 +104,6 @@ export function PageEditPage({ id }: { id: string }) {
   const [form, setForm] = useState({
     title: '',
     path: '',
-    status: 'draft' as PageStatus,
     showHeader: true,
     showFooter: true,
     shareDescription: '',
@@ -163,7 +158,6 @@ export function PageEditPage({ id }: { id: string }) {
     setForm({
       title: next.page.title,
       path: next.page.path,
-      status: next.page.status,
       showHeader: next.page.showHeader,
       showFooter: next.page.showFooter,
       shareDescription: next.page.shareDescription,
@@ -350,6 +344,87 @@ export function PageEditPage({ id }: { id: string }) {
     })
   }
 
+  function publishPage() {
+    void run(
+      () => apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/publish`, 'POST', {}),
+      '已發布。網站上現在就是這一份。',
+    )
+  }
+
+  async function unpublishPage() {
+    const agreed = await ask({
+      title: '取消發布這一頁？',
+      body: '網址會變成 404，內容留著。發布紀錄不會刪掉，之後可以再發布回去。',
+      confirmLabel: '取消發布',
+    })
+    if (!agreed) return
+    void run(
+      () => apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/unpublish`, 'POST', {}),
+      '已從網站上撤下。',
+    )
+  }
+
+  /**
+   * Put an old version back into the draft.
+   *
+   * It asks the server what that version points at that is gone before
+   * drawing the dialog. Everywhere else a missing image just drops its slide
+   * quietly, and that is right — but a restore is a deliberate look backwards,
+   * and coming back one product short without warning reads as a failed
+   * restore rather than as a product that was archived in the meantime.
+   */
+  async function restoreVersion(version: PageVersion) {
+    let missing: { images: string[]; products: string[] } = { images: [], products: [] }
+    try {
+      const answer = await api<{ missing: typeof missing }>(
+        `/api/pages/${encodeURIComponent(id)}/versions/${encodeURIComponent(version.id)}`,
+      )
+      missing = answer.missing
+    } catch (error) {
+      // Not being able to check is not a reason to refuse. The dialog simply
+      // stops making a promise it cannot keep.
+      showError(error)
+    }
+    const gone = missing.images.length + missing.products.length
+
+    const agreed = await ask({
+      title: `還原到 ${dateTime(version.publishedAt)} 的版本？`,
+      body: (
+        <>
+          <p>這一版會覆蓋目前的草稿，但不會直接上線——看過之後再按發布。</p>
+          {gone > 0 && (
+            <>
+              <p>
+                這一版點名的東西有 {gone} 個已經不在了，還原後那些位置會是空的：
+              </p>
+              <ul class="usage">
+                {missing.products.map((slug) => (
+                  <li key={`p-${slug}`}>商品 {slug}</li>
+                ))}
+                {missing.images.map((mediaId) => (
+                  <li key={`i-${mediaId}`}>圖片 {mediaId}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      ),
+      confirmLabel: '還原',
+      tone: gone > 0 ? 'danger' : 'primary',
+    })
+    if (!agreed) return
+    void run(
+      () =>
+        apiJson<PageDetail>(
+          `/api/pages/${encodeURIComponent(id)}/versions/${encodeURIComponent(version.id)}`,
+          'POST',
+          {},
+        ),
+      '已還原成那一版的內容。看過之後再發布。',
+      { keepDrafts: false },
+    )
+  }
+
   /** Expands a block, closing the others unless the owner asked for all of them. */
   function openBlock(blockId: string) {
     setOpenIds((current) => (multi ? [...current.filter((each) => each !== blockId), blockId] : [blockId]))
@@ -486,7 +561,6 @@ export function PageEditPage({ id }: { id: string }) {
   const pageChanged =
     form.title !== detail.page.title ||
     form.path !== detail.page.path ||
-    form.status !== detail.page.status ||
     form.showHeader !== detail.page.showHeader ||
     form.showFooter !== detail.page.showFooter ||
     form.shareDescription !== detail.page.shareDescription ||
@@ -804,6 +878,17 @@ export function PageEditPage({ id }: { id: string }) {
         {/* The settings sit beside the blocks rather than above them: they are
             changed once and then read, while the blocks are the work. */}
         <aside class="editor-side">
+          <PublishPanel
+            state={detail.publishState}
+            versions={detail.versions}
+            busy={busy}
+            unsaved={unsaved}
+            hasBlocks={detail.blocks.length > 0}
+            onPublish={publishPage}
+            onUnpublish={unpublishPage}
+            onRestore={restoreVersion}
+          />
+
           <Panel title="頁面設定">
             <TextField
               label="頁面名稱"
@@ -837,12 +922,6 @@ export function PageEditPage({ id }: { id: string }) {
                     ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
                     : '例如 /about。/shop、/cart 這類系統路徑不能使用。'
               }
-            />
-            <RadioGroup
-              legend="狀態"
-              value={form.status}
-              options={STATUSES.map((status) => ({ value: status.value, label: status.label, hint: status.hint }))}
-              onChange={(status) => setForm({ ...form, status })}
             />
             <Toggle
               label="顯示網站頁首"

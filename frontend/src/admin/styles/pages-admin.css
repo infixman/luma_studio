@@ -697,3 +697,56 @@ body.admin .live-frame iframe {
 body.admin .preview-surface {
   margin: 0 auto var(--space-3);
 }
+
+/* --- the publish panel -------------------------------------------------- */
+
+body.admin .publish-note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-sm);
+}
+
+body.admin .publish-history-title {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: none;
+}
+
+body.admin .publish-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+}
+
+body.admin .publish-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+body.admin .publish-history li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+body.admin .publish-history time {
+  font-size: var(--font-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who published it, when there is a who. Long enough to wrap a column on its
+   own, so it is allowed to be cut rather than push the button off the row. */
+body.admin .publish-history li .muted {
+  font-size: var(--font-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

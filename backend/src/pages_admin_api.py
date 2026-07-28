@@ -34,11 +34,21 @@ async def _detail(ctx: Ctx, page: dict) -> dict:
     }
 
 
-def _page_fields(body: dict) -> dict:
+def _page_fields(body: dict, page: dict | None = None) -> dict:
+    """The fields an ordinary save writes.
+
+    Status is not one of them any more unless the body says so. Publishing
+    owns it now — `/publish` and `/unpublish` — and a save that carried a
+    stale `status: draft` along with a title change would take a live page
+    down as a side effect of renaming it. A body that never mentions it keeps
+    what is there, the same rule the chrome flags and the share image follow.
+    """
+
+    current = page["status"] if page else "draft"
     return {
         "path": pages.validate_path(body.get("path") or ""),
         "title": pages.validate_title(body.get("title") or ""),
-        "status": pages.validate_status(str(body.get("status") or "draft")),
+        "status": pages.validate_status(str(body["status"])) if "status" in body else current,
     }
 
 
@@ -122,7 +132,7 @@ async def handle(ctx: Ctx):
         if not tail and method == "PUT":
             try:
                 body = await _read_json(ctx)
-                fields = {**_page_fields(body), **_chrome_fields(body), **await _share_fields(ctx, body, page)}
+                fields = {**_page_fields(body, page), **_chrome_fields(body), **await _share_fields(ctx, body, page)}
             except pages.PageError as error:
                 return ctx.error(str(error), 400)
             except (ValueError, AttributeError):

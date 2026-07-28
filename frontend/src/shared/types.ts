@@ -421,6 +421,14 @@ export interface Page {
   path: string
   title: string
   status: PageStatus
+  /**
+   * Where the page stands between its draft and the public.
+   *
+   * Present on list rows, where it is worked out from timestamps rather than
+   * by comparing content — see list_pages. The editor gets the exact answer
+   * on PageDetail.
+   */
+  publishState?: PublishState
   isHome: boolean
   showHeader: boolean
   showFooter: boolean
@@ -549,9 +557,28 @@ export type PageBlock =
   | (BlockBase & { type: 'contact'; config: ContactConfig; data?: { image: MediaRef | null } })
 
 /** What the back office edits. */
+/**
+ * Where a page stands between its draft and what the public can see.
+ *
+ * `modified` is the one that had no way to be shown before versions existed:
+ * edited since it was last published, with nothing anywhere saying so.
+ */
+export type PublishState = 'draft' | 'published' | 'modified'
+
+/** One entry in the published history. Without its payload — see list_versions. */
+export interface PageVersion {
+  id: string
+  publishedAt: number
+  publishedBy: string
+  isCurrent: boolean
+}
+
 export interface PageDetail {
   page: Page
   blocks: PageBlock[]
+  publishState: PublishState
+  /** Newest first, capped at 20 by the server. */
+  versions: PageVersion[]
 }
 
 /** What the storefront renders. Drafts never reach this shape. */

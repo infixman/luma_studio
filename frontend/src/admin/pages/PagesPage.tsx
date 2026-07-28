@@ -68,6 +68,26 @@ export function PagesPage() {
     }
   }
 
+  /**
+   * Publish or withdraw one page from the list.
+   *
+   * Publishing here publishes whatever the draft currently holds — the same
+   * thing the editor's button does, through the same endpoint. A page with no
+   * blocks is refused by the server rather than going live empty.
+   */
+  async function setLive(page: Page, live: boolean) {
+    try {
+      await apiJson(
+        `/api/pages/${encodeURIComponent(page.id)}/${live ? 'publish' : 'unpublish'}`,
+        'POST',
+        {},
+      )
+      await load()
+    } catch (error) {
+      showError(error)
+    }
+  }
+
   async function remove(page: Page) {
     const ok = await ask({
       title: '刪除頁面',
@@ -153,7 +173,7 @@ export function PagesPage() {
                   <p class="meta">
                     <code>{page.isHome ? '/' : page.path}</code>
                     {page.isHome && <Badge tone="primary">首頁</Badge>}
-                    {page.status === 'published' ? (
+                    {page.status === 'published' && (
                       <a
                         class="visit"
                         href={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
@@ -162,16 +182,27 @@ export function PagesPage() {
                       >
                         開啟
                       </a>
+                    )}
+                    {/* Three states, because the third one is the one nobody
+                        can see otherwise: edited since it was published. */}
+                    {page.publishState === 'modified' ? (
+                      <Badge tone="warning">有未發布的修改</Badge>
+                    ) : page.publishState === 'published' ? (
+                      <Badge tone="success">已發布</Badge>
                     ) : (
                       <Badge>草稿</Badge>
                     )}
                   </p>
                 </div>
                 <div class="actions">
+                  {/* Through the same endpoints the editor uses. Setting
+                      `status` directly would leave a page marked published
+                      with no version to serve, which is a 404 wearing a
+                      green badge. */}
                   <Toggle
                     label="公開"
                     checked={page.status === 'published'}
-                    onChange={(on) => void save(page, { status: on ? 'published' : 'draft' })}
+                    onChange={(on) => void setLive(page, on)}
                   />
                   <Toggle label="首頁" checked={page.isHome} onChange={(isHome) => void save(page, { isHome })} />
                   <Button size="sm" onClick={() => location.assign(`/pages/${encodeURIComponent(page.id)}`)}>
