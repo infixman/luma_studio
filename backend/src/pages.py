@@ -59,6 +59,7 @@ CAROUSEL = "carousel"
 ALBUM = "album"
 SHOP = "shop"
 ABOUT = "about"
+CONTACT = "contact"
 
 MAX_HEADING = 80
 MAX_CAPTION = 120
@@ -69,6 +70,8 @@ MAX_LABEL = 30
 MAX_ABOUT_BODY = 4000
 MAX_SHOP_ITEMS = 24
 MAX_FILTER = 200
+MAX_CONTACT_DETAILS = 6
+MAX_CONTACT_VALUE = 200
 
 # Appearance is chosen from a fixed set, never typed — the same rule as the
 # site chrome, for the same reason: nothing the owner enters becomes CSS.
@@ -76,6 +79,14 @@ RATIOS = ("wide", "square", "tall")
 COLUMNS = (2, 3, 4)
 IMAGE_SIDES = ("left", "right")
 SHOP_SOURCES = ("products", "category")
+SHOP_LAYOUTS = ("grid", "featured")
+# What fills the other half of a contact block. Not a form — see
+# `_validate_contact` for why that is a different piece of work.
+CONTACT_ASIDES = ("image", "text")
+# The kind decides the label and whether the value becomes a link, so it is a
+# choice rather than a typed heading: `note` is the escape hatch for anything
+# the other four do not cover.
+CONTACT_KINDS = ("email", "phone", "address", "hours", "note")
 
 
 class PageError(Exception):
@@ -241,6 +252,16 @@ def _validate_shop(config: dict) -> dict:
         "slugs": [slug for slug in slugs if slug],
         "filter": _text(config.get("filter"), MAX_FILTER, "分類條件"),
         "limit": max(1, min(int(config.get("limit") or MAX_SHOP_ITEMS), MAX_SHOP_ITEMS)),
+        # A layout, not a second block type: the same products arranged two
+        # ways. `featured` enlarges whichever product is first in the list
+        # above, so the order stays in one place — a separate "featured" flag
+        # would be a second way to say which product comes first, and the two
+        # would eventually disagree.
+        "layout": _choice(str(config.get("layout") or "grid"), SHOP_LAYOUTS, "版面"),
+        # Off by default. The demo this came from lays its labels over a black
+        # photograph; an illustration carries its subject across the whole
+        # frame, so a name dropped on top lands on the part that matters.
+        "overlayLabels": bool(config.get("overlayLabels")),
     }
 
 
@@ -263,12 +284,45 @@ def _validate_about(config: dict) -> dict:
     }
 
 
+def _validate_contact(config: dict) -> dict:
+    """How to reach the shop on one side, a picture or a passage on the other.
+
+    Layout only: there is deliberately no form here. The site's CSP is
+    `form-action 'none'` and nothing on the backend receives a message, so a
+    form would mean a new public endpoint, bot protection, a rate limit and
+    outbound mail — a different piece of work from arranging two columns. The
+    address and the social links below already give a customer somewhere to
+    write to; a form only adds "without showing the address".
+    """
+
+    details = []
+    for entry in _entries(config.get("details"), MAX_CONTACT_DETAILS, "聯絡方式"):
+        if not isinstance(entry, dict):
+            raise PageError("每一筆聯絡方式都必須是物件")
+        kind = _choice(str(entry.get("kind") or "note"), CONTACT_KINDS, "聯絡方式類型")
+        value = _text(entry.get("value"), MAX_CONTACT_VALUE, "聯絡內容")
+        # An empty value would draw a label with nothing beside it.
+        if value:
+            details.append({"kind": kind, "value": value})
+    return {
+        "heading": _text(config.get("heading"), MAX_HEADING, "標題"),
+        "details": details,
+        "aside": _choice(str(config.get("aside") or "image"), CONTACT_ASIDES, "另一半放什麼"),
+        "mediaId": _media_id(config.get("mediaId")),
+        "body": _text(config.get("body"), MAX_ABOUT_BODY, "內文"),
+        # Which column the details take. The same pair of sides the about
+        # block offers, so the owner learns the control once.
+        "detailsSide": _choice(str(config.get("detailsSide") or "left"), IMAGE_SIDES, "聯絡方式放哪邊"),
+    }
+
+
 VALIDATORS = {
     TEXT: _validate_text_block,
     CAROUSEL: _validate_carousel,
     ALBUM: _validate_album,
     SHOP: _validate_shop,
     ABOUT: _validate_about,
+    CONTACT: _validate_contact,
 }
 
 BLOCK_TYPES = tuple(VALIDATORS)

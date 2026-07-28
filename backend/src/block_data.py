@@ -40,7 +40,10 @@ def _media_ids(block: dict) -> list[str]:
         return [str(slide.get("mediaId") or "") for slide in config.get("slides") or []]
     if block["type"] == "album":
         return [str(media_id) for media_id in config.get("mediaIds") or []]
-    if block["type"] == "about":
+    # Both hold a single picture beside their words, so they resolve the same
+    # way. A contact block set to show a passage instead still carries the id,
+    # which is what lets switching back bring the picture with it.
+    if block["type"] in {"about", "contact"}:
         return [str(config.get("mediaId") or "")]
     return []
 
@@ -78,7 +81,7 @@ async def _data_for(env, block: dict, library: dict) -> dict:
         pictures = [_picture(library, str(media_id)) for media_id in config.get("mediaIds") or []]
         return {"images": [picture for picture in pictures if picture is not None]}
 
-    if kind == "about":
+    if kind in {"about", "contact"}:
         return {"image": _picture(library, str(config.get("mediaId") or ""))}
 
     if kind == "shop":

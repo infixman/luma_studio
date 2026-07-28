@@ -78,6 +78,83 @@ class TestAppearanceIsChosenNotTyped:
         assert fields["footer_copyright"] == "© 苒光繪誌"
 
 
+class TestFooterBlurb:
+    """The sentence under the mark in the footer's brand column."""
+
+    def test_it_is_saved_with_the_rest_of_the_chrome(self, site_chrome):
+        fields = site_chrome.validate_settings(
+            {
+                "headerBackground": "solid",
+                "headerColour": "cream",
+                "headerHeight": "medium",
+                "headerText": "dark",
+                "headerLogoSize": "medium",
+                "footerColour": "ink",
+                "footerText": "light",
+                "footerBlurb": "  台中的插畫工作室，畫紙上的光。  ",
+            }
+        )
+        assert fields["footer_blurb"] == "台中的插畫工作室，畫紙上的光。"
+
+    def test_empty_is_a_real_answer(self, site_chrome):
+        """A shop with nothing to add gets a mark and a copyright line."""
+
+        fields = site_chrome.validate_settings(
+            {
+                "headerBackground": "solid",
+                "headerColour": "cream",
+                "headerHeight": "medium",
+                "headerText": "dark",
+                "headerLogoSize": "medium",
+                "footerColour": "ink",
+                "footerText": "light",
+            }
+        )
+        assert fields["footer_blurb"] == ""
+
+    def test_a_blurb_longer_than_the_limit_is_refused(self, site_chrome):
+        with pytest.raises(site_chrome.SiteError):
+            site_chrome.validate_settings(
+                {
+                    "headerBackground": "solid",
+                    "headerColour": "cream",
+                    "headerHeight": "medium",
+                    "headerText": "dark",
+                    "headerLogoSize": "medium",
+                    "footerColour": "ink",
+                    "footerText": "light",
+                    "footerBlurb": "字" * (site_chrome.MAX_BLURB + 1),
+                }
+            )
+
+    def test_a_row_from_before_the_migration_still_maps(self, site_chrome):
+        """Both Workers read this table and only one of them applies schema.
+
+        An empty blurb is a footer without a sentence; a KeyError here is a
+        site without a footer.
+        """
+
+        row = {
+            "header_background": "solid",
+            "header_colour": "cream",
+            "header_image_key": None,
+            "header_height": "medium",
+            "header_text": "dark",
+            "header_logo_size": "medium",
+            "header_sticky": 1,
+            "header_show_cart": 1,
+            "header_show_login": 1,
+            "header_cta_label": "",
+            "header_cta_url": "",
+            "footer_colour": "ink",
+            "footer_text": "light",
+            "footer_copyright": "",
+            "footer_columns": "[]",
+            "footer_socials": "[]",
+        }
+        assert site_chrome.settings_row(row)["footerBlurb"] == ""
+
+
 class TestFooterStructure:
     def test_columns_and_links_round_trip(self, site_chrome):
         columns = site_chrome.validate_footer_columns(

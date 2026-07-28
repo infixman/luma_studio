@@ -35,6 +35,10 @@ TARGET_KINDS = ("page", "category", "url")
 
 MAX_LABEL = 30
 MAX_COPYRIGHT = 200
+# The sentence under the mark in the footer's brand column. Plain text with a
+# limit, like every other chrome field — long enough for what the shop is,
+# short enough that it cannot become the page.
+MAX_BLURB = 200
 MAX_CTA_LABEL = 20
 MAX_FOOTER_COLUMNS = 4
 MAX_FOOTER_LINKS = 10
@@ -184,6 +188,7 @@ DEFAULTS = {
     "headerCtaUrl": "",
     "footerColour": "ink",
     "footerText": "light",
+    "footerBlurb": "",
     "footerCopyright": "",
     "footerColumns": [],
     "footerSocials": [],
@@ -205,6 +210,11 @@ def settings_row(row: dict) -> dict:
         "headerCtaUrl": row["header_cta_url"],
         "footerColour": row["footer_colour"],
         "footerText": row["footer_text"],
+        # Read defensively: both Workers read this table and only the admin one
+        # applies migrations, so the public deployment can see a row from
+        # before this column existed. An empty blurb is a footer without a
+        # sentence; a KeyError is a site without a footer.
+        "footerBlurb": row["footer_blurb"] if "footer_blurb" in row else "",
         "footerCopyright": row["footer_copyright"],
         "footerColumns": _read_json_list(row["footer_columns"], validate_footer_columns),
         "footerSocials": _read_json_list(row["footer_socials"], validate_footer_socials),
@@ -238,6 +248,7 @@ def validate_settings(body: dict) -> dict:
         "header_cta_url": validate_url(cta_url) if cta_url else "",
         "footer_colour": choice(body.get("footerColour"), COLOURS, "頁尾底色"),
         "footer_text": choice(body.get("footerText"), TEXT_TONES, "頁尾文字色"),
+        "footer_blurb": text(body.get("footerBlurb"), MAX_BLURB, "頁尾介紹"),
         "footer_copyright": text(body.get("footerCopyright"), MAX_COPYRIGHT, "版權文字"),
         "footer_columns": json.dumps(validate_footer_columns(body.get("footerColumns") or []), ensure_ascii=False),
         "footer_socials": json.dumps(validate_footer_socials(body.get("footerSocials") or []), ensure_ascii=False),

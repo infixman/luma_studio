@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 
 import { apiUrl } from '../api'
 import { renderMarkdown } from '../markdown'
-import type { MediaRef, PageBlock, PublicProductCard } from '../types'
+import type { ContactDetail, MediaRef, PageBlock, PublicProductCard } from '../types'
 import './blocks.css'
 
 /**
@@ -49,10 +49,20 @@ function Block({ block }: { block: PageBlock }) {
       return <Album images={block.data?.images ?? []} columns={block.config.columns} ratio={block.config.ratio} />
 
     case 'shop':
-      return <ShopRow heading={block.config.heading} products={block.data?.products ?? []} />
+      return (
+        <ShopRow
+          heading={block.config.heading}
+          products={block.data?.products ?? []}
+          layout={block.config.layout}
+          overlayLabels={block.config.overlayLabels}
+        />
+      )
 
     case 'about':
       return <About block={block} />
+
+    case 'contact':
+      return <Contact block={block} />
 
     default:
       // A type the API validated but this build has no case for. Rendering
@@ -168,13 +178,42 @@ function priceLabel(card: PublicProductCard): string {
   return `NT$${card.priceFrom}–${card.priceTo}`
 }
 
-function ShopRow({ heading, products }: { heading: string; products: PublicProductCard[] }) {
+/**
+ * A row of products, in one of two arrangements.
+ *
+ * `grid` is the even row of tiles this block has always drawn. `featured`
+ * gives the first product a tile twice the size of the rest — a shop that
+ * sells illustrations has work that deserves more room than a 190px square,
+ * and every tile the same size means none of it gets any.
+ *
+ * Which product is large is simply the first one in the block's list. There
+ * is no "featured" flag, because a flag plus an ordered list is two ways of
+ * saying which product comes first, and they would disagree.
+ *
+ * `overlayLabels` puts the name and price on the artwork instead of under it,
+ * and is off by default. The demo this came from lays its labels over a black
+ * space photograph; an illustration carries its subject across the whole
+ * frame, so the text lands on the part that matters. When it is on, the label
+ * is pinned to one corner over a solid backdrop, so it stays readable
+ * whatever is behind it.
+ */
+function ShopRow({
+  heading,
+  products,
+  layout,
+  overlayLabels,
+}: {
+  heading: string
+  products: PublicProductCard[]
+  layout: string
+  overlayLabels: boolean
+}) {
   // An empty row is drawn as nothing rather than as a heading over a gap. The
   // editor is where "this block shows no products" needs saying.
   if (products.length === 0) return null
 
   return (
-    <section class="block block-shop">
+    <section class={`block block-shop layout-${layout}${overlayLabels ? ' overlay-labels' : ''}`}>
       {heading && <h2>{heading}</h2>}
       <ul>
         {products.map((card) => (
@@ -184,12 +223,99 @@ function ShopRow({ heading, products }: { heading: string; products: PublicProdu
                 {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
                 {!card.inStock && <span class="ribbon">售完</span>}
               </span>
-              <span class="title">{card.title}</span>
-              <span class="price">{priceLabel(card)}</span>
+              {/* One wrapper for both lines, so the overlay moves them together
+                  rather than needing two sets of coordinates. */}
+              <span class="label">
+                <span class="title">{card.title}</span>
+                <span class="price">{priceLabel(card)}</span>
+              </span>
             </a>
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+/** The heading each kind of detail is filed under. */
+export const CONTACT_LABELS: Record<ContactDetail['kind'], string> = {
+  email: '電子郵件',
+  phone: '電話',
+  address: '地址',
+  hours: '營業時間',
+  note: '其他',
+}
+
+/**
+ * The address a detail links to, or null when it is only worth reading.
+ *
+ * The scheme is written here and never taken from the value, so what the
+ * owner typed cannot become one — `mailto:` and `tel:` are the only two that
+ * appear, whatever is in the field.
+ */
+export function contactHref(detail: ContactDetail): string | null {
+  const value = detail.value.trim()
+  if (!value) return null
+  // Not percent-encoded: `@` survives every mail client and reads back as the
+  // address the owner typed, which is what a copied link should say.
+  if (detail.kind === 'email') return `mailto:${value}`
+  if (detail.kind === 'phone') {
+    // Spaces and dashes are how a phone number is written for a person to
+    // read; a dialler wants neither.
+    const digits = value.replace(/[^+\d]/g, '')
+    return digits ? `tel:${digits}` : null
+  }
+  return null
+}
+
+/**
+ * How to reach the shop on one side, a picture or a passage on the other.
+ *
+ * Layout only, and deliberately so: there is no form here. The site's CSP is
+ * `form-action 'none'` and nothing on the backend receives a message, so a
+ * form would mean a new public endpoint, bot protection, a rate limit and
+ * outbound mail. What it would add over an address printed in plain sight is
+ * only "without showing the address".
+ */
+function Contact({ block }: { block: Extract<PageBlock, { type: 'contact' }> }) {
+  const { heading, details, aside, body, detailsSide } = block.config
+  const image = block.data?.image ?? null
+  // The other half is drawn only when it has something in it; without it the
+  // details take the whole width rather than sitting beside a gap.
+  const hasAside = aside === 'image' ? Boolean(image) : Boolean(body)
+
+  return (
+    <section class={`block block-contact details-${detailsSide} ${hasAside ? '' : 'alone'}`}>
+      <div class="details">
+        {heading && <h2>{heading}</h2>}
+        {details.length > 0 && (
+          <dl>
+            {details.map((detail, index) => {
+              const href = contactHref(detail)
+              return (
+                // Keyed by position: the same kind may appear twice, for a
+                // studio line and a workshop line.
+                <div class="detail" key={index}>
+                  <dt>{CONTACT_LABELS[detail.kind]}</dt>
+                  <dd>{href ? <a href={href}>{detail.value}</a> : detail.value}</dd>
+                </div>
+              )
+            })}
+          </dl>
+        )}
+      </div>
+
+      {hasAside && (
+        <div class="aside">
+          {aside === 'image' && image ? (
+            <Picture image={image} />
+          ) : (
+            // Same escape-first renderer as everywhere else, so a paragraph
+            // behaves the same wherever it is written.
+            <div class="body" dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }} />
+          )}
+        </div>
+      )}
     </section>
   )
 }

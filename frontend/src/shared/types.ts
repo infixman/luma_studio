@@ -436,7 +436,7 @@ export interface Page {
 
 export type BlockRatio = 'wide' | 'square' | 'tall'
 export type BlockColumns = 2 | 3 | 4
-export type BlockType = 'text' | 'carousel' | 'album' | 'shop' | 'about'
+export type BlockType = 'text' | 'carousel' | 'album' | 'shop' | 'about' | 'contact'
 
 /** One image as the API resolved it. */
 export interface MediaRef {
@@ -467,12 +467,20 @@ export interface AlbumConfig {
   ratio: BlockRatio
 }
 
+export type ShopLayout = 'grid' | 'featured'
+
 export interface ShopBlockConfig {
   heading: string
   source: 'products' | 'category'
   slugs: string[]
   filter: string
   limit: number
+  /* `featured` enlarges the first product in the list above. There is no
+     separate flag saying which one is large, because that would be a second
+     ordering competing with `slugs`. */
+  layout: ShopLayout
+  /** Names and prices over the artwork. Off by default — see ShopRow. */
+  overlayLabels: boolean
 }
 
 export interface AboutConfig {
@@ -483,7 +491,33 @@ export interface AboutConfig {
   links: { label: string; url: string }[]
 }
 
-export type BlockConfig = TextBlockConfig | CarouselConfig | AlbumConfig | ShopBlockConfig | AboutConfig
+/* Layout only. There is no form: the CSP is `form-action 'none'` and nothing
+   on the backend receives a message, so a form would be a new endpoint, bot
+   protection, a rate limit and mail — a separate piece of work. */
+export type ContactKind = 'email' | 'phone' | 'address' | 'hours' | 'note'
+
+export interface ContactDetail {
+  kind: ContactKind
+  value: string
+}
+
+export interface ContactConfig {
+  heading: string
+  details: ContactDetail[]
+  /** What fills the other column: a picture, or a passage of prose. */
+  aside: 'image' | 'text'
+  mediaId: string
+  body: string
+  detailsSide: 'left' | 'right'
+}
+
+export type BlockConfig =
+  | TextBlockConfig
+  | CarouselConfig
+  | AlbumConfig
+  | ShopBlockConfig
+  | AboutConfig
+  | ContactConfig
 
 interface BlockBase {
   id: string
@@ -500,6 +534,7 @@ export type PageBlock =
   | (BlockBase & { type: 'album'; config: AlbumConfig; data?: { images: MediaRef[] } })
   | (BlockBase & { type: 'shop'; config: ShopBlockConfig; data?: { products: PublicProductCard[] } })
   | (BlockBase & { type: 'about'; config: AboutConfig; data?: { image: MediaRef | null } })
+  | (BlockBase & { type: 'contact'; config: ContactConfig; data?: { image: MediaRef | null } })
 
 /** What the back office edits. */
 export interface PageDetail {
@@ -541,6 +576,8 @@ export interface SiteSettings {
   headerCtaUrl: string
   footerColour: SiteColour
   footerText: SiteTone
+  /** The sentence under the mark in the footer's brand column. */
+  footerBlurb: string
   footerCopyright: string
   footerColumns: { title: string; links: { label: string; url: string }[] }[]
   footerSocials: { platform: string; url: string }[]

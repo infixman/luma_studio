@@ -8,9 +8,12 @@ import type {
   BlockConfig,
   BlockRatio,
   CarouselConfig,
+  ContactConfig,
+  ContactKind,
   MediaItem,
   PageBlock,
   ShopBlockConfig,
+  ShopLayout,
   TextBlockConfig,
 } from '../../shared/types'
 
@@ -75,6 +78,12 @@ const ICONS: Record<PageBlock['type'], JSX.Element> = {
       <path d="M3.5 19a5 5 0 0 1 10 0M16 8h5M16 12h5M16 16h3" />
     </svg>
   ),
+  contact: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </svg>
+  ),
 }
 
 export function BlockIcon({ type }: { type: PageBlock['type'] }) {
@@ -87,6 +96,16 @@ export const BLOCK_KINDS: { type: PageBlock['type']; label: string; hint: string
   { type: 'album', label: '相簿', hint: '格狀排列的作品照片' },
   { type: 'shop', label: '商城', hint: '指定商品，或整個分類' },
   { type: 'about', label: '介紹', hint: '關於我、聯絡我：照片＋文字＋連結' },
+  { type: 'contact', label: '聯絡', hint: '聯絡方式＋一張照片或一段話。沒有表單' },
+]
+
+/** The label each kind of contact detail is filed under, on both sides. */
+export const CONTACT_KINDS: { value: ContactKind; label: string }[] = [
+  { value: 'email', label: '電子郵件' },
+  { value: 'phone', label: '電話' },
+  { value: 'address', label: '地址' },
+  { value: 'hours', label: '營業時間' },
+  { value: 'note', label: '其他' },
 ]
 
 /**
@@ -116,11 +135,19 @@ export function blockSummary(type: PageBlock['type'], config: BlockConfig): stri
     case 'shop': {
       const shop = config as ShopBlockConfig
       const what = shop.source === 'products' ? `指定 ${shop.slugs.length} 件商品` : `分類 ${shop.filter || '未指定'}`
-      return shop.heading ? `${shop.heading} · ${what}` : what
+      // The layout is named only when it is not the ordinary grid: a word on
+      // every row that says the same thing is a word nobody reads.
+      const how = shop.layout === 'featured' ? ' · 精選版面' : ''
+      return (shop.heading ? `${shop.heading} · ${what}` : what) + how
     }
     case 'about': {
       const about = config as AboutConfig
       return about.heading || clip(about.body.trim(), 60) || '（還沒有內容）'
+    }
+    case 'contact': {
+      const contact = config as ContactConfig
+      if (contact.heading) return contact.heading
+      return contact.details.length ? `${contact.details.length} 筆聯絡方式` : '（還沒有聯絡方式）'
     }
     default:
       return ''
@@ -145,9 +172,26 @@ export function emptyConfig(type: PageBlock['type']): BlockConfig {
     case 'album':
       return { mediaIds: [], columns: 3, ratio: 'square' } satisfies AlbumConfig
     case 'shop':
-      return { heading: '', source: 'products', slugs: [], filter: '', limit: 8 } satisfies ShopBlockConfig
+      return {
+        heading: '',
+        source: 'products',
+        slugs: [],
+        filter: '',
+        limit: 8,
+        layout: 'grid',
+        overlayLabels: false,
+      } satisfies ShopBlockConfig
     case 'about':
       return { heading: '', body: '', mediaId: '', imageSide: 'left', links: [] } satisfies AboutConfig
+    case 'contact':
+      return {
+        heading: '',
+        details: [],
+        aside: 'image',
+        mediaId: '',
+        body: '',
+        detailsSide: 'left',
+      } satisfies ContactConfig
     default:
       return { body: '' } satisfies TextBlockConfig
   }
@@ -497,6 +541,34 @@ export function ShopEditor({
           onInput={(event) => onChange({ ...config, limit: Number((event.target as HTMLInputElement).value) || 1 })}
         />
       </label>
+
+      <Choices
+        legend="版面"
+        value={config.layout}
+        options={[
+          { value: 'grid' as ShopLayout, label: '齊頭格狀' },
+          { value: 'featured' as ShopLayout, label: '精選（1 大 2 小）' },
+        ]}
+        onPick={(layout) => onChange({ ...config, layout })}
+      />
+      {/* Said here rather than left to be worked out from the preview: the
+          alternative is a "featured" checkbox on every product, which is a
+          second place to order the same list. */}
+      {config.layout === 'featured' && (
+        <p class="muted">放大的是上面清單的第一件商品。要換一件，把它移到第一個。</p>
+      )}
+
+      <label class="toggle">
+        <input
+          type="checkbox"
+          checked={config.overlayLabels}
+          onChange={(event) => onChange({ ...config, overlayLabels: (event.target as HTMLInputElement).checked })}
+        />
+        商品名與價格疊在圖上
+      </label>
+      <p class="muted">
+        疊上去會蓋住畫面一角。滿版構圖的插畫通常整張都是重點，所以預設是放在圖片下方。
+      </p>
     </div>
   )
 }
@@ -599,6 +671,137 @@ export function AboutEditor({
       >
         加一個連結
       </button>
+    </div>
+  )
+}
+
+export function ContactEditor({
+  config,
+  onChange,
+  library,
+  pick,
+}: {
+  config: ContactConfig
+  onChange: (next: ContactConfig) => void
+  library: Map<string, MediaItem>
+  pick: PickImage
+}) {
+  function editDetail(index: number, patch: Partial<ContactConfig['details'][number]>) {
+    onChange({
+      ...config,
+      details: config.details.map((detail, at) => (at === index ? { ...detail, ...patch } : detail)),
+    })
+  }
+
+  async function choose() {
+    const item = await pick()
+    if (item) onChange({ ...config, mediaId: item.id })
+  }
+
+  return (
+    <div class="block-editor">
+      <label>
+        標題
+        <input
+          maxLength={80}
+          value={config.heading}
+          onInput={(event) => onChange({ ...config, heading: (event.target as HTMLInputElement).value })}
+        />
+      </label>
+
+      {/* Said once, here, because the block looks like the place a form would
+          go. It is a layout: there is nowhere for a message to be sent. */}
+      <p class="muted">
+        這個區塊只排版，沒有聯絡表單。要收訊息需要新的後端端點、機器人防護與寄信，那是另一件事。
+      </p>
+
+      <ul class="link-list">
+        {config.details.map((detail, index) => (
+          <li key={index}>
+            <select
+              value={detail.kind}
+              onChange={(event) =>
+                editDetail(index, { kind: (event.target as HTMLSelectElement).value as ContactKind })
+              }
+            >
+              {CONTACT_KINDS.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="內容"
+              maxLength={200}
+              value={detail.value}
+              onInput={(event) => editDetail(index, { value: (event.target as HTMLInputElement).value })}
+            />
+            <button
+              type="button"
+              class="danger"
+              onClick={() => onChange({ ...config, details: config.details.filter((_, at) => at !== index) })}
+            >
+              移除
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        type="button"
+        disabled={config.details.length >= 6}
+        onClick={() => onChange({ ...config, details: [...config.details, { kind: 'email', value: '' }] })}
+      >
+        加一筆聯絡方式
+      </button>
+
+      <Choices
+        legend="聯絡方式放哪邊"
+        value={config.detailsSide}
+        options={[
+          { value: 'left' as const, label: '左邊' },
+          { value: 'right' as const, label: '右邊' },
+        ]}
+        onPick={(detailsSide) => onChange({ ...config, detailsSide })}
+      />
+
+      <Choices
+        legend="另一半放什麼"
+        value={config.aside}
+        options={[
+          { value: 'image' as const, label: '一張照片' },
+          { value: 'text' as const, label: '一段話' },
+        ]}
+        onPick={(aside) => onChange({ ...config, aside })}
+      />
+
+      {config.aside === 'image' ? (
+        <div class="portrait-row">
+          {config.mediaId ? (
+            <Thumb mediaId={config.mediaId} library={library} />
+          ) : (
+            <span class="thumb empty">沒有照片</span>
+          )}
+          <div class="controls">
+            <button type="button" onClick={() => void choose()}>
+              {config.mediaId ? '換照片' : '選一張照片'}
+            </button>
+            {config.mediaId && (
+              <button type="button" class="danger" onClick={() => onChange({ ...config, mediaId: '' })}>
+                移除照片
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <textarea
+          rows={6}
+          maxLength={4000}
+          value={config.body}
+          placeholder={'工作室的一段話。\n\n支援 Markdown。'}
+          onInput={(event) => onChange({ ...config, body: (event.target as HTMLTextAreaElement).value })}
+        />
+      )}
     </div>
   )
 }

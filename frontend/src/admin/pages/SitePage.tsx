@@ -424,6 +424,17 @@ export function SitePage() {
               ]}
               onPick={(footerText) => edit({ footerText })}
             />
+            <h3>品牌欄</h3>
+            <p class="muted">頁尾左邊的那一塊：logo、一句話、版權。連結欄位會靠右排。</p>
+            <label>
+              一句話介紹
+              <input
+                value={settings.footerBlurb}
+                onInput={(event) => edit({ footerBlurb: (event.target as HTMLInputElement).value })}
+                maxLength={200}
+                placeholder="台中的插畫工作室，把日常畫成可以帶走的東西。"
+              />
+            </label>
             <label>
               版權文字
               <input

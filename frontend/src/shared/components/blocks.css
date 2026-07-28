@@ -65,7 +65,8 @@
 .block-carousel,
 .block-album,
 .block-shop,
-.block-about {
+.block-about,
+.block-contact {
   /* Wider than prose: a photograph cramped to reading width is a thumbnail. */
   max-width: 68rem;
 }
@@ -226,6 +227,11 @@
   text-align: center;
 }
 
+.block-shop .label {
+  display: grid;
+  gap: 0.15rem;
+}
+
 .block-shop .title {
   font-weight: 600;
 }
@@ -238,6 +244,92 @@
 .block-shop .sold-out .title,
 .block-shop .sold-out .price {
   opacity: 0.6;
+}
+
+/* --- shop: the featured layout --- */
+
+/* One large tile and two small ones. The large one is the first product in
+   the block's list — there is no second flag saying which, because a flag and
+   an ordered list are two ways to say the same thing.
+
+   Two columns, the first twice as wide, with the first tile spanning two
+   rows. Anything past the third product simply carries on filling the grid,
+   so a block with six products stays a grid rather than becoming a mistake. */
+.block-shop.layout-featured ul {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.block-shop.layout-featured li:first-child {
+  grid-row: span 2;
+}
+
+/* The large cover takes whatever height the two small rows add up to, rather
+   than being given a ratio of its own — a fixed ratio here would have to
+   guess the height of two titles and a gap, and would be wrong on any
+   product whose name wraps. */
+.block-shop.layout-featured li:first-child a {
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.block-shop.layout-featured li:first-child .cover {
+  aspect-ratio: auto;
+  height: 100%;
+  min-height: 12rem;
+}
+
+.block-shop.layout-featured li:first-child .title {
+  font-size: 1.1rem;
+}
+
+/* --- shop: labels over the artwork --- */
+
+/* Off by default, and this is why: the label covers part of the picture, and
+   this shop's pictures have their subject across the whole frame. When it is
+   on, the label is pinned to the top-left over a solid backdrop, so it is
+   legible over any artwork and out of the way of the sold-out ribbon along
+   the bottom. */
+.block-shop.overlay-labels a {
+  position: relative;
+}
+
+.block-shop.overlay-labels .label {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  max-width: calc(100% - 1.2rem);
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgb(43 38 34 / 0.78);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+
+.block-shop.overlay-labels .price {
+  color: rgb(255 255 255 / 0.85);
+}
+
+.block-shop.overlay-labels .sold-out .title,
+.block-shop.overlay-labels .sold-out .price {
+  opacity: 1;
+}
+
+/* One column on a phone. The featured tile stops spanning rows: at this width
+   every tile is the full width already, so "larger" has nothing left to mean
+   and the span would only leave a hole. */
+@media (max-width: 720px) {
+  .block-shop.layout-featured ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .block-shop.layout-featured li:first-child {
+    grid-row: auto;
+  }
+
+  .block-shop.layout-featured li:first-child .cover {
+    aspect-ratio: 1 / 1;
+    height: auto;
+  }
 }
 
 /* --- about --- */
@@ -305,6 +397,87 @@
   }
 
   .block-about.image-right .portrait {
+    order: 0;
+  }
+}
+
+/* --- contact --- */
+
+/* Two even columns: the details are a short list and the other half is a
+   picture or a paragraph, so neither side earns more room than the other.
+   Nothing here submits anywhere — see the component for why. */
+.block-contact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  align-items: start;
+}
+
+/* With only one side filled there is no second column to balance against. */
+.block-contact.alone {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 46rem;
+}
+
+/* The details are first in the markup so they read first when the columns
+   collapse; on a wide screen the order moves, not the source. */
+.block-contact.details-right .details {
+  order: 2;
+}
+
+.block-contact h2 {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.block-contact dl {
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.block-contact dt {
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #7a6f65;
+}
+
+.block-contact dd {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  /* An address or an email is one long unbroken run of characters, and this
+     column is half a page wide. */
+  overflow-wrap: anywhere;
+}
+
+.block-contact dd a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+.block-contact .aside img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+}
+
+.block-contact .aside .body {
+  line-height: 1.8;
+}
+
+.block-contact .aside .body p {
+  margin: 0 0 1rem;
+}
+
+@media (max-width: 720px) {
+  .block-contact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .block-contact.details-right .details {
     order: 0;
   }
 }

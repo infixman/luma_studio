@@ -1,6 +1,7 @@
-"""The four block types beyond plain text, and what they need to be drawn."""
+"""The block types beyond plain text, and what they need to be drawn."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -127,6 +128,41 @@ class TestShopBlock:
         assert config["limit"] == pages.MAX_SHOP_ITEMS
 
 
+class TestTheFeaturedLayout:
+    """One large tile and two small ones, as a layout rather than a type."""
+
+    def test_the_grid_is_what_a_block_gets_without_asking(self, pages):
+        _, config = pages.validate_block("shop", {})
+        assert config["layout"] == "grid"
+
+    def test_featured_is_offered(self, pages):
+        _, config = pages.validate_block("shop", {"layout": "featured"})
+        assert config["layout"] == "featured"
+
+    def test_a_layout_outside_the_fixed_set_is_refused(self, pages):
+        with pytest.raises(pages.PageError):
+            pages.validate_block("shop", {"layout": "masonry"})
+
+    def test_there_is_no_second_place_to_say_which_product_is_large(self, pages):
+        """The first slug is the large one. A `featured` flag beside the list
+        would be a second ordering, and two orderings eventually disagree."""
+
+        _, config = pages.validate_block(
+            "shop", {"layout": "featured", "source": "products", "slugs": ["a", "b"], "featured": "b"}
+        )
+        assert config["slugs"][0] == "a"
+        assert "featured" not in config
+
+    def test_labels_over_the_artwork_are_off_unless_asked_for(self, pages):
+        """This shop sells illustrations with content across the whole frame,
+        so a name dropped on top lands on the part that matters."""
+
+        _, config = pages.validate_block("shop", {})
+        assert config["overlayLabels"] is False
+        _, config = pages.validate_block("shop", {"overlayLabels": True})
+        assert config["overlayLabels"] is True
+
+
 class TestAboutBlock:
     def test_a_link_without_a_url_is_dropped(self, pages):
         """A label with no URL is a button that does nothing."""
@@ -144,6 +180,73 @@ class TestAboutBlock:
     def test_an_oversized_body_is_refused(self, pages):
         with pytest.raises(pages.PageError):
             pages.validate_block("about", {"body": "字" * (pages.MAX_ABOUT_BODY + 1)})
+
+
+class TestContactBlock:
+    """Contact details beside a picture or a passage. Layout only — no form."""
+
+    def test_details_keep_their_kind_and_value(self, pages):
+        _, config = pages.validate_block(
+            "contact",
+            {"details": [{"kind": "email", "value": "shop@luma-studio.tw"}, {"kind": "hours", "value": "週三至週日"}]},
+        )
+        assert config["details"] == [
+            {"kind": "email", "value": "shop@luma-studio.tw"},
+            {"kind": "hours", "value": "週三至週日"},
+        ]
+
+    def test_a_detail_with_no_value_is_dropped(self, pages):
+        """A label with nothing beside it is a row that says nothing."""
+
+        _, config = pages.validate_block("contact", {"details": [{"kind": "phone", "value": "  "}]})
+        assert config["details"] == []
+
+    def test_a_kind_outside_the_fixed_set_is_refused(self, pages):
+        with pytest.raises(pages.PageError):
+            pages.validate_block("contact", {"details": [{"kind": "telegram", "value": "@x"}]})
+
+    def test_the_aside_and_the_side_come_from_fixed_sets(self, pages):
+        with pytest.raises(pages.PageError):
+            pages.validate_block("contact", {"aside": "map"})
+        with pytest.raises(pages.PageError):
+            pages.validate_block("contact", {"detailsSide": "middle"})
+
+    def test_the_defaults_are_details_on_the_left_beside_a_picture(self, pages):
+        _, config = pages.validate_block("contact", {})
+        assert (config["aside"], config["detailsSide"]) == ("image", "left")
+
+    def test_too_many_details_are_refused(self, pages):
+        details = [{"kind": "note", "value": "x"}] * (pages.MAX_CONTACT_DETAILS + 1)
+        with pytest.raises(pages.PageError):
+            pages.validate_block("contact", {"details": details})
+
+    def test_nothing_a_form_would_need_is_stored(self, pages):
+        """The CSP is `form-action 'none'` and no endpoint receives a message.
+
+        Storing the fields anyway would leave a block that looks like it
+        submits somewhere, which is the failure this test exists to prevent.
+        """
+
+        _, config = pages.validate_block("contact", {"submitTo": "https://example.com", "fields": ["name"]})
+        assert "submitTo" not in config
+        assert "fields" not in config
+
+    def test_a_stored_block_reads_back_the_way_it_was_written(self, pages):
+        """Validation runs on the way out too: the config is JSON, so a row
+        written by an older build has to be checked before it reaches a page."""
+
+        stored = {"details": [{"kind": "address", "value": "台中市"}], "aside": "text", "body": "來坐坐"}
+        row = {"id": "b1", "type": "contact", "config": json.dumps(stored), "position": 0}
+        block = pages.block_row(row)
+        assert block["type"] == "contact"
+        assert block["config"]["details"] == [{"kind": "address", "value": "台中市"}]
+        assert block["config"]["aside"] == "text"
+
+    def test_a_stored_block_that_no_longer_fits_is_dropped_not_raised(self, pages):
+        """One stale row must not take a published page down with it."""
+
+        row = {"id": "b1", "type": "contact", "config": json.dumps({"aside": "map"}), "position": 0}
+        assert pages.block_row(row) is None
 
 
 class TestHydratingPictures:
@@ -184,6 +287,21 @@ class TestHydratingPictures:
         blocks = [block("album", {"mediaIds": [MEDIA_A, MEDIA_B]})]
         hydrated = asyncio.run(block_data.hydrate(make_env(database), blocks))
         assert [image["id"] for image in hydrated[0]["data"]["images"]] == [MEDIA_A, MEDIA_B]
+
+    def test_a_contact_block_resolves_its_picture_like_an_about_block(self, block_data):
+        database = FakeDatabase({"WHERE id IN": [media_row(MEDIA_A)]})
+        blocks = [block("contact", {"mediaId": MEDIA_A, "aside": "image", "details": []})]
+        hydrated = asyncio.run(block_data.hydrate(make_env(database), blocks))
+        assert hydrated[0]["data"]["image"]["path"] == "/media-assets/a.jpg"
+
+    def test_a_contact_block_whose_picture_is_gone_still_draws(self, block_data):
+        """The id stays in the config to be repaired; the render loses a photo."""
+
+        database = FakeDatabase({"WHERE id IN": []})
+        blocks = [block("contact", {"mediaId": "goneaway123", "aside": "image", "details": []})]
+        hydrated = asyncio.run(block_data.hydrate(make_env(database), blocks))
+        assert hydrated[0]["data"]["image"] is None
+        assert hydrated[0]["config"]["mediaId"] == "goneaway123"
 
     def test_a_block_with_no_pictures_asks_for_none(self, block_data):
         database = FakeDatabase()

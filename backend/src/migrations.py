@@ -510,6 +510,20 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_preview_tokens_expiry ON preview_tokens (expires_at)",
         ],
     },
+    {
+        # The footer's brand column: a sentence about the shop, between the
+        # mark and the copyright. The link columns were already editable and
+        # ran left to right with nothing on the left to anchor them.
+        #
+        # Numbered past 0017 and 0018 on purpose — two other changes are
+        # landing beside this one and own those names. Applying order comes
+        # from this list, and the table records names, so a gap costs nothing;
+        # renumbering to close it would re-run a migration somebody has already
+        # applied under the other name.
+        "name": "0019_add_footer_blurb",
+        "add_columns": [("site_settings", "footer_blurb", "TEXT NOT NULL DEFAULT ''")],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

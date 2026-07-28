@@ -6,6 +6,7 @@ import {
   AlbumEditor,
   BLOCK_KINDS,
   CarouselEditor,
+  ContactEditor,
   ShopEditor,
   TextEditor,
   emptyConfig,
@@ -35,6 +36,7 @@ import type {
   AlbumConfig,
   BlockConfig,
   CarouselConfig,
+  ContactConfig,
   MediaItem,
   PageBlock,
   PageDetail,
@@ -485,6 +487,16 @@ export function PageEditPage({ id }: { id: string }) {
           data: { image: item ? { id: item.id, path: item.path, alt: item.alt } : null },
         }
       }
+      // Same single picture beside its words, resolved the same way.
+      case 'contact': {
+        const draft = config as ContactConfig
+        const item = draft.mediaId ? byId.get(draft.mediaId) : undefined
+        return {
+          ...block,
+          config: draft,
+          data: { image: item ? { id: item.id, path: item.path, alt: item.alt } : null },
+        }
+      }
       case 'shop':
         return { ...block, config: config as ShopBlockConfig }
       default:
@@ -593,6 +605,14 @@ export function PageEditPage({ id }: { id: string }) {
                     {block.type === 'about' && (
                       <AboutEditor
                         config={(drafts[block.id] ?? block.config) as AboutConfig}
+                        onChange={(config) => edit(block, config)}
+                        library={byId}
+                        pick={pick}
+                      />
+                    )}
+                    {block.type === 'contact' && (
+                      <ContactEditor
+                        config={(drafts[block.id] ?? block.config) as ContactConfig}
                         onChange={(config) => edit(block, config)}
                         library={byId}
                         pick={pick}

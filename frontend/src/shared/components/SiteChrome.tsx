@@ -152,14 +152,52 @@ export function SiteHeader({
   )
 }
 
+/**
+ * The footer: a wide brand column, with the link columns pushed to the right.
+ *
+ * The link columns came first and ran left to right with nothing anchoring
+ * them — a row of headings starting at the page's left edge reads as the end
+ * of the content rather than as the shop signing its name. The mark, the
+ * blurb and the copyright give that row something to sit beside.
+ *
+ * The socials belong up here too: they are the shop's own addresses, not a
+ * sixth column of links to pages.
+ */
 export function SiteFooter({ settings }: { settings: SiteSettings }) {
   const hasContent =
-    settings.footerColumns.length > 0 || settings.footerSocials.length > 0 || Boolean(settings.footerCopyright)
+    settings.footerColumns.length > 0 ||
+    settings.footerSocials.length > 0 ||
+    Boolean(settings.footerBlurb) ||
+    Boolean(settings.footerCopyright)
+  // A footer holding nothing but a logo is a band of colour that says nothing,
+  // so an unconfigured site gets no footer at all rather than an empty one.
   if (!hasContent) return null
 
   return (
     <footer class={`site-footer colour-${settings.footerColour} text-${settings.footerText}`}>
       <div class="footer-inner">
+        <div class="footer-brand">
+          <a class="footer-mark" href="/">
+            <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
+          </a>
+
+          {settings.footerBlurb && <p class="footer-blurb">{settings.footerBlurb}</p>}
+
+          {settings.footerSocials.length > 0 && (
+            <ul class="footer-socials">
+              {settings.footerSocials.map((social) => (
+                <li key={social.platform}>
+                  <a href={social.url} rel="noopener" aria-label={social.platform}>
+                    <SocialIcon platform={social.platform} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {settings.footerCopyright && <p class="footer-copyright">{settings.footerCopyright}</p>}
+        </div>
+
         {settings.footerColumns.length > 0 && (
           <div class="footer-columns">
             {settings.footerColumns.map((column, index) => (
@@ -177,20 +215,6 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
             ))}
           </div>
         )}
-
-        {settings.footerSocials.length > 0 && (
-          <ul class="footer-socials">
-            {settings.footerSocials.map((social) => (
-              <li key={social.platform}>
-                <a href={social.url} rel="noopener" aria-label={social.platform}>
-                  <SocialIcon platform={social.platform} />
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {settings.footerCopyright && <p class="footer-copyright">{settings.footerCopyright}</p>}
       </div>
     </footer>
   )
