@@ -1,10 +1,14 @@
 /**
- * Serves the built SPA, and gives the name-card page real link-preview tags.
+ * Serves the built SPA, and gives its shareable pages real link-preview tags.
  *
  * A single-page app is empty HTML until its JavaScript runs, and the crawlers
- * behind LINE, Facebook and Slack previews do not run it. Since a name card
- * exists to be shared, its page is rendered with the profile's own title,
- * description and image already in the markup.
+ * behind LINE, Facebook and Slack previews do not run it. So every page that
+ * gets sent to someone — the name card, a custom page, a product — is served
+ * with its own title, description and image already in the markup.
+ *
+ * The lookup that fills those in is allowed to fail. A page with no preview
+ * card is a missed opportunity; a page that does not load because the API was
+ * slow is a broken link, and the second is far worse than the first.
  */
 
 interface Env {
@@ -19,11 +23,46 @@ interface BioLink {
   avatarPath: string | null
 }
 
+/** The share fields of the public page payload; the rest is for the app. */
+interface PageContent {
+  title: string
+  shareDescription: string
+  shareImagePath: string | null
+}
+
+interface ProductDetail {
+  title: string
+  description: string
+  images: { path: string | null; alt: string }[]
+}
+
 // The public name-card page. Note its neighbour /cart is one letter away;
 // both are live, so keep them straight when touching either.
 const CARD_PATH = '/card'
+const SHOP_PATH = '/shop'
+// Category pages live under /shop/c/…, so this segment is never a product.
+const CATEGORY_SEGMENT = 'c'
 const SITE_NAME = '苒光繪誌'
-const PROFILE_CACHE_SECONDS = 300
+const PREVIEW_CACHE_SECONDS = 300
+
+// The branded landscape card, and the size it is. Preview cards crop to
+// roughly 1.91:1, so this is the fallback whenever a page has no picture of
+// its own — a card with the studio's name beats a card with a broken image.
+const SHARE_CARD = '/assets/share-card.png'
+const SHARE_CARD_SIZE = { width: 1200, height: 630 }
+
+interface Preview {
+  /** Both <title> and og:title: some previewers read only one of them. */
+  title: string
+  description: string
+  /** Absolute — a crawler does not resolve a path against the page it read. */
+  image: string
+  imageAlt: string
+  url: string
+  type: 'profile' | 'website' | 'product'
+  /** Stated only when we know it, which is when we shipped the image. */
+  imageSize?: { width: number; height: number }
+}
 
 export function escapeHtml(value: string): string {
   return value
@@ -39,57 +78,161 @@ export function oneLine(value: string, limit = 160): string {
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat
 }
 
-async function loadBioLink(env: Env): Promise<BioLink | null> {
-  try {
-    const response = await fetch(`${env.API_BASE}/api/bio-link`, {
-      // Crawlers arrive in bursts when a link is shared; one API call per
-      // burst is plenty, and a stale title for a few minutes is harmless.
-      cf: { cacheTtl: PROFILE_CACHE_SECONDS, cacheEverything: true },
-    })
-    if (!response.ok) return null
-    return (await response.json()) as BioLink
-  } catch {
-    return null
-  }
-}
-
 /** Avoids "… | 苒光繪誌 | 苒光繪誌" when the name already carries the studio. */
 export function pageTitle(displayName: string): string {
   if (!displayName) return SITE_NAME
   return displayName.includes(SITE_NAME) ? displayName : `${displayName} | ${SITE_NAME}`
 }
 
-function previewTags(profile: BioLink, origin: string): string {
-  const title = pageTitle(profile.displayName)
-  const description = oneLine(profile.bio) || `${SITE_NAME}的連結彙整`
-  // The branded landscape card rather than the avatar: preview cards crop to
-  // roughly 1.91:1, which turns a square portrait into a slice of a face.
-  const image = `${origin}/assets/share-card.png`
-  const url = `${origin}${CARD_PATH}`
+/**
+ * Which public endpoint knows about this path, if any.
+ *
+ * Kept apart from the fetching so the routing can be read — and tested —
+ * without a network. Null means the page is served untouched, which is the
+ * answer for everything under /shop that is not one product: the index and
+ * the category pages are the shop's own furniture, not a shared link.
+ *
+ * Paths that belong to no page at all still ask, and get a 404 back. The list
+ * of reserved paths lives in the backend, and a second copy here would be the
+ * copy nobody remembers to update.
+ */
+export function previewSource(path: string): string | null {
+  if (path === CARD_PATH) return '/api/bio-link'
+  // The most-shared URL of the lot, and it is an ordinary page underneath —
+  // just one reached by a flag rather than by its path.
+  if (path === '/') return '/api/pages/home'
+  if (path.startsWith(`${SHOP_PATH}/`)) {
+    const slug = path.slice(SHOP_PATH.length + 1)
+    if (!slug || slug.includes('/') || slug === CATEGORY_SEGMENT) return null
+    return `/api/products/${encodeURIComponent(slug)}`
+  }
+  // Only the shop itself, not everything spelled like it: /shopping-guide is
+  // an ordinary page, and the backend says so too.
+  if (path === SHOP_PATH) return null
+  return `/api/pages?path=${encodeURIComponent(path)}`
+}
+
+async function loadJson<T>(env: Env, path: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${env.API_BASE.replace(/\/+$/, '')}${path}`, {
+      // Crawlers arrive in bursts when a link is shared; one API call per
+      // burst is plenty, and a stale title for a few minutes is harmless.
+      cf: { cacheTtl: PREVIEW_CACHE_SECONDS, cacheEverything: true },
+    })
+    if (!response.ok) return null
+    return (await response.json()) as T
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A field of a payload, or empty.
+ *
+ * Everything the API sends is read as "maybe": a response that is not the
+ * shape this Worker expected must cost a preview card, never the page it was
+ * supposed to decorate.
+ */
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+/** Images are served by the API host, so their paths need its origin. */
+function imageUrl(env: Env, path: string | null): string | null {
+  if (!path) return null
+  return `${env.API_BASE.replace(/\/+$/, '')}${path}`
+}
+
+export function cardPreview(profile: BioLink, origin: string): Preview {
+  return {
+    title: pageTitle(text(profile.displayName)),
+    description: oneLine(text(profile.bio)) || `${SITE_NAME}的連結彙整`,
+    image: `${origin}${SHARE_CARD}`,
+    imageAlt: SITE_NAME,
+    imageSize: SHARE_CARD_SIZE,
+    url: `${origin}${CARD_PATH}`,
+    type: 'profile',
+  }
+}
+
+/**
+ * A custom page's own card, falling back to the branded one.
+ *
+ * Nothing here is required of the owner: a page with an empty share panel
+ * still gets its title and the studio's card, which is what it would have
+ * shown anyway before any of this existed.
+ */
+export function pagePreview(page: PageContent, url: string, image: string | null): Preview {
+  return {
+    title: pageTitle(text(page.title)),
+    description: oneLine(text(page.shareDescription)),
+    image: image ?? `${new URL(url).origin}${SHARE_CARD}`,
+    imageAlt: text(page.title) || SITE_NAME,
+    imageSize: image ? undefined : SHARE_CARD_SIZE,
+    url,
+    type: 'website',
+  }
+}
+
+/**
+ * A product's card, built from what the shop already holds.
+ *
+ * The title and the cover photo are the product's own, so a product nobody
+ * has written share text for still shares as itself rather than as the shop.
+ */
+export function productPreview(product: ProductDetail, url: string, cover: string | null): Preview {
+  return {
+    title: pageTitle(text(product.title)),
+    description: oneLine(text(product.description)),
+    image: cover ?? `${new URL(url).origin}${SHARE_CARD}`,
+    imageAlt: text(product.images?.[0]?.alt) || text(product.title) || SITE_NAME,
+    imageSize: cover ? undefined : SHARE_CARD_SIZE,
+    url,
+    type: 'product',
+  }
+}
+
+export function previewTags(preview: Preview): string {
+  const described = preview.description
+    ? [
+        `<meta property="og:description" content="${escapeHtml(preview.description)}">`,
+        `<meta name="twitter:description" content="${escapeHtml(preview.description)}">`,
+        `<meta name="description" content="${escapeHtml(preview.description)}">`,
+      ]
+    : []
 
   return [
-    `<meta property="og:type" content="profile">`,
+    `<meta property="og:type" content="${preview.type}">`,
     `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}">`,
-    `<meta property="og:title" content="${escapeHtml(title)}">`,
-    `<meta property="og:description" content="${escapeHtml(description)}">`,
-    `<meta property="og:image" content="${escapeHtml(image)}">`,
-    `<meta property="og:image:alt" content="${escapeHtml(SITE_NAME)}">`,
+    `<meta property="og:title" content="${escapeHtml(preview.title)}">`,
+    `<meta property="og:image" content="${escapeHtml(preview.image)}">`,
+    `<meta property="og:image:alt" content="${escapeHtml(preview.imageAlt)}">`,
     // Stated so a crawler can lay out the card before it fetches the image.
-    `<meta property="og:image:width" content="1200">`,
-    `<meta property="og:image:height" content="630">`,
-    `<meta property="og:url" content="${escapeHtml(url)}">`,
+    ...(preview.imageSize
+      ? [
+          `<meta property="og:image:width" content="${preview.imageSize.width}">`,
+          `<meta property="og:image:height" content="${preview.imageSize.height}">`,
+        ]
+      : []),
+    `<meta property="og:url" content="${escapeHtml(preview.url)}">`,
     `<meta name="twitter:card" content="summary_large_image">`,
-    `<meta name="twitter:title" content="${escapeHtml(title)}">`,
-    `<meta name="twitter:description" content="${escapeHtml(description)}">`,
-    `<meta name="twitter:image" content="${escapeHtml(image)}">`,
-    `<meta name="description" content="${escapeHtml(description)}">`,
+    `<meta name="twitter:title" content="${escapeHtml(preview.title)}">`,
+    `<meta name="twitter:image" content="${escapeHtml(preview.image)}">`,
+    ...described,
   ].join('\n    ')
+}
+
+/** Some previewers ignore og:title and read <title>, so set both. */
+export function inject(html: string, preview: Preview): string {
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(preview.title)}</title>`)
+    .replace('</head>', `  ${previewTags(preview)}\n  </head>`)
 }
 
 /**
  * Whether this request is a link previewer rather than a person.
  *
- * Only previewers need the profile injected into the HTML — a browser runs
+ * Only previewers need the preview injected into the HTML — a browser runs
  * the app and fetches it anyway — and fetching it costs a round trip to the
  * API before a single byte reaches the visitor. So the wait is spent only on
  * requests that cannot do without it.
@@ -129,6 +272,35 @@ function shellResponse(html: string, source: Response): Response {
   return new Response(html, { status: 200, headers })
 }
 
+/**
+ * The card for this path, or null when there is nothing to say about it.
+ *
+ * Every branch treats a missing answer as "no preview" rather than as an
+ * error, so a page whose metadata could not be fetched is still a page.
+ */
+async function previewFor(path: string, url: URL, env: Env): Promise<Preview | null> {
+  const source = previewSource(path)
+  if (source === null) return null
+  const address = `${url.origin}${path}`
+
+  if (path === CARD_PATH) {
+    const profile = await loadJson<BioLink>(env, source)
+    return profile && cardPreview(profile, url.origin)
+  }
+
+  if (source.startsWith('/api/products/')) {
+    const product = await loadJson<ProductDetail>(env, source)
+    if (!product || !text(product.title)) return null
+    return productPreview(product, address, imageUrl(env, product.images?.[0]?.path ?? null))
+  }
+
+  const page = await loadJson<PageContent>(env, source)
+  // No title means this is not a page we asked for — a 404 body, or an
+  // answer from a version of the API that predates any of this.
+  if (!page || !text(page.title)) return null
+  return pagePreview(page, address, imageUrl(env, page.shareImagePath))
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -144,19 +316,13 @@ export default {
     if (shell.status !== 200) return new Response('Not found', { status: 404 })
 
     const path = url.pathname.replace(/\/+$/, '') || '/'
-    if (path !== CARD_PATH) return shellResponse(await shell.text(), shell)
     if (!isLinkPreviewer(request.headers.get('user-agent') ?? '')) {
       return shellResponse(await shell.text(), shell)
     }
 
-    const profile = await loadBioLink(env)
+    const preview = await previewFor(path, url, env)
     const html = await shell.text()
-    if (!profile) return shellResponse(html, shell)
-
-    // Some previewers ignore og:title and read <title>, so set both.
-    const injected = html
-      .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(pageTitle(profile.displayName))}</title>`)
-      .replace('</head>', `  ${previewTags(profile, url.origin)}\n  </head>`)
-    return shellResponse(injected, shell)
+    if (!preview) return shellResponse(html, shell)
+    return shellResponse(inject(html, preview), shell)
   },
 }

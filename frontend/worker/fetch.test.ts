@@ -46,14 +46,23 @@ const CRAWLER = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_u
 const BROWSER =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
 
-/** Replaces global fetch for the profile lookup the Worker makes. */
-function stubApi(response: unknown | Error) {
+/**
+ * Replaces global fetch for the metadata lookups the Worker makes.
+ *
+ * The answer may be a value for every URL, or a function of the URL when a
+ * test cares which endpoint was asked. Returning undefined stands for a 404,
+ * which is what the API says about a path no page claims.
+ */
+function stubApi(answer: unknown | Error | ((url: string) => unknown)) {
   const original = globalThis.fetch
   calls.length = 0
   globalThis.fetch = (async (input: RequestInfo | URL) => {
-    calls.push(String(input))
-    if (response instanceof Error) throw response
-    return new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } })
+    const url = String(input)
+    calls.push(url)
+    const value = typeof answer === 'function' ? (answer as (url: string) => unknown)(url) : answer
+    if (value instanceof Error) throw value
+    if (value === undefined) return new Response('{"error":"Not found"}', { status: 404 })
+    return new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } })
   }) as typeof fetch
   return () => {
     globalThis.fetch = original
@@ -64,6 +73,25 @@ function stubApi(response: unknown | Error) {
 const calls: string[] = []
 
 const profile = { displayName: '喬喬老師', bio: '台中開課\n兒童美術', avatarPath: '/bio-link-assets/a.jpg' }
+
+const page = {
+  title: '關於我們',
+  path: '/about',
+  showHeader: true,
+  showFooter: true,
+  shareDescription: '台中與桃園的繪畫教室\n兒童美術與成人肌理畫',
+  shareImagePath: '/media-assets/about.jpg',
+  blocks: [],
+}
+
+const product = {
+  slug: 'pastel-set',
+  title: '粉彩組',
+  description: '十二色，附收納盒',
+  images: [{ path: '/shop-assets/pastel.jpg', alt: '粉彩組' }],
+  variants: [],
+  categories: [],
+}
 
 describe('serving the built site', () => {
   it('returns a real file as it comes', async () => {
@@ -181,11 +209,141 @@ describe('link previews on /card', () => {
     }
   })
 
-  it('leaves other routes without preview tags', async () => {
-    const restore = stubApi(profile)
+})
+
+describe('link previews on custom pages', () => {
+  it('asks the public API for the page at this path', async () => {
+    const restore = stubApi(page)
     try {
-      const html = await (await worker.fetch(get('/anything-else', CRAWLER), env())).text()
+      await worker.fetch(get('/about', CRAWLER), env())
+      expect(calls).toEqual(['https://api.example.test/api/pages?path=%2Fabout'])
+    } finally {
+      restore()
+    }
+  })
+
+  it('writes the page card into the head', async () => {
+    const restore = stubApi(page)
+    try {
+      const html = await (await worker.fetch(get('/about', CRAWLER), env())).text()
+      expect(html).toContain('<title>關於我們 | 苒光繪誌</title>')
+      expect(html).toContain('<meta property="og:title" content="關於我們 | 苒光繪誌">')
+      expect(html).toContain('content="台中與桃園的繪畫教室 兒童美術與成人肌理畫"')
+      expect(html).toContain('<meta property="og:url" content="https://luma-studio.tw/about">')
+      // The image is served by the API host, so a path alone would resolve
+      // against the site and 404 in whichever app is drawing the card.
+      expect(html).toContain('content="https://api.example.test/media-assets/about.jpg"')
+    } finally {
+      restore()
+    }
+  })
+
+  it('falls back to the studio card when the page has no image of its own', async () => {
+    const restore = stubApi({ ...page, shareDescription: '', shareImagePath: null })
+    try {
+      const html = await (await worker.fetch(get('/about', CRAWLER), env())).text()
+      expect(html).toContain('content="https://luma-studio.tw/assets/share-card.png"')
+      // Nothing written means nothing said, rather than an empty description
+      // tag for a crawler to show as a blank line.
+      expect(html).not.toContain('og:description')
+    } finally {
+      restore()
+    }
+  })
+
+  it('asks the home endpoint for the front page', async () => {
+    // The most-shared URL of the lot, and no path of its own to ask by.
+    const restore = stubApi(page)
+    try {
+      await worker.fetch(get('/', CRAWLER), env())
+      expect(calls).toEqual(['https://api.example.test/api/pages/home'])
+    } finally {
+      restore()
+    }
+  })
+
+  it('serves a path no page claims anyway', async () => {
+    const restore = stubApi(undefined)
+    try {
+      const response = await worker.fetch(get('/nothing-here', CRAWLER), env())
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('<div id="app">')
+    } finally {
+      restore()
+    }
+  })
+
+  it('serves the page when the metadata lookup fails', async () => {
+    // A metadata miss must never become a broken link.
+    const restore = stubApi(new Error('network down'))
+    try {
+      const response = await worker.fetch(get('/about', CRAWLER), env())
+      expect(response.status).toBe(200)
+      expect(await response.text()).not.toContain('og:title')
+    } finally {
+      restore()
+    }
+  })
+
+  it('does not make a person wait for the API', async () => {
+    const restore = stubApi(page)
+    try {
+      const response = await worker.fetch(get('/about', BROWSER), env())
+      expect(response.status).toBe(200)
+      expect(calls).toEqual([])
+    } finally {
+      restore()
+    }
+  })
+})
+
+describe('link previews on product pages', () => {
+  it('shares the product as itself', async () => {
+    const restore = stubApi(product)
+    try {
+      const html = await (await worker.fetch(get('/shop/pastel-set', CRAWLER), env())).text()
+      expect(calls).toEqual(['https://api.example.test/api/products/pastel-set'])
+      expect(html).toContain('<meta property="og:type" content="product">')
+      expect(html).toContain('<meta property="og:title" content="粉彩組 | 苒光繪誌">')
+      expect(html).toContain('content="十二色，附收納盒"')
+      expect(html).toContain('content="https://api.example.test/shop-assets/pastel.jpg"')
+    } finally {
+      restore()
+    }
+  })
+
+  it('still shares a product nobody has written anything for', async () => {
+    // The title and the cover are the product's own, so an untouched product
+    // shares as itself rather than as a blank card.
+    const restore = stubApi({ slug: 'plain', title: '素描本', description: '', images: [] })
+    try {
+      const html = await (await worker.fetch(get('/shop/plain', CRAWLER), env())).text()
+      expect(html).toContain('<meta property="og:title" content="素描本 | 苒光繪誌">')
+      expect(html).toContain('content="https://luma-studio.tw/assets/share-card.png"')
+    } finally {
+      restore()
+    }
+  })
+
+  it('serves the product page when the lookup fails', async () => {
+    const restore = stubApi(new Error('network down'))
+    try {
+      const response = await worker.fetch(get('/shop/pastel-set', CRAWLER), env())
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('<div id="app">')
+    } finally {
+      restore()
+    }
+  })
+
+  it.each(['/shop', '/shop/c/art-kits'])('leaves %s alone, and asks nothing about it', async (path) => {
+    // The index and the category pages are the shop's own furniture; only a
+    // product is somebody's shared link.
+    const restore = stubApi(product)
+    try {
+      const html = await (await worker.fetch(get(path, CRAWLER), env())).text()
       expect(html).not.toContain('og:title')
+      expect(calls).toEqual([])
     } finally {
       restore()
     }

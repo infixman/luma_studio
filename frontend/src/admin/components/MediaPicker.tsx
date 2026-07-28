@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { MediaGrid } from './MediaGrid'
-import { api, uploadMedia } from '../../shared/api'
+import { MediaSearchField, useMediaLibrary } from './MediaSearch'
+import { Button, Spinner } from './ui'
+import { uploadMedia } from '../../shared/api'
 import type { MediaItem } from '../../shared/types'
 
 /**
@@ -13,6 +15,10 @@ import type { MediaItem } from '../../shared/types'
  * Uploading is here as well as on the library page. Making the owner leave a
  * half-finished carousel to go and upload a photo is how a half-finished
  * carousel gets saved.
+ *
+ * Searching is here for the same kind of reason, and it is the more important
+ * half: the library page is where you tidy up, but this is where you are
+ * looking for one particular picture among two hundred.
  */
 export function MediaPicker({
   open,
@@ -25,23 +31,21 @@ export function MediaPicker({
   onPick: (item: MediaItem) => void
   onClose: () => void
 }) {
-  const [items, setItems] = useState<MediaItem[] | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    setError('')
-    api<{ media: MediaItem[] }>('/api/media')
-      .then((data) => setItems(data.media))
-      .catch((problem) => setError(problem instanceof Error ? problem.message : '媒體庫載入失敗'))
-  }, [open])
+  const report = useCallback(
+    (problem: unknown) => setError(problem instanceof Error ? problem.message : '媒體庫載入失敗'),
+    [],
+  )
+  const { query, setQuery, items, setItems } = useMediaLibrary(open, report)
 
   // Escape closes it, because a dialog that can only be dismissed by finding
   // the right button is a dialog people click through to get rid of.
   useEffect(() => {
     if (!open) return
+    // Last time's failure is not this time's news.
+    setError('')
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
@@ -75,29 +79,46 @@ export function MediaPicker({
       <div class="panel">
         <header>
           <h3>選擇圖片</h3>
-          <button type="button" class="ghost" onClick={onClose}>
+          <Button tone="ghost" onClick={onClose}>
             關閉
-          </button>
+          </Button>
         </header>
 
         {error && <p class="error">{error}</p>}
 
+        {/* Above the grid, not in the footer: it is the first thing you reach
+            for once the library has more images than fit on one screen. */}
+        <div class="search">
+          <MediaSearchField value={query} onChange={setQuery} />
+        </div>
+
         <div class="body">
           {items === null ? (
-            <p class="muted">載入中…</p>
+            <Spinner />
           ) : (
-            <MediaGrid items={items} selectedId={selectedId} onSelect={onPick} empty="媒體庫還是空的，先上傳一張。" />
+            <MediaGrid
+              items={items}
+              selectedId={selectedId}
+              onSelect={onPick}
+              empty={query.trim() ? '沒有符合的圖片。標籤要打完整，標題與檔名打一部分就好。' : '媒體庫還是空的，先上傳一張。'}
+            />
           )}
         </div>
 
         <footer>
+          {/* Hidden, because a file chooser is the one control the kit cannot
+              draw — the button in front of it is the one that matches. */}
           <input
             ref={fileInput}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            hidden
             onChange={upload}
             disabled={busy}
           />
+          <Button busy={busy} onClick={() => fileInput.current?.click()}>
+            上傳新圖
+          </Button>
           <span class="muted">jpg、png 或 webp，最大 5 MB</span>
         </footer>
       </div>

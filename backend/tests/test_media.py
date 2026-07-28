@@ -1,4 +1,4 @@
-"""The media library: uploads, alt text, usage and deletion."""
+"""The media library: uploads, naming, tags, search, usage and deletion."""
 
 import asyncio
 import json
@@ -15,12 +15,24 @@ def media():
     return module
 
 
-def row(media_id="mediaid1234", key="_media/abc123.jpg", name="cat.jpg", alt="", size=1234, created=1700000000):
+def row(
+    media_id="mediaid1234",
+    key="_media/abc123.jpg",
+    name="cat.jpg",
+    title="",
+    alt="",
+    tags=None,
+    size=1234,
+    created=1700000000,
+):
     return {
         "id": media_id,
         "object_key": key,
         "file_name": name,
+        "title": title,
         "alt": alt,
+        # How SQL hands them over: one string, newline separated.
+        "tags": "\n".join(tags or ()),
         "byte_size": size,
         "created_at": created,
     }
@@ -65,6 +77,71 @@ class TestAltText:
             media.validate_alt("字" * (media.MAX_ALT + 1))
 
 
+class TestTitle:
+    """The owner's own label, which is never the alt text."""
+
+    def test_empty_is_fine_because_the_file_name_stands_in(self, media):
+        assert media.validate_title("") == ""
+        assert media.validate_title(None) == ""
+
+    def test_spacing_is_tidied_but_the_words_are_left_alone(self, media):
+        assert media.validate_title("  首頁  banner  ") == "首頁 banner"
+
+    def test_case_is_kept_because_this_one_is_read_by_people(self, media):
+        """Unlike a tag: nobody matches on a title, they read it."""
+
+        assert media.validate_title("Banner V3") == "Banner V3"
+
+    def test_too_long_is_refused(self, media):
+        with pytest.raises(media.MediaError):
+            media.validate_title("字" * (media.MAX_TITLE + 1))
+
+
+class TestTagNormalisation:
+    def test_surrounding_and_inner_whitespace_is_reduced(self, media):
+        assert media.normalise_tag("  首頁   用圖 ") == "首頁 用圖"
+
+    def test_a_newline_cannot_survive_because_it_separates_tags_in_sql(self, media):
+        assert "\n" not in media.normalise_tag("首頁\n用圖")
+
+    def test_ascii_is_folded_so_one_tag_does_not_become_two(self, media):
+        assert media.normalise_tag("Banner") == media.normalise_tag("BANNER") == "banner"
+
+    def test_chinese_is_left_exactly_as_typed(self, media):
+        assert media.normalise_tag("插畫") == "插畫"
+
+    def test_an_over_long_tag_is_cut_rather_than_refused(self, media):
+        assert len(media.normalise_tag("字" * 80)) == media.MAX_TAG
+
+    def test_nothing_but_spaces_is_not_a_tag(self, media):
+        assert media.normalise_tag("   ") == ""
+
+
+class TestTagLists:
+    def test_the_order_typed_is_the_order_kept(self, media):
+        assert media.validate_tags(["首頁", "插畫", "banner"]) == ["首頁", "插畫", "banner"]
+
+    def test_two_spellings_of_one_tag_are_one_tag(self, media):
+        assert media.validate_tags(["Banner", " banner "]) == ["banner"]
+
+    def test_blanks_are_dropped_rather_than_stored(self, media):
+        assert media.validate_tags(["插畫", "", "   ", None]) == ["插畫"]
+
+    def test_nothing_at_all_is_an_empty_list(self, media):
+        assert media.validate_tags(None) == []
+
+    def test_more_than_the_ceiling_is_refused(self, media):
+        with pytest.raises(media.MediaError):
+            media.validate_tags([f"tag{index}" for index in range(media.MAX_TAGS + 1)])
+
+    def test_duplicates_do_not_count_towards_the_ceiling(self, media):
+        assert len(media.validate_tags(["插畫"] * (media.MAX_TAGS + 5))) == 1
+
+    def test_something_that_is_not_a_list_is_refused(self, media):
+        with pytest.raises(media.MediaError):
+            media.validate_tags("插畫,首頁")
+
+
 class TestKeysAndUrls:
     def test_a_key_carries_the_prefix_that_keeps_it_out_of_the_print_routes(self, media):
         key = media.object_key(".jpg")
@@ -83,16 +160,33 @@ class TestKeysAndUrls:
 
 class TestReading:
     def test_a_row_becomes_a_url_and_the_facts_around_it(self, media):
-        database = FakeDatabase({"FROM media": [row(alt="一隻貓", size=2048)]})
+        database = FakeDatabase({"FROM media": [row(title="首頁主圖", alt="一隻貓", tags=["插畫"], size=2048)]})
         item = asyncio.run(media.get_media(make_env(database), "mediaid1234"))
         assert item == {
             "id": "mediaid1234",
             "path": "/media-assets/abc123.jpg",
             "fileName": "cat.jpg",
+            "title": "首頁主圖",
             "alt": "一隻貓",
+            "tags": ["插畫"],
             "byteSize": 2048,
             "createdAt": 1700000000,
         }
+
+    def test_title_and_alt_stay_two_answers_to_two_questions(self, media):
+        """One says what it is for the owner, the other for a screen reader."""
+
+        database = FakeDatabase({"FROM media": [row(title="首頁 banner v3", alt="一隻在窗邊的貓")]})
+        item = asyncio.run(media.get_media(make_env(database), "mediaid1234"))
+        assert item["title"] == "首頁 banner v3"
+        assert item["alt"] == "一隻在窗邊的貓"
+
+    def test_an_image_from_before_tags_existed_reads_as_untagged(self, media):
+        """The column defaults to empty; a row with nothing in it is not an error."""
+
+        database = FakeDatabase({"FROM media": [row(tags=[])]})
+        item = asyncio.run(media.get_media(make_env(database), "mediaid1234"))
+        assert item["title"] == "" and item["tags"] == []
 
     def test_resolve_skips_an_id_with_nothing_behind_it(self, media):
         """A block asking for a deleted image drops that picture, not the page."""
@@ -110,6 +204,62 @@ class TestReading:
         database = FakeDatabase({"WHERE id IN": [row()]})
         asyncio.run(media.resolve(make_env(database), ["a", "b", "a"]))
         assert "?3" not in database.statements[0]
+
+
+class TestSearch:
+    """What `q` looks in, which is the whole point of the tags being a table."""
+
+    def test_no_term_asks_for_everything(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database)))
+        assert "media.title LIKE" not in database.statements[0]
+
+    def test_a_term_looks_in_the_title_the_file_name_and_the_tags(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database), search="貓"))
+        sql = database.statements[0]
+        assert "media.title LIKE ?1" in sql
+        assert "media.file_name LIKE ?1" in sql
+        assert "EXISTS (SELECT 1 FROM media_tags" in sql
+
+    def test_the_words_are_matched_loosely_and_the_tag_exactly(self, media):
+        """Searching 貓 must not answer with everything tagged 熊貓."""
+
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database), search="貓"))
+        assert "tag = ?2" in database.statements[0]
+        assert database.reads[0][1][:2] == ("%貓%", "貓")
+
+    def test_the_term_is_normalised_the_way_the_tag_was_stored(self, media):
+        """Otherwise typing Banner would never find the tag banner."""
+
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database), search=" Banner "))
+        assert database.reads[0][1][1] == "banner"
+
+    def test_a_very_long_term_is_cut_rather_than_sent_whole(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database), search="字" * 500))
+        assert len(database.reads[0][1][0]) == media.MAX_SEARCH + 2  # the two % around it
+
+    def test_spaces_alone_are_not_a_search(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.list_media(make_env(database), search="   "))
+        assert "media.title LIKE" not in database.statements[0]
+
+    def test_the_list_says_when_it_was_cut_short(self, media):
+        database = FakeDatabase({"FROM media": [row() for _ in range(media.MAX_ITEMS + 1)]})
+        items, truncated = asyncio.run(media.list_media(make_env(database)))
+        assert truncated is True and len(items) == media.MAX_ITEMS
+
+
+class TestTagIndex:
+    def test_the_tags_in_use_come_back_most_used_first(self, media):
+        """Which is the order the suggestions are read in."""
+
+        database = FakeDatabase({"FROM media_tags": [{"tag": "插畫", "uses": 9}, {"tag": "首頁", "uses": 2}]})
+        assert asyncio.run(media.list_tags(make_env(database))) == ["插畫", "首頁"]
+        assert "ORDER BY uses DESC" in database.statements[0]
 
 
 class TestUsage:
@@ -150,13 +300,52 @@ class TestWriting:
         database = FakeDatabase({"FROM media": [row()]})
         item = asyncio.run(
             media.create(
-                make_env(database), object_key="_media/abc123.jpg", file_name="cat.jpg", alt="", byte_size=1234
+                make_env(database),
+                object_key="_media/abc123.jpg",
+                file_name="cat.jpg",
+                title="",
+                alt="",
+                byte_size=1234,
             )
         )
         insert = [write for write in database.writes if "INSERT INTO media" in write[0]]
         assert len(insert) == 1
         assert insert[0][1][1] == "_media/abc123.jpg"
         assert item["path"] == "/media-assets/abc123.jpg"
+
+    def test_saving_writes_the_title_and_the_alt_in_one_statement(self, media):
+        """Two endpoints would mean a half-saved image when the second failed."""
+
+        database = FakeDatabase()
+        asyncio.run(media.update(make_env(database), "mediaid1234", title="首頁主圖", alt="一隻貓", tags=[]))
+        update = [write for write in database.writes if "UPDATE media" in write[0]]
+        assert update[0][1] == ("mediaid1234", "首頁主圖", "一隻貓")
+
+    def test_saving_tags_replaces_whatever_was_there(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.update(make_env(database), "mediaid1234", title="", alt="", tags=["插畫", "首頁"]))
+        tag_writes = [write for write in database.writes if "media_tags" in write[0]]
+        assert tag_writes[0][0].startswith("DELETE FROM media_tags")
+        assert tag_writes[1][1] == ("mediaid1234", "插畫", "首頁")
+
+    def test_clearing_every_tag_writes_nothing_back(self, media):
+        database = FakeDatabase()
+        asyncio.run(media.update(make_env(database), "mediaid1234", title="", alt="", tags=[]))
+        assert not any("INSERT OR IGNORE INTO media_tags" in write[0] for write in database.writes)
+
+    def test_saving_something_that_is_gone_touches_no_tags(self, media):
+        """Otherwise a stale id would leave tag rows behind with no image."""
+
+        database = FakeDatabase(changes={"UPDATE media": 0})
+        assert asyncio.run(media.update(make_env(database), "gone12345678", title="", alt="", tags=["插畫"])) is False
+        assert not any("media_tags" in write[0] for write in database.writes)
+
+    def test_deleting_takes_the_tags_with_it(self, media):
+        """A tag nothing carries would keep being offered by the autocomplete."""
+
+        database = FakeDatabase({"SELECT object_key": [{"object_key": "_media/abc123.jpg"}]})
+        asyncio.run(media.delete(make_env(database), "mediaid1234"))
+        assert any("DELETE FROM media_tags" in write[0] for write in database.writes)
 
     def test_deleting_reports_the_key_that_is_now_unreferenced(self, media):
         database = FakeDatabase({"SELECT object_key": [{"object_key": "_media/abc123.jpg"}]})
@@ -261,15 +450,53 @@ class TestUploadEndpoint:
         assert response.status == 400
 
 
-class TestAltEndpoint:
-    def test_alt_text_can_be_changed(self, media):
+class TestListEndpoint:
+    def test_the_search_box_reaches_the_query(self, media):
+        """Client-side filtering would only ever filter the page it was given."""
+
+        database = FakeDatabase()
+        response = call(JsonRequest("/api/media?q=插畫", None, "GET"), database)
+        assert response.status == 200
+        assert "media.title LIKE ?1" in database.statements[0]
+
+    def test_the_tag_list_is_reached_before_the_id_route(self, media):
+        """`tags` is not an id, so the order of these two routes is load bearing."""
+
+        database = FakeDatabase({"FROM media_tags": [{"tag": "插畫", "uses": 1}]})
+        response = call(JsonRequest("/api/media/tags", None, "GET"), database)
+        assert response.status == 200
+        assert body_of(response)["tags"] == ["插畫"]
+
+
+class TestUpdateEndpoint:
+    def test_the_title_the_alt_and_the_tags_are_saved_together(self, media):
         database = FakeDatabase({"FROM media": [row(alt="一隻貓")]}, {"UPDATE media": 1})
-        response = call(JsonRequest("/api/media/mediaid1234", {"alt": "  一隻貓  "}), database)
+        response = call(
+            JsonRequest("/api/media/mediaid1234", {"title": " 首頁主圖 ", "alt": "  一隻貓  ", "tags": ["Banner"]}),
+            database,
+        )
         assert response.status == 200
         update = [write for write in database.writes if "UPDATE media" in write[0]]
-        assert update[0][1] == ("mediaid1234", "一隻貓")
+        assert update[0][1] == ("mediaid1234", "首頁主圖", "一隻貓")
+        insert = [write for write in database.writes if "INSERT OR IGNORE INTO media_tags" in write[0]]
+        assert insert[0][1] == ("mediaid1234", "banner")
 
-    def test_changing_alt_on_something_that_is_gone_is_a_404(self, media):
+    def test_leaving_the_tags_out_clears_them_rather_than_guessing(self, media):
+        """The form always sends the whole set, so an absent set is an empty one."""
+
+        database = FakeDatabase({"FROM media": [row()]}, {"UPDATE media": 1})
+        assert call(JsonRequest("/api/media/mediaid1234", {"alt": ""}), database).status == 200
+        assert any("DELETE FROM media_tags" in write[0] for write in database.writes)
+
+    def test_too_many_tags_is_refused_with_a_sentence_the_owner_can_read(self, media):
+        database = FakeDatabase()
+        response = call(
+            JsonRequest("/api/media/mediaid1234", {"tags": [f"t{index}" for index in range(20)]}), database
+        )
+        assert response.status == 400
+        assert str(media.MAX_TAGS) in body_of(response)["error"]
+
+    def test_changing_something_that_is_gone_is_a_404(self, media):
         database = FakeDatabase(changes={"UPDATE media": 0})
         assert call(JsonRequest("/api/media/mediaid1234", {"alt": "x"}), database).status == 404
 

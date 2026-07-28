@@ -47,6 +47,23 @@ def _chrome_fields(body: dict) -> dict:
     }
 
 
+async def _share_fields(ctx: Ctx, body: dict, page: dict) -> dict:
+    """The preview card's text and image.
+
+    A body that never mentions the image leaves the stored one alone, for the
+    same reason the chrome flags default to on: an older client must not strip
+    a page's preview image off just by saving the title.
+    """
+
+    key = page["shareImageKey"]
+    if "shareImageId" in body:
+        key = await pages.resolve_share_image_key(ctx.env, body["shareImageId"])
+    return {
+        "share_description": pages.validate_share_description(body.get("shareDescription")),
+        "share_image_key": key,
+    }
+
+
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
@@ -97,7 +114,7 @@ async def handle(ctx: Ctx):
         if not tail and method == "PUT":
             try:
                 body = await _read_json(ctx)
-                fields = {**_page_fields(body), **_chrome_fields(body)}
+                fields = {**_page_fields(body), **_chrome_fields(body), **await _share_fields(ctx, body, page)}
             except pages.PageError as error:
                 return ctx.error(str(error), 400)
             except (ValueError, AttributeError):

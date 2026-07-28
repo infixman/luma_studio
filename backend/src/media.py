@@ -8,6 +8,11 @@ uploading it three times means correcting it three times.
 So blocks store a media id, not a URL. The id survives everything the owner
 can do to the file afterwards, and a page can be told that the image it points
 at is gone instead of quietly rendering a broken picture.
+
+Finding one again is done with a title and tags rather than folders. A drawing
+is both "插畫" and "首頁用" at once, which a folder cannot be; and there is no
+such thing as moving a picture, or deleting a folder that still has pictures
+in it, when there are no folders.
 """
 
 import json
@@ -18,8 +23,20 @@ from common import d1_rows, urlsafe_token, utc_timestamp
 MEDIA_ID_PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 
 MAX_ALT = 200
+MAX_TITLE = 120
 MAX_FILE_NAME = 120
 MAX_ITEMS = 300
+MAX_SEARCH = 60
+
+# Short enough that a tag stays a label rather than becoming a sentence, and
+# few enough that the list under an image is still readable at a glance.
+MAX_TAG = 30
+MAX_TAGS = 10
+
+# Tags come back from SQL as one string per row. A newline is safe as the
+# separator because `normalise_tag` collapses every run of whitespace into a
+# single space, so no tag can contain one.
+TAG_SEPARATOR = "\n"
 
 # Same underscore trick as the shop and the header image: the prefix keeps
 # these out of IDENTIFIER_PATTERN, so a library image can never be reached
@@ -73,6 +90,57 @@ def validate_alt(raw) -> str:
     return alt
 
 
+def validate_title(raw) -> str:
+    """The owner's own name for the image, which may be empty.
+
+    Not the same field as alt and never merged with it: alt is read out to
+    somebody who cannot see the picture, this is what the owner types into the
+    search box. Empty is fine — the file name stands in.
+    """
+
+    title = " ".join(str(raw or "").split())
+    if len(title) > MAX_TITLE:
+        raise MediaError(f"標題請控制在 {MAX_TITLE} 個字以內")
+    return title
+
+
+def normalise_tag(raw) -> str:
+    """One tag, reduced to the single form it is stored and searched as.
+
+    Everything here exists so that two people typing the same tag get the same
+    row: the spacing is collapsed, and ASCII letters are folded to lower case
+    so "Banner" and "banner" are one tag rather than two that look identical
+    in a list. Only ASCII is folded — full Unicode lowering would fold pairs
+    we never meant to fold, and the tags that matter here are Chinese, which
+    has no case to fold.
+
+    Over-long input is cut rather than refused. The input in the back office
+    stops at the same length, so this only catches what arrives another way.
+    """
+
+    text = " ".join(str(raw or "").split())
+    folded = "".join(character.lower() if "A" <= character <= "Z" else character for character in text)
+    return folded[:MAX_TAG]
+
+
+def validate_tags(raw) -> list[str]:
+    """The tags of one image, in the order they were given.
+
+    Duplicates are dropped rather than refused — two spellings of one tag are
+    the same tag once normalised, and saying so would be pedantry about
+    something already fixed.
+    """
+
+    if raw is None:
+        return []
+    if not isinstance(raw, (list, tuple)):
+        raise MediaError("標籤格式不正確")
+    tags = [tag for tag in dict.fromkeys(normalise_tag(item) for item in raw) if tag]
+    if len(tags) > MAX_TAGS:
+        raise MediaError(f"一張圖最多 {MAX_TAGS} 個標籤")
+    return tags
+
+
 def clean_file_name(raw) -> str:
     """The original name, kept only to be shown in the library.
 
@@ -112,27 +180,86 @@ def media_row(row: dict) -> dict:
         "id": row["id"],
         "path": image_path(row["object_key"]),
         "fileName": row["file_name"],
+        "title": row.get("title") or "",
         "alt": row["alt"],
+        "tags": _split_tags(row.get("tags")),
         "byteSize": int(row["byte_size"]),
         "createdAt": int(row["created_at"]),
     }
 
 
+def _split_tags(joined) -> list[str]:
+    if not joined:
+        return []
+    # Sorted here rather than in SQL: group_concat promises nothing about the
+    # order it joins in, and a list that reshuffles between two loads of the
+    # same page looks like the data changed.
+    return sorted({tag for tag in str(joined).split(TAG_SEPARATOR) if tag})
+
+
 # --- reading -------------------------------------------------------------
 
 
-async def list_media(env) -> tuple[list[dict], bool]:
+# Tags come along with the row rather than in a second query. The library is
+# read a grid at a time, and one round trip per image is the shape of query
+# that D1 charges for.
+_SELECT = """SELECT media.*,
+                    (SELECT group_concat(tag, char(10)) FROM media_tags WHERE media_id = media.id) AS tags
+               FROM media"""
+
+
+async def list_media(env, *, search: str = "") -> tuple[list[dict], bool]:
     """The library, and whether it was cut short."""
 
+    where, bindings = _search_clause(search)
+    bindings.append(MAX_ITEMS + 1)
     rows = await d1_rows(
-        env.DB.prepare("SELECT * FROM media ORDER BY created_at DESC, id LIMIT ?1").bind(MAX_ITEMS + 1)
+        env.DB.prepare(
+            f"{_SELECT}{where} ORDER BY media.created_at DESC, media.id LIMIT ?{len(bindings)}"
+        ).bind(*bindings)
     )
     return [media_row(row) for row in rows[:MAX_ITEMS]], len(rows) > MAX_ITEMS
 
 
+def _search_clause(search: str) -> tuple[str, list]:
+    """What `q` matches, and the values behind it.
+
+    Three things, because they are the three ways an owner remembers an image:
+    the label they gave it, the name their camera gave it, and a tag.
+
+    The tag half is an exact match, not a LIKE. That is the whole reason the
+    tags are a table: searching 貓 must not answer with everything tagged
+    熊貓. So the term is put through the same normaliser the tags were stored
+    with, and compared as a whole.
+    """
+
+    term = str(search or "").strip()[:MAX_SEARCH]
+    if not term:
+        return "", []
+    return (
+        """ WHERE media.title LIKE ?1 OR media.file_name LIKE ?1
+              OR EXISTS (SELECT 1 FROM media_tags WHERE media_id = media.id AND tag = ?2)""",
+        [f"%{term}%", normalise_tag(term)],
+    )
+
+
 async def get_media(env, media_id: str) -> dict | None:
-    rows = await d1_rows(env.DB.prepare("SELECT * FROM media WHERE id = ?1").bind(media_id))
+    rows = await d1_rows(env.DB.prepare(f"{_SELECT} WHERE media.id = ?1").bind(media_id))
     return media_row(rows[0]) if rows else None
+
+
+async def list_tags(env) -> list[str]:
+    """Every tag in use, most used first.
+
+    This is what the tag box offers while somebody types. Ordered by use
+    rather than alphabetically because the tag you want is usually one you
+    have used before, and only the first few suggestions get read.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare("SELECT tag, COUNT(*) AS uses FROM media_tags GROUP BY tag ORDER BY uses DESC, tag")
+    )
+    return [row["tag"] for row in rows]
 
 
 async def resolve(env, media_ids) -> dict:
@@ -147,6 +274,9 @@ async def resolve(env, media_ids) -> dict:
     if not wanted:
         return {}
     placeholders = ", ".join(f"?{index + 1}" for index in range(len(wanted)))
+    # Plain columns, not `_SELECT`: this runs on the public Worker every time a
+    # page with pictures is drawn, and nothing out there renders a tag. Rows
+    # from here come back with an empty tag list, which is what they are worth.
     rows = await d1_rows(env.DB.prepare(f"SELECT * FROM media WHERE id IN ({placeholders})").bind(*wanted))
     return {row["id"]: media_row(row) for row in rows}
 
@@ -220,18 +350,46 @@ def _mentions(config, media_id: str) -> bool:
 # --- writing -------------------------------------------------------------
 
 
-async def create(env, *, object_key: str, file_name: str, alt: str, byte_size: int) -> dict:
+async def create(env, *, object_key: str, file_name: str, title: str, alt: str, byte_size: int) -> dict:
     media_id = urlsafe_token(12)
     await env.DB.prepare(
-        """INSERT INTO media (id, object_key, file_name, alt, byte_size, created_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6)"""
-    ).bind(media_id, object_key, file_name, alt, int(byte_size), utc_timestamp()).run()
+        """INSERT INTO media (id, object_key, file_name, title, alt, byte_size, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"""
+    ).bind(media_id, object_key, file_name, title, alt, int(byte_size), utc_timestamp()).run()
     return (await get_media(env, media_id)) or {}
 
 
-async def set_alt(env, media_id: str, alt: str) -> bool:
-    result = await env.DB.prepare("UPDATE media SET alt = ?2 WHERE id = ?1").bind(media_id, alt).run()
-    return bool(result.meta.changes)
+async def update(env, media_id: str, *, title: str, alt: str, tags: list[str]) -> bool:
+    """Save the three things the owner can change about an image.
+
+    One call rather than one per field: they are edited in one form, and three
+    endpoints would mean a half-saved image whenever the second request failed.
+    """
+
+    result = await (
+        env.DB.prepare("UPDATE media SET title = ?2, alt = ?3 WHERE id = ?1").bind(media_id, title, alt).run()
+    )
+    if not result.meta.changes:
+        return False
+    await _replace_tags(env, media_id, tags)
+    return True
+
+
+async def _replace_tags(env, media_id: str, tags: list[str]):
+    """The tags submitted become the tags stored, whatever was there before.
+
+    Working out which ones were added and which removed would be two more
+    queries to arrive at the same rows. Ten is the ceiling, so replacing the
+    lot is one delete and one insert.
+    """
+
+    await env.DB.prepare("DELETE FROM media_tags WHERE media_id = ?1").bind(media_id).run()
+    if not tags:
+        return
+    values = ", ".join(f"(?1, ?{index + 2})" for index in range(len(tags)))
+    await env.DB.prepare(f"INSERT OR IGNORE INTO media_tags (media_id, tag) VALUES {values}").bind(
+        media_id, *tags
+    ).run()
 
 
 async def delete(env, media_id: str) -> str | None:
@@ -245,4 +403,8 @@ async def delete(env, media_id: str) -> str | None:
     if key is None:
         return None
     await env.DB.prepare("DELETE FROM media WHERE id = ?1").bind(media_id).run()
+    # D1 does not enforce foreign keys here, so the tags have to be cleared by
+    # hand. Left behind they would keep offering a tag in the autocomplete
+    # that no image carries any more.
+    await env.DB.prepare("DELETE FROM media_tags WHERE media_id = ?1").bind(media_id).run()
     return key

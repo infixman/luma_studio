@@ -14,9 +14,9 @@ import type { Catalogue } from '../components/BlockEditors'
 import { BlockPicker, BlockRow } from '../components/BlockRow'
 import { useMediaPicker } from '../components/MediaPicker'
 import { useStatus } from '../components/StatusBar'
-import { Button, Panel, RadioGroup, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
+import { Button, Panel, RadioGroup, Spinner, TextArea, TextField, Toggle, useConfirm } from '../components/ui'
 import { Blocks } from '../../shared/components/Blocks'
-import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { ApiError, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -41,9 +41,28 @@ const STATUSES: { value: PageStatus; label: string; hint: string }[] = [
 
 const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.label]))
 
+const MAX_SHARE_DESCRIPTION = 200
+
+/* The share image is held apart from the rest of the form because the editor
+   only ever learns its URL, never the media id behind it. `id` stays null
+   until the owner picks or clears one, and null is what tells the save to
+   leave the stored image alone. */
+interface ShareImage {
+  id: string | null
+  path: string | null
+}
+
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
-  const [form, setForm] = useState({ title: '', path: '', status: 'draft' as PageStatus, showHeader: true, showFooter: true })
+  const [form, setForm] = useState({
+    title: '',
+    path: '',
+    status: 'draft' as PageStatus,
+    showHeader: true,
+    showFooter: true,
+    shareDescription: '',
+  })
+  const [shareImage, setShareImage] = useState<ShareImage>({ id: null, path: null })
   const [drafts, setDrafts] = useState<Record<string, BlockConfig>>({})
   const [library, setLibrary] = useState<MediaItem[]>([])
   const [catalogue, setCatalogue] = useState<Catalogue>({ products: [], categories: [] })
@@ -67,7 +86,9 @@ export function PageEditPage({ id }: { id: string }) {
       status: next.page.status,
       showHeader: next.page.showHeader,
       showFooter: next.page.showFooter,
+      shareDescription: next.page.shareDescription,
     })
+    setShareImage({ id: null, path: next.page.shareImagePath })
     // Block configs are edited locally and saved on demand, so they are kept
     // beside the server's copy rather than derived from it on every render.
     setDrafts(Object.fromEntries(next.blocks.map((block) => [block.id, block.config])))
@@ -108,6 +129,12 @@ export function PageEditPage({ id }: { id: string }) {
     return item
   }, [picker])
 
+  /** Picking may upload, so this is the pick that also updates the preview. */
+  async function chooseShareImage() {
+    const item = await pick()
+    if (item) setShareImage({ id: item.id, path: item.path })
+  }
+
   async function run(work: () => Promise<PageDetail | void>, done: string) {
     if (busy) return
     setBusy(true)
@@ -141,7 +168,11 @@ export function PageEditPage({ id }: { id: string }) {
     if (!detail) return
     const dirty = dirtyIds(detail)
     void run(async () => {
-      await apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}`, 'PUT', form)
+      // The image travels only when the owner touched it: leaving the field
+      // out means "unchanged", so saving a title cannot drop a picture this
+      // editor only ever knew as a URL.
+      const body = shareImage.id === null ? form : { ...form, shareImageId: shareImage.id }
+      await apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}`, 'PUT', body)
       let latest: PageDetail | undefined
       for (const blockId of dirty) {
         latest = await apiJson<PageDetail>(`/api/blocks/${encodeURIComponent(blockId)}`, 'PUT', {
@@ -218,7 +249,9 @@ export function PageEditPage({ id }: { id: string }) {
     form.path !== detail.page.path ||
     form.status !== detail.page.status ||
     form.showHeader !== detail.page.showHeader ||
-    form.showFooter !== detail.page.showFooter
+    form.showFooter !== detail.page.showFooter ||
+    form.shareDescription !== detail.page.shareDescription ||
+    shareImage.id !== null
 
   /**
    * What the storefront would render, given what is in the boxes right now.
@@ -445,6 +478,43 @@ export function PageEditPage({ id }: { id: string }) {
               // that wants nothing but its own content.
               hint="關掉之後，這一頁就只有區塊，沒有選單也沒有頁尾連結。"
             />
+          </Panel>
+
+          <Panel title="分享預覽">
+            <p class="muted">有人把這一頁貼到 LINE 或 Facebook 時看到的卡片。標題用的是上面的頁面名稱。</p>
+
+            <TextArea
+              label="分享文案"
+              hint={`${form.shareDescription.length} / ${MAX_SHARE_DESCRIPTION} 字，建議 70–120 字：太短說不完，太長會被截掉。`}
+              rows={3}
+              maxLength={MAX_SHARE_DESCRIPTION}
+              value={form.shareDescription}
+              onInput={(event) =>
+                setForm({ ...form, shareDescription: (event.currentTarget as HTMLTextAreaElement).value })
+              }
+            />
+
+            <div class="portrait-row">
+              {shareImage.path ? (
+                <img class="thumb" src={apiUrl(shareImage.path)} alt="" />
+              ) : (
+                <span class="thumb empty">沒有圖片</span>
+              )}
+              <div class="controls">
+                <Button size="sm" onClick={() => void chooseShareImage()}>
+                  {shareImage.path ? '換圖片' : '選一張圖片'}
+                </Button>
+                {shareImage.path && (
+                  <Button size="sm" tone="danger" onClick={() => setShareImage({ id: '', path: null })}>
+                    移除
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Nothing here is required: a page with an empty panel still
+                shares as itself, just with the site's own card. */}
+            <p class="muted">沒有選就用網站預設的分享圖。</p>
           </Panel>
         </aside>
       </div>

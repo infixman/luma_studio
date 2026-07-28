@@ -69,6 +69,38 @@ body.admin .editor-side {
   top: 0;
 }
 
+/* The share image is picked from the same library as a block's, so it is
+   shown the same way rather than inventing a second kind of thumbnail. */
+body.admin .editor-side .portrait-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+body.admin .editor-side .thumb {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+body.admin .editor-side .thumb.empty {
+  display: grid;
+  place-items: center;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--font-xs);
+  text-align: center;
+}
+
+body.admin .editor-side .controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 body.admin .unsaved-mark {
   color: var(--warning);
   font-size: var(--font-sm);

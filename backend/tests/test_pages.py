@@ -15,13 +15,15 @@ def pages():
     return module
 
 
-def page_record(page_id="p1", path="/about", status="published", is_home=0):
+def page_record(page_id="p1", path="/about", status="published", is_home=0, description="", image_key=""):
     return {
         "id": page_id,
         "path": path,
         "title": "關於我們",
         "status": status,
         "is_home": is_home,
+        "share_description": description,
+        "share_image_key": image_key,
         "position": 0,
         "created_at": 1,
         "updated_at": 1,
@@ -110,6 +112,41 @@ class TestReadingStoredBlocks:
         assert pages.block_row(row) is None
 
 
+class TestSharePreview:
+    """What a shared link shows, and how it survives the trip to the client."""
+
+    def test_the_stored_key_leaves_as_a_url(self, pages):
+        """The page keeps a media object key; the client is handed a path.
+
+        Nothing outside the backend should have to know how one becomes the
+        other, and a raw key in a tag would be a broken image.
+        """
+
+        row = pages.page_row(page_record(image_key="_media/abc.jpg"))
+        assert row["shareImagePath"] == "/media-assets/abc.jpg"
+
+    def test_no_image_is_no_url(self, pages):
+        assert pages.page_row(page_record())["shareImagePath"] is None
+
+    def test_a_row_from_before_the_migration_still_maps(self, pages):
+        """Both Workers read this table, and only one of them applies schema."""
+
+        older = {key: value for key, value in page_record().items() if not key.startswith("share_")}
+        row = pages.page_row(older)
+        assert row["shareDescription"] == ""
+        assert row["shareImagePath"] is None
+
+    def test_an_empty_description_is_a_real_answer(self, pages):
+        """A page with nothing to add lets the card show the title alone."""
+
+        assert pages.validate_share_description("") == ""
+        assert pages.validate_share_description(None) == ""
+
+    def test_a_description_longer_than_any_card_shows_is_refused(self, pages):
+        with pytest.raises(pages.PageError):
+            pages.validate_share_description("字" * (pages.MAX_SHARE_DESCRIPTION + 1))
+
+
 @pytest.fixture
 def call():
     import main
@@ -130,6 +167,17 @@ class TestPublicPages:
         response = call(FakeRequest("/api/pages?path=/about"), database)
         assert response.status == 200
         assert response.json()["title"] == "關於我們"
+
+    def test_the_share_fields_travel_with_the_page(self, call):
+        """The storefront Worker reads these to build the tags a crawler sees,
+        so they have to be in the public payload rather than behind the admin."""
+
+        database = FakeDatabase(
+            {"FROM pages WHERE path": [page_record(description="台中的繪畫教室", image_key="_media/abc.jpg")]}
+        )
+        body = call(FakeRequest("/api/pages?path=/about"), database).json()
+        assert body["shareDescription"] == "台中的繪畫教室"
+        assert body["shareImagePath"] == "/media-assets/abc.jpg"
 
     def test_a_draft_is_not_reachable(self, call):
         """The back office previews drafts with the same components, so there
@@ -201,3 +249,80 @@ class TestAdminPages:
             "/api/pages", "GET", {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"}, host="admin-api.luma-studio.tw"
         )
         assert admin_call(anonymous).status == 401
+
+
+class JsonRequest(FakeRequest):
+    """A signed-in PUT with a body. The session check belongs to admin_main."""
+
+    def __init__(self, path: str, body, method: str = "PUT"):
+        super().__init__(path, method, {"Origin": ADMIN_ORIGIN}, host="admin-api.luma-studio.tw")
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+def edit(body, database=None):
+    """One page edit straight into the handler, returning what it wrote."""
+
+    import pages_admin_api
+    from responses import Ctx
+    from urllib.parse import parse_qs, urlsplit
+
+    request = JsonRequest("/api/pages/" + "a" * 18, body)
+    parts = urlsplit(request.url)
+    database = database or FakeDatabase({"FROM pages WHERE id": [page_record()]})
+    ctx = Ctx(make_env(database), request, parts.path, parse_qs(parts.query))
+    response = asyncio.run(pages_admin_api.handle(ctx))
+    written = [bindings for statement, bindings in database.writes if statement.startswith("UPDATE pages SET path")]
+    return response, written
+
+
+SAVED = {"path": "/about", "title": "關於我們", "status": "published"}
+
+
+class TestEditingTheSharePreview:
+    def test_an_image_the_body_never_mentions_is_left_alone(self):
+        """The editor only ever learns the image's URL, not the id behind it.
+
+        So a save that says nothing about the image must keep it. Otherwise
+        editing a title would quietly strip the page's preview card.
+        """
+
+        database = FakeDatabase({"FROM pages WHERE id": [page_record(image_key="_media/kept.jpg")]})
+        response, written = edit(SAVED, database)
+        assert response.status == 200
+        assert written[0][7] == "_media/kept.jpg"
+
+    def test_picking_an_image_stores_the_key_behind_the_id(self):
+        """The key, not the id: every crawl needs a URL, and the key is one."""
+
+        database = FakeDatabase(
+            {
+                "FROM pages WHERE id": [page_record()],
+                "SELECT object_key FROM media": [{"object_key": "_media/new.jpg"}],
+            }
+        )
+        _, written = edit({**SAVED, "shareImageId": "abcdefghij12"}, database)
+        assert written[0][7] == "_media/new.jpg"
+
+    def test_clearing_the_image_stores_nothing(self):
+        database = FakeDatabase({"FROM pages WHERE id": [page_record(image_key="_media/old.jpg")]})
+        _, written = edit({**SAVED, "shareImageId": ""}, database)
+        assert written[0][7] == ""
+
+    def test_an_id_with_nothing_behind_it_is_refused(self):
+        """An image the owner can see in the picker but not in the preview is
+        worse than being told to pick again."""
+
+        response, written = edit({**SAVED, "shareImageId": "abcdefghij12"})
+        assert response.status == 400
+        assert written == []
+
+    def test_the_description_is_saved_with_the_rest_of_the_page(self):
+        _, written = edit({**SAVED, "shareDescription": "台中的繪畫教室"})
+        assert written[0][6] == "台中的繪畫教室"
+
+    def test_a_description_no_card_could_show_is_refused(self):
+        response, _ = edit({**SAVED, "shareDescription": "字" * 400})
+        assert response.status == 400

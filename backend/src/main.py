@@ -256,6 +256,11 @@ async def page_response(ctx: Ctx, page: dict | None):
             # The site's chrome is on unless this page opted out of it.
             "showHeader": page["showHeader"],
             "showFooter": page["showFooter"],
+            # Read by the storefront Worker, which turns them into og: tags
+            # before a crawler ever sees the page. The stored key stays here;
+            # what leaves is the URL it points at.
+            "shareDescription": page["shareDescription"],
+            "shareImagePath": page["shareImagePath"],
             "blocks": await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"])),
         }
     )

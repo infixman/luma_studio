@@ -416,6 +416,11 @@ export interface Page {
   isHome: boolean
   showHeader: boolean
   showFooter: boolean
+  /* What a shared link shows. The key round-trips so saving a title cannot
+     drop an image the editor never touched; the path is what draws it. */
+  shareDescription: string
+  shareImageKey: string
+  shareImagePath: string | null
   position: number
   updatedAt: number
 }
@@ -508,6 +513,10 @@ export interface PageContent {
   path: string
   showHeader: boolean
   showFooter: boolean
+  /* Read by the storefront Worker, not by the app: the crawlers these are
+     for never run the JavaScript that would set them. */
+  shareDescription: string
+  shareImagePath: string | null
   blocks: PageBlock[]
 }
 
@@ -572,7 +581,11 @@ export interface MediaItem {
   id: string
   path: string
   fileName: string
+  /** The owner's own label, for finding it again. Empty falls back to the file name. */
+  title: string
+  /** Read out to somebody who cannot see the picture. Never the same field as the title. */
   alt: string
+  tags: string[]
   byteSize: number
   createdAt: number
 }

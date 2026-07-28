@@ -21,8 +21,14 @@ async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/media" and method == "GET":
-        items, truncated = await media.list_media(env)
+        search = (ctx.query.get("q") or [""])[0]
+        items, truncated = await media.list_media(env, search=search)
         return ctx.json({"media": items, "truncated": truncated})
+
+    # Before the /api/media/{id} block below, which would read "tags" as an id
+    # and refuse it. Same rule as the order and category routes.
+    if path == "/api/media/tags" and method == "GET":
+        return ctx.json({"tags": await media.list_tags(env)})
 
     if path == "/api/media" and method == "POST":
         try:
@@ -32,6 +38,7 @@ async def handle(ctx: Ctx):
                 raise media.MediaError("缺少檔案")
             file_name = media.clean_file_name(uploaded.name)
             suffix = media.validate_image_suffix(file_name)
+            title = media.validate_title(form.get("title"))
             alt = media.validate_alt(form.get("alt"))
             content = await uploaded.bytes()
             if not content or len(content) > media.MAX_IMAGE_BYTES:
@@ -46,7 +53,9 @@ async def handle(ctx: Ctx):
         # storage, and the next upload does not trip over it.
         key = media.object_key(suffix)
         await env.IBON_IMAGES.put(key, content)
-        row = await media.create(env, object_key=key, file_name=file_name, alt=alt, byte_size=len(content))
+        row = await media.create(
+            env, object_key=key, file_name=file_name, title=title, alt=alt, byte_size=len(content)
+        )
         return ctx.json({"item": row}, 201)
 
     if path.startswith("/api/media/"):
@@ -63,12 +72,15 @@ async def handle(ctx: Ctx):
 
         if method == "PUT":
             try:
-                alt = media.validate_alt((await _read_json(ctx)).get("alt"))
+                body = await _read_json(ctx)
+                title = media.validate_title(body.get("title"))
+                alt = media.validate_alt(body.get("alt"))
+                tags = media.validate_tags(body.get("tags"))
             except media.MediaError as error:
                 return ctx.error(str(error), 400)
             except (ValueError, AttributeError):
                 return ctx.error("Invalid media", 400)
-            if not await media.set_alt(env, media_id, alt):
+            if not await media.update(env, media_id, title=title, alt=alt, tags=tags):
                 return ctx.error("Media not found", 404)
             return ctx.json({"item": await media.get_media(env, media_id)})
 
@@ -84,7 +96,9 @@ async def handle(ctx: Ctx):
             if key is None:
                 return ctx.error("Media not found", 404)
             await env.IBON_IMAGES.delete(key)
-            items, truncated = await media.list_media(env)
+            # The list comes back filtered the same way it was asked for, so
+            # deleting from a search does not silently drop the search.
+            items, truncated = await media.list_media(env, search=(ctx.query.get("q") or [""])[0])
             return ctx.json({"media": items, "truncated": truncated})
 
     return ctx.error("Not found", 404)

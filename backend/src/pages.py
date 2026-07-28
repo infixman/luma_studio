@@ -25,6 +25,10 @@ MAX_PATH = 120
 MAX_TITLE = 80
 MAX_BLOCKS = 40
 MAX_TEXT = 20000
+# Preview cards cut the text off around 120 characters and LINE shows even
+# less, so the limit is generous enough to write in and short enough that
+# nothing important can hide past the end.
+MAX_SHARE_DESCRIPTION = 200
 
 STATUSES = ("draft", "published")
 
@@ -127,6 +131,16 @@ def _text(raw, limit: int, label: str) -> str:
     if len(value) > limit:
         raise PageError(f"{label}請控制在 {limit} 個字以內")
     return value
+
+
+def validate_share_description(raw) -> str:
+    """The line a shared link shows under the title. May be empty.
+
+    Empty is a real answer: a page with nothing to add is better off letting
+    the crawler show the title alone than repeating it back.
+    """
+
+    return _text(raw, MAX_SHARE_DESCRIPTION, "分享文案")
 
 
 def _choice(raw, allowed, label: str):
@@ -281,6 +295,7 @@ def validate_block(block_type: str, config) -> tuple[str, dict]:
 
 
 def page_row(row: dict) -> dict:
+    share_key = row["share_image_key"] if "share_image_key" in row else ""
     return {
         "id": row["id"],
         "path": row["path"],
@@ -292,6 +307,12 @@ def page_row(row: dict) -> dict:
         # own content.
         "showHeader": bool(row["show_header"]) if "show_header" in row else True,
         "showFooter": bool(row["show_footer"]) if "show_footer" in row else True,
+        # What a shared link shows. The key is carried alongside the URL so the
+        # editor can send back the image it did not touch; only the URL is ever
+        # published.
+        "shareDescription": row["share_description"] if "share_description" in row else "",
+        "shareImageKey": share_key,
+        "shareImagePath": media.image_path(share_key),
         "position": int(row["position"]),
         "updatedAt": int(row["updated_at"]),
     }
@@ -367,6 +388,24 @@ async def count_blocks(env, page_id: str) -> int:
     return int(rows[0]["total"]) if rows else 0
 
 
+async def resolve_share_image_key(env, raw) -> str:
+    """Turn the media id the picker handed the editor into a stored key.
+
+    The page keeps the key rather than the id because every crawl needs a URL,
+    and the key is one lookup away from being a URL while an id is two. An id
+    with nothing behind it is refused rather than stored: an image the owner
+    can see in the picker but not in the preview is worse than an error.
+    """
+
+    media_id = _media_id(raw)
+    if not media_id:
+        return ""
+    key = await media.object_key_of(env, media_id)
+    if key is None:
+        raise PageError("找不到這張圖片，請重新選一次")
+    return key
+
+
 async def page_id_of_block(env, block_id: str) -> str | None:
     rows = await d1_rows(env.DB.prepare("SELECT page_id FROM page_blocks WHERE id = ?1").bind(block_id))
     return rows[0]["page_id"] if rows else None
@@ -387,14 +426,34 @@ async def create_page(env, *, path: str, title: str, status: str) -> str:
 
 
 async def update_page(
-    env, page_id: str, *, path: str, title: str, status: str, show_header: bool = True, show_footer: bool = True
+    env,
+    page_id: str,
+    *,
+    path: str,
+    title: str,
+    status: str,
+    show_header: bool = True,
+    show_footer: bool = True,
+    share_description: str = "",
+    share_image_key: str = "",
 ) -> bool:
     if await get_page(env, page_id) is None:
         return False
     await env.DB.prepare(
-        "UPDATE pages SET path = ?2, title = ?3, status = ?4, show_header = ?5, show_footer = ?6, updated_at = ?7"
+        "UPDATE pages SET path = ?2, title = ?3, status = ?4, show_header = ?5, show_footer = ?6,"
+        " share_description = ?7, share_image_key = ?8, updated_at = ?9"
         " WHERE id = ?1"
-    ).bind(page_id, path, title, status, 1 if show_header else 0, 1 if show_footer else 0, utc_timestamp()).run()
+    ).bind(
+        page_id,
+        path,
+        title,
+        status,
+        1 if show_header else 0,
+        1 if show_footer else 0,
+        share_description,
+        share_image_key,
+        utc_timestamp(),
+    ).run()
     return True
 
 

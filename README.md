@@ -81,7 +81,7 @@ frontend/
   .env.admin          後台建置的 API 網址
   vite.config.ts      依 --mode 切換進入點與輸出目錄
   worker/
-    storefront.ts     供應前台 SPA、為 /card 注入分享預覽標籤、轉走舊的 /admin
+    storefront.ts     供應前台 SPA、為分享出去的頁面注入預覽標籤、轉走舊的 /admin
     admin.ts          供應後台 SPA
     legacy.ts         只做一件事：把發出去的 workers.dev 舊網址轉到正式網域
   public/assets/      logo 與教學圖
@@ -638,6 +638,18 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 **外觀一樣是從固定清單選**：比例（寬／方／直）、每列張數（2／3／4）、照片在左或在右。輪播的自動播放預設關閉，而且後台直接寫出理由——會動的東西會在讀者還在看的時候把頁面帶走。
 
 後台預覽的圖片是用編輯器手上那份媒體庫在本機接起來的，所以剛加的一張立刻看得到；商品不是，價格與庫存在伺服器上，所以商城區塊預覽的是上次儲存的結果。這件事寫在預覽卡上，不是留給人自己發現。
+
+### 分享預覽
+
+**貼到 LINE 或 Facebook 的卡片是前台 Worker 貼上去的，不是 app。** 那些爬蟲不會執行 JavaScript，所以在瀏覽器裡用 JS 設好的 `og:` 標籤，它們一個都看不到。[storefront.ts](frontend/worker/storefront.ts) 在送出 HTML 之前先向公開 API 問一次，把標籤寫進 `<head>`：`/card` 問 bio link、`/` 與自訂頁路徑問頁面、`/shop/{slug}` 問商品。
+
+只有爬蟲會等這一次查詢（`isLinkPreviewer`）。一般訪客的瀏覽器本來就會自己抓內容，讓每個人多等一趟只會延後第一次繪製。
+
+**查不到就照常出頁面，不出卡片。** 少一張預覽卡是可惜，因為 API 慢而打不開的連結是壞掉——後者糟得多，所以每一條路徑上的失敗都當作「沒有預覽」處理，包含回應格式不對的情況。
+
+每一頁可以自己填分享文案與分享圖（`pages.share_description`、`pages.share_image_key`），沒填就用網站的預設卡片。商品不用填：標題用商品名稱、圖用第一張照片，所以一個什麼都沒設定的商品貼出去仍然像它自己。
+
+**存的是媒體物件的 key，不是媒體 id。** 每一次爬取都要一個網址，而 key 離網址只差一個前綴。編輯器手上只有網址，所以儲存時不提 `shareImageId` 就代表「沒有動過」——否則改個標題就會把分享圖洗掉。
 
 ### 站台外框與選單
 

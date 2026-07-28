@@ -126,6 +126,9 @@ class FakeDatabase:
         self.changes = changes or {}
         self.statements: list[str] = []
         self.writes: list[tuple[str, tuple]] = []
+        # Reads keep their bindings too, so a test about what a search asks
+        # for can look at the values and not only at the SQL around them.
+        self.reads: list[tuple[str, tuple]] = []
 
     def prepare(self, sql: str):
         flat = " ".join(sql.split())
@@ -143,9 +146,11 @@ class FakeDatabase:
 
         statement.run = run
 
-    def _rows_for(self, sql: str, _bindings):
+    def _rows_for(self, sql: str, bindings):
+        flat = " ".join(sql.split())
+        self.reads.append((flat, bindings))
         for fragment, rows in self.answers.items():
-            if fragment in " ".join(sql.split()):
+            if fragment in flat:
                 return rows
         return []
 

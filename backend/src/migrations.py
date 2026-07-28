@@ -446,6 +446,48 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_email_outbox_pending ON email_outbox (status, created_at)",
         ],
     },
+    {
+        # What a shared link looks like in LINE, Facebook or Slack. It lives on
+        # the page rather than in the app because the crawlers that read it do
+        # not run JavaScript: the storefront Worker has to put these into the
+        # HTML before it is sent.
+        "name": "0015_add_page_share_metadata",
+        "add_columns": [
+            ("pages", "share_description", "TEXT NOT NULL DEFAULT ''"),
+            # The media object key, not the media id. What ends up in the tag
+            # is an absolute URL, and the key is what makes one; an id would
+            # mean a second lookup on every crawl.
+            ("pages", "share_image_key", "TEXT NOT NULL DEFAULT ''"),
+        ],
+        "statements": [],
+    },
+    {
+        # Finding a picture again. Folders were the obvious answer and the
+        # wrong one: a drawing is both "插畫" and "首頁用", and a folder makes
+        # you pick one — plus folders bring moving and "delete the folder with
+        # everything in it" along with them.
+        "name": "0016_add_media_title_and_tags",
+        # `title` sits beside `alt`, not instead of it. Alt is read aloud to
+        # somebody who cannot see the picture and depends on where it is used;
+        # title is the owner's own label for finding it again. One column for
+        # both ends with a screen reader saying "首頁 banner v3".
+        "add_columns": [("media", "title", "TEXT NOT NULL DEFAULT ''")],
+        "statements": [
+            # A table, not a comma-separated column. A string cannot be
+            # indexed, cannot answer "which tags already exist" for the
+            # autocomplete, and matching inside it crosses tag boundaries —
+            # 貓 would find 熊貓. One row per tag makes equality mean equality.
+            """CREATE TABLE IF NOT EXISTS media_tags (
+                 media_id TEXT NOT NULL,
+                 tag TEXT NOT NULL,
+                 PRIMARY KEY (media_id, tag)
+               )""",
+            # The primary key already covers "the tags of one image". This
+            # covers the other direction: "the images with this tag", which is
+            # what the search does.
+            "CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags (tag)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

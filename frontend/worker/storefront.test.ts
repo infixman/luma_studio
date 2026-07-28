@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { escapeHtml, isLinkPreviewer, oneLine, pageTitle } from './storefront'
+import {
+  escapeHtml,
+  isLinkPreviewer,
+  oneLine,
+  pagePreview,
+  pageTitle,
+  previewSource,
+  previewTags,
+  productPreview,
+} from './storefront'
 
 describe('escapeHtml', () => {
   it('neutralises the characters that would break out of an attribute', () => {
@@ -49,6 +58,82 @@ describe('pageTitle', () => {
 
   it('falls back to the studio name when nothing is set', () => {
     expect(pageTitle('')).toBe('苒光繪誌')
+  })
+})
+
+describe('previewSource', () => {
+  it.each([
+    ['/card', '/api/bio-link'],
+    ['/', '/api/pages/home'],
+    ['/about', '/api/pages?path=%2Fabout'],
+    ['/about/team', '/api/pages?path=%2Fabout%2Fteam'],
+    ['/shop/pastel-set', '/api/products/pastel-set'],
+    // A path that merely starts with the same letters is an ordinary page.
+    ['/shopping-guide', '/api/pages?path=%2Fshopping-guide'],
+  ])('asks about %s at %s', (path, source) => {
+    expect(previewSource(path)).toBe(source)
+  })
+
+  // A category slug is not a product slug, and asking would 404 for every
+  // category page anyone ever shares.
+  it.each(['/shop', '/shop/c', '/shop/c/art-kits'])('has nothing to ask about %s', (path) => {
+    expect(previewSource(path)).toBeNull()
+  })
+})
+
+describe('building a card', () => {
+  const url = 'https://luma-studio.tw/about'
+
+  it('uses the page image when there is one, and states no size for it', () => {
+    const preview = pagePreview(
+      { title: '關於我們', shareDescription: '台中的繪畫教室', shareImagePath: '/media-assets/a.jpg' },
+      url,
+      'https://api.example.test/media-assets/a.jpg',
+    )
+    expect(preview.image).toBe('https://api.example.test/media-assets/a.jpg')
+    // We did not upload it and cannot measure it from here; a guessed size is
+    // worse than none, because a crawler lays the card out with it.
+    expect(preview.imageSize).toBeUndefined()
+  })
+
+  it('falls back to the studio card, whose size we do know', () => {
+    const preview = pagePreview({ title: '關於我們', shareDescription: '', shareImagePath: null }, url, null)
+    expect(preview.image).toBe('https://luma-studio.tw/assets/share-card.png')
+    expect(preview.imageSize).toEqual({ width: 1200, height: 630 })
+  })
+
+  it('takes a product at its own title and cover', () => {
+    const preview = productPreview(
+      { title: '粉彩組', description: '十二色', images: [{ path: '/shop-assets/p.jpg', alt: '粉彩組' }] },
+      'https://luma-studio.tw/shop/pastel-set',
+      'https://api.example.test/shop-assets/p.jpg',
+    )
+    expect(preview.title).toBe('粉彩組 | 苒光繪誌')
+    expect(preview.image).toBe('https://api.example.test/shop-assets/p.jpg')
+    expect(preview.type).toBe('product')
+  })
+})
+
+describe('previewTags', () => {
+  const card = {
+    title: '關於我們 | 苒光繪誌',
+    description: 'a & b',
+    image: 'https://api.example.test/media-assets/a.jpg',
+    imageAlt: '"><script>alert(1)</script>',
+    url: 'https://luma-studio.tw/about',
+    type: 'website' as const,
+  }
+
+  it('escapes everything it puts in an attribute', () => {
+    const tags = previewTags(card)
+    expect(tags).toContain('content="a &amp; b"')
+    expect(tags).not.toContain('<script>')
+  })
+
+  it('leaves the description out rather than writing an empty one', () => {
+    const tags = previewTags({ ...card, description: '' })
+    expect(tags).not.toContain('description')
+    expect(tags).toContain('og:title')
   })
 })
 
