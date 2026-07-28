@@ -110,7 +110,7 @@ def content_type_for(file_name: str) -> str | None:
 def media_row(row: dict) -> dict:
     return {
         "id": row["id"],
-        "url": image_path(row["object_key"]),
+        "path": image_path(row["object_key"]),
         "fileName": row["file_name"],
         "alt": row["alt"],
         "byteSize": int(row["byte_size"]),

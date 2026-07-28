@@ -87,7 +87,7 @@ class TestReading:
         item = asyncio.run(media.get_media(make_env(database), "mediaid1234"))
         assert item == {
             "id": "mediaid1234",
-            "url": "/media-assets/abc123.jpg",
+            "path": "/media-assets/abc123.jpg",
             "fileName": "cat.jpg",
             "alt": "一隻貓",
             "byteSize": 2048,
@@ -156,7 +156,7 @@ class TestWriting:
         insert = [write for write in database.writes if "INSERT INTO media" in write[0]]
         assert len(insert) == 1
         assert insert[0][1][1] == "_media/abc123.jpg"
-        assert item["url"] == "/media-assets/abc123.jpg"
+        assert item["path"] == "/media-assets/abc123.jpg"
 
     def test_deleting_reports_the_key_that_is_now_unreferenced(self, media):
         database = FakeDatabase({"SELECT object_key": [{"object_key": "_media/abc123.jpg"}]})
@@ -239,7 +239,7 @@ class TestUploadEndpoint:
         assert response.status == 201
         assert len(bucket.objects) == 1
         assert list(bucket.objects)[0].startswith("_media/")
-        assert body_of(response)["item"]["url"].startswith("/media-assets/")
+        assert body_of(response)["item"]["path"].startswith("/media-assets/")
 
     def test_an_upload_with_no_file_is_refused(self, media):
         response = call(UploadRequest("/api/media", {}))

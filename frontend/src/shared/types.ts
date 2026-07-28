@@ -413,3 +413,13 @@ export interface SiteChrome {
   settings: SiteSettings
   menu: ResolvedMenuItem[]
 }
+
+/** One image in the library. Blocks store the id; `url` is for drawing it. */
+export interface MediaItem {
+  id: string
+  path: string
+  fileName: string
+  alt: string
+  byteSize: number
+  createdAt: number
+}

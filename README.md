@@ -83,7 +83,7 @@ frontend/
   src/
     shared/           兩邊共用：api、types、markdown、區塊元件、SocialIcon、base.css
     storefront/       main、app、HomePage、PrintPage、BioLinkPage、商城、自訂頁
-    admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器
+    admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器、外框、媒體庫
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
 docs/superpowers/specs/  設計文件
@@ -588,6 +588,12 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 「誰在用」是把每個區塊的 config 讀出來在 JSON 裡找，不是對著 JSON 跑 LIKE：`LIKE '%id%'` 會把「id 剛好是某個更長字串的一部分」也算進去。而且這個找法是照 JSON 的形狀寫的，不是照區塊類型寫的，所以之後新增的區塊類型不用回來這裡補一筆。
 
 公開路由 `/media-assets/{file}` 會先確認這個 key 真的在 `media` 表裡才去讀 R2。同一個 bucket 也放 ibon 的列印檔——網址不是權威。
+
+後台有兩個入口：媒體庫頁（上傳、改替代文字、看誰在用、刪除）與 `MediaPicker`（區塊編輯器裡跳出來選圖，也能當場上傳）。兩者共用同一個 `MediaGrid`——同一批圖，差別只在點下去代表什麼。
+
+**替代文字留白是一個真的答案。** 純裝飾的圖，空的 alt 讓讀螢幕的人跳過它，比讀出「IMG_2831.jpg」好。所以後台在格子上標「沒有替代文字」提醒你想一下，但不會擋著不讓存。
+
+API 回的是 `path`，不是完整網址，前端用 `apiUrl()` 補上 API 主機——與商品照片、名片頁頭像同一條規則。圖片是 API 供應的，不是站台。
 
 ### 分類
 

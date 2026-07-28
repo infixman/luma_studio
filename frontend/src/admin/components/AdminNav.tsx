@@ -8,6 +8,7 @@ const tabs = [
   { href: '/card', label: '名片頁' },
   { href: '/pages', label: '頁面' },
   { href: '/site', label: '外框' },
+  { href: '/media', label: '媒體庫' },
   { href: '/', label: 'ibon 列印' },
   { href: '/products', label: '商城' },
   { href: '/shipping', label: '運費' },

@@ -1,0 +1,144 @@
+/* The media library and the picker that shares its grid. */
+
+body.admin .upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.2rem;
+}
+
+body.admin .media-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.8rem;
+}
+
+body.admin .media-grid button {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 0.3rem;
+}
+
+body.admin .media-grid .selected button {
+  border-color: #2f5d4a;
+  box-shadow: inset 0 0 0 1px #2f5d4a;
+}
+
+/* Fixed height with object-fit, so a portrait and a landscape photo do not
+   make the grid jump around. */
+body.admin .media-grid img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #f2ede6;
+}
+
+body.admin .media-grid .name {
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.admin .media-grid .warn {
+  font-size: 0.75rem;
+  color: #a05a00;
+}
+
+/* --- the detail card --- */
+
+body.admin .media-detail img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+}
+
+body.admin .media-detail h3 {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+body.admin .usage {
+  margin: 0 0 1.2rem;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+/* --- the picker --- */
+
+body.admin .media-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+body.admin .media-picker .backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+}
+
+body.admin .media-picker .panel {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.3);
+}
+
+body.admin .media-picker header,
+body.admin .media-picker footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1.1rem;
+}
+
+body.admin .media-picker header {
+  border-bottom: 1px solid rgb(0 0 0 / 0.1);
+}
+
+body.admin .media-picker header h3 {
+  margin: 0;
+  margin-right: auto;
+  font-size: 1.05rem;
+}
+
+body.admin .media-picker footer {
+  border-top: 1px solid rgb(0 0 0 / 0.1);
+}
+
+/* The grid is what scrolls, so the upload control stays reachable however
+   many images the library holds. */
+body.admin .media-picker .body {
+  overflow-y: auto;
+  padding: 1.1rem;
+}
+
+body.admin .media-picker .error {
+  margin: 0;
+  padding: 0.6rem 1.1rem;
+  color: #8a2a2a;
+}
