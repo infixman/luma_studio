@@ -4,13 +4,54 @@
    now draws kit controls next to its own markup, and a hard-coded #fff beside
    a themed button is a card that turns white in the dark theme. */
 
+/* --- the toolbar above the list --- */
+
+body.admin .media-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* The view switch sits at the far end, away from the destructive button it
+   would otherwise be adjacent to. */
+body.admin .media-toolbar .ui-button-row.align-end {
+  margin-left: auto;
+}
+
+/* --- uploading --- */
+
+body.admin .media-upload-row {
+  display: grid;
+  gap: var(--space-1);
+}
+
+body.admin .media-upload-error {
+  margin-left: var(--space-2);
+  color: var(--danger);
+}
+
+/* A bar that stopped, rather than one still moving. The whole width in the
+   danger colour says "this one is finished and it did not work" without
+   needing to be read. */
+body.admin .progress-bar.failed {
+  background: var(--danger);
+}
+
+/* --- the grid --- */
+
 body.admin .media-grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: var(--space-3);
+}
+
+body.admin .media-grid li {
+  position: relative;
 }
 
 body.admin .media-grid button {
@@ -36,14 +77,39 @@ body.admin .media-grid .selected button {
   box-shadow: inset 0 0 0 1px var(--primary);
 }
 
-/* Fixed height with object-fit, so a portrait and a landscape photo do not
-   make the grid jump around. */
-body.admin .media-grid img {
-  width: 100%;
-  height: 110px;
-  object-fit: cover;
+body.admin .media-grid .chosen button {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* The tick sits over the corner of the thumbnail rather than beside the name:
+   it belongs to the card, and a column of checkboxes down the left would
+   push every picture out of line with the one above it. */
+body.admin .media-pick {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: 2px;
   border-radius: var(--radius-sm);
-  background: var(--sunken);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+body.admin .media-pick .ui-choice-label {
+  padding: 0;
+}
+
+/* The label is there for a screen reader, which needs to hear which image it
+   is about. Hidden by clipping rather than by display:none, because the
+   latter takes it out of the accessibility tree along with the layout. */
+body.admin .media-pick-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 body.admin .media-grid .name {
@@ -53,17 +119,143 @@ body.admin .media-grid .name {
   white-space: nowrap;
 }
 
+body.admin .media-grid .meta {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
 body.admin .media-grid .warn {
   font-size: var(--font-xs);
   color: var(--warning);
 }
 
-/* --- the detail card --- */
+/* --- thumbnails --- */
 
-body.admin .media-detail img {
-  max-width: 100%;
+/* Fixed height so a portrait and a landscape photo do not make the grid jump
+   around, but the picture is fitted inside it rather than cropped to it:
+   `cover` would tell you a tall drawing is square.
+
+   The checkerboard is the other half of the same idea. A transparent PNG on a
+   flat background looks exactly like one with a white background painted in,
+   and for a shop selling illustrations those are two different files. */
+body.admin .media-thumb {
+  display: block;
+  height: 118px;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, var(--sunken) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--sunken) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--sunken) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--sunken) 75%);
+  background-size: 14px 14px;
+  background-position:
+    0 0,
+    0 7px,
+    7px -7px,
+    -7px 0;
+}
+
+body.admin .media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* --- the list view --- */
+
+body.admin .ui-table .media-tick {
+  width: 1px;
+  padding-right: 0;
+}
+
+body.admin .ui-table .media-tick .ui-choice-label {
+  padding: 0;
+}
+
+body.admin .media-row-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.admin .media-row-name:hover {
+  color: var(--primary);
+}
+
+body.admin .media-row-name small {
+  display: block;
+  color: var(--warning);
+  font-size: var(--font-xs);
+}
+
+body.admin .media-row-thumb .media-thumb {
+  width: 44px;
+  height: 44px;
+}
+
+body.admin .ui-table tr.selected td {
+  background: var(--primary-soft);
+}
+
+/* --- the detail dialog --- */
+
+body.admin .media-detail .media-preview {
+  display: grid;
+  place-items: center;
   max-height: 320px;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2);
   border-radius: var(--radius);
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, var(--sunken) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--sunken) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--sunken) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--sunken) 75%);
+  background-size: 18px 18px;
+  background-position:
+    0 0,
+    0 9px,
+    9px -9px,
+    -9px 0;
+}
+
+body.admin .media-detail .media-preview img {
+  max-width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+}
+
+body.admin .media-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+body.admin .media-facts dt {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+body.admin .media-facts dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
 }
 
 body.admin .media-detail h3 {

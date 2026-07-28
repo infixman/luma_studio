@@ -168,10 +168,13 @@ docs/superpowers/specs/  設計文件
 | GET / POST | `/api/menu` | 選單項目 |
 | PUT | `/api/menu/order` | 排序與改層級，必須排在 `{id}` 之前 |
 | PUT / DELETE | `/api/menu/{id}` | 單一項目 |
-| GET / POST | `/api/media` | 媒體庫清單與上傳 |
+| GET / POST | `/api/media` | 媒體庫清單（`?q=` 搜尋）與上傳（原圖 + 瀏覽器產生的縮圖） |
+| GET | `/api/media/tags` | 現有標籤，給自動完成 |
+| GET | `/api/media/usage?ids=` | 一次問多張圖被哪些頁面使用 |
 | GET | `/api/media/{id}` | 單張圖與使用它的頁面 |
-| PUT | `/api/media/{id}` | 改替代文字 |
+| PUT | `/api/media/{id}` | 改標題、替代文字與標籤 |
 | DELETE | `/api/media/{id}` | 刪除。還被使用時回 409，加 `?force=1` 才真的刪 |
+| POST | `/api/media/delete` | 批次刪除，規則同上 |
 | GET | `/api/orders?status=&q=` | 訂單列表與各狀態筆數 |
 | GET | `/api/orders/{id}` | 單筆訂單、品項、付款嘗試與稽核紀錄 |
 | POST | `/api/orders/{id}/paid` | 手動標記已付款（匯款先到時用） |
@@ -725,6 +728,16 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 **替代文字留白是一個真的答案。** 純裝飾的圖，空的 alt 讓讀螢幕的人跳過它，比讀出「IMG_2831.jpg」好。所以後台在格子上標「沒有替代文字」提醒你想一下，但不會擋著不讓存。
 
 API 回的是 `path`，不是完整網址，前端用 `apiUrl()` 補上 API 主機——與商品照片、名片頁頭像同一條規則。圖片是 API 供應的，不是站台。
+
+**縮圖是在瀏覽器產生的，上傳時就一起送。** Python Worker 裡沒有影像函式庫，Cloudflare 的 Image Resizing 是 zone 層級的付費功能——所以縮放只能在上傳的那台機器上做。這反而是對的：成本落在上傳的那一個人身上，而不是每一個顧客身上。480／960／1600 三個寬度，永不放大（600px 的圖只會有一個變體），存進 `media_sizes`。
+
+用的是 `createImageBitmap(file, { imageOrientation: 'from-image' })`，所以**EXIF 方向是順帶解決的**，沒有另外寫一段旋轉。手機拍的照片躺著上傳，是這一行處理掉的。
+
+**這批之前上傳的圖沒有變體**（`width/height` 是 0，`media_sizes` 沒有列）。Worker 產不出來，要補只能從後台重新上傳。沒有變體時 `srcset` 就是空的，照樣顯示原圖。
+
+**找一張圖**靠 `title` 與標籤，不是資料夾。一張圖同時是「插畫」和「首頁用」，資料夾只能二選一。`title` 跟 `alt` 是**兩個不同的欄位**：alt 是給看不到圖的人讀的、取決於圖用在哪；title 是你自己找圖用的標籤。合在一起的下場是為了好找而把 alt 寫成「首頁 banner v3」，然後讀螢幕的顧客就聽到這句。
+
+標籤存**關聯表**不是逗號字串：字串建不了索引、列不出「現有哪些標籤」給自動完成，而且比對會跨界——搜「貓」會中「熊貓」。所以搜尋時標籤那一半是精確比對，`title` 與檔名才是子字串。
 
 ### 分類
 

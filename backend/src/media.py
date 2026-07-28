@@ -13,6 +13,11 @@ Finding one again is done with a title and tags rather than folders. A drawing
 is both "插畫" and "首頁用" at once, which a folder cannot be; and there is no
 such thing as moving a picture, or deleting a folder that still has pictures
 in it, when there are no folders.
+
+Each image is stored several times over at different widths. The scaling is
+done by the browser before the upload, so nothing here decodes an image: this
+module takes the bytes it is handed and the dimensions it is told, and the
+only thing it enforces is that both are within reason.
 """
 
 import json
@@ -27,6 +32,11 @@ MAX_TITLE = 120
 MAX_FILE_NAME = 120
 MAX_ITEMS = 300
 MAX_SEARCH = 60
+
+# One screenful of a grid, generously. Select-all selects what is on screen,
+# and what is on screen is capped by MAX_ITEMS, so this only has to be larger
+# than any selection a person makes on purpose.
+MAX_BULK = 100
 
 # Short enough that a tag stays a label rather than becoming a sentence, and
 # few enough that the list under an image is still readable at a glance.
@@ -53,6 +63,26 @@ IMAGE_CONTENT_TYPES = {
 }
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+# The three widths the browser renders, named rather than numbered so that
+# changing 960 later does not have to rewrite every stored row. A closed set
+# because the label is half of a primary key and part of an object key: an
+# upload naming its own labels could write as many objects as it liked under
+# one image.
+SIZE_LABELS = ("small", "medium", "large")
+
+# Variants are webp and narrower than the original, so one that reaches the
+# original's ceiling is not a resize — it is something else being posted at
+# this field. Same number rather than a smaller one because the ceiling is
+# about what the bucket will accept, not about what a good variant looks like.
+MAX_VARIANT_BYTES = MAX_IMAGE_BYTES
+
+# Wide enough for anything a camera or a scanner produces, narrow enough that
+# a mistyped dimension cannot be stored as fact. Nothing here decodes the
+# image, so this is the only check there can be.
+MAX_DIMENSION = 20000
+
+VARIANT_SUFFIX = ".webp"
+
 
 class MediaError(Exception):
     """The upload or the change as submitted cannot be stored."""
@@ -66,6 +96,24 @@ def validate_id(media_id: str) -> str:
     if not 10 <= len(raw) <= 60 or any(character not in MEDIA_ID_PATTERN_CHARS for character in raw):
         raise MediaError("Invalid media id")
     return raw
+
+
+def validate_ids(raw) -> list[str]:
+    """The images one bulk action is about.
+
+    Capped because the whole selection is answered for in one response, and an
+    unbounded list is an unbounded response — and, for the delete, an
+    unbounded number of bucket calls inside one request.
+    """
+
+    if not isinstance(raw, (list, tuple)):
+        raise MediaError("Invalid media ids")
+    ids = [validate_id(item) for item in dict.fromkeys(str(item) for item in raw)]
+    if not ids:
+        raise MediaError("沒有選取任何圖片")
+    if len(ids) > MAX_BULK:
+        raise MediaError(f"一次最多處理 {MAX_BULK} 張圖片")
+    return ids
 
 
 def validate_image_suffix(file_name: str) -> str:
@@ -141,6 +189,29 @@ def validate_tags(raw) -> list[str]:
     return tags
 
 
+def validate_dimensions(raw) -> tuple[int, int]:
+    """A "1024x768" from the browser, as two numbers.
+
+    Nothing arrives measured. A Python Worker has no image library, so the
+    pixels are whatever the browser that did the scaling says they are, and
+    this only refuses values that could not describe a picture.
+
+    An absent or unreadable value is (0, 0) rather than an error, and (0, 0)
+    means "not measured". Refusing would mean that a file the browser cannot
+    decode — the one case where the owner most wants the original kept safely
+    somewhere — is the one file the library will not accept.
+    """
+
+    text = str(raw or "").strip().lower()
+    width, _, height = text.partition("x")
+    if not width.isdigit() or not height.isdigit():
+        return (0, 0)
+    pixels = (int(width), int(height))
+    if not all(0 < value <= MAX_DIMENSION for value in pixels):
+        return (0, 0)
+    return pixels
+
+
 def clean_file_name(raw) -> str:
     """The original name, kept only to be shown in the library.
 
@@ -159,6 +230,18 @@ def clean_file_name(raw) -> str:
 
 def object_key(suffix: str) -> str:
     return f"{OBJECT_PREFIX}/{urlsafe_token(12)}{suffix}"
+
+
+def variant_key(label: str) -> str:
+    """A key of its own for each width, not the original's key plus a suffix.
+
+    Deriving one key from another reads well right up to the moment an owner
+    replaces an image: the derived keys would collide with the previous
+    version's, and the edge would keep serving whichever it cached. Separate
+    tokens make every stored object independent of every other.
+    """
+
+    return f"{OBJECT_PREFIX}/{urlsafe_token(12)}-{label}{VARIANT_SUFFIX}"
 
 
 def image_path(key: str) -> str | None:
@@ -184,6 +267,12 @@ def media_row(row: dict) -> dict:
         "alt": row["alt"],
         "tags": _split_tags(row.get("tags")),
         "byteSize": int(row["byte_size"]),
+        # Zero for anything uploaded before the browser started measuring, and
+        # for anything it could not decode. Callers show what they have rather
+        # than pretending to a number they were never given.
+        "width": int(row.get("width") or 0),
+        "height": int(row.get("height") or 0),
+        "sizes": _split_sizes(row.get("sizes")),
         "createdAt": int(row["created_at"]),
     }
 
@@ -197,15 +286,57 @@ def _split_tags(joined) -> list[str]:
     return sorted({tag for tag in str(joined).split(TAG_SEPARATOR) if tag})
 
 
+def _split_sizes(joined) -> list[dict]:
+    """The variants of one image, narrowest first.
+
+    They arrive as one string per row for the same reason the tags do — the
+    library is read a grid at a time and D1 charges per round trip — so this
+    is the other half of the `group_concat` in `_SIZES`. Fields are separated
+    by spaces, which nothing stored here can contain: the labels are a closed
+    set, the keys are generated tokens and the rest are numbers.
+
+    A piece that does not parse is dropped rather than raised on. A missing
+    width costs one entry in a srcset; an exception costs the whole page.
+    """
+
+    if not joined:
+        return []
+    sizes = []
+    for part in str(joined).split(TAG_SEPARATOR):
+        fields = part.split(" ")
+        if len(fields) != 5:
+            continue
+        label, key, width, height, byte_size = fields
+        path = image_path(key)
+        if path is None or not (width.isdigit() and height.isdigit() and byte_size.isdigit()):
+            continue
+        sizes.append(
+            {
+                "label": label,
+                "path": path,
+                "width": int(width),
+                "height": int(height),
+                "byteSize": int(byte_size),
+            }
+        )
+    # Narrowest first, because that is the order a srcset is read in and the
+    # order group_concat does not promise.
+    return sorted(sizes, key=lambda size: size["width"])
+
+
 # --- reading -------------------------------------------------------------
 
 
-# Tags come along with the row rather than in a second query. The library is
-# read a grid at a time, and one round trip per image is the shape of query
-# that D1 charges for.
-_SELECT = """SELECT media.*,
-                    (SELECT group_concat(tag, char(10)) FROM media_tags WHERE media_id = media.id) AS tags
-               FROM media"""
+# Tags and sizes come along with the row rather than in a second query. The
+# library is read a grid at a time, and one round trip per image is the shape
+# of query that D1 charges for.
+_TAGS = "(SELECT group_concat(tag, char(10)) FROM media_tags WHERE media_id = media.id) AS tags"
+_SIZES = """(SELECT group_concat(
+                      label || ' ' || object_key || ' ' || width || ' ' || height || ' ' || byte_size,
+                      char(10))
+               FROM media_sizes WHERE media_id = media.id) AS sizes"""
+
+_SELECT = f"SELECT media.*, {_TAGS}, {_SIZES} FROM media"
 
 
 async def list_media(env, *, search: str = "") -> tuple[list[dict], bool]:
@@ -274,10 +405,14 @@ async def resolve(env, media_ids) -> dict:
     if not wanted:
         return {}
     placeholders = ", ".join(f"?{index + 1}" for index in range(len(wanted)))
-    # Plain columns, not `_SELECT`: this runs on the public Worker every time a
-    # page with pictures is drawn, and nothing out there renders a tag. Rows
-    # from here come back with an empty tag list, which is what they are worth.
-    rows = await d1_rows(env.DB.prepare(f"SELECT * FROM media WHERE id IN ({placeholders})").bind(*wanted))
+    # The sizes but not the tags. This runs on the public Worker every time a
+    # page with pictures is drawn: nothing out there renders a tag, but the
+    # sizes are the entire reason they exist — a storefront that cannot see
+    # them serves the phone the full-width original. Rows from here come back
+    # with an empty tag list, which is what a tag is worth on the storefront.
+    rows = await d1_rows(
+        env.DB.prepare(f"SELECT media.*, {_SIZES} FROM media WHERE id IN ({placeholders})").bind(*wanted)
+    )
     return {row["id"]: media_row(row) for row in rows}
 
 
@@ -287,9 +422,20 @@ async def key_is_known(env, key: str) -> bool:
     The public image route checks this before reading the object, so a guessed
     or stale URL cannot be used to fish around in a bucket that also holds ibon
     print jobs.
+
+    Both tables, because a srcset points a customer's browser straight at the
+    variants: an answer that only knew about originals would turn every
+    responsive image on the site into a 404.
     """
 
-    rows = await d1_rows(env.DB.prepare("SELECT 1 FROM media WHERE object_key = ?1").bind(key))
+    rows = await d1_rows(
+        env.DB.prepare(
+            """SELECT 1 FROM media WHERE object_key = ?1
+               UNION ALL
+               SELECT 1 FROM media_sizes WHERE object_key = ?1
+               LIMIT 1"""
+        ).bind(key)
+    )
     return bool(rows)
 
 
@@ -302,14 +448,30 @@ async def object_key_of(env, media_id: str) -> str | None:
 
 
 async def usage(env, media_id: str) -> list[dict]:
-    """Which pages use this image.
+    """Which pages use this image."""
+
+    return (await usage_of(env, [media_id])).get(media_id, [])
+
+
+async def usage_of(env, media_ids) -> dict[str, list[dict]]:
+    """Which pages use each of these images, in one pass over the blocks.
 
     The ids live inside each block's JSON config, so this reads the configs and
     looks in them rather than asking SQL to search text it does not understand.
     The library holds hundreds of rows, not millions; a scan is honest here and
     a LIKE against JSON would match an id that merely appears inside a longer
     string.
+
+    Several ids at once because deleting a selection asks the same question
+    about each of them, and the expensive half — reading and parsing every
+    block on the site — is the half that does not depend on which id is being
+    asked about. Ten images used to mean ten scans.
     """
+
+    wanted = [media_id for media_id in dict.fromkeys(media_ids) if media_id]
+    found: dict[str, dict[str, dict]] = {media_id: {} for media_id in wanted}
+    if not wanted:
+        return {}
 
     rows = await d1_rows(
         env.DB.prepare(
@@ -320,15 +482,18 @@ async def usage(env, media_id: str) -> list[dict]:
         )
     )
 
-    seen: dict[str, dict] = {}
     for row in rows:
         try:
             config = json.loads(row["config"])
         except ValueError:
             continue
-        if _mentions(config, media_id):
-            seen[row["page_id"]] = {"id": row["page_id"], "title": row["title"], "path": row["path"]}
-    return sorted(seen.values(), key=lambda page: page["path"])
+        page = {"id": row["page_id"], "title": row["title"], "path": row["path"]}
+        for media_id in wanted:
+            if _mentions(config, media_id):
+                found[media_id][row["page_id"]] = page
+    return {
+        media_id: sorted(pages.values(), key=lambda page: page["path"]) for media_id, pages in found.items()
+    }
 
 
 def _mentions(config, media_id: str) -> bool:
@@ -350,12 +515,49 @@ def _mentions(config, media_id: str) -> bool:
 # --- writing -------------------------------------------------------------
 
 
-async def create(env, *, object_key: str, file_name: str, title: str, alt: str, byte_size: int) -> dict:
+async def create(
+    env,
+    *,
+    object_key: str,
+    file_name: str,
+    title: str,
+    alt: str,
+    byte_size: int,
+    width: int = 0,
+    height: int = 0,
+    sizes=(),
+) -> dict:
     media_id = urlsafe_token(12)
     await env.DB.prepare(
-        """INSERT INTO media (id, object_key, file_name, title, alt, byte_size, created_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"""
-    ).bind(media_id, object_key, file_name, title, alt, int(byte_size), utc_timestamp()).run()
+        """INSERT INTO media (id, object_key, file_name, title, alt, byte_size, width, height, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"""
+    ).bind(
+        media_id,
+        object_key,
+        file_name,
+        title,
+        alt,
+        int(byte_size),
+        int(width),
+        int(height),
+        utc_timestamp(),
+    ).run()
+    for size in sizes:
+        # One statement each rather than one long VALUES list. Three rows is
+        # not where a round trip is worth saving, and a variant that fails to
+        # record leaves the others recorded — the image is still shown, one
+        # width worse off, instead of losing all of them together.
+        await env.DB.prepare(
+            """INSERT OR REPLACE INTO media_sizes (media_id, label, object_key, width, height, byte_size)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)"""
+        ).bind(
+            media_id,
+            size["label"],
+            size["object_key"],
+            int(size["width"]),
+            int(size["height"]),
+            int(size["byte_size"]),
+        ).run()
     return (await get_media(env, media_id)) or {}
 
 
@@ -392,19 +594,29 @@ async def _replace_tags(env, media_id: str, tags: list[str]):
     ).run()
 
 
-async def delete(env, media_id: str) -> str | None:
-    """Remove the row, returning the R2 key that is now unreferenced.
+async def delete(env, media_id: str) -> list[str] | None:
+    """Remove the row, returning every R2 key that is now unreferenced.
 
-    The row goes first. An orphaned object costs storage; an orphaned row is a
-    picture the library offers and the site cannot draw.
+    A list rather than one key, because an image is stored once per width. The
+    caller deletes what it is handed; a variant left behind would be storage
+    nobody can reach, since the row that named it is gone.
+
+    The rows go first. An orphaned object costs storage; an orphaned row is a
+    picture the library offers and the site cannot draw. `None` means there
+    was no such image, which is not the same as an image with no variants.
     """
 
     key = await object_key_of(env, media_id)
     if key is None:
         return None
+    variants = await d1_rows(
+        env.DB.prepare("SELECT object_key FROM media_sizes WHERE media_id = ?1").bind(media_id)
+    )
     await env.DB.prepare("DELETE FROM media WHERE id = ?1").bind(media_id).run()
-    # D1 does not enforce foreign keys here, so the tags have to be cleared by
-    # hand. Left behind they would keep offering a tag in the autocomplete
-    # that no image carries any more.
+    # D1 does not enforce foreign keys here, so the tags and the sizes have to
+    # be cleared by hand. A tag left behind would keep being offered by the
+    # autocomplete with no image carrying it; a size left behind would keep
+    # the public image route serving a variant of a deleted picture.
     await env.DB.prepare("DELETE FROM media_tags WHERE media_id = ?1").bind(media_id).run()
-    return key
+    await env.DB.prepare("DELETE FROM media_sizes WHERE media_id = ?1").bind(media_id).run()
+    return [key, *(row["object_key"] for row in variants)]

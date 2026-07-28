@@ -511,6 +511,45 @@ MIGRATIONS = [
         ],
     },
     {
+        # Responsive sizes. The storefront was handing a phone the same 1024px
+        # original the owner uploaded, which is somebody else's data plan, not
+        # a matter of taste.
+        #
+        # The variants are made in the browser before the upload. There is no
+        # Pillow in a Python Worker and Image Resizing is a paid zone feature,
+        # so the Worker could not do it even if we wanted it to — and doing it
+        # once at upload time puts the cost on the one person uploading rather
+        # than on every customer who loads the page afterwards.
+        "name": "0018_add_media_dimensions_and_sizes",
+        # The original's own pixels, so the library can say PNG · 1024×1024
+        # without fetching the image to measure it. Zero means "not measured":
+        # rows from before this migration, and uploads the browser could not
+        # decode. An upload is never refused for want of a measurement.
+        "add_columns": [
+            ("media", "width", "INTEGER NOT NULL DEFAULT 0"),
+            ("media", "height", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "statements": [
+            # A table rather than three sets of columns on `media`, because the
+            # count varies: a 600px drawing gets one variant and a 4000px scan
+            # gets three, since nothing is ever scaled up past the original.
+            #
+            # `object_key` is UNIQUE for the index it brings rather than for
+            # the constraint: the public image route asks "is this key ours?"
+            # on every request, and that question has to be an indexed equality
+            # rather than a scan.
+            """CREATE TABLE IF NOT EXISTS media_sizes (
+                 media_id TEXT NOT NULL,
+                 label TEXT NOT NULL,
+                 object_key TEXT NOT NULL UNIQUE,
+                 width INTEGER NOT NULL,
+                 height INTEGER NOT NULL,
+                 byte_size INTEGER NOT NULL,
+                 PRIMARY KEY (media_id, label)
+               )""",
+        ],
+    },
+    {
         # The footer's brand column: a sentence about the shop, between the
         # mark and the copyright. The link columns were already editable and
         # ran left to right with nothing on the left to anchor them.

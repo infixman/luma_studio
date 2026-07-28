@@ -1,17 +1,33 @@
 import { useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
-import { MediaGrid, fileSize, mediaName } from '../components/MediaGrid'
+import { MediaGrid, MediaTable, type MediaView } from '../components/MediaGrid'
 import { MediaSearchField, useMediaLibrary } from '../components/MediaSearch'
 import { useStatus } from '../components/StatusBar'
-import { Button, EmptyState, Panel, Spinner, TagInput, TextField, useConfirm } from '../components/ui'
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  EmptyState,
+  Modal,
+  Panel,
+  Spinner,
+  TagInput,
+  TextField,
+  useConfirm,
+} from '../components/ui'
 import { api, apiJson, apiUrl, uploadMedia } from '../../shared/api'
+import { fileSize, mediaDate, mediaDimensions, mediaFormat, mediaName, mediaSrcSet } from '../lib/mediaFacts'
+import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/media-admin.css'
 
 type Usage = { id: string; title: string; path: string }
+
+/** One file inside a batch, so a failure names itself instead of the batch. */
+type UploadTask = { key: number; name: string; ratio: number; state: 'working' | 'done' | 'failed'; error?: string }
 
 export function MediaPage() {
   const { message, show, showError } = useStatus()
@@ -21,9 +37,20 @@ export function MediaPage() {
   const [title, setTitle] = useState('')
   const [alt, setAlt] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
+  const [view, setView] = useState<MediaView>('grid')
+  const [picked, setPicked] = useState<string[]>([])
+  const [uploads, setUploads] = useState<UploadTask[]>([])
+  const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const { ask, dialog } = useConfirm()
   const file = useRef<HTMLInputElement>(null)
+
+  const shown = items ?? []
+  // Only what is on screen counts as picked. A search narrows the grid, and
+  // deleting something the owner cannot currently see is not a batch — it is
+  // a surprise.
+  const pickedHere = shown.filter((item) => picked.includes(item.id))
+  const allPicked = shown.length > 0 && pickedHere.length === shown.length
 
   async function run(work: () => Promise<void>, done: string) {
     if (busy) return
@@ -53,16 +80,63 @@ export function MediaPage() {
     }
   }
 
-  function upload(event: Event) {
-    const input = event.target as HTMLInputElement
-    const picked = input.files?.[0]
-    if (!picked) return
-    void run(async () => {
-      const { item } = await uploadMedia(picked, '')
-      setItems((current) => [item, ...(current ?? [])])
-      await inspect(item)
-      input.value = ''
-    }, '圖片已上傳。記得補一句替代文字。')
+  function togglePicked(id: string, on: boolean) {
+    setPicked((current) => (on ? [...current, id] : current.filter((entry) => entry !== id)))
+  }
+
+  function togglePickedAll(on: boolean) {
+    setPicked(on ? shown.map((item) => item.id) : [])
+  }
+
+  /**
+   * Upload a batch, one file at a time.
+   *
+   * Sequential rather than all at once for two reasons: the decoded bitmap of
+   * a twelve megapixel photograph is real memory and twenty of them at once is
+   * a tab that dies, and a progress bar per file only means anything if the
+   * files take turns.
+   *
+   * A failure marks that one file and the loop carries on. Twenty photographs
+   * where the eleventh is a HEIC the browser will not take should leave
+   * nineteen uploaded, not a batch to start again.
+   */
+  async function acceptFiles(list: FileList | null) {
+    const chosenFiles = [...(list ?? [])]
+    if (chosenFiles.length === 0 || busy) return
+    const started = Date.now()
+    setUploads(
+      chosenFiles.map((entry, index) => ({ key: started + index, name: entry.name, ratio: 0, state: 'working' })),
+    )
+    setBusy(true)
+
+    let done = 0
+    let failed = 0
+    for (const [index, entry] of chosenFiles.entries()) {
+      const key = started + index
+      const update = (patch: Partial<UploadTask>) =>
+        setUploads((current) => current.map((task) => (task.key === key ? { ...task, ...patch } : task)))
+      try {
+        // The responsive widths, and with them the EXIF rotation — see
+        // prepareUpload: the decoder applies the orientation tag, so a photo
+        // taken sideways is stored the right way up.
+        const { dimensions, variants } = await prepareUpload(entry)
+        const { item } = await uploadMedia({ file: entry, dimensions, variants }, (ratio) => update({ ratio }))
+        setItems((current) => [item, ...(current ?? [])])
+        update({ ratio: 1, state: 'done' })
+        done += 1
+      } catch (error) {
+        update({ state: 'failed', error: error instanceof Error ? error.message : '上傳失敗' })
+        failed += 1
+      }
+    }
+
+    setBusy(false)
+    // The finished rows go; the failed ones stay on screen, because a file
+    // that did not upload is the only thing left to act on.
+    setUploads((current) => current.filter((task) => task.state === 'failed'))
+    if (failed === 0) show(`已上傳 ${done} 張。記得補上替代文字。`, 'ok')
+    else if (done === 0) show(`${failed} 張都沒有上傳成功。`, 'error')
+    else show(`已上傳 ${done} 張，${failed} 張失敗。`, 'error')
   }
 
   function save(event: Event) {
@@ -80,6 +154,14 @@ export function MediaPage() {
       // A tag invented just now has to be offered to the next image.
       void loadTags()
     }, '已儲存。')
+  }
+
+  /** The query string that keeps a filtered list filtered across a delete. */
+  function searchParam(extra: Record<string, string> = {}): string {
+    const params = new URLSearchParams(extra)
+    if (query.trim()) params.set('q', query.trim())
+    const search = params.toString()
+    return search ? `?${search}` : ''
   }
 
   async function remove() {
@@ -109,21 +191,103 @@ export function MediaPage() {
     if (!agreed) return
 
     void run(async () => {
-      const params = new URLSearchParams()
       // Saying so twice is what turns a refusal into a deletion.
-      if (used.length) params.set('force', '1')
-      // The list comes back filtered the same way, so deleting from a search
-      // does not throw the search away.
-      if (query.trim()) params.set('q', query.trim())
-      const search = params.toString()
-      const path = `/api/media/${encodeURIComponent(selected.id)}${search ? `?${search}` : ''}`
+      const path = `/api/media/${encodeURIComponent(selected.id)}${searchParam(used.length ? { force: '1' } : {})}`
       const data = await api<{ media: MediaItem[] }>(path, { method: 'DELETE' })
       setItems(data.media)
+      setPicked((current) => current.filter((id) => id !== selected.id))
       setSelected(null)
       setUsedBy(null)
       void loadTags()
     }, '圖片已刪除。')
   }
+
+  /**
+   * Delete everything ticked, behind one question.
+   *
+   * The usage of the whole selection is fetched before the question is asked,
+   * so the dialog can name the pictures and the pages still using them in the
+   * same breath. Finding that out afterwards would mean a second dialog for
+   * something the owner has already decided.
+   */
+  async function removePicked() {
+    if (pickedHere.length === 0 || busy) return
+    const ids = pickedHere.map((item) => item.id)
+
+    let usage: Record<string, Usage[]> = {}
+    try {
+      const data = await api<{ usage: Record<string, Usage[]> }>(
+        `/api/media/usage?ids=${encodeURIComponent(ids.join(','))}`,
+      )
+      usage = data.usage
+    } catch (error) {
+      showError(error)
+      return
+    }
+    const inUse = pickedHere.filter((item) => (usage[item.id] ?? []).length > 0)
+
+    const agreed = await ask({
+      title: `刪除 ${ids.length} 張圖？`,
+      body: (
+        <>
+          <p>以下圖片會從媒體庫與儲存空間一併移除，這個動作沒有辦法復原。</p>
+          <ul class="usage">
+            {pickedHere.map((item) => (
+              <li key={item.id}>{mediaName(item)}</li>
+            ))}
+          </ul>
+          {inUse.length > 0 && (
+            <>
+              <p>
+                其中 {inUse.length} 張還被頁面使用中，刪除後那些頁面就少一張圖：
+              </p>
+              <ul class="usage">
+                {inUse.map((item) => (
+                  <li key={item.id}>
+                    {mediaName(item)} —{' '}
+                    {(usage[item.id] ?? []).map((page) => page.title || page.path).join('、')}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      ),
+      confirmLabel: '刪除',
+    })
+    if (!agreed) return
+
+    void run(async () => {
+      const data = await apiJson<{ media: MediaItem[] }>(`/api/media/delete${searchParam()}`, 'POST', {
+        ids,
+        force: inUse.length > 0,
+      })
+      setItems(data.media)
+      setPicked([])
+      if (selected && ids.includes(selected.id)) {
+        setSelected(null)
+        setUsedBy(null)
+      }
+      void loadTags()
+    }, `已刪除 ${ids.length} 張圖。`)
+  }
+
+  const list =
+    view === 'grid' ? (
+      <MediaGrid
+        items={shown}
+        selectedId={selected?.id ?? null}
+        onSelect={inspect}
+        selection={{ chosen: new Set(picked), onToggle: togglePicked }}
+      />
+    ) : (
+      <MediaTable
+        items={shown}
+        selectedId={selected?.id ?? null}
+        onSelect={inspect}
+        selection={{ chosen: new Set(picked), onToggle: togglePicked }}
+      />
+    )
 
   return (
     <AdminShell
@@ -137,13 +301,22 @@ export function MediaPage() {
       }
     >
       {/* The only raw control on this page: there is no way to open a file
-          chooser without one, so it is hidden and the button above opens it. */}
+          chooser without one, so it is hidden and the buttons in front of it
+          open it. */}
       <input
         ref={file}
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        multiple
         hidden
-        onChange={upload}
+        onChange={(event) => {
+          const input = event.currentTarget as HTMLInputElement
+          void acceptFiles(input.files).finally(() => {
+            // Cleared so that picking the same file twice in a row still
+            // counts as a change.
+            input.value = ''
+          })
+        }}
         disabled={busy}
       />
 
@@ -151,18 +324,107 @@ export function MediaPage() {
         <Panel title="媒體庫">
           <p class="muted">
             上傳一次，輪播、相簿與介紹區塊都能用。區塊記住的是這裡的圖片，不是網址，所以之後換掉檔名也不會斷。jpg、png
-            或 webp，最大 5 MB。
+            或 webp，最大 5 MB。上傳時會在瀏覽器裡先做好三種寬度，手機不用下載整張原圖。
           </p>
+
+          <section class="upload-area" aria-label="圖片上傳">
+            <button
+              type="button"
+              class={dragging ? 'drop-zone drag-over' : 'drop-zone'}
+              disabled={busy}
+              onClick={() => file.current?.click()}
+              onDragEnter={(event) => {
+                event.preventDefault()
+                if (!busy) setDragging(true)
+              }}
+              onDragOver={(event) => {
+                event.preventDefault()
+                if (!busy) setDragging(true)
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault()
+                setDragging(false)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                setDragging(false)
+                if (!busy) void acceptFiles(event.dataTransfer?.files ?? null)
+              }}
+            >
+              <span class="drop-zone-icon" aria-hidden="true">
+                ⇧
+              </span>
+              <span class="drop-zone-title">
+                拖曳圖片至此
+                <br />／點擊這裡選擇檔案即可上傳
+              </span>
+              <span class="drop-zone-hint">可以一次拖進好幾張，會一張一張上傳。</span>
+            </button>
+
+            {uploads.length > 0 && (
+              <div class="upload-progress" aria-live="polite">
+                {uploads.map((task) => (
+                  <div key={task.key} class="media-upload-row">
+                    <span class="upload-progress-label">
+                      {task.name}
+                      {task.state === 'failed' && <span class="media-upload-error">{task.error}</span>}
+                    </span>
+                    <div class="progress-track">
+                      <div
+                        class={task.state === 'failed' ? 'progress-bar failed' : 'progress-bar'}
+                        style={{ width: `${Math.round((task.state === 'failed' ? 1 : task.ratio) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
           <MediaSearchField value={query} onChange={setQuery} />
 
+          <div class="media-toolbar">
+            <Checkbox
+              label={pickedHere.length > 0 ? `已選 ${pickedHere.length} 張` : '全選'}
+              checked={allPicked}
+              disabled={shown.length === 0}
+              onChange={togglePickedAll}
+            />
+            <Button
+              tone="danger"
+              size="sm"
+              disabled={busy || pickedHere.length === 0}
+              onClick={() => void removePicked()}
+            >
+              刪除選取
+            </Button>
+            <ButtonRow align="end">
+              <Button
+                tone={view === 'grid' ? 'primary' : 'ghost'}
+                size="sm"
+                aria-pressed={view === 'grid'}
+                onClick={() => setView('grid')}
+              >
+                格狀
+              </Button>
+              <Button
+                tone={view === 'list' ? 'primary' : 'ghost'}
+                size="sm"
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
+              >
+                清單
+              </Button>
+            </ButtonRow>
+          </div>
+
           {truncated && (
-            <p class="muted">只顯示最新的 {items?.length} 張，用搜尋找更舊的。舊的圖片仍然在頁面上正常顯示。</p>
+            <p class="muted">只顯示最新的 {shown.length} 張，用搜尋找更舊的。舊的圖片仍然在頁面上正常顯示。</p>
           )}
 
           {items === null ? (
             <Spinner />
-          ) : items.length === 0 && query.trim() ? (
+          ) : shown.length === 0 && query.trim() ? (
             <EmptyState
               title="沒有符合的圖片"
               body="標籤要打完整才算命中，標題與檔名則是打一部分就好。"
@@ -172,20 +434,85 @@ export function MediaPage() {
                 </Button>
               }
             />
-          ) : items.length === 0 ? (
+          ) : shown.length === 0 ? (
             <EmptyState title="媒體庫還是空的" body="上傳第一張圖，之後在頁面的區塊裡就選得到它。" />
           ) : (
-            <MediaGrid items={items} selectedId={selected?.id ?? null} onSelect={inspect} />
+            list
           )}
         </Panel>
+      </section>
 
+      {/* A dialog rather than a second card below the grid: the detail is
+          about one picture, and a card left open beside a list you are still
+          scrolling belongs to whichever image you last clicked, which is not
+          always the one you are looking at. */}
+      <Modal
+        title={selected ? mediaName(selected) : ''}
+        open={selected !== null}
+        width="lg"
+        onClose={() => {
+          setSelected(null)
+          setUsedBy(null)
+        }}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setSelected(null)}>
+              關閉
+            </Button>
+            <Button tone="danger" onClick={remove} disabled={busy || usedBy === null}>
+              刪除這張圖
+            </Button>
+          </>
+        }
+      >
         {selected && (
-          <Panel title={mediaName(selected)} class="media-detail">
-            <img src={apiUrl(selected.path)} alt={selected.alt} />
+          <div class="media-detail">
+            <div class="media-preview">
+              <img
+                src={apiUrl(selected.path)}
+                srcset={mediaSrcSet(selected) || undefined}
+                sizes="(max-width: 640px) 90vw, 420px"
+                alt={selected.alt}
+              />
+            </div>
+
+            {/* The facts, spelled out. Everything here was previously either
+                missing or buried in a sentence, and they are what tells two
+                versions of the same drawing apart. */}
+            <dl class="media-facts">
+              <div>
+                <dt>檔名</dt>
+                <dd>{selected.fileName}</dd>
+              </div>
+              <div>
+                <dt>格式</dt>
+                <dd>{mediaFormat(selected) || '未知'}</dd>
+              </div>
+              <div>
+                <dt>大小</dt>
+                <dd>{fileSize(selected.byteSize)}</dd>
+              </div>
+              <div>
+                <dt>尺寸</dt>
+                <dd>{mediaDimensions(selected) || '未記錄'}</dd>
+              </div>
+              <div>
+                <dt>上傳日期</dt>
+                <dd>{mediaDate(selected.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>響應式寬度</dt>
+                <dd>
+                  {selected.sizes.length > 0
+                    ? selected.sizes.map((size) => `${size.width}px`).join('、')
+                    : '沒有（原圖已經夠小，或瀏覽器讀不到尺寸）'}
+                </dd>
+              </div>
+            </dl>
+
             <p class="muted">
-              {selected.fileName}．{fileSize(selected.byteSize)}．
               <a href={apiUrl(selected.path)} target="_blank" rel="noopener">
-                原圖
+                開啟原圖
               </a>
             </p>
 
@@ -224,6 +551,9 @@ export function MediaPage() {
               </Button>
             </form>
 
+            {/* Kept, and kept above the delete button. Naming the pages that
+                use a picture before it goes is the thing this library does
+                that the ones it was modelled on do not. */}
             <h3>用在哪裡</h3>
             {usedBy === null ? (
               <Spinner label="查詢中" />
@@ -238,13 +568,9 @@ export function MediaPage() {
                 ))}
               </ul>
             )}
-
-            <Button tone="danger" onClick={remove} disabled={busy || usedBy === null}>
-              刪除這張圖
-            </Button>
-          </Panel>
+          </div>
         )}
-      </section>
+      </Modal>
 
       {dialog}
     </AdminShell>

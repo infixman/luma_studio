@@ -4,6 +4,7 @@ import { MediaGrid } from './MediaGrid'
 import { MediaSearchField, useMediaLibrary } from './MediaSearch'
 import { Button, Spinner } from './ui'
 import { uploadMedia } from '../../shared/api'
+import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
 
 /**
@@ -62,7 +63,11 @@ export function MediaPicker({
     setBusy(true)
     setError('')
     try {
-      const { item } = await uploadMedia(file, '')
+      // The same widths the library page makes. An image put into a page from
+      // here is exactly the one a customer loads, so it cannot be the one
+      // upload route that quietly skips the responsive copies.
+      const { dimensions, variants } = await prepareUpload(file)
+      const { item } = await uploadMedia({ file, dimensions, variants })
       setItems((current) => [item, ...(current ?? [])])
       onPick(item)
     } catch (problem) {

@@ -624,7 +624,28 @@ export interface MediaItem {
   alt: string
   tags: string[]
   byteSize: number
+  /** The original's own pixels. Zero means nobody measured it — see MediaSize. */
+  width: number
+  height: number
+  /**
+   * The same picture stored again at narrower widths, narrowest first.
+   *
+   * Rendered by the browser that uploaded it, because a Python Worker has no
+   * image library and paying for it once beats paying for it on every page
+   * load. Empty is normal: an image already narrower than the smallest target
+   * has nothing to scale down to, and one the browser could not decode was
+   * kept as it arrived rather than refused.
+   */
+  sizes: MediaSize[]
   createdAt: number
+}
+
+export interface MediaSize {
+  label: 'small' | 'medium' | 'large'
+  path: string
+  width: number
+  height: number
+  byteSize: number
 }
 
 // --- back-office dashboard ----------------------------------------------

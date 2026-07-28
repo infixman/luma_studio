@@ -135,12 +135,65 @@ export async function uploadProductImage(productId: string, file: File, alt: str
   return api<ProductDetail>(`/api/products/${encodeURIComponent(productId)}/images`, { method: 'POST', body: form })
 }
 
-export async function uploadMedia(file: File, alt: string): Promise<{ item: MediaItem }> {
+/**
+ * One image and the narrower copies of it the browser rendered.
+ *
+ * They travel together in one request rather than one per width. Four requests
+ * would be four chances to half-upload a picture, and the row that records the
+ * widths cannot be written until they all exist.
+ *
+ * XHR rather than fetch, for the same reason `uploadImage` uses it: a batch of
+ * photographs takes long enough that a progress bar is the difference between
+ * waiting and wondering, and fetch has no upload progress event.
+ */
+export function uploadMedia(
+  upload: {
+    file: File
+    alt?: string
+    title?: string
+    /** Null when the browser could not decode the file; the original is still stored. */
+    dimensions?: { width: number; height: number } | null
+    variants?: { label: string; width: number; height: number; blob: Blob }[]
+  },
+  onProgress?: (ratio: number) => void,
+): Promise<{ item: MediaItem }> {
   const form = new FormData()
-  form.append('file', file)
-  form.append('alt', alt)
-  // No content-type header: the browser has to set the multipart boundary.
-  return api<{ item: MediaItem }>('/api/media', { method: 'POST', body: form })
+  form.append('file', upload.file)
+  form.append('alt', upload.alt ?? '')
+  if (upload.title) form.append('title', upload.title)
+  if (upload.dimensions) form.append('dimensions', `${upload.dimensions.width}x${upload.dimensions.height}`)
+  for (const variant of upload.variants ?? []) {
+    // The name only has to be a name — the server keys everything off the
+    // field, and the original's file name is what the library displays.
+    form.append(`size_${variant.label}`, variant.blob, `${variant.label}.webp`)
+    form.append(`size_${variant.label}_dimensions`, `${variant.width}x${variant.height}`)
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', `${API_BASE}/api/media`)
+    request.withCredentials = true
+    request.setRequestHeader('x-luma-app', '1')
+    request.responseType = 'json'
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total)
+    }
+    request.onerror = () => reject(new ApiError('上傳連線失敗', 0))
+    request.onload = () => {
+      const body = (request.response ?? {}) as Record<string, unknown>
+      if (request.status >= 200 && request.status < 300) {
+        resolve(body as { item: MediaItem })
+        return
+      }
+      if (request.status === 401) {
+        reject(handleUnauthorized())
+        return
+      }
+      reject(new ApiError(typeof body.error === 'string' ? body.error : '上傳失敗', request.status))
+    }
+    // No content-type header: the browser has to set the multipart boundary.
+    request.send(form)
+  })
 }
 
 export async function uploadHeaderImage(file: File): Promise<{ settings: SiteSettings }> {
