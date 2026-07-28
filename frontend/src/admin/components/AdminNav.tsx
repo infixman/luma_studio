@@ -5,7 +5,7 @@ import '../styles/admin-nav.css'
  * The hrefs carry no /admin segment: every path on this host is administration.
  */
 const tabs = [
-  { href: '/bio-link', label: '名片頁' },
+  { href: '/card', label: '名片頁' },
   { href: '/', label: 'ibon 列印' },
   { href: '/products', label: '商城' },
   { href: '/shipping', label: '運費' },

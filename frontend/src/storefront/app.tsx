@@ -29,7 +29,7 @@ export function App() {
     return <HomePage />
   }
 
-  if (path === '/bio_link') {
+  if (path === '/card') {
     markBody('bio')
     return <BioLinkPage />
   }

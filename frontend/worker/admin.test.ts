@@ -43,7 +43,7 @@ describe('serving the back office', () => {
     expect(await response.text()).toBe('console.log(1)')
   })
 
-  it.each(['/', '/bio-link', '/anything-else'])('serves the shell for %s', async (path) => {
+  it.each(['/', '/card', '/anything-else'])('serves the shell for %s', async (path) => {
     const response = await worker.fetch(get(path), env())
     expect(response.status).toBe(200)
     expect(response.headers.get('location')).toBeNull()
@@ -53,19 +53,19 @@ describe('serving the back office', () => {
   it('looks for admin.html rather than index.html', async () => {
     // A build whose shell is named index.html would leave every route dead,
     // and the failure would only show up after a deploy.
-    const response = await worker.fetch(get('/bio-link'), env({ '/index.html': { status: 200, body: SHELL } }))
+    const response = await worker.fetch(get('/card'), env({ '/index.html': { status: 200, body: SHELL } }))
     expect(response.status).toBe(404)
   })
 
   it('refuses to pass a redirect through as the shell', async () => {
-    const response = await worker.fetch(get('/bio-link'), env({ '/admin.html': { status: 307, headers: { location: '/' } } }))
+    const response = await worker.fetch(get('/card'), env({ '/admin.html': { status: 307, headers: { location: '/' } } }))
     expect(response.status).toBe(404)
     expect(response.headers.get('location')).toBeNull()
   })
 
   it('keeps the security headers the asset layer sets', async () => {
     const response = await worker.fetch(
-      get('/bio-link'),
+      get('/card'),
       env({ '/admin.html': { status: 200, body: SHELL, headers: { 'x-frame-options': 'DENY' } } }),
     )
     expect(response.headers.get('x-frame-options')).toBe('DENY')

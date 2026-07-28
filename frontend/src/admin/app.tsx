@@ -18,7 +18,7 @@ function markBody(page: string): void {
 function Routed() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
-  if (path === '/bio-link') return <BioLinkAdminPage />
+  if (path === '/card') return <BioLinkAdminPage />
   if (path === '/products') return <ProductsPage />
   if (path === '/shipping') return <ShippingPage />
 

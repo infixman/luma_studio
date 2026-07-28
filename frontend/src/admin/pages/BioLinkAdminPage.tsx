@@ -380,7 +380,7 @@ export function BioLinkAdminPage() {
 
   return (
     <AdminShell
-      current="/bio-link"
+      current="/card"
       message={message}
       onError={showError}
       confirmLeave={() => !dirty || confirm('有未儲存的修改，登出後會遺失。要登出嗎？')}

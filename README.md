@@ -19,7 +19,7 @@
 
 管理 Worker 是**唯一會套用 D1 migration 的部署**。公開 Worker 只讀取 `schema_migrations` 回報狀態，不修改 schema：結帳是熱路徑，不該為 schema 檢查付出冷啟動成本，而公開得到的 Worker 也沒有理由具備 `ALTER TABLE` 的能力。因此部署順序固定為管理端先、公開端後。
 
-管理介面搬到 `admin.luma-studio.tw` 之後，前台 Worker 會把舊的 `/admin` 與 `/admin/bio-link` 以 301 永久轉向新網址（去掉 `/admin` 這一段，因為新主機上每一頁都是管理頁）。搬遷期間公開 Worker 上曾有一層 `/api/admin/*` 轉接，現已移除——那些路徑在公開 Worker 上回 404 而不是 401，因為 401 代表處理器還接著，只差一道 session 檢查。
+管理介面搬到 `admin.luma-studio.tw` 之後，前台 Worker 會把舊的 `/admin` 與 `/admin/bio-link` 等舊路徑以 301 永久轉向新網址（去掉 `/admin` 這一段，因為新主機上每一頁都是管理頁）。搬遷期間公開 Worker 上曾有一層 `/api/admin/*` 轉接，現已移除——那些路徑在公開 Worker 上回 404 而不是 401，因為 401 代表處理器還接著，只差一道 session 檢查。
 
 ## 使用方式
 
@@ -70,7 +70,7 @@ frontend/
   .env.admin          後台建置的 API 網址
   vite.config.ts      依 --mode 切換進入點與輸出目錄
   worker/
-    storefront.ts     供應前台 SPA、為 /bio_link 注入分享預覽標籤、轉走舊的 /admin
+    storefront.ts     供應前台 SPA、為 /card 注入分享預覽標籤、轉走舊的 /admin
     admin.ts          供應後台 SPA
   public/assets/      logo 與教學圖
   src/
@@ -226,7 +226,7 @@ uv --directory backend run pywrangler d1 execute luma-ibon-cache --remote --file
 
 執行前會先刪掉該資料夾的 24 小時快取。少了這步，canary 第二天起就只是在讀自己的資料庫，會在真正的流程壞掉時天天顯示正常。
 
-**公開路徑**：確認 `/`、`/admin`、`/bio_link`、`/ibon_print/{id}`、`/api/health`、`/api/bio-link` 都回 200，而且 `/bio_link` 帶著分享預覽標籤。`/admin` 曾經因為前端 Worker 的一行錯誤而 307 導回首頁，這類檢查就是為了讓那種問題自己現形。
+**公開路徑**：確認 `/`、`/admin`、`/card`、`/ibon_print/{id}`、`/api/health`、`/api/bio-link` 都回 200，而且 `/card` 帶著分享預覽標籤。`/admin` 曾經因為前端 Worker 的一行錯誤而 307 導回首頁，這類檢查就是為了讓那種問題自己現形。
 
 建立 `zz_canary` 資料夾時放一張小圖即可。它會出現在 admin 的資料夾清單裡（底線開頭的 id 無法通過 `IDENTIFIER_PATTERN`，所以不能藏起來），排在最後。
 
@@ -552,18 +552,18 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 
 **沒有用 D1 的 `batch` API。** 這個 codebase 還沒有從 Python 呼叫過它，而一串 prepared statement 要跨進 JavaScript 才到得了那裡。排序寫到一半是外觀問題，下次儲存就會自己修正；在寫入目錄的路徑上賭一個沒驗證過的綁定不值得。真正需要原子性的是之後的庫存扣減，那時會用實際部署驗證過再用。
 
-## Bio Link
+## 名片頁
 
 公開頁：
 
 ```text
-https://luma-studio.tw/bio_link
+https://luma-studio.tw/card
 ```
 
 編輯介面在 admin 的第二個分頁：
 
 ```text
-https://luma-studio.tw/admin/bio-link
+https://admin.luma-studio.tw/card
 ```
 
 可設定頭像、顯示名稱、簡介，以及兩組連結：主要的連結按鈕，和一排社群 icon。兩者都可排序、可個別停用。頭像未設定時公開頁改用 logo。
@@ -582,7 +582,7 @@ https://luma-studio.tw/admin/bio-link
 
 ### 分享預覽
 
-`/bio_link` 被貼到 LINE、Facebook、Slack 時會顯示標題、簡介與品牌卡片。SPA 在爬蟲眼中是空白的 HTML，所以前端 Worker（[frontend/worker/index.ts](frontend/worker/index.ts)）會在回傳頁面前，向 API 取得目前內容並把 Open Graph 標籤寫進 `<head>`。爬蟲來得又急又密集，因此那次 API 呼叫在邊緣快取五分鐘。
+`/card` 被貼到 LINE、Facebook、Slack 時會顯示標題、簡介與品牌卡片。SPA 在爬蟲眼中是空白的 HTML，所以前端 Worker（[frontend/worker/storefront.ts](frontend/worker/storefront.ts)）會在回傳頁面前，向 API 取得目前內容並把 Open Graph 標籤寫進 `<head>`。爬蟲來得又急又密集，因此那次 API 呼叫在邊緣快取五分鐘。
 
 預覽圖是 `public/assets/share-card.png`（1200×630），不是頭像——預覽卡片會裁切成約 1.91:1，方形頭像進去只會剩下一條。換 logo 之後重新產生：
 

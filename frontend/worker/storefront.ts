@@ -1,8 +1,8 @@
 /**
- * Serves the built SPA, and gives the bio link page real link-preview tags.
+ * Serves the built SPA, and gives the name-card page real link-preview tags.
  *
  * A single-page app is empty HTML until its JavaScript runs, and the crawlers
- * behind LINE, Facebook and Slack previews do not run it. Since a bio link
+ * behind LINE, Facebook and Slack previews do not run it. Since a name card
  * exists to be shared, its page is rendered with the profile's own title,
  * description and image already in the markup.
  */
@@ -19,7 +19,9 @@ interface BioLink {
   avatarPath: string | null
 }
 
-const BIO_LINK_PATH = '/bio_link'
+// The public name-card page. Note its neighbour /cart is one letter away;
+// both are live, so keep them straight when touching either.
+const CARD_PATH = '/card'
 const SITE_NAME = '苒光繪誌'
 const PROFILE_CACHE_SECONDS = 300
 
@@ -63,7 +65,7 @@ function previewTags(profile: BioLink, origin: string): string {
   // The branded landscape card rather than the avatar: preview cards crop to
   // roughly 1.91:1, which turns a square portrait into a slice of a face.
   const image = `${origin}/assets/share-card.png`
-  const url = `${origin}${BIO_LINK_PATH}`
+  const url = `${origin}${CARD_PATH}`
 
   return [
     `<meta property="og:type" content="profile">`,
@@ -142,7 +144,7 @@ export default {
     if (shell.status !== 200) return new Response('Not found', { status: 404 })
 
     const path = url.pathname.replace(/\/+$/, '') || '/'
-    if (path !== BIO_LINK_PATH) return shellResponse(await shell.text(), shell)
+    if (path !== CARD_PATH) return shellResponse(await shell.text(), shell)
     if (!isLinkPreviewer(request.headers.get('user-agent') ?? '')) {
       return shellResponse(await shell.text(), shell)
     }

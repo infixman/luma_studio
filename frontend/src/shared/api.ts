@@ -124,7 +124,7 @@ export function bioLinkRedirectUrl(itemId: string): string {
 }
 
 export function bioLinkPageUrl(): string {
-  return `${STOREFRONT_ORIGIN}/bio_link`
+  return `${STOREFRONT_ORIGIN}/card`
 }
 
 export async function uploadProductImage(productId: string, file: File, alt: string): Promise<ProductDetail> {

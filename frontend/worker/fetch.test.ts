@@ -84,7 +84,7 @@ describe('serving the built site', () => {
     expect(await response.text()).toContain('<div id="app">')
   })
 
-  it.each(['/ibon_print/20260721_soda', '/bio_link', '/anything-else'])(
+  it.each(['/ibon_print/20260721_soda', '/card', '/anything-else'])(
     'serves the shell for %s',
     async (path) => {
       const response = await worker.fetch(get(path), env())
@@ -128,11 +128,11 @@ describe('the back office moved hosts', () => {
   })
 })
 
-describe('link previews on /bio_link', () => {
+describe('link previews on /card', () => {
   it('writes the profile into the head', async () => {
     const restore = stubApi(profile)
     try {
-      const html = await (await worker.fetch(get('/bio_link', CRAWLER), env())).text()
+      const html = await (await worker.fetch(get('/card', CRAWLER), env())).text()
       expect(html).toContain('<meta property="og:title" content="喬喬老師 | 苒光繪誌">')
       expect(html).toContain('property="og:image" content="https://luma-studio.tw/assets/share-card.png"')
       expect(html).toContain('<title>喬喬老師 | 苒光繪誌</title>')
@@ -146,7 +146,7 @@ describe('link previews on /bio_link', () => {
   it('escapes what it injects', async () => {
     const restore = stubApi({ displayName: '"><script>alert(1)</script>', bio: 'a & b', avatarPath: null })
     try {
-      const html = await (await worker.fetch(get('/bio_link', CRAWLER), env())).text()
+      const html = await (await worker.fetch(get('/card', CRAWLER), env())).text()
       expect(html).not.toContain('<script>alert(1)</script>')
       expect(html).toContain('&quot;&gt;&lt;script&gt;')
       expect(html).toContain('content="a &amp; b"')
@@ -159,7 +159,7 @@ describe('link previews on /bio_link', () => {
     // A preview is worth less than the page working.
     const restore = stubApi(new Error('network down'))
     try {
-      const response = await worker.fetch(get('/bio_link', CRAWLER), env())
+      const response = await worker.fetch(get('/card', CRAWLER), env())
       expect(response.status).toBe(200)
       expect(await response.text()).not.toContain('og:title')
     } finally {
@@ -172,7 +172,7 @@ describe('link previews on /bio_link', () => {
     // round trip only delays the first paint.
     const restore = stubApi(profile)
     try {
-      const response = await worker.fetch(get('/bio_link', BROWSER), env())
+      const response = await worker.fetch(get('/card', BROWSER), env())
       expect(response.status).toBe(200)
       expect(calls).toEqual([])
       expect(await response.text()).not.toContain('og:title')
