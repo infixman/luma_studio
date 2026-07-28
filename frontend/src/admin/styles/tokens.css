@@ -1,0 +1,174 @@
+/* Every colour, spacing step and shadow the back office draws from.
+
+   Named for what they are used for, not what they look like: a token called
+   --surface survives a change of palette, one called --grey-100 has to be
+   found and renamed everywhere the day the palette moves.
+
+   Two themes, one set of names. Which one applies:
+
+     :root                        the light values, and the default
+     prefers-color-scheme: dark   the dark values, when nothing was chosen
+     [data-theme="dark"|"light"]  what the owner chose, over the system
+
+   The system rule is guarded by :not([data-theme]). Without that guard a
+   system set to dark would out-rank the light theme the owner just picked,
+   and the toggle would work in one direction only. */
+
+:root {
+  /* --- surfaces, back to front --- */
+  --page: #f4f4f7;
+  --surface: #fff;
+  --raised: #fff;
+  --sunken: #eeeef2;
+  --rail: #1c1c2b;
+  --rail-text: #b9b9cc;
+  --rail-text-strong: #fff;
+
+  /* --- text --- */
+  --text: #21212e;
+  --text-soft: #4a4a5c;
+  --muted: #6c6c80;
+  --on-primary: #fff;
+
+  /* --- lines --- */
+  --border: #dcdce4;
+  --border-strong: #c4c4d0;
+
+  /* --- the one accent, and the states that borrow it --- */
+  --primary: #1f7a72;
+  --primary-hover: #196660;
+  --primary-soft: rgb(31 122 114 / 0.1);
+  --focus-ring: rgb(31 122 114 / 0.35);
+
+  /* --- meaning --- */
+  --danger: #b3384c;
+  --danger-hover: #972d3f;
+  --danger-soft: rgb(179 56 76 / 0.1);
+  --warning: #9a6100;
+  --warning-soft: rgb(154 97 0 / 0.12);
+  --success: #1e7a45;
+  --success-soft: rgb(30 122 69 / 0.12);
+  --info: #2a5f9e;
+  --info-soft: rgb(42 95 158 / 0.12);
+
+  /* --- depth --- */
+  --shadow-1: 0 1px 2px rgb(20 20 40 / 0.06);
+  --shadow-2: 0 4px 12px rgb(20 20 40 / 0.09);
+  --shadow-3: 0 16px 40px rgb(20 20 40 / 0.18);
+
+  /* --- shape and rhythm --- */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* A four-step scale. Anything between two steps is a decision nobody
+     will remember making, so there is nothing between two steps. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --rail-width: 60px;
+  --sidebar-width: 240px;
+  --topbar-height: 60px;
+
+  --font-xs: 0.75rem;
+  --font-sm: 0.85rem;
+  --font-base: 0.94rem;
+  --font-lg: 1.1rem;
+  --font-xl: 1.45rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --page: #181826;
+    --surface: #21212f;
+    --raised: #2a2a3c;
+    --sunken: #14141f;
+    --rail: #14141f;
+    --rail-text: #9a9ab4;
+    --rail-text-strong: #fff;
+
+    --text: #eeeef4;
+    --text-soft: #c3c3d4;
+    --muted: #9494ab;
+    --on-primary: #0d1f1d;
+
+    --border: #35354b;
+    --border-strong: #45455e;
+
+    --primary: #45b8ac;
+    --primary-hover: #5fcabf;
+    --primary-soft: rgb(69 184 172 / 0.14);
+    --focus-ring: rgb(69 184 172 / 0.4);
+
+    --danger: #e4738a;
+    --danger-hover: #ef8a9e;
+    --danger-soft: rgb(228 115 138 / 0.15);
+    --warning: #e0a33c;
+    --warning-soft: rgb(224 163 60 / 0.16);
+    --success: #4fbd7c;
+    --success-soft: rgb(79 189 124 / 0.16);
+    --info: #6ba3e8;
+    --info-soft: rgb(107 163 232 / 0.16);
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45);
+    --shadow-3: 0 16px 40px rgb(0 0 0 / 0.6);
+  }
+}
+
+/* The chosen theme, which must beat the system rule above — hence the
+   duplication rather than a shared block. */
+:root[data-theme='dark'] {
+  --page: #181826;
+  --surface: #21212f;
+  --raised: #2a2a3c;
+  --sunken: #14141f;
+  --rail: #14141f;
+  --rail-text: #9a9ab4;
+  --rail-text-strong: #fff;
+
+  --text: #eeeef4;
+  --text-soft: #c3c3d4;
+  --muted: #9494ab;
+  --on-primary: #0d1f1d;
+
+  --border: #35354b;
+  --border-strong: #45455e;
+
+  --primary: #45b8ac;
+  --primary-hover: #5fcabf;
+  --primary-soft: rgb(69 184 172 / 0.14);
+  --focus-ring: rgb(69 184 172 / 0.4);
+
+  --danger: #e4738a;
+  --danger-hover: #ef8a9e;
+  --danger-soft: rgb(228 115 138 / 0.15);
+  --warning: #e0a33c;
+  --warning-soft: rgb(224 163 60 / 0.16);
+  --success: #4fbd7c;
+  --success-soft: rgb(79 189 124 / 0.16);
+  --info: #6ba3e8;
+  --info-soft: rgb(107 163 232 / 0.16);
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.6);
+}
+
+/* Light is the value set on :root, so choosing it only has to say "stop
+   listening to the system" — which the :not([data-theme]) guard already
+   does. This block exists so the selector is not silently a no-op to the
+   next person reading it. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

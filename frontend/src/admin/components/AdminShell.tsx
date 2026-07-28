@@ -1,33 +1,46 @@
 import type { ComponentChildren } from 'preact'
 
-import { AdminNav } from './AdminNav'
+import { AreaPages, AreaRail, areaOf, labelOf } from './AdminNav'
+import { ThemeToggle } from './ThemeToggle'
 import { StatusBar, type StatusKind } from './StatusBar'
 import { api, clearLoginAttempt } from '../../shared/api'
 
 /**
- * The frame every back-office page sits in: the mark, the way out, the tabs,
- * and the status line.
+ * The frame every back-office page sits in: the area rail, the page list, a
+ * title bar that stays put, and the status line.
  *
  * It exists because it used to be copied into each page. Two pages agreed by
  * accident, the next two were written from scratch and came out different —
  * no header, tabs outside the container, content not in a card. A shared
  * frame is the only way that stops happening again.
+ *
+ * The title bar does not scroll away. These pages are long forms, and the
+ * button that saves one should not have to be scrolled to; nor should the
+ * page's own name disappear while somebody is halfway down it.
  */
 export function AdminShell({
   current,
+  title,
+  actions,
   message,
   onError,
   confirmLeave,
   children,
 }: {
-  /** Which tab is the current one. Must match an href in AdminNav. */
+  /** Which page is the current one. Must match an href in AdminNav. */
   current: string
+  /** Overrides the name from the navigation — for a page about one record. */
+  title?: string
+  /** The page's own buttons, in the title bar. */
+  actions?: ComponentChildren
   message: { text: string; kind: StatusKind } | null
   onError: (error: unknown) => void
   /** Return false to abandon signing out — for a page holding unsaved work. */
   confirmLeave?: () => boolean
   children: ComponentChildren
 }) {
+  const area = areaOf(current)
+
   async function logout() {
     if (confirmLeave && !confirmLeave()) return
     try {
@@ -41,16 +54,36 @@ export function AdminShell({
   }
 
   return (
-    <main>
-      <header>
-        <img class="brand-logo" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
-        <AdminNav current={current} />
-        <button class="ghost" onClick={logout}>
-          登出
+    <div class="admin-layout">
+      <AreaRail current={area}>
+        <ThemeToggle />
+        <button type="button" class="rail-button" onClick={logout} aria-label="登出" title="登出">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M14 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h8" />
+            <path d="M17 15l3-3-3-3M20 12H10" />
+          </svg>
+          <span class="rail-tip">登出</span>
         </button>
-      </header>
-      <StatusBar message={message} />
-      {children}
-    </main>
+      </AreaRail>
+
+      <AreaPages area={area} current={current} />
+
+      <main class="admin-main">
+        <header class="admin-topbar">
+          <h1 class="admin-title">{title ?? labelOf(current)}</h1>
+          {actions && <div class="admin-topbar-actions">{actions}</div>}
+        </header>
+        <StatusBar message={message} />
+        <div class="admin-content">{children}</div>
+      </main>
+    </div>
   )
 }

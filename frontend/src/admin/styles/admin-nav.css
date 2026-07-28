@@ -1,49 +1,254 @@
-/* Inline navigation, sitting in the header beside the mark.
-   `margin-right: auto` is what keeps it next to the logo rather than being
-   spread across the row by the header's space-between. */
-body.admin .admin-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 0 0 8px;
-  margin-right: auto;
+/* The two navigation levels, and the frame that holds them.
+
+   Three columns, full height, and only the middle of the third one scrolls:
+   the rail and the page list stay where they are while a long form moves. */
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: var(--rail-width) var(--sidebar-width) minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  background: var(--page);
 }
 
-body.admin .admin-tab {
-  padding: 8px 14px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: #55676f;
-  font-weight: 700;
+/* --- the rail --- */
+
+.admin-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  background: var(--rail);
+  color: var(--rail-text);
+}
+
+.rail-mark {
+  width: 34px;
+  height: auto;
+  margin-bottom: var(--space-3);
+  /* The mark was drawn for a cream page. On the rail it is one colour. */
+  filter: brightness(0) invert(1);
+  opacity: 0.9;
+}
+
+.rail-areas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  align-items: center;
+}
+
+.rail-area,
+.rail-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
   text-decoration: none;
 }
 
-body.admin .admin-tab:hover {
-  background: #edf5f3;
-  color: #1e625e;
+.rail-area svg,
+.rail-button svg {
+  width: 21px;
+  height: 21px;
 }
 
-body.admin .admin-tab.current {
-  border-color: #d8ddd7;
-  background: #fff;
-  color: #1f3343;
+.rail-area:hover,
+.rail-button:hover {
+  background: rgb(255 255 255 / 0.09);
+  color: var(--rail-text-strong);
 }
 
-body.admin .admin-tab:focus-visible {
-  outline: 3px solid #a7d5d0;
+.rail-area.current {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.rail-area:focus-visible,
+.rail-button:focus-visible {
+  outline: 2px solid var(--rail-text-strong);
   outline-offset: 2px;
 }
 
-/* Narrow screens: the mark and the way out stay on one line, the links wrap
-   underneath rather than squeezing the logo. */
-@media (max-width: 720px) {
-  body.admin header {
-    flex-wrap: wrap;
+.rail-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The name, shown on hover. `title` alone waits a second and renders as an
+   operating-system tooltip, which is the look this redesign is getting rid
+   of — but it stays on the element as the fallback when CSS does not load. */
+.rail-tip {
+  position: absolute;
+  left: calc(100% + 8px);
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--rail);
+  color: var(--rail-text-strong);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+  z-index: 40;
+}
+
+.rail-area:hover .rail-tip,
+.rail-area:focus-visible .rail-tip,
+.rail-button:hover .rail-tip,
+.rail-button:focus-visible .rail-tip {
+  opacity: 1;
+}
+
+/* --- the page list --- */
+
+.admin-sidebar {
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.sidebar-title {
+  margin: 0 0 var(--space-3);
+  padding: 0 var(--space-2);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar-pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-page {
+  display: block;
+  padding: 0.5rem var(--space-2);
+  border-radius: var(--radius);
+  color: var(--text-soft);
+  font-size: var(--font-base);
+  text-decoration: none;
+}
+
+.sidebar-page:hover {
+  background: var(--sunken);
+  color: var(--text);
+}
+
+.sidebar-page.current {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 650;
+}
+
+.sidebar-page:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* --- the content column --- */
+
+.admin-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--topbar-height);
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.admin-title {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The only thing that scrolls. */
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+/* --- narrow --- */
+
+@media (max-width: 900px) {
+  /* The page list folds into a strip above the content: on a phone a fixed
+     240px column is most of the screen, and it is not what anyone came for. */
+  .admin-layout {
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  body.admin .admin-nav {
-    order: 3;
-    width: 100%;
-    margin: 4px 0 0;
+  .admin-rail {
+    grid-row: 1 / 3;
+  }
+
+  .admin-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-2) var(--space-3);
+    overflow-x: auto;
+  }
+
+  .sidebar-title {
+    display: none;
+  }
+
+  .sidebar-pages {
+    flex-direction: row;
+    gap: var(--space-1);
+  }
+
+  .sidebar-page {
+    white-space: nowrap;
+  }
+
+  .admin-content {
+    padding: var(--space-4);
+  }
+
+  .admin-topbar {
+    padding: var(--space-2) var(--space-4);
   }
 }

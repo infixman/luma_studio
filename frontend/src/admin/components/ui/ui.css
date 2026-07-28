@@ -1,0 +1,741 @@
+/* The back office's controls. Every colour here is a token from
+   styles/tokens.css, so both themes come out of one set of rules. */
+
+/* --- buttons --- */
+
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ui-button.size-md {
+  padding: 0.55rem 0.95rem;
+  font-size: var(--font-base);
+}
+
+.ui-button.size-sm {
+  padding: 0.35rem 0.7rem;
+  font-size: var(--font-sm);
+}
+
+.ui-button.tone-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.ui-button.tone-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.ui-button.tone-neutral {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ui-button.tone-neutral:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ui-button.tone-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.ui-button.tone-danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
+}
+
+.ui-button.tone-ghost {
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.ui-button.tone-ghost:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--text);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Busy is not disabled-looking: the work was accepted, it is just not done. */
+.ui-button.busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+.ui-button svg,
+.ui-icon-button svg {
+  width: 1.05em;
+  height: 1.05em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ui-icon-button.size-md {
+  width: 34px;
+  height: 34px;
+}
+
+.ui-icon-button.size-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.ui-icon-button:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--text);
+}
+
+.ui-icon-button.tone-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ui-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.ui-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.ui-button-row.align-end {
+  justify-content: flex-end;
+}
+
+/* One focus ring for everything, so keyboard use looks deliberate rather
+   than like whatever each browser does by default. */
+.ui-button:focus-visible,
+.ui-icon-button:focus-visible,
+.ui-input:focus-visible,
+.ui-choice-input:focus-visible + .ui-choice-label .ui-box,
+.ui-choice-input:focus-visible + .ui-choice-label .ui-dot,
+.ui-toggle-input:focus-visible + .ui-toggle-track,
+.ui-option:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* --- fields --- */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.ui-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.ui-required {
+  margin-left: 2px;
+  color: var(--danger);
+}
+
+.ui-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-base);
+}
+
+.ui-input::placeholder {
+  color: var(--muted);
+}
+
+.ui-input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.ui-input:disabled {
+  background: var(--sunken);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.ui-field.has-error .ui-input {
+  border-color: var(--danger);
+}
+
+.ui-textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.ui-input-trailing {
+  position: absolute;
+  right: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Room for whatever sits at the end, so the text never runs under it. */
+.ui-input-wrap:has(.ui-input-trailing) .ui-input {
+  padding-right: 2.6rem;
+}
+
+.ui-note {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.ui-note.is-error {
+  color: var(--danger);
+}
+
+/* --- select --- */
+
+.ui-select {
+  position: relative;
+}
+
+.ui-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-select-trigger.is-empty .ui-select-value {
+  color: var(--muted);
+}
+
+.ui-select-trigger.is-open {
+  border-color: var(--primary);
+}
+
+.ui-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-chevron {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+  transition: transform 140ms ease;
+}
+
+.ui-select-trigger.is-open .ui-chevron {
+  transform: rotate(180deg);
+}
+
+.ui-listbox {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-2);
+}
+
+.ui-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  cursor: pointer;
+}
+
+/* Hover and keyboard share one highlight — two different ones would put two
+   "current" rows on screen the moment somebody touches the mouse. */
+.ui-option.is-active {
+  background: var(--primary-soft);
+}
+
+.ui-option.is-selected {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.ui-option.is-disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.ui-tick {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- checkbox, radio --- */
+
+.ui-choice {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The real control stays, and stays reachable: it is placed under the drawn
+   box rather than removed with display:none, which would take it out of the
+   tab order along with everything the browser does for free. */
+.ui-choice-input {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ui-choice-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  cursor: pointer;
+  font-size: var(--font-base);
+}
+
+.ui-box,
+.ui-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ui-box {
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+}
+
+.ui-dot {
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+}
+
+.ui-box svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--on-primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.ui-choice-input:checked + .ui-choice-label .ui-box {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.ui-choice-input:checked + .ui-choice-label .ui-box svg {
+  opacity: 1;
+}
+
+.ui-choice-input:checked + .ui-choice-label .ui-dot {
+  border-color: var(--primary);
+  border-width: 5px;
+}
+
+.ui-choice-input:disabled + .ui-choice-label {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-choice-hint {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.5;
+}
+
+.ui-radio-group {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ui-radio-group.is-inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.ui-radio-group legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+
+.ui-radio-group.is-inline legend {
+  width: 100%;
+}
+
+/* --- toggle --- */
+
+.ui-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.ui-toggle-row .ui-choice-text {
+  flex: 1;
+}
+
+.ui-toggle-label {
+  font-size: var(--font-base);
+  cursor: pointer;
+}
+
+.ui-toggle-track {
+  flex: none;
+  width: 40px;
+  height: 22px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.ui-toggle-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  box-shadow: var(--shadow-1);
+  transition: transform 140ms ease;
+}
+
+.ui-toggle-input:checked + .ui-toggle-track {
+  background: var(--primary);
+}
+
+.ui-toggle-input:checked + .ui-toggle-track .ui-toggle-knob {
+  transform: translateX(18px);
+}
+
+.ui-toggle-input:disabled + .ui-toggle-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- panel --- */
+
+.ui-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.ui-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-panel-title {
+  margin: 0;
+  font-size: var(--font-base);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.ui-panel-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ui-panel-body {
+  padding: var(--space-4);
+}
+
+/* --- badge --- */
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ui-badge.tone-neutral { background: var(--sunken); color: var(--text-soft); }
+.ui-badge.tone-primary { background: var(--primary-soft); color: var(--primary); }
+.ui-badge.tone-success { background: var(--success-soft); color: var(--success); }
+.ui-badge.tone-warning { background: var(--warning-soft); color: var(--warning); }
+.ui-badge.tone-danger { background: var(--danger-soft); color: var(--danger); }
+.ui-badge.tone-info { background: var(--info-soft); color: var(--info); }
+
+/* --- table --- */
+
+.ui-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-base);
+}
+
+.ui-table th {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ui-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.ui-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ui-table tbody tr:hover td {
+  background: var(--primary-soft);
+}
+
+.ui-table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- empty, loading --- */
+
+.ui-empty {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+}
+
+.ui-empty-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ui-empty-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  max-width: 34rem;
+}
+
+.ui-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  padding: var(--space-5) 0;
+}
+
+.ui-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: ui-spin 700ms linear infinite;
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner {
+    animation-duration: 2s;
+  }
+
+  .ui-toggle-knob,
+  .ui-chevron {
+    transition: none;
+  }
+}
+
+/* --- modal --- */
+
+/* display:grid would otherwise beat the hidden attribute's display:none. */
+.ui-backdrop[hidden] {
+  display: none;
+}
+
+.ui-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(10 10 20 / 0.55);
+}
+
+.ui-modal {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-modal.width-sm { max-width: 26rem; }
+.ui-modal.width-md { max-width: 38rem; }
+.ui-modal.width-lg { max-width: 54rem; }
+
+.ui-modal:focus {
+  outline: none;
+}
+
+.ui-modal-title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: var(--font-lg);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.ui-modal-body {
+  padding: 0 var(--space-5) var(--space-4);
+  overflow-y: auto;
+  color: var(--text-soft);
+  line-height: 1.65;
+}
+
+.ui-modal-body p {
+  margin: 0 0 var(--space-2);
+}
+
+/* The way out on the left, the thing being confirmed on the right — the same
+   order every dialog in this back office uses. */
+.ui-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--border);
+}

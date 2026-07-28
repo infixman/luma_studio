@@ -1,122 +1,145 @@
-body.admin main {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 44px 24px 72px;
-}
+/* The back office's shared surface: typography, the plain controls that have
+   not been replaced by components yet, and the ibon page's own pieces.
 
-body.admin header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  border-bottom: 1px solid #d8ddd7;
-  padding-bottom: 26px;
-}
+   Every colour is a token from tokens.css. Nothing here names a colour, so
+   both themes come out of one set of rules. */
 
-body.admin .brand-logo {
-  display: block;
-  width: 154px;
-  height: auto;
+body.admin {
+  background: var(--page);
+  color: var(--text);
+  font-size: var(--font-base);
+  /* The shell owns the height and does its own scrolling. */
+  overflow: hidden;
 }
 
 body.admin h2 {
-  font-size: 1.125rem;
+  font-size: var(--font-lg);
   margin: 0;
-  color: #1f3343;
+  color: var(--text);
+}
+
+body.admin h3 {
+  font-size: var(--font-base);
+  margin: 0 0 var(--space-2);
+  color: var(--text);
 }
 
 body.admin p {
-  color: #596775;
-  line-height: 1.5;
+  color: var(--text-soft);
+  line-height: 1.6;
 }
 
+body.admin a {
+  color: var(--primary);
+}
+
+/* --- controls not yet moved onto the component set --- */
+
 body.admin button {
-  border: 1px solid #247e78;
-  border-radius: 7px;
-  padding: 9px 13px;
-  background: #287f79;
-  color: #fff;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.8rem;
+  background: var(--primary);
+  color: var(--on-primary);
   cursor: pointer;
+  font: inherit;
   font-weight: 600;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 body.admin button:hover:not(:disabled) {
-  background: #1f6e69;
-  border-color: #1f6e69;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 body.admin button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 body.admin button.danger {
-  background: #b74355;
-  border-color: #b74355;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 body.admin button.danger:hover:not(:disabled) {
-  background: #9f3447;
-  border-color: #9f3447;
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
 }
 
 body.admin button.ghost {
-  background: #fff;
-  color: #405160;
-  border-color: #c8d0cc;
+  background: var(--surface);
+  color: var(--text-soft);
+  border-color: var(--border-strong);
+}
+
+body.admin button.ghost:hover:not(:disabled) {
+  background: var(--sunken);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+body.admin input,
+body.admin textarea,
+body.admin select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 body.admin button:focus-visible,
-body.admin input:focus-visible {
-  outline: 3px solid #a7d5d0;
+body.admin input:focus-visible,
+body.admin textarea:focus-visible,
+body.admin select:focus-visible,
+body.admin a:focus-visible {
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* --- layout helpers --- */
 
 body.admin .grid {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  gap: 28px;
-  margin-top: 32px;
+  gap: var(--space-5);
 }
 
 body.admin .card {
-  background: #fff;
-  border: 1px solid #d8ddd7;
-  border-radius: 10px;
-  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
 }
 
 body.admin .row {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: center;
 }
 
 body.admin .row input {
   min-width: 0;
   flex: 1;
-  padding: 10px 11px;
-  border: 1px solid #bbc6c1;
-  border-radius: 7px;
-  background: #fff;
-  color: #1e2938;
+  padding: 0.55rem 0.7rem;
 }
 
 body.admin .folders,
 body.admin .files {
   list-style: none;
   padding: 0;
-  margin: 16px 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 body.admin li {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 11px 0;
-  border-bottom: 1px solid #e1e5e1;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
 }
 
 body.admin .folder {
@@ -124,35 +147,35 @@ body.admin .folder {
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 6px 4px;
-  color: #253746;
+  padding: var(--space-1) var(--space-1);
+  color: var(--text);
   font-weight: 600;
 }
 
 body.admin .folder:hover:not(:disabled) {
-  background: #edf5f3;
-  color: #1e625e;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 body.admin .folder-row.selected {
   margin: 0 -8px;
-  padding: 11px 8px;
-  border-radius: 7px;
-  background: #edf5f3;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
   border-bottom-color: transparent;
 }
 
 body.admin .copy-link {
   display: grid;
   place-items: center;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: 1px solid #c7d2cd;
-  border-radius: 7px;
-  background: #fff;
-  color: #3a6c68;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
 }
 
 body.admin a.copy-link {
@@ -160,8 +183,9 @@ body.admin a.copy-link {
 }
 
 body.admin .copy-link:hover:not(:disabled) {
-  background: #edf5f3;
-  border-color: #80aaa4;
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 body.admin .copy-link svg {
@@ -175,9 +199,9 @@ body.admin .copy-link svg {
 }
 
 body.admin .copy-link.copied {
-  border-color: #287f79;
-  background: #e6f2ef;
-  color: #19665f;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
   animation: copy-success 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -191,7 +215,7 @@ body.admin .file-main {
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: 11px;
+  gap: var(--space-3);
   align-items: center;
 }
 
@@ -199,9 +223,9 @@ body.admin .file-thumb {
   flex: 0 0 46px;
   width: 46px;
   height: 46px;
-  border: 1px solid #e1e5e1;
-  border-radius: 6px;
-  background: #f3f5f2;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
   object-fit: cover;
 }
 
@@ -214,28 +238,30 @@ body.admin .file-name {
 body.admin .file-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 
 body.admin .muted {
-  color: #697683;
-  font-size: 0.875rem;
+  color: var(--muted);
+  font-size: var(--font-sm);
 }
+
+/* --- the status line --- */
 
 body.admin #status {
   position: fixed;
-  z-index: 10;
+  z-index: 60;
   left: 50%;
-  bottom: 28px;
+  bottom: var(--space-5);
   width: max-content;
   max-width: calc(100vw - 32px);
   margin: 0;
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: #263b47;
-  color: #fff;
-  box-shadow: 0 12px 30px rgba(23, 44, 60, 0.22);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--rail);
+  color: var(--rail-text-strong);
+  box-shadow: var(--shadow-3);
   font-weight: 600;
   line-height: 1.45;
   opacity: 0;
@@ -250,42 +276,46 @@ body.admin #status.visible {
 }
 
 body.admin #status.error {
-  background: #9f3447;
+  background: var(--danger);
+  color: #fff;
 }
 
 body.admin #status.ok {
-  background: #216c66;
+  background: var(--success);
+  color: #fff;
 }
 
 body.admin .empty {
-  padding: 24px 0;
-  color: #71808a;
+  padding: var(--space-5) 0;
+  color: var(--muted);
   text-align: center;
 }
 
+/* --- the ibon print page --- */
+
 body.admin .print-settings {
-  margin: 26px 0 24px;
-  padding: 20px 0 22px;
-  border-top: 1px solid #e1e5e1;
-  border-bottom: 1px solid #e1e5e1;
+  margin: var(--space-5) 0;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 body.admin .print-settings-header {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--space-3);
   align-items: baseline;
 }
 
 body.admin .print-settings-header p {
-  margin: 4px 0 0;
+  margin: var(--space-1) 0 0;
 }
 
 body.admin .setting-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 17px 22px;
-  margin: 18px 0 0;
+  gap: var(--space-4) var(--space-5);
+  margin: var(--space-4) 0 0;
 }
 
 body.admin fieldset {
@@ -297,62 +327,62 @@ body.admin fieldset {
 
 body.admin legend {
   padding: 0;
-  color: #253746;
+  color: var(--text);
   font-weight: 700;
 }
 
 body.admin .choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 body.admin button.choice {
   min-height: 38px;
-  border-color: #d1d9d4;
-  background: #f3f5f2;
-  color: #45545d;
-  font-size: 0.875rem;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
 }
 
 body.admin button.choice:hover:not(:disabled) {
-  border-color: #80aaa4;
-  background: #edf5f3;
-  color: #1e625e;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 body.admin button.choice.selected {
-  border-color: #247e78;
-  background: #287f79;
-  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 body.admin button.choice:disabled {
-  border-color: #e1e5e1;
-  background: #f7f8f6;
-  color: #a4afaa;
+  border-color: var(--border);
+  background: var(--sunken);
+  color: var(--muted);
   opacity: 1;
 }
 
 body.admin .print-summary {
-  margin: 17px 0 0;
-  color: #536371;
-  font-size: 0.92rem;
+  margin: var(--space-4) 0 0;
+  color: var(--text-soft);
+  font-size: var(--font-sm);
 }
 
 body.admin .cache-notice {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border-radius: 7px;
-  background: #f3f6f2;
-  color: #596775;
-  font-size: 0.875rem;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
   line-height: 1.55;
 }
 
 body.admin .upload-area {
-  margin: 22px 0 0;
+  margin: var(--space-5) 0 0;
 }
 
 body.admin button.drop-zone {
@@ -360,26 +390,27 @@ body.admin button.drop-zone {
   width: 100%;
   min-height: 142px;
   place-items: center;
-  gap: 7px;
-  padding: 22px;
-  border: 1.5px dashed #90b9b3;
-  border-radius: 9px;
-  background: #f5faf8;
-  color: #245f5b;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  color: var(--text-soft);
   text-align: center;
   cursor: pointer;
 }
 
 body.admin button.drop-zone:hover:not(:disabled),
 body.admin button.drop-zone.drag-over {
-  border-color: #287f79;
-  background: #e8f4f1;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 body.admin button.drop-zone:disabled {
-  border-color: #d9e1dd;
-  background: #f6f7f5;
-  color: #8a9992;
+  border-color: var(--border);
+  background: var(--sunken);
+  color: var(--muted);
 }
 
 body.admin .drop-zone-icon {
@@ -393,65 +424,57 @@ body.admin .drop-zone-title {
 }
 
 body.admin .drop-zone-hint {
-  color: #687780;
-  font-size: 0.875rem;
+  color: var(--muted);
+  font-size: var(--font-sm);
   font-weight: 400;
 }
 
 body.admin .upload-progress {
   display: grid;
-  gap: 7px;
-  margin-top: 12px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 body.admin .upload-progress-label {
-  color: #52636e;
-  font-size: 0.875rem;
+  color: var(--text-soft);
+  font-size: var(--font-sm);
 }
 
 body.admin .progress-track {
   height: 7px;
   overflow: hidden;
-  border-radius: 99px;
-  background: #e0e8e4;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
 }
 
 body.admin .progress-bar {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: #287f79;
+  background: var(--primary);
   transition: width 0.2s ease-out;
 }
 
 body.admin .upload-limit {
-  margin: 22px 0 0;
-  padding: 16px;
-  border: 1px solid #d7e1dc;
-  border-radius: 8px;
-  background: #f3f6f2;
-  color: #536371;
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--text-soft);
   line-height: 1.55;
 }
 
 body.admin .folder-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 14px;
+  margin-top: var(--space-3);
 }
 
 @media (max-width: 720px) {
-  body.admin main {
-    padding: 28px 16px 48px;
-  }
-
   body.admin .grid {
     grid-template-columns: 1fr;
-    gap: 18px;
-  }
-
-  body.admin .brand-logo {
-    width: 126px;
+    gap: var(--space-4);
   }
 
   body.admin .row {
@@ -461,7 +484,7 @@ body.admin .folder-actions {
 
   body.admin .setting-grid {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: var(--space-4);
   }
 
   body.admin button.choice {
