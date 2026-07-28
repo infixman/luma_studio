@@ -47,13 +47,13 @@
 
 .ui-button.tone-neutral:hover:not(:disabled) {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .ui-button.tone-danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 .ui-button.tone-danger:hover:not(:disabled) {
@@ -333,7 +333,7 @@
 }
 
 .ui-option.is-selected {
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
 }
 
@@ -388,7 +388,7 @@
   padding: 2px 2px 2px 0.55rem;
   border-radius: var(--radius-pill);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: var(--font-sm);
   font-weight: 600;
   white-space: nowrap;
@@ -653,7 +653,7 @@
 }
 
 .ui-badge.tone-neutral { background: var(--sunken); color: var(--text-soft); }
-.ui-badge.tone-primary { background: var(--primary-soft); color: var(--primary); }
+.ui-badge.tone-primary { background: var(--primary-soft); color: var(--primary-text); }
 .ui-badge.tone-success { background: var(--success-soft); color: var(--success); }
 .ui-badge.tone-warning { background: var(--warning-soft); color: var(--warning); }
 .ui-badge.tone-danger { background: var(--danger-soft); color: var(--danger); }
@@ -927,7 +927,7 @@
   justify-content: center;
   width: 1em;
   height: 1em;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .ui-menu-tick svg {

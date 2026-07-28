@@ -15,7 +15,7 @@ body.admin .page-row {
   align-items: center;
   justify-content: space-between;
   padding: 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -184,7 +184,7 @@ body.admin .block-kind {
   height: 26px;
   border-radius: var(--radius-sm);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin .block-kind svg {
@@ -293,7 +293,7 @@ body.admin .block-menu button {
 
 body.admin .block-menu button:hover:not(:disabled) {
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Disabled rather than absent, so the gesture is still visible to somebody
@@ -393,7 +393,7 @@ body.admin .tile-mark {
   height: 34px;
   border-radius: var(--radius-pill);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin .tile-mark svg {
@@ -423,7 +423,7 @@ body.admin .block-list textarea {
 /* The preview holds the storefront's background so the blocks are read
    against what they will actually sit on, not against the admin's card. */
 body.admin .preview-surface {
-  background: #faf7f2;
+  background: var(--storefront-page);
   border-radius: 8px;
   padding: 1.2rem 1rem;
   min-height: 12rem;
@@ -492,7 +492,7 @@ body.admin .preview-jump:focus-visible {
 /* Shut reads as the stronger of the two states because it is the one that is
    doing something: the field below it is not the owner's to type in. */
 body.admin .slug-lock.is-locked {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 @media (max-width: 1100px) {
@@ -535,7 +535,7 @@ body.admin .block-editor .thumb {
   height: 74px;
   object-fit: cover;
   border-radius: 6px;
-  background: #f2ede6;
+  background: var(--sunken);
   flex: none;
 }
 
@@ -548,11 +548,11 @@ body.admin .block-editor .thumb.empty {
   padding: 0.3rem;
   font-size: 0.72rem;
   text-align: center;
-  color: #a05a00;
+  color: var(--warning);
 }
 
 body.admin .block-editor .thumb.empty {
-  color: #7a726a;
+  color: var(--muted);
 }
 
 body.admin .slide-list,
@@ -574,7 +574,7 @@ body.admin .portrait-row {
   align-items: center;
   gap: 0.6rem;
   padding: 0.5rem;
-  border: 1px solid rgb(0 0 0 / 0.1);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 

@@ -3,7 +3,7 @@
 /* The preview holds the real components, so it needs a surface that is not
    the admin card behind them. */
 body.admin .chrome-preview {
-  border: 1px solid rgb(0 0 0 / 0.12);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -59,17 +59,17 @@ body.admin .menu-tree li {
   align-items: center;
   gap: 0.6rem;
   padding: 0.45rem 0.6rem;
-  border: 1px solid rgb(0 0 0 / 0.12);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
 }
 
 body.admin .menu-tree .depth-2 { margin-left: 1.6rem; }
 body.admin .menu-tree .depth-3 { margin-left: 3.2rem; }
 
 body.admin .menu-tree .drop-target {
-  border-color: #2f5d4a;
-  box-shadow: inset 0 0 0 1px #2f5d4a;
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 
 /* The grip is a hint that dragging works, not the only way to reorder — the
@@ -91,7 +91,7 @@ body.admin .menu-tree code {
 }
 
 body.admin .menu-tree code.broken {
-  color: #a05a00;
+  color: var(--warning);
   opacity: 1;
 }
 
@@ -140,7 +140,7 @@ body.admin .header-image-row .thumb {
   height: 74px;
   object-fit: cover;
   border-radius: 6px;
-  background: #f2ede6;
+  background: var(--sunken);
   flex: none;
 }
 
@@ -148,7 +148,7 @@ body.admin .header-image-row .thumb.empty {
   display: grid;
   place-items: center;
   font-size: 0.78rem;
-  color: #7a726a;
+  color: var(--muted);
 }
 
 /* --- footer columns and socials --- */
@@ -165,7 +165,7 @@ body.admin .footer-columns-editor > li {
   display: grid;
   gap: 0.6rem;
   padding: 0.7rem;
-  border: 1px solid rgb(0 0 0 / 0.1);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 

@@ -27,9 +27,21 @@
   width: 34px;
   height: auto;
   margin-bottom: var(--space-3);
-  /* The mark was drawn for a cream page. On the rail it is one colour. */
+}
+
+/* The mark was drawn for a cream page, so on a dark rail it is knocked out to
+   one colour. Only on a dark rail: the light theme's rail is white, and a
+   white mark on it is an empty square. */
+:root[data-theme='dark'] .rail-mark {
   filter: brightness(0) invert(1);
   opacity: 0.9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .rail-mark {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+  }
 }
 
 .rail-areas {
@@ -66,7 +78,7 @@
 
 .rail-area:hover,
 .rail-button:hover {
-  background: rgb(255 255 255 / 0.09);
+  background: var(--sunken);
   color: var(--rail-text-strong);
 }
 
@@ -98,6 +110,7 @@
   border-radius: var(--radius-sm);
   background: var(--rail);
   color: var(--rail-text-strong);
+  border: 1px solid var(--border);
   font-size: var(--font-xs);
   white-space: nowrap;
   box-shadow: var(--shadow-2);
@@ -158,7 +171,7 @@
 
 .sidebar-page.current {
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 650;
 }
 

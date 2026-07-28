@@ -30,7 +30,7 @@ body.admin p {
 }
 
 body.admin a {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* --- controls not yet moved onto the component set --- */
@@ -60,7 +60,7 @@ body.admin button:disabled {
 body.admin button.danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 body.admin button.danger:hover:not(:disabled) {
@@ -159,7 +159,7 @@ body.admin .folder {
 
 body.admin .folder:hover:not(:disabled) {
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin .folder-row.selected {
@@ -190,7 +190,7 @@ body.admin a.copy-link {
 body.admin .copy-link:hover:not(:disabled) {
   background: var(--primary-soft);
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin .copy-link svg {
@@ -206,7 +206,7 @@ body.admin .copy-link svg {
 body.admin .copy-link.copied {
   border-color: var(--primary);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
   animation: copy-success 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -282,12 +282,14 @@ body.admin #status.visible {
 
 body.admin #status.error {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 body.admin #status.ok {
+  /* The dark theme's success green is light enough that white sits at 2.4:1
+     on it, so the ink follows the same rule the danger button does. */
   background: var(--success);
-  color: #fff;
+  color: var(--on-success);
 }
 
 body.admin .empty {
@@ -354,7 +356,7 @@ body.admin button.choice {
 body.admin button.choice:hover:not(:disabled) {
   border-color: var(--primary);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin button.choice.selected {
@@ -409,7 +411,7 @@ body.admin button.drop-zone:hover:not(:disabled),
 body.admin button.drop-zone.drag-over {
   border-color: var(--primary);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin button.drop-zone:disabled {

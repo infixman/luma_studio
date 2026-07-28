@@ -45,17 +45,27 @@
   --primary-hover: #3733e0;
   --primary-soft: #f0f0ff;
   --primary-line: #d9d8ff;
+  /* The accent as *text*. Same as the fill in the light theme; in the dark one
+     the fill is an indigo that reads 2.99:1 on the tint behind it, so text
+     takes the lighter step instead. */
+  --primary-text: #4945ff;
   --focus-ring: rgb(73 69 255 / 0.2);
 
   /* --- meaning --- */
   --danger: #d02b20;
   --danger-hover: #b72b1a;
+  /* What reads on a filled danger button. White clears 5.19:1 here, but the
+     dark theme's danger is a much lighter red — see the note there. */
+  --on-danger: #fff;
   --danger-soft: #fcecea;
   --danger-line: #f5c0b8;
-  --warning: #be5d01;
+  /* Darker than Strapi's #be5d01, which reads 4.03:1 on its own tint — these
+     badges are 12px, so that is under AA. This one is 5.15:1. */
+  --warning: #a54f00;
   --warning-soft: #fdf4dc;
   --warning-line: #faca8c;
   --success: #328048;
+  --on-success: #fff;
   --success-soft: #eafbe7;
   --success-line: #c6f0c2;
   --info: #0c75af;
@@ -81,6 +91,12 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
+
+  /* The storefront's own page colour, for the block preview only. It is not
+     part of the admin's palette and does not follow the theme: the preview is
+     supposed to look like the shop, not like the tool. Mirrors --surface in
+     storefront/styles/surface.css — the two bundles cannot share a variable. */
+  --storefront-page: #f3ede4;
 
   --rail-width: 56px;
   --sidebar-width: 232px;
@@ -116,16 +132,21 @@
     --primary-hover: #7b79ff;
     --primary-soft: #181826;
     --primary-line: #4a4a6a;
+    --primary-text: #7b79ff;
     --focus-ring: rgb(123 121 255 / 0.35);
 
     --danger: #ee5e52;
     --danger-hover: #d02b20;
+    /* Not white: #fff on #ee5e52 is 3.30:1, and these buttons are 14px, so
+       that fails AA. A dark ink on the same red is 5.67:1. */
+    --on-danger: #1f0d0c;
     --danger-soft: #181826;
     --danger-line: #4a4a6a;
     --warning: #f29d41;
     --warning-soft: #181826;
     --warning-line: #4a4a6a;
     --success: #5cb176;
+    --on-success: #06210f;
     --success-soft: #181826;
     --success-line: #4a4a6a;
     --info: #66b7f1;
@@ -161,16 +182,21 @@
   --primary-hover: #7b79ff;
   --primary-soft: #181826;
   --primary-line: #4a4a6a;
+  --primary-text: #7b79ff;
   --focus-ring: rgb(123 121 255 / 0.35);
 
   --danger: #ee5e52;
   --danger-hover: #d02b20;
+  /* Not white: #fff on #ee5e52 is 3.30:1, and these buttons are 14px, so
+     that fails AA. A dark ink on the same red is 5.67:1. */
+  --on-danger: #1f0d0c;
   --danger-soft: #181826;
   --danger-line: #4a4a6a;
   --warning: #f29d41;
   --warning-soft: #181826;
   --warning-line: #4a4a6a;
   --success: #5cb176;
+  --on-success: #06210f;
   --success-soft: #181826;
   --success-line: #4a4a6a;
   --info: #66b7f1;

@@ -188,7 +188,7 @@ body.admin .media-row-name {
 }
 
 body.admin .media-row-name:hover {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 body.admin .media-row-name small {
