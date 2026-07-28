@@ -65,6 +65,7 @@ backend/
     site_admin_api.py 管理端外框端點
     media.py          媒體庫：上傳的圖片與誰在用它
     media_admin_api.py 管理端媒體端點
+    orders_admin_api.py 管理端訂單端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
     common.py         共用常數與小工具
@@ -167,6 +168,12 @@ docs/superpowers/specs/  設計文件
 | GET | `/api/media/{id}` | 單張圖與使用它的頁面 |
 | PUT | `/api/media/{id}` | 改替代文字 |
 | DELETE | `/api/media/{id}` | 刪除。還被使用時回 409，加 `?force=1` 才真的刪 |
+| GET | `/api/orders?status=&q=` | 訂單列表與各狀態筆數 |
+| GET | `/api/orders/{id}` | 單筆訂單、品項、付款嘗試與稽核紀錄 |
+| POST | `/api/orders/{id}/paid` | 手動標記已付款（匯款先到時用） |
+| POST | `/api/orders/{id}/shipped`、`/completed` | 往前一步，不能跳過也不能倒退 |
+| POST | `/api/orders/{id}/cancel` | 取消並退回庫存 |
+| POST | `/api/orders/{id}/note` | 店家備註，顧客看不到 |
 
 `/api/bio-link` 在兩台主機上都存在，語意不同：公開端是唯讀內容，管理端是編輯。不會混淆，因為授權管理端的 cookie 永遠不會被送到公開端。
 
@@ -664,6 +671,22 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 檢查寫在 `WHERE` 裡，所以兩個請求搶最後一件時，不可能兩邊都讀到「剩 1」然後都成功——後到的那個 UPDATE match 不到任何列。這是這家店和超賣之間唯一的防線，所以只寫在 `orders.take_stock` 一個地方。
 
 訂單建立途中若有一行賣完，**先前已扣的庫存會被放回去**。少了這一步，某個顧客結帳失敗會安靜地把其他商品從架上拿走。
+
+### 後台的訂單
+
+| 位置 | |
+| --- | --- |
+| 訂單列表與明細 | `admin.luma-studio.tw/orders` |
+
+狀態只能往前，而且不能跳過 `paid`：`pending → paid → shipped → completed`，取消是另一條路（`pending`／`paid`／`shipped` 都能取消，庫存會退回）。允許的移動寫成一張表 `orders.FORWARD`，API 和後台的按鈕都讀它——畫出一個伺服器會拒絕的按鈕，等於教人「按鈕會騙你」。
+
+**每一次移動都記名字。** 這個部署只有一個人登得進來，所以稽核紀錄裡寫的是那個 email，不是 `admin`。付款被爭議的那一天不是開始蒐集證據的日子。
+
+移動時把「讀到的狀態」放進 `WHERE`，所以兩個人同時按只會有一次成功、一次 409，不會產生兩筆稽核紀錄。沒有 `shipped_at` 這種欄位——什麼時候發生的在稽核紀錄裡，那份才是必須正確的。
+
+**手動標記已付款**是刻意留的：金流還沒串，匯款先到的時候需要一個入口。對到哪一筆匯款會寫進稽核的 detail，因為「手動標記」單獨看沒有意義。
+
+**店家備註不會出現在顧客的訂單頁。** `orders.order_row` 是交給顧客的形狀，`admin_row` 才多帶 `adminNote` 與 `customerId`。把私人備註加進共用的形狀，就是把它發佈在別人的訂單頁上。
 
 ### 金流還沒串
 

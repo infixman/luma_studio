@@ -1,0 +1,145 @@
+/* The shop's own view of its orders. */
+
+body.admin .order-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0 0 1.1rem;
+}
+
+body.admin .order-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+body.admin .order-tabs button {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+body.admin .order-tabs button.current {
+  border-color: #2f5d4a;
+  background: #2f5d4a;
+  color: #fff;
+}
+
+body.admin .order-tabs .count {
+  margin-left: 0.35rem;
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+body.admin .order-filters input[type='search'] {
+  flex: 1;
+  min-width: 12rem;
+}
+
+body.admin .order-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+body.admin .order-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.82rem;
+  opacity: 0.65;
+  padding: 0 0.5rem 0.4rem;
+}
+
+body.admin .order-table td {
+  padding: 0.55rem 0.5rem;
+  border-top: 1px solid rgb(0 0 0 / 0.08);
+  vertical-align: top;
+}
+
+body.admin .order-table tr.current td {
+  background: #f6f2ec;
+}
+
+body.admin .order-table tr.total td {
+  font-weight: 650;
+}
+
+/* Status colours carry meaning that the words already carry, so they stay
+   quiet: a tint, not a traffic light. */
+body.admin .status {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: #ece7e0;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+body.admin .status.paid { background: #d8e6d8; }
+body.admin .status.shipped { background: #d7e2ee; }
+body.admin .status.completed { background: #dcd9ee; }
+body.admin .status.cancelled,
+body.admin .status.expired { background: #ecdcdc; }
+
+body.admin .order-detail h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+body.admin .order-detail h3 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+body.admin .moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+body.admin .facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+body.admin .facts dt {
+  opacity: 0.65;
+}
+
+body.admin .facts dd {
+  margin: 0;
+}
+
+body.admin .audit {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  body.admin .order-table thead {
+    display: none;
+  }
+
+  body.admin .order-table tr {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid rgb(0 0 0 / 0.08);
+  }
+
+  body.admin .order-table td {
+    padding: 0;
+    border: none;
+  }
+}

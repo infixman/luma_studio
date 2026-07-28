@@ -7,6 +7,7 @@ import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ShippingPage } from './pages/ShippingPage'
 import { MediaPage } from './pages/MediaPage'
+import { OrdersAdminPage } from './pages/OrdersAdminPage'
 import { SitePage } from './pages/SitePage'
 
 const PRODUCT_PATH = /^\/products\/([^/]+)$/
@@ -29,6 +30,7 @@ function Routed() {
   if (path === '/pages') return <PagesPage />
   if (path === '/site') return <SitePage />
   if (path === '/media') return <MediaPage />
+  if (path === '/orders') return <OrdersAdminPage />
 
   const page = PAGE_PATH.exec(path)
   if (page) return <PageEditPage id={decodeURIComponent(page[1]!)} />

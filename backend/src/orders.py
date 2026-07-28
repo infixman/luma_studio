@@ -25,6 +25,9 @@ ORDER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,25}$")
 # stranding the item for an afternoon.
 RESERVATION_SECONDS = 15 * 60
 
+# The back office reads a page at a time; nothing here pages through a year.
+MAX_LIST = 200
+
 STATUSES = ("pending", "paid", "shipped", "completed", "cancelled", "expired")
 # The states in which stock is still spoken for. Leaving any of these puts it
 # back; every caller goes through `release_stock` rather than deciding alone.
@@ -117,6 +120,17 @@ def item_row(row: dict) -> dict:
         "quantity": int(row["quantity"]),
         "subtotal": int(row["subtotal"]),
     }
+
+
+def admin_row(row: dict) -> dict:
+    """The same order plus what only the shop may see.
+
+    A separate function rather than a field on `order_row`, because that one
+    is what a customer is handed. A private note added to the shared shape is
+    a private note published on someone's order page.
+    """
+
+    return {**order_row(row), "customerId": row["customer_id"], "adminNote": row["admin_note"]}
 
 
 async def audit(env, order_id: str, actor: str, action: str, *, before=None, after=None, detail: str = "") -> None:
@@ -221,6 +235,11 @@ async def get_order(env, order_id: str) -> dict | None:
     return order_row(rows[0]) if rows else None
 
 
+async def get_order_for_admin(env, order_id: str) -> dict | None:
+    rows = await d1_rows(env.DB.prepare("SELECT * FROM orders WHERE id = ?1").bind(order_id))
+    return admin_row(rows[0]) if rows else None
+
+
 async def list_items(env, order_id: str) -> list[dict]:
     return [
         item_row(row)
@@ -271,6 +290,130 @@ async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool
     if changed:
         await audit(env, order_id, actor, "paid", before="pending", after="paid", detail=detail)
     return changed
+
+
+# What the shop is allowed to do to an order, and from where. Written as a
+# table because the interesting part is which move is missing: nothing goes
+# backwards, and nothing skips paid.
+FORWARD = {"shipped": ("paid",), "completed": ("shipped",)}
+
+
+async def advance(env, order_id: str, to_status: str, actor: str, *, detail: str = "") -> str | None:
+    """Move an order one step forward, returning the status it came from.
+
+    None means the move was refused: the order is gone, or it is not in a
+    status this move starts from. The status it was read at goes into the
+    WHERE clause, so two people clicking at once produce one move and one
+    refusal rather than two audit entries.
+
+    There is no `shipped_at` column. When a move happened is in the audit log,
+    which is the record that has to be right the day a payment is disputed.
+    """
+
+    allowed = FORWARD.get(to_status)
+    if not allowed:
+        return None
+    order = await get_order(env, order_id)
+    if order is None or order["status"] not in allowed:
+        return None
+
+    before = order["status"]
+    result = await (
+        env.DB.prepare("UPDATE orders SET status = ?2, updated_at = ?3 WHERE id = ?1 AND status = ?4")
+        .bind(order_id, to_status, utc_timestamp(), before)
+        .run()
+    )
+    try:
+        changed = int(result.meta.changes) == 1
+    except (AttributeError, TypeError, ValueError):
+        changed = False
+    if not changed:
+        return None
+
+    await audit(env, order_id, actor, to_status, before=before, after=to_status, detail=detail)
+    return before
+
+
+async def set_note(env, order_id: str, note: str, actor: str) -> bool:
+    """The shop's own note on an order — a tracking number, a phone call.
+
+    Audited like everything else here. A note that quietly changed is a note
+    nobody can rely on.
+    """
+
+    result = await (
+        env.DB.prepare("UPDATE orders SET admin_note = ?2, updated_at = ?3 WHERE id = ?1")
+        .bind(order_id, note, utc_timestamp())
+        .run()
+    )
+    try:
+        changed = int(result.meta.changes) == 1
+    except (AttributeError, TypeError, ValueError):
+        changed = False
+    if changed:
+        await audit(env, order_id, actor, "note", detail=note)
+    return changed
+
+
+async def list_all(env, *, status: str = "", search: str = "", limit: int = 50) -> list[dict]:
+    """The shop's own view of its orders, newest first.
+
+    Search covers the order id, the recipient and the email they gave at
+    checkout — the three things someone has in front of them when they write
+    in asking about an order.
+    """
+
+    conditions, bindings = [], []
+    if status:
+        bindings.append(status)
+        conditions.append(f"status = ?{len(bindings)}")
+    if search:
+        bindings.append(f"%{search}%")
+        index = len(bindings)
+        conditions.append(f"(id LIKE ?{index} OR recipient_name LIKE ?{index} OR recipient_email LIKE ?{index})")
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    bindings.append(max(1, min(limit, MAX_LIST)))
+    query = f"SELECT * FROM orders{where} ORDER BY created_at DESC, id LIMIT ?{len(bindings)}"
+    return [admin_row(row) for row in await d1_rows(env.DB.prepare(query).bind(*bindings))]
+
+
+async def counts_by_status(env) -> dict:
+    rows = await d1_rows(env.DB.prepare("SELECT status, COUNT(*) AS total FROM orders GROUP BY status"))
+    return {row["status"]: int(row["total"]) for row in rows}
+
+
+async def list_audit(env, order_id: str) -> list[dict]:
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM order_audit_log WHERE order_id = ?1 ORDER BY created_at, rowid"
+        ).bind(order_id)
+    )
+    return [
+        {
+            "actor": row["actor"],
+            "action": row["action"],
+            "fromStatus": row["from_status"],
+            "toStatus": row["to_status"],
+            "detail": row["detail"],
+            "createdAt": int(row["created_at"]),
+        }
+        for row in rows
+    ]
+
+
+async def list_attempts(env, order_id: str) -> list[dict]:
+    rows = await d1_rows(
+        env.DB.prepare("SELECT * FROM payment_attempts WHERE order_id = ?1 ORDER BY created_at").bind(order_id)
+    )
+    return [
+        {
+            "merTradeNo": row["mer_trade_no"],
+            "amount": int(row["amount"]),
+            "status": row["status"],
+            "createdAt": int(row["created_at"]),
+        }
+        for row in rows
+    ]
 
 
 async def cancel(env, order_id: str, actor: str, *, reason: str = "") -> bool:

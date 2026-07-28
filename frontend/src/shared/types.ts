@@ -319,6 +319,40 @@ export interface OrderDetail {
   items: OrderItem[]
 }
 
+/** The same order plus what only the shop may see. */
+export interface AdminOrder extends Order {
+  customerId: string
+  adminNote: string
+}
+
+export interface PaymentAttempt {
+  merTradeNo: string
+  amount: number
+  status: string
+  createdAt: number
+}
+
+export interface OrderAuditEntry {
+  actor: string
+  action: string
+  fromStatus: string | null
+  toStatus: string | null
+  detail: string
+  createdAt: number
+}
+
+export interface AdminOrderDetail {
+  order: AdminOrder
+  items: OrderItem[]
+  attempts: PaymentAttempt[]
+  audit: OrderAuditEntry[]
+}
+
+export interface AdminOrderList {
+  orders: AdminOrder[]
+  counts: Partial<Record<OrderStatus, number>>
+}
+
 // --- custom pages -------------------------------------------------------
 
 export type PageStatus = 'draft' | 'published'

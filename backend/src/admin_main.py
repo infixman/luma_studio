@@ -18,6 +18,7 @@ import admin_api
 import auth_admin
 import bio_link_api
 import media_admin_api
+import orders_admin_api
 import pages_admin_api
 import rate_limit
 import router
@@ -57,6 +58,10 @@ async def dispatch(ctx: Ctx):
     if not email:
         return ctx.error("Authentication required", 401)
 
+    # Who is signed in, for the handlers that record who did what. Set once,
+    # here, rather than re-read by each of them.
+    ctx.admin_email = email
+
     if path == "/api/session" and method == "GET":
         return ctx.json({"email": email})
 
@@ -71,6 +76,9 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/media" or path.startswith("/api/media/"):
         return await media_admin_api.handle(ctx)
+
+    if path == "/api/orders" or path.startswith("/api/orders/"):
+        return await orders_admin_api.handle(ctx)
 
     if (
         path == "/api/products"
