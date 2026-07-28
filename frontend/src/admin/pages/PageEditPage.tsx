@@ -1,32 +1,63 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
+import {
+  AboutEditor,
+  AlbumEditor,
+  BLOCK_KINDS,
+  CarouselEditor,
+  ShopEditor,
+  TextEditor,
+  emptyConfig,
+} from '../components/BlockEditors'
+import type { Catalogue } from '../components/BlockEditors'
+import { useMediaPicker } from '../components/MediaPicker'
 import { useStatus } from '../components/StatusBar'
 import { Blocks } from '../../shared/components/Blocks'
 import { ApiError, api, apiJson, clearLoginAttempt } from '../../shared/api'
-import type { PageBlock, PageDetail, PageStatus } from '../../shared/types'
+import type {
+  AboutConfig,
+  AlbumConfig,
+  BlockConfig,
+  CarouselConfig,
+  MediaItem,
+  PageBlock,
+  PageDetail,
+  PageStatus,
+  ShopBlockConfig,
+  TextBlockConfig,
+} from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
+import '../styles/media-admin.css'
 
 const STATUSES: { value: PageStatus; label: string; hint: string }[] = [
   { value: 'draft', label: '草稿', hint: '只有你看得到' },
   { value: 'published', label: '公開', hint: '任何人都能開啟這個網址' },
 ]
 
+const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map((kind) => [kind.type, kind.label]))
+
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
   const [form, setForm] = useState({ title: '', path: '', status: 'draft' as PageStatus })
-  const [bodies, setBodies] = useState<Record<string, string>>({})
+  const [drafts, setDrafts] = useState<Record<string, BlockConfig>>({})
+  const [library, setLibrary] = useState<MediaItem[]>([])
+  const [catalogue, setCatalogue] = useState<Catalogue>({ products: [], categories: [] })
+  const [adding, setAdding] = useState<PageBlock['type']>('text')
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const picker = useMediaPicker()
+
+  const byId = useMemo(() => new Map(library.map((item) => [item.id, item])), [library])
 
   const apply = useCallback((next: PageDetail) => {
     setDetail(next)
     setForm({ title: next.page.title, path: next.page.path, status: next.page.status })
-    // The textareas are edited locally and saved on demand, so their state is
-    // kept beside the server's rather than derived from it on every render.
-    setBodies(Object.fromEntries(next.blocks.map((block) => [block.id, block.config.body ?? ''])))
+    // Block configs are edited locally and saved on demand, so they are kept
+    // beside the server's copy rather than derived from it on every render.
+    setDrafts(Object.fromEntries(next.blocks.map((block) => [block.id, block.config])))
   }, [])
 
   const load = useCallback(async () => {
@@ -41,6 +72,28 @@ export function PageEditPage({ id }: { id: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // The library and the catalogue are what the block editors offer to choose
+  // from. Fetched once here rather than per block: five carousels on a page
+  // would otherwise be five identical requests.
+  useEffect(() => {
+    api<{ media: MediaItem[] }>('/api/media')
+      .then((data) => setLibrary(data.media))
+      .catch(() => undefined)
+    api<{ products: { slug: string; title: string }[] }>('/api/products')
+      .then((data) => setCatalogue((current) => ({ ...current, products: data.products })))
+      .catch(() => undefined)
+    api<{ categories: { slug: string; title: string }[] }>('/api/categories')
+      .then((data) => setCatalogue((current) => ({ ...current, categories: data.categories })))
+      .catch(() => undefined)
+  }, [])
+
+  /** Picking may upload, so anything new has to join the local library. */
+  const pick = useCallback(async () => {
+    const item = await picker.request()
+    if (item) setLibrary((current) => (current.some((entry) => entry.id === item.id) ? current : [item, ...current]))
+    return item
+  }, [picker])
 
   async function run(work: () => Promise<PageDetail | void>, done: string) {
     if (busy) return
@@ -63,14 +116,21 @@ export function PageEditPage({ id }: { id: string }) {
 
   function addBlock() {
     void run(
-      () => apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks`, 'POST', { type: 'text', config: { body: '' } }),
+      () =>
+        apiJson<PageDetail>(`/api/pages/${encodeURIComponent(id)}/blocks`, 'POST', {
+          type: adding,
+          config: emptyConfig(adding),
+        }),
       '區塊已新增。',
     )
   }
 
   function saveBlock(block: PageBlock) {
     void run(
-      () => apiJson<PageDetail>(`/api/blocks/${encodeURIComponent(block.id)}`, 'PUT', { config: { body: bodies[block.id] ?? '' } }),
+      () =>
+        apiJson<PageDetail>(`/api/blocks/${encodeURIComponent(block.id)}`, 'PUT', {
+          config: drafts[block.id] ?? block.config,
+        }),
       '區塊已儲存。',
     )
   }
@@ -93,6 +153,10 @@ export function PageEditPage({ id }: { id: string }) {
     )
   }
 
+  function edit(block: PageBlock, config: BlockConfig) {
+    setDrafts((current) => ({ ...current, [block.id]: config }))
+  }
+
   if (detail === null) {
     return (
       <AdminShell current="/pages" message={message} onError={showError}>
@@ -105,11 +169,62 @@ export function PageEditPage({ id }: { id: string }) {
     )
   }
 
-  // What the storefront would render, given what is in the boxes right now.
-  const previewBlocks: PageBlock[] = detail.blocks.map((block) => ({
-    ...block,
-    config: { body: bodies[block.id] ?? '' },
-  }))
+  /**
+   * What the storefront would render, given what is in the boxes right now.
+   *
+   * Pictures are resolved here from the library the editor already holds, so
+   * a slide added a second ago appears without a round trip. Products are not:
+   * prices and stock live on the server, so a shop block previews what it last
+   * knew until the block is saved.
+   */
+  const previewBlocks: PageBlock[] = detail.blocks.map((block) => {
+    const config = drafts[block.id] ?? block.config
+    switch (block.type) {
+      case 'carousel': {
+        const draft = config as CarouselConfig
+        return {
+          ...block,
+          config: draft,
+          data: {
+            slides: draft.slides
+              .map((slide) => ({ item: byId.get(slide.mediaId), slide }))
+              .filter((entry) => entry.item)
+              .map(({ item, slide }) => ({
+                image: { id: item!.id, path: item!.path, alt: item!.alt },
+                caption: slide.caption,
+                href: slide.href,
+              })),
+          },
+        }
+      }
+      case 'album': {
+        const draft = config as AlbumConfig
+        return {
+          ...block,
+          config: draft,
+          data: {
+            images: draft.mediaIds
+              .map((mediaId) => byId.get(mediaId))
+              .filter((item): item is MediaItem => Boolean(item))
+              .map((item) => ({ id: item.id, path: item.path, alt: item.alt })),
+          },
+        }
+      }
+      case 'about': {
+        const draft = config as AboutConfig
+        const item = draft.mediaId ? byId.get(draft.mediaId) : undefined
+        return {
+          ...block,
+          config: draft,
+          data: { image: item ? { id: item.id, path: item.path, alt: item.alt } : null },
+        }
+      }
+      case 'shop':
+        return { ...block, config: config as ShopBlockConfig }
+      default:
+        return { ...block, config: config as TextBlockConfig }
+    }
+  })
 
   return (
     <AdminShell current="/pages" message={message} onError={showError}>
@@ -173,32 +288,66 @@ export function PageEditPage({ id }: { id: string }) {
         <div class="editor-split">
           <div class="card blocks">
             <h3>區塊</h3>
-            {detail.blocks.length === 0 && <p class="muted">還沒有區塊。加一個文字區塊開始。</p>}
+            {detail.blocks.length === 0 && <p class="muted">還沒有區塊。從下面挑一種加上去。</p>}
 
             <ul class="block-list">
               {detail.blocks.map((block, index) => (
                 <li key={block.id}>
                   <div class="block-head">
-                    <span class="kind">文字</span>
+                    <span class="kind">{KIND_LABEL[block.type] ?? block.type}</span>
                     <button type="button" disabled={busy || index === 0} onClick={() => move(block, -1)}>
                       ↑
                     </button>
-                    <button type="button" disabled={busy || index === detail.blocks.length - 1} onClick={() => move(block, 1)}>
+                    <button
+                      type="button"
+                      disabled={busy || index === detail.blocks.length - 1}
+                      onClick={() => move(block, 1)}
+                    >
                       ↓
                     </button>
                     <button type="button" class="danger" onClick={() => removeBlock(block)}>
                       刪除
                     </button>
                   </div>
-                  <textarea
-                    rows={10}
-                    maxLength={20000}
-                    value={bodies[block.id] ?? ''}
-                    placeholder={'# 標題\n\n一段文字。\n\n- 清單項目\n- 另一項\n\n**粗體**、[連結](https://example.com)'}
-                    onInput={(event) =>
-                      setBodies({ ...bodies, [block.id]: (event.target as HTMLTextAreaElement).value })
-                    }
-                  />
+
+                  {block.type === 'text' && (
+                    <TextEditor
+                      config={(drafts[block.id] ?? block.config) as TextBlockConfig}
+                      onChange={(config) => edit(block, config)}
+                    />
+                  )}
+                  {block.type === 'carousel' && (
+                    <CarouselEditor
+                      config={(drafts[block.id] ?? block.config) as CarouselConfig}
+                      onChange={(config) => edit(block, config)}
+                      library={byId}
+                      pick={pick}
+                    />
+                  )}
+                  {block.type === 'album' && (
+                    <AlbumEditor
+                      config={(drafts[block.id] ?? block.config) as AlbumConfig}
+                      onChange={(config) => edit(block, config)}
+                      library={byId}
+                      pick={pick}
+                    />
+                  )}
+                  {block.type === 'shop' && (
+                    <ShopEditor
+                      config={(drafts[block.id] ?? block.config) as ShopBlockConfig}
+                      onChange={(config) => edit(block, config)}
+                      catalogue={catalogue}
+                    />
+                  )}
+                  {block.type === 'about' && (
+                    <AboutEditor
+                      config={(drafts[block.id] ?? block.config) as AboutConfig}
+                      onChange={(config) => edit(block, config)}
+                      library={byId}
+                      pick={pick}
+                    />
+                  )}
+
                   <button type="button" disabled={busy} onClick={() => saveBlock(block)}>
                     儲存這個區塊
                   </button>
@@ -206,15 +355,25 @@ export function PageEditPage({ id }: { id: string }) {
               ))}
             </ul>
 
-            <button type="button" disabled={busy} onClick={addBlock}>
-              新增文字區塊
-            </button>
+            <div class="add-block">
+              <select value={adding} onChange={(event) => setAdding((event.target as HTMLSelectElement).value as PageBlock['type'])}>
+                {BLOCK_KINDS.map((kind) => (
+                  <option key={kind.type} value={kind.type}>
+                    {kind.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" disabled={busy} onClick={addBlock}>
+                新增區塊
+              </button>
+              <small class="muted">{BLOCK_KINDS.find((kind) => kind.type === adding)?.hint}</small>
+            </div>
           </div>
 
           <div class="card preview">
             <h3>預覽</h3>
             <p class="muted">
-              這裡用的是前台渲染區塊的同一份程式，所以看到的就是公開後的樣子。
+              這裡用的是前台渲染區塊的同一份程式，所以看到的就是公開後的樣子。商城區塊的商品要儲存後才會更新。
             </p>
             <div class="preview-surface">
               {previewBlocks.length === 0 ? <p class="muted">還沒有內容。</p> : <Blocks blocks={previewBlocks} />}
@@ -222,6 +381,8 @@ export function PageEditPage({ id }: { id: string }) {
           </div>
         </div>
       </section>
+
+      {picker.element}
     </AdminShell>
   )
 }

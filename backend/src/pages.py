@@ -13,6 +13,8 @@ older version of this code cannot take a page down.
 import json
 import re
 
+import media
+from bio_link import validate_url
 from common import d1_rows, urlsafe_token, utc_timestamp
 
 
@@ -46,9 +48,30 @@ RESERVED = (
 )
 
 # One entry per block type: the validator for its config. Adding a type means
-# adding a line here and a component in the frontend, which is the whole point
-# of getting the skeleton right before there are six of them.
+# adding a line to VALIDATORS and a component in the frontend, which is the
+# whole point of getting the skeleton right before there are six of them.
 TEXT = "text"
+CAROUSEL = "carousel"
+ALBUM = "album"
+SHOP = "shop"
+ABOUT = "about"
+
+MAX_HEADING = 80
+MAX_CAPTION = 120
+MAX_SLIDES = 12
+MAX_ALBUM_IMAGES = 60
+MAX_LINKS = 8
+MAX_LABEL = 30
+MAX_ABOUT_BODY = 4000
+MAX_SHOP_ITEMS = 24
+MAX_FILTER = 200
+
+# Appearance is chosen from a fixed set, never typed — the same rule as the
+# site chrome, for the same reason: nothing the owner enters becomes CSS.
+RATIOS = ("wide", "square", "tall")
+COLUMNS = (2, 3, 4)
+IMAGE_SIDES = ("left", "right")
+SHOP_SOURCES = ("products", "category")
 
 
 class PageError(Exception):
@@ -99,6 +122,144 @@ def validate_status(raw: str) -> str:
     return raw
 
 
+def _text(raw, limit: int, label: str) -> str:
+    value = str(raw or "").strip()
+    if len(value) > limit:
+        raise PageError(f"{label}請控制在 {limit} 個字以內")
+    return value
+
+
+def _choice(raw, allowed, label: str):
+    if raw not in allowed:
+        raise PageError(f"{label}必須是 {'、'.join(str(value) for value in allowed)} 其中之一")
+    return raw
+
+
+def _media_id(raw) -> str:
+    """A media id, or empty.
+
+    Empty is allowed: a slide whose image was deleted should still be
+    editable, and the render drops it. Refusing here would leave the owner
+    unable to save the block they are trying to repair.
+    """
+
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    try:
+        return media.validate_id(value)
+    except media.MediaError as error:
+        raise PageError(str(error)) from error
+
+
+def _optional_url(raw) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    try:
+        return validate_url(value)
+    except ValueError as error:
+        raise PageError(str(error)) from error
+
+
+def _entries(raw, limit: int, label: str) -> list:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PageError(f"{label}必須是清單")
+    if len(raw) > limit:
+        raise PageError(f"{label}最多 {limit} 筆")
+    return raw
+
+
+def _validate_text_block(config: dict) -> dict:
+    body = str(config.get("body") or "")
+    if len(body) > MAX_TEXT:
+        raise PageError(f"文字區塊請控制在 {MAX_TEXT} 個字以內")
+    return {"body": body}
+
+
+def _validate_carousel(config: dict) -> dict:
+    slides = []
+    for entry in _entries(config.get("slides"), MAX_SLIDES, "輪播圖片"):
+        if not isinstance(entry, dict):
+            raise PageError("輪播的每一張都必須是物件")
+        slides.append(
+            {
+                "mediaId": _media_id(entry.get("mediaId")),
+                "caption": _text(entry.get("caption"), MAX_CAPTION, "圖說"),
+                "href": _optional_url(entry.get("href")),
+            }
+        )
+    return {
+        "slides": slides,
+        "ratio": _choice(str(config.get("ratio") or "wide"), RATIOS, "比例"),
+        # Off by default. Something that moves on its own takes the page away
+        # from whoever is reading it.
+        "autoplay": bool(config.get("autoplay")),
+    }
+
+
+def _validate_album(config: dict) -> dict:
+    ids = [_media_id(entry) for entry in _entries(config.get("mediaIds"), MAX_ALBUM_IMAGES, "相簿圖片")]
+    return {
+        "mediaIds": [media_id for media_id in ids if media_id],
+        "columns": _choice(int(config.get("columns") or 3), COLUMNS, "每列張數"),
+        "ratio": _choice(str(config.get("ratio") or "square"), RATIOS, "比例"),
+    }
+
+
+def _validate_shop(config: dict) -> dict:
+    """A row of products, named either one by one or by category.
+
+    The filter string is stored as typed rather than parsed into ids: `,` is
+    any and `+` is all, the same grammar as the category URLs, so one rule
+    covers the address bar and the block.
+    """
+
+    source = _choice(str(config.get("source") or "products"), SHOP_SOURCES, "來源")
+    slugs = [
+        _text(entry, 80, "商品") for entry in _entries(config.get("slugs"), MAX_SHOP_ITEMS, "商品")
+    ]
+    return {
+        "heading": _text(config.get("heading"), MAX_HEADING, "標題"),
+        "source": source,
+        "slugs": [slug for slug in slugs if slug],
+        "filter": _text(config.get("filter"), MAX_FILTER, "分類條件"),
+        "limit": max(1, min(int(config.get("limit") or MAX_SHOP_ITEMS), MAX_SHOP_ITEMS)),
+    }
+
+
+def _validate_about(config: dict) -> dict:
+    links = []
+    for entry in _entries(config.get("links"), MAX_LINKS, "連結"):
+        if not isinstance(entry, dict):
+            raise PageError("每一個連結都必須是物件")
+        url = _optional_url(entry.get("url"))
+        label = _text(entry.get("label"), MAX_LABEL, "連結文字")
+        # Both or neither: a label with no URL is a button that does nothing.
+        if url and label:
+            links.append({"label": label, "url": url})
+    return {
+        "heading": _text(config.get("heading"), MAX_HEADING, "標題"),
+        "body": _text(config.get("body"), MAX_ABOUT_BODY, "內文"),
+        "mediaId": _media_id(config.get("mediaId")),
+        "imageSide": _choice(str(config.get("imageSide") or "left"), IMAGE_SIDES, "圖片位置"),
+        "links": links,
+    }
+
+
+VALIDATORS = {
+    TEXT: _validate_text_block,
+    CAROUSEL: _validate_carousel,
+    ALBUM: _validate_album,
+    SHOP: _validate_shop,
+    ABOUT: _validate_about,
+}
+
+BLOCK_TYPES = tuple(VALIDATORS)
+
+
 def validate_block(block_type: str, config) -> tuple[str, dict]:
     """Check a block's type and config, returning both ready to store.
 
@@ -108,15 +269,12 @@ def validate_block(block_type: str, config) -> tuple[str, dict]:
     loss to whoever wrote it.
     """
 
-    if block_type != TEXT:
+    validator = VALIDATORS.get(block_type)
+    if validator is None:
         raise PageError(f"未知的區塊類型：{block_type}")
     if not isinstance(config, dict):
         raise PageError("區塊設定必須是物件")
-
-    body = str(config.get("body") or "")
-    if len(body) > MAX_TEXT:
-        raise PageError(f"文字區塊請控制在 {MAX_TEXT} 個字以內")
-    return block_type, {"body": body}
+    return block_type, validator(config)
 
 
 # --- row mapping ---------------------------------------------------------

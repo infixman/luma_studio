@@ -6,6 +6,7 @@ block whose config the frontend has no component for, must be refused at the
 door rather than discovered by a visitor.
 """
 
+import block_data
 import pages
 from responses import Ctx
 
@@ -18,7 +19,11 @@ async def _read_json(ctx: Ctx) -> dict:
 
 
 async def _detail(ctx: Ctx, page: dict) -> dict:
-    return {"page": page, "blocks": await pages.list_blocks(ctx.env, page["id"])}
+    # Hydrated the same way the storefront is, because the editor previews
+    # with the storefront's own components — a preview fed different data is
+    # a preview of something else.
+    blocks = await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"]))
+    return {"page": page, "blocks": blocks}
 
 
 def _page_fields(body: dict) -> dict:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { MediaGrid } from './MediaGrid'
 import { api, uploadMedia } from '../../shared/api'
@@ -103,4 +103,31 @@ export function MediaPicker({
       </div>
     </div>
   )
+}
+
+/**
+ * The picker as something to await.
+ *
+ * A block editor wants one line — "give me an image" — not a piece of state
+ * per slide tracking which control opened the dialog. So the promise is held
+ * here and settled when the owner picks or dismisses.
+ */
+export function useMediaPicker() {
+  const [pending, setPending] = useState<{ resolve: (item: MediaItem | null) => void } | null>(null)
+
+  const request = useCallback(
+    () => new Promise<MediaItem | null>((resolve) => setPending({ resolve })),
+    [],
+  )
+
+  const settle = (item: MediaItem | null) => {
+    pending?.resolve(item)
+    setPending(null)
+  }
+
+  const element = (
+    <MediaPicker open={pending !== null} onPick={(item) => settle(item)} onClose={() => settle(null)} />
+  )
+
+  return { request, element }
 }

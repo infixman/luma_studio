@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'preact/hooks'
+
+import { apiUrl } from '../api'
 import { renderMarkdown } from '../markdown'
-import type { PageBlock } from '../types'
+import type { MediaRef, PageBlock, PublicProductCard } from '../types'
 import './blocks.css'
 
 /**
@@ -9,6 +12,10 @@ import './blocks.css'
  * to preview a draft. That is the whole reason drafts never need to be
  * fetchable from the public API — what the owner sees in the editor is what
  * a visitor will see, because it is the same component.
+ *
+ * Every block draws from `data`, which the API resolved from the ids in
+ * `config`. Nothing here turns an id into a picture, so nothing here has to
+ * decide what to do when the picture is gone: it simply is not in `data`.
  *
  * Adding a block type means adding a case here and a validator in
  * backend/src/pages.py. Nothing else in the page machinery changes.
@@ -24,18 +31,197 @@ export function Blocks({ blocks }: { blocks: PageBlock[] }) {
 }
 
 function Block({ block }: { block: PageBlock }) {
-  if (block.type === 'text') {
-    // The HTML is produced by renderMarkdown, which escapes its input before
-    // applying any rule — the only tags here are ones that file wrote.
-    return (
-      <section
-        class="block block-text"
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(block.config.body ?? '') }}
-      />
-    )
-  }
+  switch (block.type) {
+    case 'text':
+      // The HTML is produced by renderMarkdown, which escapes its input before
+      // applying any rule — the only tags here are ones that file wrote.
+      return (
+        <section
+          class="block block-text"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(block.config.body ?? '') }}
+        />
+      )
 
-  // A type the API validated but this build has no case for. Rendering
-  // nothing is right; the editor is where an unknown block gets dealt with.
-  return null
+    case 'carousel':
+      return <Carousel slides={block.data?.slides ?? []} ratio={block.config.ratio} autoplay={block.config.autoplay} />
+
+    case 'album':
+      return <Album images={block.data?.images ?? []} columns={block.config.columns} ratio={block.config.ratio} />
+
+    case 'shop':
+      return <ShopRow heading={block.config.heading} products={block.data?.products ?? []} />
+
+    case 'about':
+      return <About block={block} />
+
+    default:
+      // A type the API validated but this build has no case for. Rendering
+      // nothing is right; the editor is where an unknown block gets dealt with.
+      return null
+  }
+}
+
+function Picture({ image, className }: { image: MediaRef; className?: string }) {
+  return <img class={className} src={apiUrl(image.path)} alt={image.alt} loading="lazy" />
+}
+
+function Carousel({
+  slides,
+  ratio,
+  autoplay,
+}: {
+  slides: { image: MediaRef; caption: string; href: string }[]
+  ratio: string
+  autoplay: boolean
+}) {
+  const [index, setIndex] = useState(0)
+  const total = slides.length
+
+  useEffect(() => {
+    if (!autoplay || total < 2) return
+    // Slow on purpose. A carousel that moves before the caption has been read
+    // is a carousel nobody reads.
+    const timer = setInterval(() => setIndex((current) => (current + 1) % total), 6000)
+    return () => clearInterval(timer)
+  }, [autoplay, total])
+
+  if (total === 0) return null
+  const current = slides[Math.min(index, total - 1)]!
+
+  return (
+    <section class={`block block-carousel ratio-${ratio}`} aria-roledescription="carousel">
+      <div class="frame">
+        {current.href ? (
+          <a href={current.href}>
+            <Picture image={current.image} />
+          </a>
+        ) : (
+          <Picture image={current.image} />
+        )}
+
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              class="arrow prev"
+              aria-label="上一張"
+              onClick={() => setIndex((current) => (current - 1 + total) % total)}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              class="arrow next"
+              aria-label="下一張"
+              onClick={() => setIndex((current) => (current + 1) % total)}
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+
+      {current.caption && <p class="caption">{current.caption}</p>}
+
+      {total > 1 && (
+        <ol class="dots">
+          {slides.map((slide, position) => (
+            <li key={slide.image.id}>
+              <button
+                type="button"
+                class={position === index ? 'current' : ''}
+                aria-label={`第 ${position + 1} 張`}
+                aria-current={position === index}
+                onClick={() => setIndex(position)}
+              />
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+function Album({ images, columns, ratio }: { images: MediaRef[]; columns: number; ratio: string }) {
+  if (images.length === 0) return null
+  return (
+    <section class={`block block-album columns-${columns} ratio-${ratio}`}>
+      <ul>
+        {images.map((image) => (
+          <li key={image.id}>
+            {/* The full image opens in its own tab rather than in a lightbox:
+                a lightbox is a modal to build, trap focus in and dismiss, and
+                the browser already has a perfectly good way to show a photo. */}
+            <a href={apiUrl(image.path)} target="_blank" rel="noopener">
+              <Picture image={image} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function priceLabel(card: PublicProductCard): string {
+  if (card.priceFrom === null) return '暫不販售'
+  if (card.priceTo === null || card.priceFrom === card.priceTo) return `NT$${card.priceFrom}`
+  return `NT$${card.priceFrom}–${card.priceTo}`
+}
+
+function ShopRow({ heading, products }: { heading: string; products: PublicProductCard[] }) {
+  // An empty row is drawn as nothing rather than as a heading over a gap. The
+  // editor is where "this block shows no products" needs saying.
+  if (products.length === 0) return null
+
+  return (
+    <section class="block block-shop">
+      {heading && <h2>{heading}</h2>}
+      <ul>
+        {products.map((card) => (
+          <li key={card.slug} class={card.inStock ? '' : 'sold-out'}>
+            <a href={`/shop/${encodeURIComponent(card.slug)}`}>
+              <span class="cover">
+                {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
+                {!card.inStock && <span class="ribbon">售完</span>}
+              </span>
+              <span class="title">{card.title}</span>
+              <span class="price">{priceLabel(card)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function About({ block }: { block: Extract<PageBlock, { type: 'about' }> }) {
+  const { heading, body, imageSide, links } = block.config
+  const image = block.data?.image ?? null
+
+  return (
+    <section class={`block block-about ${image ? `image-${imageSide}` : 'no-image'}`}>
+      {image && (
+        <div class="portrait">
+          <Picture image={image} />
+        </div>
+      )}
+      <div class="words">
+        {heading && <h2>{heading}</h2>}
+        {/* Same escape-first renderer as the text block, so one paragraph of
+            prose behaves the same wherever it is written. */}
+        {body && <div class="body" dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }} />}
+        {links.length > 0 && (
+          <ul class="links">
+            {links.map((link) => (
+              <li key={link.url}>
+                <a href={link.url} rel="noopener">
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  )
 }

@@ -19,6 +19,7 @@ from workers import WorkerEntrypoint
 
 import auth_customer
 import bio_link
+import block_data
 import cart
 import categories
 import orders
@@ -249,7 +250,7 @@ async def page_response(ctx: Ctx, page: dict | None):
         {
             "title": page["title"],
             "path": page["path"],
-            "blocks": await pages.list_blocks(ctx.env, page["id"]),
+            "blocks": await block_data.hydrate(ctx.env, await pages.list_blocks(ctx.env, page["id"])),
         }
     )
 

@@ -77,7 +77,7 @@ class TestBlocks:
         wrote it, so it never gets stored in the first place."""
 
         with pytest.raises(pages.PageError):
-            pages.validate_block("carousel", {})
+            pages.validate_block("weather-widget", {})
 
     def test_a_config_that_is_not_an_object_is_refused(self, pages):
         with pytest.raises(pages.PageError):
@@ -96,7 +96,7 @@ class TestReadingStoredBlocks:
     @pytest.mark.parametrize(
         "row",
         [
-            {"id": "b1", "type": "carousel", "config": "{}", "position": 0},
+            {"id": "b1", "type": "weather-widget", "config": "{}", "position": 0},
             {"id": "b1", "type": "text", "config": "not json", "position": 0},
             {"id": "b1", "type": "text", "config": "[]", "position": 0},
         ],

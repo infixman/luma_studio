@@ -59,3 +59,252 @@
 .block-text strong {
   font-weight: 650;
 }
+
+/* --- carousel --- */
+
+.block-carousel,
+.block-album,
+.block-shop,
+.block-about {
+  /* Wider than prose: a photograph cramped to reading width is a thumbnail. */
+  max-width: 68rem;
+}
+
+.block-carousel .frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f2ede6;
+}
+
+.block-carousel img,
+.block-album img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The frame keeps its shape whatever the photograph's own is, so changing
+   slide does not make the rest of the page jump. */
+.ratio-wide .frame { aspect-ratio: 16 / 9; }
+.ratio-square .frame { aspect-ratio: 1 / 1; }
+.ratio-tall .frame { aspect-ratio: 3 / 4; }
+
+.block-carousel .arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.85);
+  color: #2b2622;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.block-carousel .arrow.prev { left: 0.6rem; }
+.block-carousel .arrow.next { right: 0.6rem; }
+
+.block-carousel .caption {
+  margin: 0.7rem 0 0;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #5b524a;
+}
+
+.block-carousel .dots {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.block-carousel .dots button {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #cfc5b8;
+  cursor: pointer;
+}
+
+.block-carousel .dots button.current {
+  background: #2b2622;
+}
+
+/* --- album --- */
+
+.block-album ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.block-album.columns-2 ul { grid-template-columns: repeat(2, 1fr); }
+.block-album.columns-3 ul { grid-template-columns: repeat(3, 1fr); }
+.block-album.columns-4 ul { grid-template-columns: repeat(4, 1fr); }
+
+.block-album li {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f2ede6;
+}
+
+.block-album.ratio-wide li { aspect-ratio: 16 / 9; }
+.block-album.ratio-square li { aspect-ratio: 1 / 1; }
+.block-album.ratio-tall li { aspect-ratio: 3 / 4; }
+
+.block-album a {
+  display: block;
+  height: 100%;
+}
+
+/* Two columns on a phone whatever the setting: three 100px-wide photographs
+   in a row is not a gallery. */
+@media (max-width: 620px) {
+  .block-album.columns-3 ul,
+  .block-album.columns-4 ul {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* --- shop row --- */
+
+.block-shop h2 {
+  margin: 0 0 1rem;
+  font-size: 1.3rem;
+  font-weight: 650;
+}
+
+.block-shop ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.2rem;
+}
+
+.block-shop a {
+  display: grid;
+  gap: 0.4rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.block-shop .cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f2ede6;
+}
+
+.block-shop .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.block-shop .ribbon {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 0.2rem 0;
+  background: rgb(43 38 34 / 0.75);
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.block-shop .title {
+  font-weight: 600;
+}
+
+.block-shop .price {
+  font-size: 0.9rem;
+  color: #5b524a;
+}
+
+.block-shop .sold-out .title,
+.block-shop .sold-out .price {
+  opacity: 0.6;
+}
+
+/* --- about --- */
+
+.block-about {
+  display: grid;
+  gap: 1.6rem;
+  align-items: start;
+}
+
+.block-about.image-left,
+.block-about.image-right {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+/* The image is first in the markup so it reads first when the columns
+   collapse; on a wide screen the order moves, not the source. */
+.block-about.image-right .portrait {
+  order: 2;
+}
+
+.block-about img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+}
+
+.block-about .words {
+  line-height: 1.8;
+}
+
+.block-about h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.block-about .body p {
+  margin: 0 0 1rem;
+}
+
+.block-about .links {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.block-about .links a {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .block-about.image-left,
+  .block-about.image-right {
+    grid-template-columns: 1fr;
+  }
+
+  .block-about.image-right .portrait {
+    order: 0;
+  }
+}

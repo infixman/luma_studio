@@ -21,7 +21,12 @@ export function CustomPage({ path, onMissing }: { path: string; onMissing: () =>
   useEffect(() => {
     const url = path === '/' ? '/api/pages/home' : `/api/pages?path=${encodeURIComponent(path)}`
     api<PageContent>(url)
-      .then((page) => setState({ kind: 'page', page }))
+      .then((page) => {
+        setState({ kind: 'page', page })
+        // The back office calls this field the browser tab's title, so it
+        // has to actually become one.
+        document.title = `${page.title} | Luma Studio`
+      })
       .catch((error) => setState(error instanceof ApiError && error.status === 404 ? { kind: 'missing' } : { kind: 'failed' }))
   }, [path])
 

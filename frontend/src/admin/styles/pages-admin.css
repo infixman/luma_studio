@@ -120,3 +120,142 @@ body.admin .preview-surface .block:last-child {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- block editors --- */
+
+body.admin .block-editor {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0 0 0.8rem;
+}
+
+body.admin .block-editor .choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+body.admin .block-editor .choice-row .radio {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+body.admin .block-editor .thumb {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f2ede6;
+  flex: none;
+}
+
+/* A block can outlive the picture it points at; the editor says so rather
+   than drawing an empty square that looks like a loading failure. */
+body.admin .block-editor .thumb.missing,
+body.admin .block-editor .thumb.empty {
+  display: grid;
+  place-items: center;
+  padding: 0.3rem;
+  font-size: 0.72rem;
+  text-align: center;
+  color: #a05a00;
+}
+
+body.admin .block-editor .thumb.empty {
+  color: #7a726a;
+}
+
+body.admin .slide-list,
+body.admin .album-list,
+body.admin .link-list,
+body.admin .chosen,
+body.admin .pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+body.admin .slide-list li,
+body.admin .chosen li,
+body.admin .portrait-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid rgb(0 0 0 / 0.1);
+  border-radius: 8px;
+}
+
+body.admin .slide-list .fields {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+body.admin .block-editor .controls {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+body.admin .block-editor .controls button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+/* The album is a row of thumbnails rather than a list of rows: the order is
+   the only thing being edited, and it reads left to right. */
+body.admin .album-list {
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+body.admin .album-list li {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: center;
+}
+
+body.admin .album-list .controls {
+  margin-left: 0;
+}
+
+body.admin .link-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+body.admin .link-list input {
+  flex: 1;
+  min-width: 8rem;
+}
+
+body.admin .pick-list {
+  max-height: 15rem;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+
+body.admin .pick-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+}
+
+body.admin .add-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}

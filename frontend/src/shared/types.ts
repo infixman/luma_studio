@@ -333,17 +333,81 @@ export interface Page {
   updatedAt: number
 }
 
-/** A block's config shape depends on its type; today there is one type. */
+/* A block's config shape depends on its type, so the block is a union rather
+   than one shape with optional fields — a carousel and a paragraph have
+   nothing in common but an id and a position.
+
+   `config` is what the editor sends back, unchanged: ids, not pictures.
+   `data` is what the API resolved from those ids so the block can be drawn.
+   Keeping them apart is why a deleted image costs one slide instead of the
+   page: the id stays in the config to be repaired. */
+
+export type BlockRatio = 'wide' | 'square' | 'tall'
+export type BlockColumns = 2 | 3 | 4
+export type BlockType = 'text' | 'carousel' | 'album' | 'shop' | 'about'
+
+/** One image as the API resolved it. */
+export interface MediaRef {
+  id: string
+  path: string
+  alt: string
+}
+
 export interface TextBlockConfig {
   body: string
 }
 
-export interface PageBlock {
+export interface CarouselSlide {
+  mediaId: string
+  caption: string
+  href: string
+}
+
+export interface CarouselConfig {
+  slides: CarouselSlide[]
+  ratio: BlockRatio
+  autoplay: boolean
+}
+
+export interface AlbumConfig {
+  mediaIds: string[]
+  columns: BlockColumns
+  ratio: BlockRatio
+}
+
+export interface ShopBlockConfig {
+  heading: string
+  source: 'products' | 'category'
+  slugs: string[]
+  filter: string
+  limit: number
+}
+
+export interface AboutConfig {
+  heading: string
+  body: string
+  mediaId: string
+  imageSide: 'left' | 'right'
+  links: { label: string; url: string }[]
+}
+
+export type BlockConfig = TextBlockConfig | CarouselConfig | AlbumConfig | ShopBlockConfig | AboutConfig
+
+interface BlockBase {
   id: string
-  type: 'text'
-  config: TextBlockConfig
   position: number
 }
+
+export type PageBlock =
+  | (BlockBase & { type: 'text'; config: TextBlockConfig; data?: Record<string, never> })
+  | (BlockBase & {
+      type: 'carousel'
+      config: CarouselConfig
+      data?: { slides: { image: MediaRef; caption: string; href: string }[] }
+    })
+  | (BlockBase & { type: 'album'; config: AlbumConfig; data?: { images: MediaRef[] } })
+  | (BlockBase & { type: 'shop'; config: ShopBlockConfig; data?: { products: PublicProductCard[] } })
+  | (BlockBase & { type: 'about'; config: AboutConfig; data?: { image: MediaRef | null } })
 
 /** What the back office edits. */
 export interface PageDetail {
