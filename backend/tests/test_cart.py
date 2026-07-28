@@ -40,8 +40,18 @@ class TestReadingTheBrowsersCart:
         lines = cart.parse_lines([{"variantId": "v1", "quantity": 2}, {"variantId": "v1", "quantity": 3}])
         assert lines == [{"variantId": "v1", "quantity": 5}]
 
-    def test_a_merge_cannot_exceed_the_per_line_cap(self, cart):
-        lines = cart.parse_lines([{"variantId": "v1", "quantity": 20}, {"variantId": "v1", "quantity": 20}])
+    def test_the_shop_does_not_decide_how_many_someone_may_buy(self, cart):
+        """Whatever is on the shelf is for sale. `price_lines` reduces the line
+        to the stock and says "only N left"; nothing here second-guesses it."""
+
+        lines = cart.parse_lines([{"variantId": "v1", "quantity": 500}])
+        assert lines[0]["quantity"] == 500
+
+    def test_a_merge_is_still_bounded_by_what_the_shop_could_hold(self, cart):
+        """Not a policy — the point past which the number is a broken client."""
+
+        half = cart.MAX_QUANTITY
+        lines = cart.parse_lines([{"variantId": "v1", "quantity": half}, {"variantId": "v1", "quantity": half}])
         assert lines[0]["quantity"] == cart.MAX_QUANTITY
 
     @pytest.mark.parametrize(
@@ -51,7 +61,7 @@ class TestReadingTheBrowsersCart:
             [{"variantId": "v1"}],
             [{"variantId": "v1", "quantity": 0}],
             [{"variantId": "v1", "quantity": -3}],
-            [{"variantId": "v1", "quantity": 21}],
+            [{"variantId": "v1", "quantity": 100001}],
             [{"variantId": "v1", "quantity": 1.5}],
             [{"variantId": "v1", "quantity": True}],
             [{"variantId": "", "quantity": 1}],

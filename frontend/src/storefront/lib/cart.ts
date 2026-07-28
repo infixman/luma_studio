@@ -12,9 +12,14 @@ const CHANGED = 'luma-cart-changed'
 
 /* Both mirror backend/src/cart.py. The browser's copy only decides what the
    number field will accept; the one that matters is the server's, which
-   re-checks every line at checkout. */
+   re-checks every line at checkout.
+
+   MAX_QUANTITY is not a limit on what anyone may buy — the shelf is the
+   limit, and only the server knows how full it is. Asking for more than is
+   in stock comes back as "only N left" with the line already adjusted. This
+   number is just the point past which the input is nonsense. */
 export const MAX_LINES = 20
-export const MAX_QUANTITY = 99
+export const MAX_QUANTITY = 100000
 
 export interface CartLine {
   variantId: string

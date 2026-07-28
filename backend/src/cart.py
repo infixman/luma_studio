@@ -18,11 +18,12 @@ import shop
 # for a thousand.
 MAX_LINES = 20
 
-# How many of one thing. This one is about the shelf, not the Worker — the
-# quantity is a single number and costs nothing to read. Stock is taken when
-# the order is created and held for fifteen minutes, so with no cap one click
-# can put every last unit on hold and show everyone else "sold out".
-MAX_QUANTITY = 99
+# How many of one thing. There is no shop-imposed limit: whatever is on the
+# shelf is for sale, and `price_lines` is what knows how much that is — it
+# reduces the line and says "only N left". The number here is not a policy,
+# it is the largest quantity the shop could ever hold, so anything above it
+# is a broken client rather than a customer buying a lot.
+MAX_QUANTITY = shop.MAX_STOCK
 
 
 class CartError(Exception):
