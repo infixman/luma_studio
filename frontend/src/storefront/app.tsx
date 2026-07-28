@@ -1,5 +1,4 @@
 import { BioLinkPage } from './pages/BioLinkPage'
-import { HomePage } from './pages/HomePage'
 import { PrintPage } from './pages/PrintPage'
 import { Chrome } from './components/Chrome'
 import { CartPage } from './pages/CartPage'
@@ -57,12 +56,13 @@ export function App() {
 function route() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
-  // A page flagged as home takes over /, and the built-in one is the
-  // fallback rather than the other way round — so nothing goes blank before
-  // anyone has built a home page.
+  // The front door is a page the shop builds in the back office. There is no
+  // hard-coded home page behind it: one existed while the page system was
+  // being built, and keeping it would mean the front door could be edited in
+  // two places, only one of which anybody would think to look at.
   if (path === '/') {
     markBody('custom-page')
-    return <CustomPage path="/" onMissing={() => { markBody('home'); return <HomePage /> }} />
+    return <CustomPage path="/" onMissing={noHomeYet} />
   }
 
   if (path === '/card') {
@@ -122,14 +122,30 @@ function route() {
   return <CustomPage path={path} onMissing={notFound} />
 }
 
+/* Neither of these draws the studio's mark. The site header above them
+   already carries it, and a second copy underneath is what the shop pages
+   used to do wrong. */
+
+function noHomeYet() {
+  markBody('landing')
+  return (
+    <main class="landing">
+      <p>首頁還沒有建立。</p>
+      <p>
+        <a href="/shop">先去看看商品</a>
+      </p>
+    </main>
+  )
+}
+
 function notFound() {
   markBody('landing')
   return (
     <main class="landing">
-      <div class="brand">
-        <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
-      </div>
       <p>這個網址沒有對應的頁面。</p>
+      <p>
+        <a href="/shop">看看商品</a>
+      </p>
     </main>
   )
 }

@@ -87,7 +87,7 @@ frontend/
   public/assets/      logo 與教學圖
   src/
     shared/           兩邊共用：api、types、markdown、區塊元件、SocialIcon、base.css
-    storefront/       main、app、HomePage、PrintPage、BioLinkPage、商城、自訂頁
+    storefront/       main、app、PrintPage、BioLinkPage、商城、訂單、自訂頁
     admin/            main、app、ibon、名片頁、商城、運費、頁面編輯器、外框、媒體庫
 design/               logo 原始檔，非公開路徑
 scripts/              本機診斷與 R2 同步腳本
@@ -619,7 +619,7 @@ Google OAuth secrets 只留在 Cloudflare，GitHub Actions 不需要也不應持
 | 頁面編輯器 | `admin.luma-studio.tw/pages/{id}` |
 | 前台 | 頁面設定的路徑，例如 `luma-studio.tw/about` |
 
-**首頁由「設為首頁」旗標接管**，不是把路徑填成 `/`。只有一頁能是首頁，由部分唯一索引（`WHERE is_home = 1`）在資料庫層保證。沒有任何一頁勾首頁時，`/` 落回內建的歡迎頁——所以這套上線不會讓前門突然變空白。
+**首頁由「設為首頁」旗標接管**，不是把路徑填成 `/`。只有一頁能是首頁，由部分唯一索引（`WHERE is_home = 1`）在資料庫層保證。前台沒有另一份寫死的首頁：沒有任何一頁勾首頁時，`/` 只會說首頁還沒建立，並給一條去商城的路。頁面系統剛上線時曾有一個內建歡迎頁接在後面，留著等於前門有兩個可以編輯的地方，而只有一個地方會有人想到要去看。
 
 **保留路徑不能被佔用**：`/shop`、`/cart`、`/checkout`、`/orders`、`/card`、`/ibon_print`、`/admin`、`/api`、`/images`、`/r` 及其子路徑。不擋的話，一個 path 是 `/shop` 的頁面會安靜地蓋掉整個商城。
 

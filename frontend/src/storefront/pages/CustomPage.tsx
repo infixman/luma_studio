@@ -11,10 +11,9 @@ type State = { kind: 'loading' } | { kind: 'missing' } | { kind: 'failed' } | { 
 /**
  * A page the owner built in the back office.
  *
- * `onMissing` lets the router fall back — for an unknown path that means the
- * built-in "no such page" message, and for `/` it means the hard-coded home
- * page, so shipping this does not blank the front door before anyone has
- * flagged a page as home.
+ * `onMissing` lets the router say so in its own words — "no such page" for an
+ * unknown path, "the home page has not been built yet" for `/`. Neither is a
+ * second copy of a page: the front door is this component and nothing else.
  */
 export function CustomPage({ path, onMissing }: { path: string; onMissing: () => preact.JSX.Element }) {
   const [state, setState] = useState<State>({ kind: 'loading' })
