@@ -35,14 +35,20 @@ export function AdminShell({
   actions?: ComponentChildren
   message: { text: string; kind: StatusKind } | null
   onError: (error: unknown) => void
-  /** Return false to abandon signing out — for a page holding unsaved work. */
-  confirmLeave?: () => boolean
+  /**
+   * Return false to abandon signing out — for a page holding unsaved work.
+   *
+   * It may answer with a promise, so the page can ask through a dialog rather
+   * than the browser's own `confirm()`. Signing out is one click; waiting for
+   * an answer costs nothing.
+   */
+  confirmLeave?: () => boolean | Promise<boolean>
   children: ComponentChildren
 }) {
   const area = areaOf(current)
 
   async function logout() {
-    if (confirmLeave && !confirmLeave()) return
+    if (confirmLeave && !(await confirmLeave())) return
     try {
       await api('/auth/logout', { method: 'POST' })
     } catch (error) {

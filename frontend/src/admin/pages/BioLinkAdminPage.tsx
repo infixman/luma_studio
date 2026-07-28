@@ -6,6 +6,7 @@ import { CopyButton, OpenButton } from '../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../shared/components/SocialIcon'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
+import { useConfirm } from '../components/ui'
 import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
@@ -43,6 +44,7 @@ const emptyDraft: Draft = { title: '', url: '', platform: 'instagram' }
 
 export function BioLinkAdminPage() {
   const { message, show, showError } = useStatus()
+  const { ask, dialog } = useConfirm()
   // `saved` is the server's copy, `page` is what the editor is holding. The
   // difference between them is what the save button writes.
   const [saved, setSaved] = useState<BioLinkState | null>(null)
@@ -103,10 +105,28 @@ export function BioLinkAdminPage() {
   /** Edits the editor's copy only. Nothing here reaches the server. */
   const edit = (patch: Partial<BioLinkState>) => setPage((current) => (current ? { ...current, ...patch } : current))
 
-  const savePage = () => {
+  const savePage = async () => {
     if (!page || !saved) return
     const removed = saved.items.filter((item) => !page.items.some((kept) => kept.id === item.id))
-    if (removed.length && !confirm(`將刪除 ${removed.length} 筆連結，連同它們的點擊統計。確定要儲存嗎？`)) return
+    if (removed.length) {
+      // Naming them: "3 筆連結" is not enough to notice you dragged the wrong
+      // row out, and the click history goes with them.
+      const agreed = await ask({
+        title: '儲存後這些連結會不見',
+        body: (
+          <>
+            <p>連同它們的點擊統計一起刪除，無法復原。</p>
+            <ul class="usage">
+              {removed.map((item) => (
+                <li key={item.id}>{item.title || item.url || '(未命名)'}</li>
+              ))}
+            </ul>
+          </>
+        ),
+        confirmLabel: '儲存',
+      })
+      if (!agreed) return
+    }
 
     void mutate(
       () =>
@@ -135,9 +155,14 @@ export function BioLinkAdminPage() {
     )
   }
 
-  const revert = () => {
+  const revert = async () => {
     if (!saved || !dirty) return
-    if (!confirm('放棄未儲存的修改？')) return
+    const agreed = await ask({
+      title: '放棄未儲存的修改？',
+      body: '頁面會回到上次儲存的樣子。',
+      confirmLabel: '放棄',
+    })
+    if (!agreed) return
     setPage(saved)
     show('已還原成上次儲存的內容。', 'ok')
   }
@@ -167,12 +192,21 @@ export function BioLinkAdminPage() {
       show(`頭像不可超過 ${MAX_AVATAR_MB} MB。`, 'error')
       return
     }
-    if (dirty && !confirm('上傳頭像會先儲存目前的修改。要繼續嗎？')) return
+    if (dirty) {
+      const agreed = await ask({
+        title: '上傳頭像會先儲存目前的修改',
+        body: '目前未儲存的內容會一起送出。',
+        confirmLabel: '繼續',
+        tone: 'primary',
+      })
+      if (!agreed) return
+    }
     await mutate(() => uploadBioLinkAvatar(file), '頭像已更新。')
   }
 
-  const removeAvatar = () => {
-    if (!confirm('移除頭像？公開頁會改用 logo。')) return
+  const removeAvatar = async () => {
+    const agreed = await ask({ title: '移除頭像？', body: '公開頁會改用 logo。', confirmLabel: '移除' })
+    if (!agreed) return
     void mutate(() => api<BioLinkState>('/api/bio-link/avatar', { method: 'DELETE' }), '頭像已移除。')
   }
 
@@ -383,7 +417,14 @@ export function BioLinkAdminPage() {
       current="/card"
       message={message}
       onError={showError}
-      confirmLeave={() => !dirty || confirm('有未儲存的修改，登出後會遺失。要登出嗎？')}
+      confirmLeave={async () =>
+        !dirty ||
+        (await ask({
+          title: '有未儲存的修改',
+          body: '登出後會遺失。',
+          confirmLabel: '登出',
+        }))
+      }
     >
 
       {page === null ? (
@@ -426,7 +467,7 @@ export function BioLinkAdminPage() {
                     {page.avatarPath ? '更換頭像' : '上傳頭像'}
                   </button>
                   {page.avatarPath && (
-                    <button class="ghost" disabled={busy} onClick={removeAvatar}>
+                    <button class="ghost" disabled={busy} onClick={() => void removeAvatar()}>
                       移除
                     </button>
                   )}
@@ -549,15 +590,16 @@ export function BioLinkAdminPage() {
         <div class={dirty ? 'bio-savebar dirty' : 'bio-savebar'}>
           <span class="bio-savebar-state">{dirty ? '有尚未儲存的修改' : '已是最新狀態'}</span>
           <div class="bio-savebar-actions">
-            <button class="ghost" disabled={busy || !dirty} onClick={revert}>
+            <button class="ghost" disabled={busy || !dirty} onClick={() => void revert()}>
               還原
             </button>
-            <button disabled={busy || !dirty} onClick={savePage}>
+            <button disabled={busy || !dirty} onClick={() => void savePage()}>
               {busy ? '儲存中…' : '儲存'}
             </button>
           </div>
         </div>
       )}
+      {dialog}
     </AdminShell>
   )
 }

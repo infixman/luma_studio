@@ -1147,3 +1147,14 @@
     min-width: 100%;
   }
 }
+
+/* What a confirmation is about, named one per line. "3 筆連結" is not enough
+   to notice you dragged the wrong row out. */
+body.admin .usage {
+  margin: 0 0 var(--space-4);
+  padding-left: 1.1rem;
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--text-soft);
+}
