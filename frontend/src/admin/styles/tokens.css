@@ -73,6 +73,10 @@
   --info-line: #b8e1ff;
 
   /* --- depth --- */
+  /* Behind a modal. The same in both themes: a scrim is there to push the
+     page back, and it does that by being dark whatever is under it. */
+  --scrim: rgb(10 10 20 / 0.55);
+
   --shadow-1: 0 1px 4px rgb(33 33 52 / 0.1);
   --shadow-2: 0 2px 15px rgb(33 33 52 / 0.1);
   --shadow-3: 0 16px 40px rgb(33 33 52 / 0.22);

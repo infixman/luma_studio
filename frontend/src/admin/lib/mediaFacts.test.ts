@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fileSize, mediaCaption, mediaDimensions, mediaFormat, mediaName, mediaSrcSet } from './mediaFacts'
+import { fileSize, mediaCaption, mediaDimensions, mediaFormat, mediaName } from './mediaFacts'
 import type { MediaItem } from '../../shared/types'
 
 function item(overrides: Partial<MediaItem> = {}): MediaItem {
@@ -78,26 +78,3 @@ describe('mediaCaption', () => {
   })
 })
 
-describe('mediaSrcSet', () => {
-  const sizes: MediaItem['sizes'] = [
-    { label: 'small', path: '/media-assets/s.webp', width: 480, height: 480, byteSize: 100 },
-    { label: 'medium', path: '/media-assets/m.webp', width: 960, height: 960, byteSize: 200 },
-  ]
-
-  it('offers the stored widths and the original above them', () => {
-    // Without the original, a wide screen would be handed the 960 copy of a
-    // 1024 image and nothing larger would exist.
-    const set = mediaSrcSet(item({ sizes }))
-    expect(set.split(', ').map((entry) => entry.split(' ')[1])).toEqual(['480w', '960w', '1024w'])
-  })
-
-  it('is empty when there is nothing to choose between', () => {
-    // A one-entry srcset only repeats what src already says.
-    expect(mediaSrcSet(item())).toBe('')
-  })
-
-  it('leaves the original out when its width was never measured', () => {
-    // A srcset entry with no width is one the browser cannot rank.
-    expect(mediaSrcSet(item({ sizes, width: 0, height: 0 }))).not.toContain('abc123.png')
-  })
-})

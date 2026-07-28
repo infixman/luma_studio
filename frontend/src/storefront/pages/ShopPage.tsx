@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 
 import { api, apiUrl } from '../../shared/api'
+import { priceLabel } from '../../shared/money'
 import type { PublicCategory, PublicProductCard } from '../../shared/types'
 import '../styles/shop.css'
-
-function priceLabel(card: PublicProductCard): string {
-  if (card.priceFrom === null || card.priceTo === null) return '暫不販售'
-  if (card.priceFrom === card.priceTo) return `NT$${card.priceFrom}`
-  return `NT$${card.priceFrom} 起`
-}
 
 export function ShopPage() {
   const [products, setProducts] = useState<PublicProductCard[] | null>(null)
@@ -61,7 +56,7 @@ export function ShopPage() {
                   {!card.inStock && <span class="ribbon">售完</span>}
                 </div>
                 <h2>{card.title}</h2>
-                <p class="price">{priceLabel(card)}</p>
+                <p class="price">{priceLabel(card.priceFrom, card.priceTo)}</p>
               </a>
             </li>
           ))}

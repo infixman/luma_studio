@@ -1,5 +1,6 @@
 import { Checkbox, TableWrap } from './ui'
 import { apiUrl } from '../../shared/api'
+import { srcSetFor } from '../../shared/srcset'
 import {
   fileSize,
   mediaCaption,
@@ -7,7 +8,6 @@ import {
   mediaDimensions,
   mediaFormat,
   mediaName,
-  mediaSrcSet,
 } from '../lib/mediaFacts'
 import type { MediaItem } from '../../shared/types'
 
@@ -148,7 +148,7 @@ function Thumbnail({ item, sizes }: { item: MediaItem; sizes: string }) {
           editor, so the name is shown beside it either way. */}
       <img
         src={apiUrl(item.path)}
-        srcset={mediaSrcSet(item) || undefined}
+        srcset={srcSetFor(item)}
         sizes={sizes}
         alt={item.alt}
         loading="lazy"

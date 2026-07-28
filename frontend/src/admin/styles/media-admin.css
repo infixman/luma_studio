@@ -275,62 +275,13 @@ body.admin .usage {
 
 /* --- the picker --- */
 
-body.admin .media-picker {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-}
+/* The picker is a Modal now, so the scrim, the panel, the header and the
+   footer all come from the kit — including the focus trap this hand-rolled
+   dialog never had. What is left is the two pieces that are the picker's own:
+   a search bar that does not scroll away, and a grid that does. */
 
-body.admin .media-picker .backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(10 10 20 / 0.55);
-}
-
-body.admin .media-picker .panel {
-  position: relative;
-  width: min(760px, 100%);
-  max-height: 86vh;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-3);
-}
-
-body.admin .media-picker header,
-body.admin .media-picker footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-}
-
-body.admin .media-picker header {
-  border-bottom: 1px solid var(--border);
-}
-
-body.admin .media-picker header h3 {
-  margin: 0;
-  margin-right: auto;
-  font-size: var(--font-lg);
-  color: var(--text);
-}
-
-body.admin .media-picker footer {
-  border-top: 1px solid var(--border);
-}
-
-/* Outside the scrolling area: a search box that scrolls away with its results
-   is a search box you lose the moment you start reading them. */
 body.admin .media-picker .search {
-  padding: var(--space-3) var(--space-4) 0;
+  margin-bottom: var(--space-3);
 }
 
 body.admin .media-picker .search .ui-field {
@@ -340,12 +291,12 @@ body.admin .media-picker .search .ui-field {
 /* The grid is what scrolls, so the upload control stays reachable however
    many images the library holds. */
 body.admin .media-picker .body {
+  max-height: 55vh;
   overflow-y: auto;
-  padding: var(--space-4);
 }
 
-body.admin .media-picker .error {
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  color: var(--danger);
+/* Pushes the upload button to the far end of the modal's footer row. */
+body.admin .picker-limit {
+  margin-right: auto;
 }
+

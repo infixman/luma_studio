@@ -7,7 +7,6 @@
  * something the library calls something else.
  */
 
-import { apiUrl } from '../../shared/api'
 import type { MediaItem } from '../../shared/types'
 
 /**
@@ -75,9 +74,3 @@ export function mediaDate(seconds: number): string {
  * An image with no stored widths returns an empty string rather than a srcset
  * of one, because a one-entry srcset is what `src` already says.
  */
-export function mediaSrcSet(item: MediaItem): string {
-  if (item.sizes.length === 0) return ''
-  const entries = item.sizes.map((size) => `${apiUrl(size.path)} ${size.width}w`)
-  if (item.width) entries.push(`${apiUrl(item.path)} ${item.width}w`)
-  return entries.join(', ')
-}

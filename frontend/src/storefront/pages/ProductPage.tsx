@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiUrl } from '../../shared/api'
+import { money, priceLabel } from '../../shared/money'
 import type { PublicProductDetail, PublicVariant } from '../../shared/types'
 import * as cart from '../lib/cart'
 import '../styles/shop.css'
@@ -19,12 +20,13 @@ function stockNote(variant: PublicVariant): string | null {
  * somebody scrolled here to find.
  */
 function headlinePrice(product: PublicProductDetail, chosen: PublicVariant | null): string {
-  if (chosen) return `NT$${chosen.price}`
+  if (chosen) return money(chosen.price)
   const prices = product.variants.map((variant) => variant.price)
   if (prices.length === 0) return '暫不販售'
-  const low = Math.min(...prices)
-  const high = Math.max(...prices)
-  return low === high ? `NT$${low}` : `NT$${low} – NT$${high}`
+  // Same wording as the cards that led here. This page used to spell a range
+  // out in full, so a product read `NT$300 起` on /shop and `NT$300 – NT$500`
+  // one click later.
+  return priceLabel(Math.min(...prices), Math.max(...prices))
 }
 
 export function ProductPage({ slug }: { slug: string }) {

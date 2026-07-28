@@ -14,8 +14,12 @@ import * as cart from '../lib/cart'
  * without it rather than behind a spinner: the content is what the visitor
  * came for, and holding it back for a navigation bar is the wrong trade.
  *
- * `bare` is for checkout and the order pages. A row of navigation links part
- * way through paying is an invitation to go and look at something else.
+ * `bare` is for checkout, and for the pages that stand on their own — the
+ * name card, the ibon printout, the draft preview. A row of navigation links
+ * part way through paying is an invitation to go and look at something else;
+ * the others have their own reasons, and `isBare` in app.tsx holds all of
+ * them with a test. The order pages are NOT among them: looking up a past
+ * order is browsing, and this said otherwise long after that changed.
  *
  * A custom page may also turn either half off for itself. It is the page that
  * knows, and the page renders inside this, so it says so through

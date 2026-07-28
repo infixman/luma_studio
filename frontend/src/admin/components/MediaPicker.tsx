@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { MediaGrid } from './MediaGrid'
 import { MediaSearchField, useMediaLibrary } from './MediaSearch'
-import { Button, Spinner } from './ui'
+import { Button, Modal, Spinner } from './ui'
 import { uploadMedia } from '../../shared/api'
 import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
@@ -41,18 +41,13 @@ export function MediaPicker({
   )
   const { query, setQuery, items, setItems } = useMediaLibrary(open, report)
 
-  // Escape closes it, because a dialog that can only be dismissed by finding
-  // the right button is a dialog people click through to get rid of.
+  // Escape, the backdrop and the focus trap belong to Modal — including the
+  // two this used to be missing: focus never entered the dialog, and never
+  // came back to whatever opened it. Only the "last time's failure is not this
+  // time's news" reset is this component's own.
   useEffect(() => {
-    if (!open) return
-    // Last time's failure is not this time's news.
-    setError('')
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    addEventListener('keydown', onKey)
-    return () => removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    if (open) setError('')
+  }, [open])
 
   if (!open) return null
 
@@ -79,19 +74,34 @@ export function MediaPicker({
   }
 
   return (
-    <div class="media-picker" role="dialog" aria-modal="true" aria-label="選擇圖片">
-      <div class="backdrop" onClick={onClose} />
-      <div class="panel">
-        <header>
-          <h3>選擇圖片</h3>
-          <Button tone="ghost" onClick={onClose}>
-            關閉
+    <Modal
+      title="選擇圖片"
+      open={open}
+      onClose={onClose}
+      width="lg"
+      footer={
+        <>
+          {/* Hidden, because a file chooser is the one control the kit cannot
+              draw — the button in front of it is the one that matches. */}
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={upload}
+            disabled={busy}
+          />
+          <span class="muted picker-limit">jpg、png 或 webp，最大 5 MB</span>
+          <Button busy={busy} onClick={() => fileInput.current?.click()}>
+            上傳新圖
           </Button>
-        </header>
+        </>
+      }
+    >
+      <div class="media-picker">
+        {error && <p class="ui-note is-error">{error}</p>}
 
-        {error && <p class="error">{error}</p>}
-
-        {/* Above the grid, not in the footer: it is the first thing you reach
+        {/* Above the grid, not at the bottom: it is the first thing you reach
             for once the library has more images than fit on one screen. */}
         <div class="search">
           <MediaSearchField value={query} onChange={setQuery} />
@@ -109,25 +119,8 @@ export function MediaPicker({
             />
           )}
         </div>
-
-        <footer>
-          {/* Hidden, because a file chooser is the one control the kit cannot
-              draw — the button in front of it is the one that matches. */}
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            onChange={upload}
-            disabled={busy}
-          />
-          <Button busy={busy} onClick={() => fileInput.current?.click()}>
-            上傳新圖
-          </Button>
-          <span class="muted">jpg、png 或 webp，最大 5 MB</span>
-        </footer>
       </div>
-    </div>
+    </Modal>
   )
 }
 

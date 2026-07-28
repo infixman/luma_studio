@@ -17,7 +17,8 @@ import {
   useConfirm,
 } from '../components/ui'
 import { api, apiJson, apiUrl, uploadMedia } from '../../shared/api'
-import { fileSize, mediaDate, mediaDimensions, mediaFormat, mediaName, mediaSrcSet } from '../lib/mediaFacts'
+import { srcSetFor } from '../../shared/srcset'
+import { fileSize, mediaDate, mediaDimensions, mediaFormat, mediaName } from '../lib/mediaFacts'
 import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
 import '../styles/admin.css'
@@ -470,7 +471,7 @@ export function MediaPage() {
             <div class="media-preview">
               <img
                 src={apiUrl(selected.path)}
-                srcset={mediaSrcSet(selected) || undefined}
+                srcset={srcSetFor(selected)}
                 sizes="(max-width: 640px) 90vw, 420px"
                 alt={selected.alt}
               />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
+import { priceLabel } from '../money'
 import { srcSetFor } from '../srcset'
 import { apiUrl } from '../api'
 import { renderMarkdown } from '../markdown'
@@ -203,12 +204,6 @@ function Album({ images, columns, ratio }: { images: MediaRef[]; columns: number
   )
 }
 
-function priceLabel(card: PublicProductCard): string {
-  if (card.priceFrom === null) return '暫不販售'
-  if (card.priceTo === null || card.priceFrom === card.priceTo) return `NT$${card.priceFrom}`
-  return `NT$${card.priceFrom}–${card.priceTo}`
-}
-
 /**
  * A row of products, in one of two arrangements.
  *
@@ -258,7 +253,7 @@ function ShopRow({
                   rather than needing two sets of coordinates. */}
               <span class="label">
                 <span class="title">{card.title}</span>
-                <span class="price">{priceLabel(card)}</span>
+                <span class="price">{priceLabel(card.priceFrom, card.priceTo)}</span>
               </span>
             </a>
           </li>

@@ -1,15 +1,30 @@
 /* Block typography, shared by the storefront and the back office's preview.
-   Deliberately self-contained: the preview must look like the page without
-   the admin build having to pull in the storefront's stylesheets. */
+
+   Deliberately self-contained: the preview has to look like the shop without
+   the admin build pulling in the storefront's stylesheets — and it cannot
+   borrow the admin's own tokens, because those are the tool's colours, not
+   the shop's. So the shop's palette is named here, once, and inherited.
+
+   These are the storefront's values; they must agree with
+   storefront/styles/surface.css. They were written out as literals at twelve
+   sites, which is how this file ended up carrying a third cream — one shade
+   away from the page it renders on and from the header above it. */
 
 .block {
+  --block-page: #f3ede4;
+  --block-card: #fff;
+  --block-ink: #2b2622;
+  --block-muted: #5b524a;
+  --block-faint: #7a6f65;
+  --block-line: #cfc5b8;
+
   max-width: 46rem;
   margin: 0 auto 2rem;
 }
 
 .block-text {
   line-height: 1.8;
-  color: #2b2622;
+  color: var(--block-ink);
 }
 
 .block-text h2 {
@@ -75,7 +90,7 @@
   position: relative;
   overflow: hidden;
   border-radius: 10px;
-  background: #f2ede6;
+  background: var(--block-page);
 }
 
 .block-carousel img,
@@ -101,7 +116,7 @@
   border: none;
   border-radius: 50%;
   background: rgb(255 255 255 / 0.85);
-  color: #2b2622;
+  color: var(--block-ink);
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
@@ -114,7 +129,7 @@
   margin: 0.7rem 0 0;
   font-size: 0.9rem;
   text-align: center;
-  color: #5b524a;
+  color: var(--block-muted);
 }
 
 .block-carousel .dots {
@@ -132,12 +147,12 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: #cfc5b8;
+  background: var(--block-line);
   cursor: pointer;
 }
 
 .block-carousel .dots button.current {
-  background: #2b2622;
+  background: var(--block-ink);
 }
 
 /* --- album --- */
@@ -157,7 +172,7 @@
 .block-album li {
   overflow: hidden;
   border-radius: 8px;
-  background: #f2ede6;
+  background: var(--block-page);
 }
 
 .block-album.ratio-wide li { aspect-ratio: 16 / 9; }
@@ -208,7 +223,7 @@
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 8px;
-  background: #f2ede6;
+  background: var(--block-page);
 }
 
 .block-shop .cover img {
@@ -222,7 +237,7 @@
   inset: auto 0 0 0;
   padding: 0.2rem 0;
   background: rgb(43 38 34 / 0.75);
-  color: #fff;
+  color: var(--block-card);
   font-size: 0.8rem;
   text-align: center;
 }
@@ -238,7 +253,7 @@
 
 .block-shop .price {
   font-size: 0.9rem;
-  color: #5b524a;
+  color: var(--block-muted);
 }
 
 .block-shop .sold-out .title,
@@ -301,7 +316,7 @@
   padding: 0.35rem 0.8rem;
   border-radius: 999px;
   background: rgb(43 38 34 / 0.78);
-  color: #fff;
+  color: var(--block-card);
   backdrop-filter: blur(6px);
 }
 
@@ -441,7 +456,7 @@
   font-size: 0.8rem;
   font-weight: 650;
   letter-spacing: 0.04em;
-  color: #7a6f65;
+  color: var(--block-faint);
 }
 
 .block-contact dd {
