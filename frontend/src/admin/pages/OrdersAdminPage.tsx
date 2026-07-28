@@ -48,6 +48,12 @@ const MOVES: Partial<Record<OrderStatus, { action: string; label: string; prompt
   ],
 }
 
+const MAIL_STATUS: Record<string, string> = {
+  pending: '等待寄出',
+  sent: '已寄出',
+  failed: '寄送失敗',
+}
+
 function when(seconds: number): string {
   return new Date(seconds * 1000).toLocaleString('zh-TW', {
     year: 'numeric',
@@ -172,6 +178,14 @@ export function OrdersAdminPage() {
               onInput={(event) => setSearch((event.target as HTMLInputElement).value)}
             />
           </div>
+
+          {/* A list that stops at its limit without saying so reads as "the
+              old orders are gone". */}
+          {list?.truncated && (
+            <p class="muted warn">
+              只顯示最新的 {list.orders.length} 筆。用上面的搜尋或狀態篩選縮小範圍。
+            </p>
+          )}
 
           {list === null ? (
             <p class="muted">載入中…</p>
@@ -312,6 +326,24 @@ export function OrdersAdminPage() {
                   ))}
                 </ul>
               </>
+            )}
+
+            <h3>通知信</h3>
+            {/* Queued, not sent here: the cron delivers within five minutes.
+                Shown so "did they get the shipping notice" has an answer that
+                does not need a database console. */}
+            {detail.emails.length === 0 ? (
+              <p class="muted">還沒有寄給這位顧客的信。沒有設定寄信服務時不會排入。</p>
+            ) : (
+              <ul class="audit">
+                {detail.emails.map((email, index) => (
+                  <li key={index}>
+                    {MAIL_STATUS[email.status] ?? email.status}．{email.subject}．{email.recipient}
+                    {email.sentAt ? `．${when(email.sentAt)}` : ''}
+                    {email.lastError ? `．${email.lastError}` : ''}
+                  </li>
+                ))}
+              </ul>
             )}
 
             <h3>稽核紀錄</h3>

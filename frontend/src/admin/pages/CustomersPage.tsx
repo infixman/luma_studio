@@ -23,6 +23,7 @@ function when(seconds: number): string {
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null)
+  const [truncated, setTruncated] = useState(false)
   const [search, setSearch] = useState('')
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null)
   const [busy, setBusy] = useState(false)
@@ -31,8 +32,9 @@ export function CustomersPage() {
   const load = useCallback(async () => {
     const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''
     try {
-      const data = await api<{ customers: AdminCustomer[] }>(`/api/customers${query}`)
+      const data = await api<{ customers: AdminCustomer[]; truncated: boolean }>(`/api/customers${query}`)
       setCustomers(data.customers)
+      setTruncated(data.truncated)
       clearLoginAttempt()
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) showError(error)
@@ -105,6 +107,10 @@ export function CustomersPage() {
               onInput={(event) => setSearch((event.target as HTMLInputElement).value)}
             />
           </div>
+
+          {truncated && (
+            <p class="muted warn">只顯示最新的 {customers?.length} 位。用搜尋縮小範圍。</p>
+          )}
 
           {customers === null ? (
             <p class="muted">載入中…</p>

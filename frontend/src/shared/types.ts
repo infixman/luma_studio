@@ -341,11 +341,24 @@ export interface OrderAuditEntry {
   createdAt: number
 }
 
+/** One queued notification, and whether it went. */
+export interface OrderEmail {
+  kind: string
+  recipient: string
+  subject: string
+  status: 'pending' | 'sent' | 'failed'
+  attempts: number
+  lastError: string
+  createdAt: number
+  sentAt: number | null
+}
+
 export interface AdminOrderDetail {
   order: AdminOrder
   items: OrderItem[]
   attempts: PaymentAttempt[]
   audit: OrderAuditEntry[]
+  emails: OrderEmail[]
 }
 
 export interface AdminCustomer {
@@ -370,6 +383,8 @@ export interface AdminCustomerDetail {
 export interface AdminOrderList {
   orders: AdminOrder[]
   counts: Partial<Record<OrderStatus, number>>
+  /** True when the answer stopped at its limit and more rows exist. */
+  truncated: boolean
 }
 
 // --- custom pages -------------------------------------------------------

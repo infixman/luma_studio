@@ -121,11 +121,13 @@ def media_row(row: dict) -> dict:
 # --- reading -------------------------------------------------------------
 
 
-async def list_media(env) -> list[dict]:
+async def list_media(env) -> tuple[list[dict], bool]:
+    """The library, and whether it was cut short."""
+
     rows = await d1_rows(
-        env.DB.prepare("SELECT * FROM media ORDER BY created_at DESC, id LIMIT ?1").bind(MAX_ITEMS)
+        env.DB.prepare("SELECT * FROM media ORDER BY created_at DESC, id LIMIT ?1").bind(MAX_ITEMS + 1)
     )
-    return [media_row(row) for row in rows]
+    return [media_row(row) for row in rows[:MAX_ITEMS]], len(rows) > MAX_ITEMS
 
 
 async def get_media(env, media_id: str) -> dict | None:

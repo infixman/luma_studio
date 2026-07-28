@@ -100,6 +100,27 @@ class TestWhatTheShopSees:
         assert body_of(call(AdminRequest("/api/orders"), database))["counts"] == {"paid": 3}
 
 
+class TestSayingWhatWasLeftOut:
+    """A list that stops at its limit and says nothing reads as "the old
+    orders are gone"."""
+
+    def test_a_full_page_is_reported_as_cut_short(self, orders):
+        # One more row than the page holds, which is exactly how the query
+        # finds out there is more.
+        database = FakeDatabase({"FROM orders": [order(f"LS2026072{index}abcdefg") for index in range(9)]})
+        rows, truncated = asyncio.run(orders.list_all(make_env(database), limit=8))
+        assert len(rows) == 8 and truncated is True
+
+    def test_a_short_page_is_not(self, orders):
+        database = FakeDatabase({"FROM orders": [order()]})
+        rows, truncated = asyncio.run(orders.list_all(make_env(database), limit=8))
+        assert len(rows) == 1 and truncated is False
+
+    def test_the_flag_reaches_the_response(self, orders):
+        database = FakeDatabase({"FROM orders": [order()]})
+        assert body_of(call(AdminRequest("/api/orders"), database))["truncated"] is False
+
+
 class TestMovingAnOrderAlong:
     def test_paid_becomes_shipped(self, orders):
         database = FakeDatabase({"FROM orders": [order(status="paid")]}, {"UPDATE orders": 1})

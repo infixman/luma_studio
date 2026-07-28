@@ -423,6 +423,29 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_media_created ON media (created_at DESC)",
         ],
     },
+    {
+        "name": "0014_create_email_outbox",
+        "statements": [
+            # Mail is queued rather than sent where it is decided. The admin
+            # Worker can mark an order shipped but has no schedule of its own,
+            # and a customer's confirmation must not fail because a third
+            # party was slow. Both write here; the public Worker's cron sends.
+            """CREATE TABLE IF NOT EXISTS email_outbox (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 order_id TEXT,
+                 kind TEXT NOT NULL,
+                 recipient TEXT NOT NULL,
+                 subject TEXT NOT NULL,
+                 body TEXT NOT NULL,
+                 status TEXT NOT NULL DEFAULT 'pending',
+                 attempts INTEGER NOT NULL DEFAULT 0,
+                 last_error TEXT NOT NULL DEFAULT '',
+                 created_at INTEGER NOT NULL,
+                 sent_at INTEGER
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_email_outbox_pending ON email_outbox (status, created_at)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

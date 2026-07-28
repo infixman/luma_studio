@@ -67,6 +67,7 @@ backend/
     media_admin_api.py 管理端媒體端點
     orders_admin_api.py 管理端訂單端點
     customers.py      會員名單、封鎖與個資清除
+    mail.py           通知信樣板、佇列與寄送
     customers_admin_api.py 管理端會員端點
     shop_admin_api.py 管理端商品端點
     migrations.py     D1 schema，由管理 Worker 套用
@@ -365,6 +366,18 @@ DNS 記錄與憑證由 Cloudflare 自動建立。**綁定前不要手動加 A/CN
 | `luma-studio-admin-api` | `GOOGLE_CLIENT_ID` | 店主那組 OAuth client |
 | `luma-studio-admin-api` | `GOOGLE_CLIENT_SECRET` | 同上 |
 | `luma-studio-admin-api` | `GOOGLE_OAUTH_REDIRECT_URI` | `https://admin-api.luma-studio.tw/auth/callback` |
+| `luma-studio` | `RESEND_API_KEY` | 寄信用。**只有公開 Worker 需要**——排空信件佇列的排程在那邊 |
+
+沒有設 `RESEND_API_KEY` 或 `MAIL_FROM` 時整套通知信是關的：不會排入、不會寄出，也不會累積一堆之後突然全部寄出去的舊信。
+
+`MAIL_FROM` 與 `MAIL_OWNER` 不是 secret（不是憑證），寫在兩個 Worker 的 `[vars]` 裡：
+
+```toml
+MAIL_FROM = "苒光繪誌 <shop@luma-studio.tw>"   # 網域要先在 Resend 驗證過
+MAIL_OWNER = "你的信箱"                        # 收「有新訂單」的通知
+```
+
+管理 Worker 也要 `MAIL_FROM`——它會排入「已出貨」這類信，而 `MAIL_FROM` 是那個開關。它不需要 `RESEND_API_KEY`，因為它不負責寄。
 
 ```powershell
 uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_ID
@@ -697,6 +710,24 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 **手動標記已付款**是刻意留的：金流還沒串，匯款先到的時候需要一個入口。對到哪一筆匯款會寫進稽核的 detail，因為「手動標記」單獨看沒有意義。
 
 **店家備註不會出現在顧客的訂單頁。** `orders.order_row` 是交給顧客的形狀，`admin_row` 才多帶 `adminNote` 與 `customerId`。把私人備註加進共用的形狀，就是把它發佈在別人的訂單頁上。
+
+### 通知信
+
+信件是**在決定的地方排隊，在別的地方寄出**（[mail.py](backend/src/mail.py) 與 `email_outbox`）。三個理由都是結構性的：
+
+1. 管理 Worker 可以把訂單標記成已出貨，但它**沒有自己的排程**。寫一列資料兩個部署都做得到，在 cron 上跟寄信服務講話則不然。
+2. 顧客的訂單不能因為第三方慢就失敗。結帳寫一列就往下走。
+3. 留得住的佇列才能重試，也才是「到底寄出去了沒」的紀錄——而那個問題一定會被問。
+
+顧客會收到：訂單成立、已收到款項、已出貨、已取消、已逾期。**「已完成」刻意不寄**——那封信會在包裹之後才到，而且說的比包裹少。你自己會收到「有新訂單」（設了 `MAIL_OWNER` 的話）。
+
+排空在公開 Worker 既有的 5 分鐘 cron 上。單封結算：服務中斷就留著下次再試，連續五次失敗就放棄——不存在的信箱不會因為多試幾次就存在。
+
+**沒設定寄信服務時，連排隊都不做。** 否則加上金鑰的那一刻，一整個月的舊信會同時寄出，有人會在六月收到四月的出貨通知。
+
+後台的訂單明細看得到這筆訂單排過哪些信、寄出了沒、失敗原因是什麼。
+
+換掉 Resend 只要改 `mail.py` 裡的 `_post` 一個函式，和它讀的兩個設定。
 
 ### 後台的會員
 

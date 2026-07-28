@@ -15,6 +15,7 @@ written once, here.
 import re
 
 import shipping
+import mail
 from common import d1_rows, random_alpha_numeric, utc_timestamp
 
 
@@ -289,6 +290,7 @@ async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool
         changed = False
     if changed:
         await audit(env, order_id, actor, "paid", before="pending", after="paid", detail=detail)
+        await _tell_customer(env, order_id, "paid")
     return changed
 
 
@@ -296,6 +298,24 @@ async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool
 # table because the interesting part is which move is missing: nothing goes
 # backwards, and nothing skips paid.
 FORWARD = {"shipped": ("paid",), "completed": ("shipped",)}
+
+
+async def _tell_customer(env, order_id: str, kind: str, *, detail: str = "") -> None:
+    """Queue the customer's notice for a change that already happened.
+
+    Deliberately after the write and deliberately not able to undo it: an
+    order that moved must stay moved even if the mail could not be written.
+    """
+
+    order = await get_order(env, order_id)
+    if order is None:
+        return
+    try:
+        await mail.queue_order_event(env, kind, order, await list_items(env, order_id), detail=detail)
+    except Exception:
+        # A queue that will not accept a row is a problem for the next run,
+        # not a reason to fail the move the shop just made.
+        pass
 
 
 async def advance(env, order_id: str, to_status: str, actor: str, *, detail: str = "") -> str | None:
@@ -331,6 +351,7 @@ async def advance(env, order_id: str, to_status: str, actor: str, *, detail: str
         return None
 
     await audit(env, order_id, actor, to_status, before=before, after=to_status, detail=detail)
+    await _tell_customer(env, order_id, to_status, detail=detail)
     return before
 
 
@@ -355,8 +376,9 @@ async def set_note(env, order_id: str, note: str, actor: str) -> bool:
     return changed
 
 
-async def list_all(env, *, status: str = "", search: str = "", limit: int = 50) -> list[dict]:
-    """The shop's own view of its orders, newest first.
+async def list_all(env, *, status: str = "", search: str = "", limit: int = 50) -> tuple[list[dict], bool]:
+    """The shop's own view of its orders, newest first, and whether the answer
+    was cut short.
 
     Search covers the order id, the recipient and the email they gave at
     checkout — the three things someone has in front of them when they write
@@ -372,9 +394,13 @@ async def list_all(env, *, status: str = "", search: str = "", limit: int = 50) 
         index = len(bindings)
         conditions.append(f"(id LIKE ?{index} OR recipient_name LIKE ?{index} OR recipient_email LIKE ?{index})")
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-    bindings.append(max(1, min(limit, MAX_LIST)))
+    wanted = max(1, min(limit, MAX_LIST))
+    # One more than asked for. Whether anything was left out is then a fact
+    # rather than "we returned exactly the limit, so probably".
+    bindings.append(wanted + 1)
     query = f"SELECT * FROM orders{where} ORDER BY created_at DESC, id LIMIT ?{len(bindings)}"
-    return [admin_row(row) for row in await d1_rows(env.DB.prepare(query).bind(*bindings))]
+    rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
+    return [admin_row(row) for row in rows[:wanted]], len(rows) > wanted
 
 
 async def counts_by_status(env) -> dict:
@@ -426,6 +452,7 @@ async def cancel(env, order_id: str, actor: str, *, reason: str = "") -> bool:
     ).bind(order_id, utc_timestamp()).run()
     await release_stock(env, order_id)
     await audit(env, order_id, actor, "cancelled", before=order["status"], after="cancelled", detail=reason)
+    await _tell_customer(env, order_id, "cancelled", detail=reason)
     return True
 
 
@@ -457,6 +484,7 @@ async def expire_unpaid(env) -> int:
             continue
         await release_stock(env, row["id"])
         await audit(env, row["id"], "system", "expired", before="pending", after="expired")
+        await _tell_customer(env, row["id"], "expired")
     return len(rows)
 
 

@@ -143,3 +143,9 @@ body.admin .audit {
     border: none;
   }
 }
+
+/* Truncation is a fact about the answer, not an error — visible, not alarming. */
+body.admin .muted.warn {
+  color: #a05a00;
+  opacity: 1;
+}

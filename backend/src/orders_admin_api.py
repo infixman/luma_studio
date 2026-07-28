@@ -10,6 +10,7 @@ backwards, and it cannot skip `paid`. Those rules live in `orders.FORWARD`,
 not here — this file is the door, not the policy.
 """
 
+import mail
 import orders
 from responses import Ctx
 
@@ -41,6 +42,7 @@ async def _detail(ctx: Ctx, order_id: str) -> dict:
         "items": await orders.list_items(ctx.env, order_id),
         "attempts": await orders.list_attempts(ctx.env, order_id),
         "audit": await orders.list_audit(ctx.env, order_id),
+        "emails": await mail.list_for_order(ctx.env, order_id),
     }
 
 
@@ -52,9 +54,13 @@ async def handle(ctx: Ctx):
         if status and status not in orders.STATUSES:
             return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
         search = (ctx.query.get("q") or [""])[0].strip()[:60]
+        rows, truncated = await orders.list_all(env, status=status, search=search)
         return ctx.json(
             {
-                "orders": await orders.list_all(env, status=status, search=search),
+                "orders": rows,
+                # Said out loud rather than left to be discovered as "the old
+                # orders are gone".
+                "truncated": truncated,
                 # The counts come back with every list so the tabs can show
                 # them without a second request that could disagree.
                 "counts": await orders.counts_by_status(env),

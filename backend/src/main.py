@@ -14,6 +14,8 @@ ever sent to the other — see `auth_core.session_cookie`.
 
 from urllib.parse import unquote
 
+import traceback
+
 import workers
 from workers import WorkerEntrypoint
 
@@ -27,6 +29,7 @@ import pages
 import rate_limit
 import router
 import shipping
+import mail
 import media
 import shop
 import site_chrome
@@ -443,7 +446,16 @@ async def checkout_response(ctx: Ctx, customer: dict):
     except orders.OrderError as error:
         return ctx.error(str(error), 409)
 
-    return ctx.json({"order": order, "items": await orders.list_items(ctx.env, order["id"])}, 201)
+    items = await orders.list_items(ctx.env, order["id"])
+    # Queued, not sent: the customer's order must not depend on a mail
+    # provider answering. The cron five minutes from now delivers it, and the
+    # confirmation page already told them the order exists.
+    try:
+        await mail.queue_order_event(ctx.env, "created", order, items)
+        await mail.queue_owner_alert(ctx.env, order, items)
+    except Exception:
+        traceback.print_exc()
+    return ctx.json({"order": order, "items": items}, 201)
 
 
 async def order_response(ctx: Ctx, customer: dict, order_id: str):
@@ -799,3 +811,7 @@ class Default(WorkerEntrypoint):
         """
 
         await orders.expire_unpaid(self.env)
+        # The outbox is drained here rather than where mail is decided: the
+        # admin Worker can mark an order shipped and has no schedule of its
+        # own, and checkout must not wait on a third party.
+        await mail.send_pending(self.env)

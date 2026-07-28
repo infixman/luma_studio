@@ -31,7 +31,8 @@ async def handle(ctx: Ctx):
 
     if path == "/api/customers" and method == "GET":
         search = (ctx.query.get("q") or [""])[0].strip()
-        return ctx.json({"customers": await customers.list_all(env, search=search)})
+        rows, truncated = await customers.list_all(env, search=search)
+        return ctx.json({"customers": rows, "truncated": truncated})
 
     if not path.startswith("/api/customers/"):
         return ctx.error("Not found", 404)

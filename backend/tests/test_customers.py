@@ -64,8 +64,9 @@ class TestTheList:
         """One round trip. Asking per customer is one more for every row."""
 
         database = FakeDatabase({"FROM customers": [row()]})
-        listed = asyncio.run(customers.list_all(make_env(database)))
+        listed, truncated = asyncio.run(customers.list_all(make_env(database)))
         assert listed[0]["orderCount"] == 2 and listed[0]["paidTotal"] == 980
+        assert truncated is False
         assert len(database.statements) == 1
 
     def test_only_orders_that_were_paid_for_count_towards_the_total(self, customers):
@@ -82,7 +83,7 @@ class TestTheList:
 
     def test_a_customer_who_never_ordered_reports_zero_rather_than_nothing(self, customers):
         database = FakeDatabase({"FROM customers": [row(orders=0, paid=None)]})
-        listed = asyncio.run(customers.list_all(make_env(database)))
+        listed, _ = asyncio.run(customers.list_all(make_env(database)))
         assert listed[0]["paidTotal"] == 0
 
 

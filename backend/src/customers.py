@@ -57,15 +57,19 @@ _LIST_QUERY = """
 """
 
 
-async def list_all(env, *, search: str = "", limit: int = 100) -> list[dict]:
+async def list_all(env, *, search: str = "", limit: int = 100) -> tuple[list[dict], bool]:
+    """The member list, and whether it was cut short."""
+
     bindings = []
     where = ""
     if search:
         bindings.append(f"%{search[:MAX_SEARCH]}%")
         where = " WHERE c.email LIKE ?1 OR c.display_name LIKE ?1 OR c.default_recipient_name LIKE ?1"
-    bindings.append(max(1, min(limit, MAX_LIST)))
+    wanted = max(1, min(limit, MAX_LIST))
+    bindings.append(wanted + 1)
     query = f"{_LIST_QUERY}{where} GROUP BY c.id ORDER BY c.created_at DESC LIMIT ?{len(bindings)}"
-    return [admin_row(row) for row in await d1_rows(env.DB.prepare(query).bind(*bindings))]
+    rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
+    return [admin_row(row) for row in rows[:wanted]], len(rows) > wanted
 
 
 async def get(env, customer_id: str) -> dict | None:

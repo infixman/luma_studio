@@ -21,7 +21,8 @@ async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/media" and method == "GET":
-        return ctx.json({"media": await media.list_media(env)})
+        items, truncated = await media.list_media(env)
+        return ctx.json({"media": items, "truncated": truncated})
 
     if path == "/api/media" and method == "POST":
         try:
@@ -83,6 +84,7 @@ async def handle(ctx: Ctx):
             if key is None:
                 return ctx.error("Media not found", 404)
             await env.IBON_IMAGES.delete(key)
-            return ctx.json({"media": await media.list_media(env)})
+            items, truncated = await media.list_media(env)
+            return ctx.json({"media": items, "truncated": truncated})
 
     return ctx.error("Not found", 404)

@@ -13,6 +13,7 @@ type Usage = { id: string; title: string; path: string }
 
 export function MediaPage() {
   const [items, setItems] = useState<MediaItem[] | null>(null)
+  const [truncated, setTruncated] = useState(false)
   const [selected, setSelected] = useState<MediaItem | null>(null)
   const [usedBy, setUsedBy] = useState<Usage[] | null>(null)
   const [alt, setAlt] = useState('')
@@ -21,8 +22,9 @@ export function MediaPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api<{ media: MediaItem[] }>('/api/media')
+      const data = await api<{ media: MediaItem[]; truncated: boolean }>('/api/media')
       setItems(data.media)
+      setTruncated(data.truncated)
       clearLoginAttempt()
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) showError(error)
@@ -119,6 +121,8 @@ export function MediaPage() {
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={upload} disabled={busy} />
             <span class="muted">jpg、png 或 webp，最大 5 MB</span>
           </label>
+
+          {truncated && <p class="muted warn">只顯示最新的 {items?.length} 張。舊的圖片仍然在頁面上正常顯示。</p>}
 
           {items === null ? (
             <p class="muted">載入中…</p>
