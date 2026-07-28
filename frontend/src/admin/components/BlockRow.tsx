@@ -40,6 +40,7 @@ export function BlockRow({
   onPaste,
   onDragStart,
   onDragOver,
+  onDragEnd,
   onDrop,
   dragging,
   children,
@@ -64,6 +65,8 @@ export function BlockRow({
   onPaste: (() => void) | null
   onDragStart: () => void
   onDragOver: () => void
+  /** The drag finished, however it finished — including cancelled. */
+  onDragEnd: () => void
   onDrop: () => void
   dragging: boolean
   children: ComponentChildren
@@ -156,6 +159,10 @@ export function BlockRow({
               event.dataTransfer?.setData('text/plain', block.id)
               onDragStart()
             }}
+            // Escape, or letting go over nothing. Without this the row stays
+            // dressed as the one being dragged until the next drag, and the
+            // next drop reads a stale origin.
+            onDragEnd={onDragEnd}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="9" cy="6" r="1.4" />

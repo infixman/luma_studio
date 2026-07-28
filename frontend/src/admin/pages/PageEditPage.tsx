@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
@@ -614,9 +615,12 @@ export function PageEditPage({ id }: { id: string }) {
 
             <ul class="block-list">
               {detail.blocks.map((block, index) => (
-                <>
+                // Keyed on the block, not the index: the picker appearing
+                // between two rows must not make Preact believe every row
+                // below it is a different block.
+                <Fragment key={block.id}>
                   {inserting === index && (
-                    <li key={`picker-${index}`}>
+                    <li>
                       <BlockPicker onPick={(type) => addBlock(type, index)} onCancel={() => setInserting(null)} />
                     </li>
                   )}
@@ -638,6 +642,7 @@ export function PageEditPage({ id }: { id: string }) {
                     onDragStart={() => setDrag({ from: index, over: index })}
                     onDragOver={() => setDrag((current) => (current ? { ...current, over: index } : null))}
                     onDrop={dropBlock}
+                    onDragEnd={() => setDrag(null)}
                   >
                     {block.type === 'text' && (
                       <TextEditor
@@ -685,7 +690,7 @@ export function PageEditPage({ id }: { id: string }) {
                       />
                     )}
                   </BlockRow>
-                </>
+                </Fragment>
               ))}
             </ul>
 
