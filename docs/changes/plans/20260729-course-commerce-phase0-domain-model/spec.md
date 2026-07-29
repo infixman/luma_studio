@@ -21,8 +21,9 @@ Entitlement active = revoked_at IS NULL AND (expires_at IS NULL OR expires_at > 
 3. 不建立 `product_type`。`containsCourse`、`containsPhysicalItem`、`requiresShipping`、`digitalOnly` 只能由 resolve result 推導，客戶端不可提交，資料庫不可重複存為真值。
 4. Component 平坦，只能指 Course 或 InventoryItem；Offer 不可作為 component target。
 5. 建單時寫不可變 Item／Fulfillment snapshots；付款後不得重新讀目前 Offer 重算交付內容。
-6. 一個 Course component 的 quantity 固定 1；inventory required quantity 為 component quantity × purchase quantity。
+6. 一個 Course component 的 quantity 固定 1；含 Course Offer 的 `purchase_quantity` 固定為 1；inventory required quantity 為 component quantity × purchase quantity。
 7. 付款成功、管理員人工標記、未來 gateway callback、reconciliation 共用 provision 入口；所有入口可安全重送。
+8. 有效 entitlement 的會員不得再次結帳含有該 Course 的 Offer；同 Offer 的 pending order 亦只能有一筆。entitlement 過期，或退款撤銷全部相關 source 後，才可重新購買。
 
 ## 候選 schema 與索引
 
@@ -56,8 +57,9 @@ Phase 1 不新增 `offers` 表，避免把同一 Offer 的 ID、價格或庫存�
 | --- | --- | --- |
 | `order_items` additive | `product_id`, `offer_id`, `requires_shipping`, `contains_course`，保留 `variant_id` | 新單全填 `offer_id`；相容期 `variant_id == offer_id`。產品／Offer ID 是來源，顯示名與金額仍採既有 snapshot 欄位。 |
 | `order_fulfillments` | `id PK, order_id, order_item_id, fulfillment_type, target_id, target_title, sku NULL, quantity, access_days NULL, status, created_at, updated_at` | `(order_id,fulfillment_type,status)` 操作索引；`(target_id,fulfillment_type)` 引用索引。target title/SKU/期限為 snapshot。 |
-| `course_entitlements` | `id PK, customer_id, course_id, granted_at, expires_at NULL, revoked_at NULL, revoke_reason NULL, created_at, updated_at` | unique `(customer_id,course_id)`，保證會員對同一 Course 的存取採集合語意；有效查詢 `(customer_id,revoked_at,expires_at)`。 |
-| `course_entitlement_sources` | `entitlement_id, source_kind, source_order_fulfillment_id NULL, actor NULL, created_at` | 購買來源 unique `(source_kind,source_order_fulfillment_id)`；手動／贈送不可偽造 order fulfillment，必填 actor/reason。 |
+| `course_entitlements` | `id PK, customer_id, course_id, granted_at, access_days NULL, first_viewed_at NULL, expires_at NULL, revoked_at NULL, revoke_reason NULL, created_at, updated_at` | unique `(customer_id,course_id)`；`access_days NULL` 是永久。期限型 entitlement 第一次成功播放才設定 `first_viewed_at/expires_at`；有效查詢 `(customer_id,revoked_at,expires_at)`。 |
+| `course_entitlement_sources` | `entitlement_id, source_kind, source_order_fulfillment_id NULL, actor NULL, reason NULL, revoked_at NULL, revoked_by NULL, revoke_reason NULL, created_at` | 購買來源 unique `(source_kind,source_order_fulfillment_id)`；手動／贈送不可偽造 order fulfillment，必填 actor/reason。退款只撤銷對應 source，無其他有效 source 才撤銷 entitlement。 |
+| `course_offer_purchase_locks` | `customer_id, offer_id, order_id, state, expires_at NULL, created_at, updated_at` | unique `(customer_id,offer_id)`；pending 阻止重複結帳，paid 後保留至 entitlement 到期或所有相關 source 撤銷；pending 取消／逾期即釋放。 |
 
 `inventory_reservations` 是可選的操作追蹤表，不是用來取代 `inventory_items.stock` 的第二份可用量。若建立，至少有 `order_id/inventory_item_id/quantity/status/expires_at`、unique `(order_id,inventory_item_id)`；唯一扣減仍是條件 `UPDATE inventory_items SET stock=stock-? WHERE stock>=?`。
 
@@ -84,8 +86,12 @@ Phase 1 不新增 `offers` 表，避免把同一 Offer 的 ID、價格或庫存�
 - Cart／Checkout 一律由伺服器 `resolve_offer` 重算 price、可買性、component、配送與庫存；拒絕或忽略 client subtotal、shipping fee、flags、component。
 - Public Product detail 提供 `requiresOfferSelection` 與可買 Offers；default Offer 不顯示假名稱。不得回 private R2 key。
 - Checkout request 對所有訂單要求登入與 email；`requiresShipping=false` 時不要求 shippingMethod／phone／address／store，並寫 `shipping_method='none'`；有實體時才驗證 home 地址或 cvs 門市快照。
+- `shippingSubtotal` 只聚合 `requiresShipping=true` 的 Offer line subtotal；混合 Offer 以全額計入免運門檻，純數位 Offer 不計入。
+- Cart quote、checkout create、`mark_paid`／provision 都必須重查 Course 購買限制；先以 `course_offer_purchase_locks` 取得同 Offer 的 pending／paid lock，再檢查每個 component Course 是否已有 active entitlement。不得讓重送或競態形成重複付款後才發現無法授權。
 - 管理 component API 只收 `{type, componentId, quantity, accessDays}` 的完整集合，不收衍生 flag、R2 key 或任意 target；先驗證全體再儲存。
 - `mark_paid` 只負責一次 payment state transition；`provision_paid_order` 只根據已寫入 fulfillments 建 entitlement，兩者均可重跑且留 audit。
+- Course playback API 在第一次成功授與受保護 Lesson／VideoAsset 播放權時才啟動期限；Course 列表、商品頁、試看片段不可改寫 entitlement。
+- gift API 不收金額或 OrderItem；只收既有 recipient customer、course、reason，並寫 `gift` source、actor 與 audit。
 
 ### 唯一計算位置
 
@@ -110,14 +116,18 @@ stateDiagram-v2
     Paid --> DigitalProvisioning: course fulfillment exists
     DigitalProvisioning --> DigitalFulfilled: all grants succeed
     DigitalProvisioning --> DigitalProvisioning: retry/reconcile
+    DigitalFulfilled --> Completed: digital only order
     Paid --> AwaitingPhysical: inventory fulfillment exists
     AwaitingPhysical --> Shipped
     Shipped --> Completed
 ```
 
 - reserve 的多品項流程：依穩定排序逐筆條件扣減、記錄成功清單；後續 reserve、Order、Item 或 Fulfillment 寫入失敗時，只回補成功清單。現況對 variant 的相同模式可見於 `backend/src/domain/orders.py:203-263`。
-- 逾期／未付款取消只能釋放 physical InventoryItem。paid 後不增加／回補庫存，除非退款／退貨政策的明確 action。
-- 對 `course_entitlement_sources` 的 `INSERT OR IGNORE` 成功或既存皆視為該 fulfillment provision 成功；entitlement 以 `(customer_id,course_id)` upsert。不得在 callback 重送時延長 `expires_at`。若將來要累加觀看期，需新增明確 policy 與 audit，而不是更新同一 key。
+- 逾期／未付款取消只能釋放 physical InventoryItem，並釋放同 Offer pending purchase lock。paid 後不增加／回補庫存，除非退款／退貨政策的明確 action。
+- 對 `course_entitlement_sources` 的 `INSERT OR IGNORE` 成功或既存皆視為該 fulfillment provision 成功；entitlement 以 `(customer_id,course_id)` upsert。期限型只在 first playback 設 `expires_at`，不得在 callback 重送或重播時延長。
+- 純數位訂單在所有 digital fulfillment provision 成功後自動轉 `completed`；任何 provision 失敗都保持 `paid` 並重試。混合訂單在 paid 後立即授權課程，實體 fulfillment 仍依 shipped／completed 流程。
+- 全額退款、已付款取消或確認 chargeback 必須撤銷該訂單的 course sources；僅在同一 entitlement 已無其他有效 source 時才寫 `revoked_at/revoke_reason`。撤銷僅收回課程／Lesson 存取與影片播放授權，不刪除歷史／進度。部分退款必須點名 course fulfillment，不能由訂單總額推測。
+- Course archive 阻止新 Offer 啟用與新 entitlement provision；既有 active entitlement 的課程閱讀與播放維持可用。
 - payment、digital fulfillment、physical fulfillment 是獨立狀態。現行單一 `orders.status` 只能暫時表示顧客整體進度；Phase 3 必須在 Order detail 顯示 fulfillment 明細。
 
 ## migration、backfill、相容與 rollback 順序
@@ -139,4 +149,4 @@ Phase 1 可以開始，但須先將下列 gate 寫入 implementation plan／revi
 - [ ] 實作／測試 Product + default Offer 的一致性策略；現行 Python binding 沒有已驗證的 D1 batch 用法，需採已驗證的補償或在測試環境驗證 batch。
 - [ ] 保留 `variantId` localStorage/API；明訂舊 key 移除前的版本與觀察期。
 
-退款、混合開課、期限、數量、免運、純數位 completed、封存可看與 gifting 的待決策不阻擋只處理 Offer UI 的 Phase 1；它們阻擋 Phase 3 對課程 checkout／fulfillment 的公開啟用。
+退款、混合開課、期限、數量、免運、純數位 completed、封存可看與 gifting 已於 2026-07-30 決定，不再阻擋 Phase 3 對課程 checkout／fulfillment 的公開啟用；Phase 3 仍須實作其 schema、競態保護與測試。

@@ -52,6 +52,11 @@ export function showOfferChooser(product: PublicProductDetail): boolean {
   return product.requiresOfferSelection && product.variants.length > 0
 }
 
+export function offerPurchaseState(product: PublicProductDetail, chosen: PublicVariant | null): 'choose' | 'soldout' | 'ready' {
+  if (product.variants.length === 0 || chosen === null) return 'choose'
+  return chosen.inStock ? 'ready' : 'soldout'
+}
+
 export function ProductPage({ slug }: { slug: string }) {
   const customer = useContext(CustomerContext)
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
@@ -147,6 +152,7 @@ export function ProductPage({ slug }: { slug: string }) {
   const cover = images[Math.min(shown, images.length - 1)]
   const picked = product.variants.find((variant) => variant.id === chosen) ?? null
   const needsOfferChoice = showOfferChooser(product)
+  const purchaseState = offerPurchaseState(product, picked)
   const back = productReturnTarget(location.search)
   // Only the server knows the real ceiling; this one exists so the stepper
   // stops somewhere sensible when the shop has said how many are left.
@@ -227,7 +233,7 @@ export function ProductPage({ slug }: { slug: string }) {
                   <button
                     type="button"
                     aria-label="減一"
-                    disabled={!picked || !picked.inStock || wanted <= 1}
+                    disabled={purchaseState !== 'ready' || wanted <= 1}
                     onClick={() => setWanted(Math.max(1, wanted - 1))}
                   >
                     −
@@ -247,7 +253,7 @@ export function ProductPage({ slug }: { slug: string }) {
                   <button
                     type="button"
                     aria-label="加一"
-                    disabled={!picked || !picked.inStock || wanted >= ceiling}
+                    disabled={purchaseState !== 'ready' || wanted >= ceiling}
                     onClick={() => setWanted(Math.min(ceiling, wanted + 1))}
                   >
                     +
@@ -257,8 +263,8 @@ export function ProductPage({ slug }: { slug: string }) {
               </div>
 
               <div class="buy">
-                <button type="button" class="add" disabled={!picked || !picked.inStock} onClick={addToCart}>
-                  {!picked ? '請先選擇方案' : picked.inStock ? '加入購物車' : '已售完'}
+                <button type="button" class="add" disabled={purchaseState !== 'ready'} onClick={addToCart}>
+                  {purchaseState === 'choose' ? '請先選擇方案' : purchaseState === 'soldout' ? '已售完' : '加入購物車'}
                 </button>
                 {added && (
                   <p class="added" aria-live="polite">

@@ -124,15 +124,15 @@ WHERE id = ?id AND enabled = 1 AND stock >= ?quantity;
 ```mermaid
 sequenceDiagram
     participant Payment as PAYUNi/管理員
-    participant Order as Order Domain
-    participant Fulfillment as Fulfillment Service
-    participant Entitlement as Entitlement Store
+    participant OrderSvc as Order Domain
+    participant FulfillmentSvc as Fulfillment Service
+    participant EntitlementStore as Entitlement Store
 
-    Payment->>Order: mark_paid(order_id)
-    Order->>Order: pending -> paid（條件更新）
-    Order->>Fulfillment: provision_paid_order
-    Fulfillment->>Entitlement: INSERT OR IGNORE course grants
-    Fulfillment->>Fulfillment: 更新數位履約狀態
+    Payment->>OrderSvc: mark paid
+    OrderSvc->>OrderSvc: conditional pending to paid
+    OrderSvc->>FulfillmentSvc: provision paid order
+    FulfillmentSvc->>EntitlementStore: idempotently create course grants
+    FulfillmentSvc->>FulfillmentSvc: update digital fulfillment status
 ```
 
 授權必須可重試。若訂單已標記 paid 但授權步驟失敗，背景 reconciliation 必須找出

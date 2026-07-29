@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PublicProductDetail } from '../../shared/types'
-import { initialOfferId, productReturnTarget, showOfferChooser } from './ProductPage'
+import { initialOfferId, offerPurchaseState, productReturnTarget, showOfferChooser } from './ProductPage'
 
 const singleOffer: PublicProductDetail = {
   slug: 'canvas-bag',
@@ -48,5 +48,17 @@ describe('Offer selection', () => {
 
     expect(initialOfferId(multiOffer)).toBeNull()
     expect(showOfferChooser(multiOffer)).toBe(true)
+    expect(offerPurchaseState(multiOffer, null)).toBe('choose')
+  })
+
+  it('keeps a sold-out single Offer selected so the page can state it is sold out', () => {
+    const soldOut = {
+      ...singleOffer,
+      variants: [{ id: 'offer-1', title: null, price: 300, inStock: false, stockLeft: null }],
+    }
+
+    expect(initialOfferId(soldOut)).toBe('offer-1')
+    expect(showOfferChooser(soldOut)).toBe(false)
+    expect(offerPurchaseState(soldOut, soldOut.variants[0]!)).toBe('soldout')
   })
 })

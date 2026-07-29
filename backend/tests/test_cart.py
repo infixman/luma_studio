@@ -78,7 +78,7 @@ class TestReadingTheBrowsersCart:
             cart.parse_lines(raw)
 
 
-def stocked(*, status="active", enabled=1, stock=10, price=300):
+def stocked(*, status="active", enabled=1, stock=10, price=300, is_default=0, title="M"):
     """A database that answers with one product and one variant."""
 
     return FakeDatabase(
@@ -87,12 +87,13 @@ def stocked(*, status="active", enabled=1, stock=10, price=300):
                 {
                     "id": "v1",
                     "product_id": "p1",
-                    "title": "M",
+                    "title": title,
                     "sku": "",
                     "price": price,
                     "stock": stock,
                     "position": 0,
                     "enabled": enabled,
+                    "is_default": is_default,
                 }
             ],
             "FROM products WHERE id": [
@@ -117,6 +118,26 @@ class TestRepricing:
         priced = run(cart.price_lines(env, [{"variantId": "v1", "quantity": 2}]))
         assert priced["lines"][0]["unitPrice"] == 350
         assert priced["subtotal"] == 700
+
+    def test_a_default_offer_keeps_the_existing_variant_id_for_price_and_stock_validation(self, cart):
+        env = make_env(stocked(price=350, stock=3, is_default=1, title=""))
+
+        priced = run(cart.price_lines(env, [{"variantId": "v1", "quantity": 9}]))
+
+        assert priced["lines"] == [
+            {
+                "variantId": "v1",
+                "productSlug": "soda-tote",
+                "productTitle": "蘇打托特包",
+                "variantTitle": "",
+                "imagePath": None,
+                "unitPrice": 350,
+                "quantity": 3,
+                "lineTotal": 1050,
+                "stockLeft": 3,
+            }
+        ]
+        assert priced["problems"] == [{"variantId": "v1", "title": "蘇打托特包", "reason": "reduced", "available": 3}]
 
     def test_a_quantity_beyond_stock_is_reduced_and_reported(self, cart):
         env = make_env(stocked(stock=3))

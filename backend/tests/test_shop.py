@@ -15,6 +15,15 @@ ADMIN_HOST = "admin-api.luma-studio.tw"
 SIGNED_IN = {"SELECT email FROM admin_sessions": [{"email": "owner@example.com"}]}
 
 
+class JsonRequest(FakeRequest):
+    def __init__(self, path: str, method: str, body: dict, headers: dict | None = None, host: str = ADMIN_HOST):
+        super().__init__(path, method, headers, host=host)
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
 @pytest.fixture
 def shop():
     from domain import shop as module
@@ -135,6 +144,64 @@ class TestOfferMode:
     def test_default_marker_not_variant_count_selects_single_mode(self, shop):
         assert shop.sales_mode([{"isDefault": True}, {"isDefault": False}]) == "single"
         assert shop.sales_mode([{"isDefault": False}]) == "multi"
+
+
+class TestOfferLifecycle:
+    def test_single_to_multi_keeps_the_existing_offer_id_and_sales_values(self, shop):
+        offer_id, product_id = "v" * 18, "p" * 18
+        database = FakeDatabase(
+            {
+                "SELECT * FROM product_variants WHERE product_id": [
+                    {
+                        "id": offer_id,
+                        "product_id": product_id,
+                        "title": "",
+                        "sku": "CANVAS-1",
+                        "price": 300,
+                        "stock": 4,
+                        "position": 0,
+                        "enabled": 1,
+                        "is_default": 1,
+                    }
+                ]
+            }
+        )
+
+        assert asyncio.run(shop.convert_default_offer_to_multi(make_env(database), product_id, title="標準版")) is True
+
+        update, bindings = next(write for write in database.writes if "UPDATE product_variants SET title" in write[0])
+        assert "is_default = 0" in update
+        assert bindings == (offer_id, "標準版")
+
+    def test_an_active_product_cannot_lose_its_last_enabled_offer(self, shop):
+        product_id, offer_id = "p" * 18, "v" * 18
+        assert asyncio.run(
+            shop.can_be_active(make_env(FakeDatabase()), product_id, changing_offer_id=offer_id, offer_enabled=False)
+        ) is False
+
+    def test_an_active_product_can_keep_another_enabled_offer(self, shop):
+        product_id, offer_id = "p" * 18, "v" * 18
+        database = FakeDatabase({"SELECT id FROM product_variants": [{"id": "other" * 4}]})
+
+        assert asyncio.run(
+            shop.can_be_active(make_env(database), product_id, changing_offer_id=offer_id, offer_enabled=False)
+        ) is True
+
+
+class TestDefaultOfferMigration:
+    def test_migration_adds_marker_index_before_backfilling_only_single_offer_products(self):
+        from shared import migrations
+
+        migration = next(item for item in migrations.MIGRATIONS if item["name"] == "0027_add_default_product_offers")
+        database = FakeDatabase()
+
+        asyncio.run(migrations._apply_one(make_env(database), migration))
+
+        statements = [statement for statement, _ in database.writes]
+        assert any("ALTER TABLE product_variants ADD COLUMN is_default" in statement for statement in statements)
+        assert any("idx_product_variants_one_default" in statement and "WHERE is_default = 1" in statement for statement in statements)
+        backfill = next(statement for statement in statements if "UPDATE product_variants SET is_default = 1" in statement)
+        assert "GROUP BY product_id HAVING COUNT(*) = 1" in backfill
 
 
 class TestImageKeys:
@@ -316,3 +383,48 @@ class TestCatalogueRoutes:
             "/api/products", "GET", {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"}, host=ADMIN_HOST
         )
         assert call(anonymous).status == 401
+
+
+class TestOfferAdminValidation:
+    def test_an_active_product_cannot_be_created_with_a_disabled_default_offer(self):
+        from api.admin import shop as shop_admin_api
+        from shared.responses import Ctx
+        from urllib.parse import parse_qs, urlsplit
+
+        request = JsonRequest(
+            "/api/products",
+            "POST",
+            {"slug": "canvas-bag", "title": "Canvas bag", "status": "active", "price": 300, "stock": 4, "enabled": False},
+        )
+        parts = urlsplit(request.url)
+        response = asyncio.run(
+            shop_admin_api.handle(Ctx(make_env(FakeDatabase()), request, parts.path, parse_qs(parts.query)))
+        )
+
+        assert response.status == 409
+        assert "至少需要一筆啟用" in response.json()["error"]
+
+    def test_default_offer_cannot_be_deleted_through_the_generic_variant_endpoint(self):
+        from api.admin import shop as shop_admin_api
+        from shared.responses import Ctx
+        from urllib.parse import parse_qs, urlsplit
+
+        product_id, variant_id = "p" * 18, "v" * 18
+        database = FakeDatabase(
+            {
+                "SELECT * FROM product_variants WHERE id": [
+                    {"id": variant_id, "product_id": product_id, "title": "", "sku": "", "price": 300, "stock": 4, "position": 0, "enabled": 1, "is_default": 1}
+                ],
+                "SELECT * FROM products WHERE id": [
+                    {"id": product_id, "slug": "canvas-bag", "title": "Canvas bag", "description": "", "status": "draft", "position": 0, "created_at": 1, "updated_at": 1}
+                ],
+            }
+        )
+        request = FakeRequest(f"/api/variants/{variant_id}", "DELETE", host=ADMIN_HOST)
+        parts = urlsplit(request.url)
+        response = asyncio.run(
+            shop_admin_api.handle(Ctx(make_env(database), request, parts.path, parse_qs(parts.query)))
+        )
+
+        assert response.status == 409
+        assert "不能刪除" in response.json()["error"]

@@ -63,31 +63,11 @@ phase2 只建立課程骨架，讓 Offer 可以引用；章節、影片與完整
 ## 資料關係
 
 ```mermaid
-erDiagram
-    PRODUCTS ||--o{ PRODUCT_VARIANTS : "has offers"
-    PRODUCT_VARIANTS ||--o{ OFFER_COMPONENTS : contains
-    INVENTORY_ITEMS ||--o{ OFFER_COMPONENTS : "inventory target"
-    COURSES ||--o{ OFFER_COMPONENTS : "course target"
-
-    INVENTORY_ITEMS {
-        text id PK
-        text sku
-        text title
-        integer stock
-        integer enabled
-        integer created_at
-        integer updated_at
-    }
-
-    OFFER_COMPONENTS {
-        text id PK
-        text offer_id
-        text component_type
-        text component_id
-        integer quantity
-        integer access_days
-        integer position
-    }
+flowchart LR
+    Product --> OfferAlias["Offer alias: product_variants"]
+    OfferAlias --> OfferComponent
+    InventoryItem --> OfferComponent
+    Course --> OfferComponent
 ```
 
 ## 商品能力推導

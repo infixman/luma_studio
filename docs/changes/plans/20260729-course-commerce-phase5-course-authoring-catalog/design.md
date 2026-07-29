@@ -86,21 +86,11 @@
 ## Course、Lesson 與 VideoAsset
 
 ```mermaid
-erDiagram
-    COURSES ||--o{ COURSE_SECTIONS : contains
-    COURSE_SECTIONS ||--o{ COURSE_LESSONS : contains
-    VIDEO_ASSETS ||--o{ COURSE_LESSONS : referenced_by
-    COURSES ||--o{ OFFER_COMPONENTS : sold_through
-
-    COURSE_LESSONS {
-        text id PK
-        text section_id
-        text title
-        text content_html
-        text video_asset_id
-        integer is_preview
-        integer position
-    }
+flowchart LR
+    Course --> CourseSection
+    CourseSection --> CourseLesson
+    VideoAsset --> CourseLesson
+    Course --> OfferComponent
 ```
 
 單元可以：

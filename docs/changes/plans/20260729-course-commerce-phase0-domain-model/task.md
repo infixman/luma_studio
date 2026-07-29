@@ -32,20 +32,20 @@
 - [x] 驗證案例可由 component 推導配送，不需 product-type enum。見 `design.md`「Cart、Order、snapshot 與履約」。
 - [ ] 以實作或測試驗證五案例。Blocker：Phase 1–3 尚未實作 Course／InventoryItem／OfferComponent／Fulfillment。
 
-## 4. 待產品／營運決策
+## 4. 已完成的產品／營運決策
 
-- [ ] 退款、已付款取消、chargeback 後 entitlement 政策。需要 owner 在 A 撤銷／B 保留／C 人工決定間選擇；影響 revoke action、audit 與 reconciliation。
-- [ ] 混合商品 paid 後的開課時間。需要 owner 在 paid／shipped／delivered 選擇；影響 digital fulfillment transition。
-- [ ] 預設觀看期限。需要 owner 在永久／固定天數／Offer 必填期限選擇；影響 `expires_at`。
-- [ ] 含 Course Offer 購買數量與未來 gifting。需要 owner 確認 quantity=1 是否成立；若 gifting，需 recipient entitlement flow。
-- [ ] 混合 Offer 免運門檻基數。需要 owner 選擇全 Offer、實體分攤或 shipping contribution；影響 quote 欄位／後台設定。
-- [ ] 純數位 paid 後是否自動 completed。需要 owner 確認對顧客訂單狀態與通知的語意。
-- [ ] archived Course 對既有 entitlement 的可看政策。需要 owner 確認繼續／停止／寬限。
-- [ ] 未來贈送課程是否需要。需要 owner 確認 scope；若要，另定 source_kind、recipient 與 audit。
+- [x] 退款、已付款取消、chargeback 後 entitlement 政策。2026-07-30 owner 決定：自動撤銷受影響 course fulfillment source；無其他有效 source 時收回 Course／Lesson 與影片播放權，不刪進度／訂單／audit。部分退款必須明確指定 course fulfillment。
+- [x] 混合商品 paid 後的開課時間。2026-07-30 owner 決定：paid 後立即建立數位授權，不等待出貨。
+- [x] 預設觀看期限。2026-07-30 owner 決定：預設無限；期限型 Offer 設 `access_days`，第一次成功播放後才開始倒數。
+- [x] 含 Course Offer 購買數量與未來 gifting。2026-07-30 owner 決定：每次 quantity 固定 1；會員有相同 Course 有效 entitlement 或未過期 pending 同 Offer 時拒絕結帳；到期／所有來源撤銷後可再購買。
+- [x] 混合 Offer 免運門檻基數。2026-07-30 owner 決定：以整個需配送 Offer 的售價計入，純數位 Offer 不計。
+- [x] 純數位 paid 後是否自動 completed。2026-07-30 owner 決定：全部 digital fulfillment／entitlement 成功後立即 completed，失敗保留 paid 重試。
+- [x] archived Course 對既有 entitlement 的可看政策。2026-07-30 owner 決定：封存只阻止新販售／新授權，既有有效 entitlement 可繼續觀看。
+- [x] 未來贈送課程是否需要。2026-07-30 owner 決定：支援 gift entitlement source，保留 actor、recipient、Course、原因與 audit，不建立零元 OrderItem。
 
 ## 5. Phase gate
 
 - [x] Phase 0 未修改正式 schema、backend、frontend、wrangler、migration 或 Phase 1–7 文件；只修改 Phase 0 三份文件。
 - [x] 已定義 Admin-first migration、backfill、讀取切換、rollback 與清理順序；見 `spec.md`「migration、backfill、相容與 rollback 順序」。
 - [ ] Phase 1 implementation review 通過。需要確認 partial unique index 策略、single-variant／zero-variant backfill、Product+default Offer 一致性策略，以及 variantId 相容觀察期；見 `spec.md`「Phase 1 gate」。
-- [ ] Phase 3 課程 checkout 公開啟用。Blocker：第 4 節八項商業決策與 Phase 2 schema/backfill 尚未完成。
+- [ ] Phase 3 課程 checkout 公開啟用。Blocker：Phase 2 schema／backfill、Phase 3 checkout／fulfillment／entitlement 實作與測試尚未完成；第 4 節商業決策已完成。

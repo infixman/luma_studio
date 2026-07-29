@@ -52,18 +52,18 @@
 | Entitlement | Customer 對 Course 的有效觀看權。 | 付款後由 course fulfillment 冪等建立，不能在播放時掃歷史訂單。 |
 
 ```mermaid
-erDiagram
-    PRODUCTS ||--o{ OFFERS : presents
-    OFFERS ||--o{ OFFER_COMPONENTS : defines
-    INVENTORY_ITEMS ||--o{ OFFER_COMPONENTS : targeted_by
-    COURSES ||--o{ OFFER_COMPONENTS : targeted_by
-    COURSES ||--o{ COURSE_SECTIONS : has
-    COURSE_SECTIONS ||--o{ COURSE_LESSONS : has
-    VIDEO_ASSETS ||--o{ COURSE_LESSONS : used_by
-    ORDERS ||--o{ ORDER_ITEMS : contains
-    ORDER_ITEMS ||--o{ ORDER_FULFILLMENTS : snapshots
-    CUSTOMERS ||--o{ COURSE_ENTITLEMENTS : owns
-    COURSES ||--o{ COURSE_ENTITLEMENTS : grants
+flowchart LR
+    Product --> Offer
+    Offer --> OfferComponent
+    OfferComponent --> InventoryItem
+    OfferComponent --> Course
+    Course --> CourseSection
+    CourseSection --> CourseLesson
+    CourseLesson --> VideoAsset
+    Order --> OrderItem
+    OrderItem --> OrderFulfillment
+    Customer --> Entitlement
+    Course --> Entitlement
 ```
 
 ### Offer、default Offer 與舊 variantId（設計決策）
@@ -94,31 +94,35 @@ erDiagram
 ```mermaid
 sequenceDiagram
     participant Browser
-    participant Cart as CartQuote
-    participant Order as Order service
-    participant Inventory
-    participant Payment
-    participant Fulfillment
-    Browser->>Cart: lines (variantId or offerId)
-    Cart->>Cart: normalize and resolve_offer
-    Cart-->>Browser: price, components, requiresShipping
-    Browser->>Order: checkout lines + recipient data
-    Order->>Order: re-resolve; do not trust quote/totals
-    Order->>Inventory: conditional reserve aggregated requirements
-    Order->>Order: write OrderItem + fulfillment snapshots
-    Payment->>Order: mark_paid once
-    Order->>Fulfillment: provision_paid_order, retryable
-    Fulfillment->>Fulfillment: INSERT OR IGNORE Entitlement per provision key
+    participant Quote as CartQuote
+    participant OrderSvc as OrderService
+    participant InventorySvc as Inventory
+    participant PaymentSvc as Payment
+    participant FulfillmentSvc as Fulfillment
+    Browser->>Quote: lines with variantId or offerId
+    Quote->>Quote: normalize and resolve offer
+    Quote-->>Browser: price, components, shipping requirement
+    Browser->>OrderSvc: checkout lines and recipient data
+    OrderSvc->>OrderSvc: re-resolve and reject stale totals
+    OrderSvc->>InventorySvc: conditionally reserve requirements
+    OrderSvc->>OrderSvc: write item and fulfillment snapshots
+    PaymentSvc->>OrderSvc: mark paid once
+    OrderSvc->>FulfillmentSvc: provision paid order
+    FulfillmentSvc->>FulfillmentSvc: idempotently create entitlement sources
 ```
 
-配送由所有 resolved components 推導：存在任一 inventory component 才 `requiresShipping=true`。純數位不提供 shipping options，也不要求電話、地址或門市；有實體則沿用現有 home/cvs 驗證，並在正式金流／物流串接前補齊 cvs store snapshot。混合 Offer 的運費基數是待決策（見下），不可沿用現況「所有 subtotal」而不標記差異。
+配送由所有 resolved components 推導：存在任一 inventory component 才 `requiresShipping=true`。純數位不提供 shipping options，也不要求電話、地址或門市；有實體則沿用現有 home/cvs 驗證，並在正式金流／物流串接前補齊 cvs store snapshot。`shippingSubtotal` 只加總 `requiresShipping=true` 的 Offer；混合 Offer 以整個 Offer 售價計入，純數位 Offer 不計入免運門檻。
 
 ### Entitlement 與付款（設計決策）
 
 - `mark_paid`、未來 gateway callback、管理員手動標記、reconciliation 必須共用 `provision_paid_order(order_id)`；付款狀態轉移維持條件更新。
-- entitlement 的存取身份為 `(customer_id, course_id)`；另以 `course_entitlement_sources` 記錄每個 `source_order_fulfillment_id`，其唯一鍵作為付款事件的 provision key。如此同一會員同一門課只有一筆有效 entitlement，但每個購買來源仍可稽核。建立 entitlement／source 時均須冪等；重複購買是否延長期限不是隱含行為，須另訂 policy。
+- entitlement 的存取身份為 `(customer_id, course_id)`；另以 `course_entitlement_sources` 記錄每個 `source_order_fulfillment_id`，其唯一鍵作為付款事件的 provision key。如此同一會員同一門課只有一筆有效 entitlement，但每個購買來源仍可稽核。建立 entitlement／source 時均須冪等。
+- 預設永久觀看。期限型 Course component 才帶 `access_days`：付款 provision 時建立尚未啟用的 entitlement；第一次成功取得受保護 Lesson／VideoAsset 播放權時，以條件更新寫 `first_viewed_at` 與 `expires_at = first_viewed_at + access_days`。瀏覽商品頁、課程目錄或預覽內容不得啟動期限；後續播放不得重設期限。
+- 含 Course 的 Offer 每次購買數量固定為 1。Cart／checkout 必須拒絕同一會員已持有任一 component Course 的 active entitlement，或已有未過期 pending 的同 Offer 訂單；因此永久課程不可重複結帳。entitlement 已過期、或退款後所有相關來源均撤銷時，可再次購買並重新啟動期限。
+- 全額退款、已付款取消或已確認 chargeback 時，自動撤銷該 order 的 course fulfillment sources。若會員對同 Course 沒有其他未撤銷來源，撤銷 entitlement 的**觀看權**：Course／Lesson 的會員存取與 private VideoAsset 的播放授權均被拒絕；不刪 Course、Lesson、影片、觀看進度、訂單或 audit。僅退實體 component 時不得撤銷課程來源。部分退款必須明確指定受影響的 course fulfillment，否則不自動撤銷。
+- manual/gift 可免費授予 Course，但不得建立零元 OrderItem。它建立 `source_kind='gift'` 的 entitlement source，必存授與人、受贈會員、Course、原因／備註與時間，並寫 audit。
 - 若 paid 已成功但 provision 失敗，Order 保持 paid，course fulfillment 留 pending，排程／管理 reconciliation 重跑；不得將付款 callback 當成唯一執行機會。
-- 付款前取消／逾期只回補 inventory fulfillment；課程 entitlement 尚未建立。退款、chargeback、已付款取消的 entitlement 政策為待決策。
+- 付款前取消／逾期只回補 inventory fulfillment；課程 entitlement 尚未建立。退款、chargeback、已付款取消則依上述 source 撤銷規則處理。
 
 ### polymorphic OfferComponent 的 D1 驗證（設計決策）
 
@@ -126,26 +130,53 @@ D1 一般 FK 不能同時指向兩張 target table。寫入 component 的 domain
 
 ## 五個代表案例（設計決策）
 
-| 案例 | Product／Offer／Component | 商品頁與 Cart | 配送／庫存 | Order snapshot、付款後、取消／逾期、會員結果 |
-| --- | --- | --- | --- |
-| 單一實體 | Product「畫筆」；default Offer（原 variant ID）；inventory component: Brush ×1。 | 無規格選擇，直接加入；Cart resolve 後顯示單一 line。 | 需要配送；reserve/sell/release Brush。 | Item 快照 Offer 價格；inventory fulfillment 含 SKU/數量，paid 後待出貨；取消／逾期回補 Brush；無 entitlement。 |
-| 多規格實體 | Product「T-shirt」；Offer S/M/L；各自 component 指向其 InventoryItem ×1。 | 顯示 Offer 選項；Cart 保留 selected offer ID。 | 需要配送；彙總各 Item 需求。 | Item 保存選項名；inventory fulfillment 各自 snapshot；取消／逾期回補對應 Item；無 entitlement。 |
-| 單一純課程 | Product「水彩入門」；default Offer；course component Course A ×1、access_days 依方案。 | 無規格選擇；Cart quote 不回 shipping。 | 不配送、不扣庫存。 | Item 與 course fulfillment 保存 Course title/期限；paid 後建立 entitlement；取消／逾期無庫存回補；會員取得 Course A。 |
-| 課程＋材料包 | Product「水彩完整套組」；default Offer；Course A ×1 + Kit ×1。 | 商品頁列出課程與材料；Cart quote 顯示配送。 | 需要配送；只 reserve Kit。 | 一個 Item、兩種 fulfillment；付款後 entitlement 與待出貨；未付款取消／逾期只回補 Kit；會員取得 Course A。開課時點為待決策。 |
-| 多門課程組合 | Product「花卉組合」；default Offer；Course A/B/C 各 ×1。 | 顯示「此方案包含」三門課；Cart 不回 shipping。 | 不配送、不扣庫存。 | 一個 Item、三筆 course fulfillment；paid 後對每 Course idempotent provision；取消／逾期無庫存回補；會員取得 A/B/C。 |
+### 1. 沒有規格的單一實體商品
 
-## 待決策（產品／營運 owner）
+- **資料形狀**：Product「畫筆」；default Offer（原 variant ID）；inventory component: Brush ×1。
+- **商品頁與 Cart**：無規格選擇，直接加入；Cart resolve 後顯示單一 line。
+- **配送／庫存**：需要配送；reserve、sell、release Brush。
+- **Order、付款與取消**：Item 快照 Offer 價格；inventory fulfillment 含 SKU／數量，paid 後待出貨；取消／逾期回補 Brush；會員沒有 entitlement。
 
-| 議題 | 可行選項與影響 | 建議（非既定事實） |
+### 2. 有多個規格的實體商品
+
+- **資料形狀**：Product「T-shirt」；Offer S/M/L；各自 component 指向其 InventoryItem ×1。
+- **商品頁與 Cart**：顯示 Offer 選項；Cart 保留 selected offer ID。
+- **配送／庫存**：需要配送；彙總各 Item 需求。
+- **Order、付款與取消**：Item 保存選項名；inventory fulfillment 各自 snapshot；取消／逾期回補對應 Item；會員沒有 entitlement。
+
+### 3. 沒有規格的純課程
+
+- **資料形狀**：Product「水彩入門」；default Offer；course component Course A ×1，`access_days` 依方案。
+- **商品頁與 Cart**：無規格選擇；Cart quote 不回 shipping。
+- **配送／庫存**：不配送、不扣庫存。
+- **Order、付款與取消**：Item 與 course fulfillment 保存 Course title／期限；paid 後建立 entitlement；取消／逾期無庫存回補；會員取得 Course A。
+
+### 4. 課程＋材料包
+
+- **資料形狀**：Product「水彩完整套組」；default Offer；Course A ×1 + Kit ×1。
+- **商品頁與 Cart**：商品頁列出課程與材料；Cart quote 顯示配送。
+- **配送／庫存**：需要配送；只 reserve Kit。
+- **Order、付款與取消**：一個 Item、兩種 fulfillment；付款後立即建立 entitlement 並待出貨；未付款取消／逾期只回補 Kit；會員取得 Course A。
+
+### 5. 多門課程組合
+
+- **資料形狀**：Product「花卉組合」；default Offer；Course A/B/C 各 ×1。
+- **商品頁與 Cart**：顯示「此方案包含」三門課；Cart 不回 shipping。
+- **配送／庫存**：不配送、不扣庫存。
+- **Order、付款與取消**：一個 Item、三筆 course fulfillment；paid 後對每 Course idempotent provision；取消／逾期無庫存回補；會員取得 A/B/C。
+
+## 已決定的商業規則（2026-07-30）
+
+| 議題 | 決策 | 實作契約 |
 | --- | --- | --- |
-| 退款後撤銷權限 | A 撤銷 entitlement；B 不撤銷；C 依觀看／退款原因人工決定。A 需 revoke reason/audit 與短 token 生效窗口；B 無播放變更；C 需營運 action。 | C，保留 A/B 可設定的 policy，避免自動沒收已觀看課程。 |
-| 混合商品何時開課 | A paid 立即；B shipped；C delivered。A 要接受材料延遲仍可學；B/C 需 digital fulfillment 等待 physical 狀態。 | A，將數位與實體履約解耦。 |
-| 預設觀看期限 | A 永久 (`expires_at NULL`)；B 固定天數；C Offer 必填期限。影響 entitlement 計算與到期 UX。 | A，期限型 Offer 再填 `access_days`。 |
-| 含課程 Offer 數量 | A 固定 1；B 允許多件但同帳號集合授權；C recipient／gift 流程。B 會有付多份卻只得一份的歧義。 | A；贈送另建 recipient entitlement。 |
-| 混合商品免運門檻 | A 全 Offer 售價；B 只實體可歸屬金額；C Offer 設 shipping contribution。A 不需拆價但數位抬高門檻；B/C 需新欄位或分配規則。 | A 作為初版透明規則，並在 UI 明示。 |
-| 純數位 paid 後整體狀態 | A 自動 completed；B 維持 paid 並以 digital fulfillment 顯示 fulfilled。A 需擴充目前 `paid -> shipped -> completed`；B 需前端語意。 | A，但只在全部 digital fulfillment 成功後轉移。 |
-| Course archived 與既有會員 | A 可繼續看；B 全部停用；C 有到期寬限。影響 learning query 與 archive UX。 | A，封存只阻止新販售。 |
-| 未來贈送課程 | A 新 entitlement source=`manual/gift`；B 以零元 OrderItem；C recipient checkout。A 要擴充 source／audit，不污染訂單。 | A，另案實作。 |
+| 退款後撤銷權限 | 自動撤銷受影響 course fulfillment 的觀看權。 | 撤銷該 order source；僅在無其他有效 source 時撤銷 entitlement。阻擋課程／單元存取與影片播放，不刪進度、訂單或 audit。 |
+| 混合商品何時開課 | paid 後立即開課。 | 數位 fulfillment 不等待 shipped／delivered；實體 fulfillment 獨立待出貨。 |
+| 預設觀看期限 | 預設無限期；可設首次觀看後 N 天到期。 | `access_days NULL` 為永久；首次成功播放才原子設定 `first_viewed_at`／`expires_at`。 |
+| 含 Course Offer 數量與重複購買 | 每次固定 1；不允許擁有相同 Course 時再次結帳。 | 拒絕 active entitlement 與未過期 pending 的重複；過期或所有來源已撤銷後可重新購買。 |
+| 混合商品免運門檻 | 以整個需配送 Offer 售價計算。 | `shippingSubtotal` 只加總 `requiresShipping=true` 的 Offer；混合 Offer 全額計入。 |
+| 純數位 paid 後整體狀態 | 立即 completed。 | 僅在全部 digital fulfillment 與 entitlement provision 成功後轉移；失敗則保持 paid 供重試。 |
+| Course archived 與既有會員 | 既有會員可繼續觀看。 | archive 阻止新販售與新授權，不影響有效 entitlement 的 learning／播放。 |
+| 免費贈送課程 | 支援，且不建立零元訂單。 | 新建 `gift` entitlement source 與完整 actor／recipient／reason audit。 |
 
 ## 跨 phase 交接
 

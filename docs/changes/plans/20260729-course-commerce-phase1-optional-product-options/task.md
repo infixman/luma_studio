@@ -40,11 +40,11 @@
 
 ## 5. 測試
 
-- [ ] 擴充 `backend/tests/test_shop.py`：建立、更新、backfill、上架驗證。部分完成：已覆蓋建立、公開 shape、sales mode；仍缺實際 migration、更新與上架拒絕測試。
-- [ ] 擴充 `backend/tests/test_cart.py`：default Offer 價格與庫存。blocker：需有可套用 0027 schema 的 D1/staging fixture；現有 cart 相容測試已通過。
-- [ ] 擴充 `ProductPage.test.ts`：單一、多方案、售完。部分完成：已覆蓋單一／多方案的選取契約；仍缺 DOM 售完呈現測試。
+- [x] 擴充 `backend/tests/test_shop.py`：建立、更新、backfill、上架驗證。（覆蓋 default Offer 建立、Single → Multi 原地更新、0027 migration SQL、上架拒絕與 default 刪除保護）
+- [x] 擴充 `backend/tests/test_cart.py`：default Offer 價格與庫存。（既有 `variantId` 對 default Offer 仍以資料庫價格與庫存驗算）
+- [x] 擴充 `ProductPage.test.ts`：單一、多方案、售完。（覆蓋選取、是否顯示 chooser 與購買狀態契約）
 - [ ] 新增 ProductCreatePage／ProductEditPage 的 single mode 測試。blocker：目前前端測試只有無 DOM 的 Vitest 設定，需先選定渲染測試基礎設施。
-- [ ] 驗證現有商品、購物車與訂單測試不因欄位增加而失敗。部分完成：`test_shop.py`、`test_cart.py` 通過；訂單測試尚未執行。
+- [x] 驗證現有商品、購物車與訂單測試不因欄位增加而失敗。（`test_shop.py`、`test_cart.py`、`test_orders.py` 通過）
 - [ ] 執行 migration 後比對商品數、Offer 數與既有 variant id。blocker：不可在本機正式 D1 執行 migration，需 staging/production 部署窗口。
 
 ## 6. 部署與驗收
