@@ -20,22 +20,131 @@ input {
   font: inherit;
 }
 
-.landing {
+/* Scope the empty-page layout to its main element. The body also receives
+   the `landing` route class; styling that bare class turns the entire page
+   into a centred grid and shrinks the header and footer to their contents. */
+main.landing {
   display: grid;
   place-items: center;
-  gap: 10px;
-  min-height: 70vh;
-  padding: 32px 20px;
+  min-height: clamp(32rem, 64vh, 46rem);
+  padding: clamp(3rem, 8vw, 6rem) 1.25rem;
   text-align: center;
-  color: #596775;
+  color: #2b2622;
 }
 
-.landing img {
+main.landing img {
   display: block;
   width: min(176px, 48vw);
   height: auto;
 }
 
-.landing a {
-  color: #1f6e69;
+main.landing a {
+  color: inherit;
+}
+
+.not-found-content {
+  width: min(100%, 38rem);
+  display: grid;
+  justify-items: center;
+}
+
+.not-found-art {
+  position: relative;
+  width: min(19rem, 76vw);
+  min-height: 11.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.not-found-art > img {
+  width: 100%;
+  opacity: 0.34;
+  filter: saturate(0.85);
+}
+
+.not-found-wanderer {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.3rem;
+  width: 58%;
+  overflow: visible;
+  fill: none;
+  stroke: #2b2622;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.not-found-wanderer circle {
+  fill: #ece2d2;
+}
+
+.not-found-wanderer .not-found-path {
+  stroke: #a8532c;
+  stroke-width: 2.5;
+  stroke-dasharray: 3 8;
+}
+
+.not-found-wanderer .not-found-question {
+  stroke: #a8532c;
+}
+
+.not-found-code {
+  margin: 0 0 0.55rem;
+  color: #a8532c;
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+}
+
+.not-found-content h1 {
+  margin: 0;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.not-found-message {
+  max-width: 30rem;
+  margin: 0.9rem 0 0;
+  color: rgb(43 38 34 / 0.68);
+  font-size: 0.98rem;
+  line-height: 1.75;
+}
+
+main.landing .not-found-home {
+  margin-top: 1.75rem;
+  padding: 0.72rem 1.2rem;
+  border: 1px solid #2b2622;
+  border-radius: 0.4rem;
+  background: #2b2622;
+  color: #faf7f2;
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+main.landing .not-found-home:hover {
+  border-color: #a8532c;
+  background: #a8532c;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 36rem) {
+  main.landing {
+    min-height: 32rem;
+    padding-block: 3.5rem;
+  }
+
+  .not-found-art {
+    min-height: 9.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main.landing .not-found-home {
+    transition: none;
+  }
 }

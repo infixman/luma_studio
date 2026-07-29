@@ -163,11 +163,23 @@ function noHomeYet() {
 function notFound() {
   markBody('landing')
   return (
-    <main class="landing">
-      <p>這個網址沒有對應的頁面。</p>
-      <p>
-        <a href="/">回首頁</a>
-      </p>
+    <main class="landing not-found">
+      <section class="not-found-content" aria-labelledby="not-found-title">
+        <div class="not-found-art" aria-hidden="true">
+          <img src="/assets/luma-studio-logo.png" alt="" />
+          <svg class="not-found-wanderer" viewBox="0 0 180 120">
+            <path class="not-found-path" d="M16 104C38 90 56 96 76 82c19-13 28-31 48-35 15-3 27 2 42-10" />
+            <circle cx="91" cy="61" r="7" />
+            <path d="M91 69v24m0-17-14 10m14-10 13 7m-13 10-10 19m10-19 12 17" />
+            <path class="not-found-question" d="M134 18c0-9 15-10 15 0 0 7-8 7-8 14m0 10v1" />
+          </svg>
+        </div>
+
+        <p class="not-found-code">404 · OOPS!</p>
+        <h1 id="not-found-title">你找的頁面好像迷路了</h1>
+        <p class="not-found-message">這個網址可能已經搬家，或是不小心走進了不存在的小徑。</p>
+        <a class="not-found-home" href="/">回到首頁</a>
+      </section>
     </main>
   )
 }
