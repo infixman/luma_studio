@@ -107,12 +107,12 @@ body.admin .notice.warn {
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-:where(body.admin button):hover:not(:disabled) {
+:where(body.admin button:hover:not(:disabled)) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
 
-:where(body.admin button):disabled {
+:where(body.admin button:disabled) {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -123,7 +123,7 @@ body.admin .notice.warn {
   color: var(--on-danger);
 }
 
-:where(body.admin button.danger):hover:not(:disabled) {
+:where(body.admin button.danger:hover:not(:disabled)) {
   background: var(--danger-hover);
   border-color: var(--danger-hover);
 }
@@ -134,7 +134,7 @@ body.admin .notice.warn {
   border-color: var(--border-strong);
 }
 
-:where(body.admin button.ghost):hover:not(:disabled) {
+:where(body.admin button.ghost:hover:not(:disabled)) {
   background: var(--sunken);
   border-color: var(--border-strong);
   color: var(--text);
