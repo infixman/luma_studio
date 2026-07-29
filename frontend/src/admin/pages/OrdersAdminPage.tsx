@@ -19,7 +19,6 @@ import {
   Spinner,
   TableWrap,
   TextField,
-  Toolbar,
   dayEnd,
   dayStart,
   readHidden,
@@ -332,10 +331,10 @@ export function OrdersAdminPage() {
         />
       </Modal>
 
-      <Panel title="訂單">
-        <div class="order-filters">
-          <fieldset class="order-filter-group">
-            <legend>訂單狀態</legend>
+      <Panel class="orders-list-panel">
+        <div class="order-filter-bar" aria-label="訂單篩選">
+          <section class="order-status-filter" aria-labelledby="order-status-filter-label">
+            <h2 id="order-status-filter-label">訂單狀態</h2>
             <div class="order-status-checks">
               {STATUSES.map((status) => (
                 <label key={status} class={selectedStatuses.includes(status) ? 'checked' : ''}>
@@ -349,38 +348,46 @@ export function OrdersAdminPage() {
                 </label>
               ))}
             </div>
-          </fieldset>
-          <fieldset class="order-filter-group">
-            <legend>訂單成立日期</legend>
-            <div class="order-date-fields">
+          </section>
+
+          <div class="order-query-row">
+            <div class="order-search">
               <TextField
-                label="從"
-                type="date"
-                value={dateFrom}
-                onInput={(event) => narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))}
-              />
-              <TextField
-                label="到"
-                type="date"
-                value={dateTo}
-                onInput={(event) => narrow(() => setDateTo((event.currentTarget as HTMLInputElement).value))}
+                label="搜尋"
+                type="search"
+                placeholder="訂單編號、收件人或 email"
+                value={search}
+                onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
               />
             </div>
-          </fieldset>
-        </div>
 
-        <Toolbar>
-          <TextField
-            label="搜尋"
-            type="search"
-            placeholder="訂單編號、收件人或 email"
-            value={search}
-            onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
-          />
-          <div class="ui-toolbar-end">
-            <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
+            <section class="order-date-filter" aria-labelledby="order-date-filter-label">
+              <h2 id="order-date-filter-label">訂單成立日期</h2>
+              <div class="order-date-fields">
+                <TextField
+                  label="從"
+                  type="date"
+                  value={dateFrom}
+                  onInput={(event) =>
+                    narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))
+                  }
+                />
+                <TextField
+                  label="到"
+                  type="date"
+                  value={dateTo}
+                  onInput={(event) =>
+                    narrow(() => setDateTo((event.currentTarget as HTMLInputElement).value))
+                  }
+                />
+              </div>
+            </section>
+
+            <div class="order-list-settings">
+              <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
+            </div>
           </div>
-        </Toolbar>
+        </div>
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void cancelSelected()}>

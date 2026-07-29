@@ -5,23 +5,27 @@
    are Badge now, and a second set of status colours beside it would be a
    second set to keep in step. */
 
-body.admin .order-filters {
-  display: grid;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+body.admin .orders-list-panel .ui-panel-body {
+  padding-top: var(--space-4);
 }
 
-body.admin .order-filter-group {
+body.admin .order-filter-bar {
+  display: grid;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+body.admin .order-status-filter,
+body.admin .order-date-filter {
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  display: grid;
-  gap: var(--space-2);
 }
 
-body.admin .order-filter-group legend {
-  padding: 0;
+body.admin .order-status-filter h2,
+body.admin .order-date-filter h2 {
+  display: block;
+  margin: 0 0 var(--space-2);
   color: var(--text);
   font-size: var(--font-sm);
   font-weight: 650;
@@ -30,7 +34,7 @@ body.admin .order-filter-group legend {
 body.admin .order-status-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 body.admin .order-status-checks label {
@@ -68,38 +72,69 @@ body.admin .order-status-checks .count {
   font-variant-numeric: tabular-nums;
 }
 
-body.admin .order-date-fields {
+body.admin .order-query-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
+  gap: var(--space-4);
+}
+
+body.admin .order-search {
+  flex: 1 1 22rem;
+  max-width: 32rem;
+}
+
+body.admin .order-search .ui-field,
+body.admin .order-date-fields .ui-field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+body.admin .order-date-filter h2 {
+  margin-bottom: var(--space-1);
+}
+
+body.admin .order-date-fields {
+  display: flex;
   gap: var(--space-2);
 }
 
-body.admin .order-date-fields label {
-  flex: 1 1 11rem;
-  max-width: 14rem;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--font-sm);
-  color: var(--text-soft);
+body.admin .order-date-fields .ui-field {
+  width: 10.5rem;
 }
 
-body.admin .order-date-fields input[type="date"] {
-  min-width: 0;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--font-sm);
+body.admin .order-list-settings {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
-@media (max-width: 36rem) {
-  body.admin .order-date-fields label {
+@media (max-width: 64rem) {
+  body.admin .order-search {
     flex-basis: 100%;
+    max-width: 36rem;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  body.admin .order-query-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  body.admin .order-search {
+    flex: none;
+    width: 100%;
     max-width: none;
+  }
+
+  body.admin .order-date-fields .ui-field {
+    flex: 1 1 0;
+    width: auto;
+  }
+
+  body.admin .order-list-settings {
+    margin-left: 0;
   }
 }
 
