@@ -291,7 +291,7 @@ async def list_for_customer(env, customer_id: str) -> list[dict]:
     return [
         order_row(row)
         for row in await d1_rows(
-            env.DB.prepare("SELECT * FROM orders WHERE customer_id = ?1 ORDER BY created_at DESC").bind(customer_id)
+            env.DB.prepare("SELECT * FROM orders WHERE customer_id = ?1 ORDER BY created_at DESC LIMIT 200").bind(customer_id)
         )
     ]
 
@@ -470,9 +470,13 @@ async def list_all(
         bindings.append(int(created_to))
         conditions.append(f"created_at <= ?{len(bindings)}")
     if search:
-        bindings.append(f"%{search}%")
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        bindings.append(f"%{escaped}%")
         index = len(bindings)
-        conditions.append(f"(id LIKE ?{index} OR recipient_name LIKE ?{index} OR recipient_email LIKE ?{index})")
+        conditions.append(
+            f"(id LIKE ?{index} ESCAPE '\\' OR recipient_name LIKE ?{index} ESCAPE '\\'"
+            f" OR recipient_email LIKE ?{index} ESCAPE '\\')"
+        )
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
 
     counted = await d1_rows(env.DB.prepare(f"SELECT COUNT(*) AS total FROM orders{where}").bind(*bindings))
@@ -532,10 +536,17 @@ async def cancel(env, order_id: str, actor: str, *, reason: str = "") -> bool:
     order = await get_order(env, order_id)
     if order is None or order["status"] not in HOLDING_STOCK:
         return False
-    await env.DB.prepare(
+    placeholders = ", ".join(f"?{i + 3}" for i in range(len(HOLDING_STOCK)))
+    now = utc_timestamp()
+    result = await env.DB.prepare(
         "UPDATE orders SET status = 'cancelled', cancelled_at = ?2, reserved_until = NULL, updated_at = ?2"
-        " WHERE id = ?1"
-    ).bind(order_id, utc_timestamp()).run()
+        f" WHERE id = ?1 AND status IN ({placeholders})"
+    ).bind(order_id, now, *HOLDING_STOCK).run()
+    try:
+        if int(result.meta.changes) != 1:
+            return False
+    except (AttributeError, TypeError, ValueError):
+        return False
     await release_stock(env, order_id)
     await audit(env, order_id, actor, "cancelled", before=order["status"], after="cancelled", detail=reason)
     await _tell_customer(env, order_id, "cancelled", detail=reason)

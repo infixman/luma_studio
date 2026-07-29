@@ -255,7 +255,19 @@ def validate_settings(body: dict) -> dict:
     }
 
 
+_SETTINGS_COLUMNS = frozenset({
+    "header_background", "header_colour", "header_height", "header_text",
+    "header_logo_size", "header_sticky", "header_show_cart", "header_show_login",
+    "header_cta_label", "header_cta_url",
+    "footer_colour", "footer_text", "footer_blurb", "footer_copyright",
+    "footer_columns", "footer_socials",
+})
+
+
 async def save_settings(env, fields: dict) -> None:
+    bad = set(fields) - _SETTINGS_COLUMNS
+    if bad:
+        raise ValueError(f"Unknown settings column: {', '.join(sorted(bad))}")
     columns = ", ".join(f"{name} = ?{index + 2}" for index, name in enumerate(fields))
     now = utc_timestamp()
     await env.DB.prepare(

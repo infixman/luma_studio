@@ -221,5 +221,3 @@ async def handle(ctx: Ctx):
     # Falling off the end used to hand the runtime a None response, which
     # surfaces as an opaque 500 rather than as the wrong URL it actually is.
     return ctx.error("Unknown bio-link endpoint", 404)
-
-    return ctx.error("Unknown bio link endpoint", 404)

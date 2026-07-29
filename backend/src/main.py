@@ -540,7 +540,7 @@ async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
         return ctx.error(str(error), 400)
 
     order = await orders.get_order(ctx.env, order_id)
-    if order is None:
+    if order is None or order.get("customerId") != customer["id"]:
         return ctx.error("Order not found", 404)
 
     if not await orders.mark_paid(ctx.env, order_id, f"fake-payment:{customer['id']}", detail="no gateway involved"):
@@ -722,6 +722,8 @@ async def dispatch(ctx: Ctx):
         if path == "/api/profile" and method == "GET":
             return await profile_response(ctx, customer)
         if path == "/api/profile" and method == "PATCH":
+            if not await rate_limit.allows(ctx.env, rate_limit.CHECKOUT, ctx.request, "profile"):
+                return ctx.too_many_requests()
             return await update_profile_response(ctx, customer)
         if path == "/api/checkout" and method == "POST":
             if not await rate_limit.allows(ctx.env, rate_limit.CHECKOUT, ctx.request, "checkout"):
@@ -864,7 +866,5 @@ class Default(WorkerEntrypoint):
         """
 
         await orders.expire_unpaid(self.env)
-        # The outbox is drained here rather than where mail is decided: the
-        # admin Worker can mark an order shipped and has no schedule of its
-        # own, and checkout must not wait on a third party.
         await mail.send_pending(self.env)
+        await auth_customer.purge_expired(self.env)

@@ -264,6 +264,8 @@ async def handle(ctx: Ctx):
 
     if path.startswith("/api/variants/") and method in {"PUT", "DELETE"}:
         variant_id = path.removeprefix("/api/variants/")
+        if not shop.PRODUCT_ID_PATTERN.fullmatch(variant_id):
+            return ctx.error("Invalid variant id", 400)
         variant = await shop.get_variant(env, variant_id)
         if variant is None:
             return ctx.error("Variant not found", 404)
@@ -282,7 +284,10 @@ async def handle(ctx: Ctx):
         return ctx.json(await _detail(ctx, product))
 
     if path.startswith("/api/images/") and method == "DELETE":
-        removed = await shop.delete_image(env, path.removeprefix("/api/images/"))
+        image_id = path.removeprefix("/api/images/")
+        if not shop.PRODUCT_ID_PATTERN.fullmatch(image_id):
+            return ctx.error("Invalid image id", 400)
+        removed = await shop.delete_image(env, image_id)
         if removed is None:
             return ctx.error("Photo not found", 404)
         # Row first, then the object: a page referencing a photo that 404s is

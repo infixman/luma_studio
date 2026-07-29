@@ -424,7 +424,12 @@ def _window_start(days: int) -> str:
     return (taipei_now - timedelta(days=days - 1)).strftime("%Y-%m-%d")
 
 
+_GROUPABLE_COLUMNS = frozenset({"country", "referrer_host", "device"})
+
+
 async def _grouped(env, column: str, since: str, limit: int = 6) -> list[dict]:
+    if column not in _GROUPABLE_COLUMNS:
+        raise ValueError(f"Invalid grouping column: {column}")
     rows = await d1_rows(
         env.DB.prepare(
             f"SELECT {column} AS label, COUNT(*) AS total FROM bio_link_events"

@@ -7,6 +7,7 @@ was migrated by hand before this module existed must converge without error.
 """
 
 import asyncio
+import re
 
 from common import MigrationError, d1_rows, utc_timestamp
 
@@ -627,12 +628,24 @@ _lock = asyncio.Lock()
 _applied_names: list[str] | None = None
 
 
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _check_identifier(value: str, label: str) -> str:
+    if not _SAFE_IDENTIFIER.fullmatch(value):
+        raise MigrationError(f"unsafe {label}: {value}")
+    return value
+
+
 async def _column_exists(env, table: str, column: str) -> bool:
+    _check_identifier(table, "table name")
     rows = await d1_rows(env.DB.prepare(f"PRAGMA table_info({table})"))
     return any(row.get("name") == column for row in rows)
 
 
 async def _add_column(env, table: str, column: str, definition: str):
+    _check_identifier(table, "table name")
+    _check_identifier(column, "column name")
     if await _column_exists(env, table, column):
         return
     try:

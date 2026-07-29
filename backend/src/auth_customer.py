@@ -145,3 +145,9 @@ async def update_profile(env, customer_id: str, *, name: str, phone: str, addres
         "UPDATE customers SET default_recipient_name = ?2, default_recipient_phone = ?3,"
         " default_address = ?4, updated_at = ?5 WHERE id = ?1"
     ).bind(customer_id, name, phone, address, utc_timestamp()).run()
+
+
+async def purge_expired(env) -> None:
+    now = utc_timestamp()
+    await env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at <= ?1").bind(now).run()
+    await env.DB.prepare("DELETE FROM customer_oauth_states WHERE expires_at <= ?1").bind(now).run()
