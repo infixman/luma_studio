@@ -81,7 +81,7 @@ export function CheckoutPage() {
       <main class="checkout">
         <p class="empty">{error}</p>
         <p>
-          <a href={loginUrl(`${location.origin}/checkout`)}>重新登入</a>
+          <a class="inline-action" href={loginUrl(`${location.origin}/checkout`)}>重新登入</a>
         </p>
       </main>
     )
@@ -100,7 +100,7 @@ export function CheckoutPage() {
     return (
       <main class="checkout">
         <p class="empty">
-          購物車是空的。<a href="/shop">去看看商品</a>
+          購物車是空的。<a class="inline-action" href="/shop">去看看商品</a>
         </p>
       </main>
     )

@@ -37,7 +37,7 @@ export function CategoryPage({ filter }: { filter: string }) {
       <main class="shop">
         <p class="empty">找不到這個分類。</p>
         <p class="empty">
-          <a href="/shop">回到商品列表</a>
+          <a class="inline-action" href="/shop">回到商品列表</a>
         </p>
       </main>
     )

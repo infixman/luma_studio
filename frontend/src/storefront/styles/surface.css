@@ -23,6 +23,52 @@ body {
   color: #2b2622;
 }
 
+/* Never let an overlooked link fall back to the browser's blue/purple,
+   underlined default. Components can still opt into their own treatment. */
+:where(a) {
+  color: var(--accent);
+  text-decoration-color: rgb(168 83 44 / 0.4);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+:where(a:visited) {
+  color: var(--accent);
+}
+
+:where(a:hover) {
+  text-decoration-color: currentColor;
+}
+
+/* Empty states and recovery paths are actions, not fragments of body copy. */
+.inline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline-start: 0.45rem;
+  padding: 0.45rem 0.78rem;
+  border: 1px solid rgb(168 83 44 / 0.22);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(43 38 34 / 0.05);
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.inline-action:visited {
+  color: var(--accent);
+}
+
+.inline-action:hover {
+  border-color: rgb(168 83 44 / 0.42);
+  background: rgb(168 83 44 / 0.08);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
 /* --- skeleton loading pulse --- */
 
 .skeleton {

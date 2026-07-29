@@ -94,7 +94,7 @@ export function CartPage() {
 
       {quote.lines.length === 0 ? (
         <p class="empty">
-          購物車是空的。<a href="/shop">去看看商品</a>
+          購物車是空的。<a class="inline-action" href="/shop">去看看商品</a>
         </p>
       ) : (
         <>

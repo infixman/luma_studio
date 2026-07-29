@@ -71,7 +71,7 @@ export function ProductPage({ slug }: { slug: string }) {
       <main class="product">
         <p class="empty">找不到這個商品，它可能已經下架。</p>
         <p>
-          <a href="/shop">回到商品列表</a>
+          <a class="inline-action" href="/shop">回到商品列表</a>
         </p>
       </main>
     )

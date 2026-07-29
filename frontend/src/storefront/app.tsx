@@ -154,7 +154,7 @@ function noHomeYet() {
     <main class="landing">
       <p>首頁還沒有建立。</p>
       <p>
-        <a href="/shop">先去看看商品</a>
+        <a class="inline-action" href="/shop">先去看看商品</a>
       </p>
     </main>
   )

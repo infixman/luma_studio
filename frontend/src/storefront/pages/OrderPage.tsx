@@ -80,7 +80,7 @@ export function OrderPage({ id }: { id: string }) {
       <main class="order">
         <p class="empty">找不到這筆訂單。</p>
         <p>
-          <a href="/orders">查看我的訂單</a>
+          <a class="inline-action" href="/orders">查看我的訂單</a>
         </p>
       </main>
     )

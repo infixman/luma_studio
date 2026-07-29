@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
-import { api, loginUrl } from '../../shared/api'
+import { api, loginUrl, probeSession } from '../../shared/api'
 import type { SiteChrome } from '../../shared/types'
 import * as cart from '../lib/cart'
 
@@ -32,6 +32,7 @@ export const ChromeControl = createContext<(wanted: ChromeWanted) => void>(() =>
 export function Chrome({ bare, children }: { bare?: boolean; children: ComponentChildren }) {
   const [chrome, setChrome] = useState<SiteChrome | null>(null)
   const [items, setItems] = useState(0)
+  const [signedIn, setSignedIn] = useState(false)
   const [wanted, setWanted] = useState<ChromeWanted>({ header: true, footer: true })
 
   useEffect(() => {
@@ -41,6 +42,9 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
     api<SiteChrome>('/api/site')
       .then(setChrome)
       .catch(() => undefined)
+    probeSession<{ customer: unknown }>('/api/session')
+      .then((session) => setSignedIn(session !== null))
+      .catch(() => setSignedIn(false))
   }, [bare])
 
   useEffect(() => {
@@ -51,6 +55,12 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
 
   if (bare || chrome === null) return <ChromeControl.Provider value={setWanted}>{children}</ChromeControl.Provider>
 
+  const logout = async () => {
+    await api('/auth/logout', { method: 'POST' })
+    setSignedIn(false)
+    location.assign('/')
+  }
+
   return (
     <ChromeControl.Provider value={setWanted}>
       {wanted.header && (
@@ -58,7 +68,9 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
           settings={chrome.settings}
           menu={chrome.menu}
           cartCount={items}
+          signedIn={signedIn}
           loginHref={loginUrl(`${location.origin}/orders`)}
+          onLogout={logout}
         />
       )}
       {children}

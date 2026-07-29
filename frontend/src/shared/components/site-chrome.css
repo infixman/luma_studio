@@ -208,6 +208,76 @@
   line-height: 1.2;
 }
 
+.account-menu {
+  position: relative;
+}
+
+.account-menu summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu summary::after {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.45rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.12rem) rotate(45deg);
+}
+
+.account-menu[open] summary::after {
+  transform: translateY(0.12rem) rotate(225deg);
+}
+
+.account-popover {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 9rem;
+  padding: 0.35rem;
+  border: 1px solid rgb(43 38 34 / 0.12);
+  border-radius: 9px;
+  background: #fff;
+  color: #2b2622;
+  box-shadow: 0 12px 32px rgb(43 38 34 / 0.16);
+}
+
+.site-header .account-popover a,
+.site-header .account-popover button {
+  display: block;
+  width: 100%;
+  padding: 0.62rem 0.7rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.site-header .account-popover a:hover,
+.site-header .account-popover button:hover:not(:disabled) {
+  background: rgb(168 83 44 / 0.09);
+  color: #8b4121;
+}
+
+.site-header .account-popover button:disabled {
+  color: rgb(43 38 34 / 0.42);
+  cursor: wait;
+}
+
 .header-actions .cta {
   display: inline-flex;
   align-items: center;

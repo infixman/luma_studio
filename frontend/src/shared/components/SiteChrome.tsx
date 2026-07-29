@@ -108,14 +108,17 @@ export function SiteHeader({
   cartCount,
   signedIn,
   loginHref,
+  onLogout,
 }: {
   settings: SiteSettings
   menu: ResolvedMenuItem[]
   cartCount?: number
   signedIn?: boolean
   loginHref?: string
+  onLogout?: () => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -183,9 +186,31 @@ export function SiteHeader({
             </a>
           )}
           {settings.headerShowLogin && (
-            <a class="action" href={signedIn ? '/orders' : (loginHref ?? '/orders')}>
-              {signedIn ? '我的訂單' : '登入'}
-            </a>
+            signedIn ? (
+              <details class="account-menu">
+                <summary class="action" aria-label="開啟個人選單">帳戶</summary>
+                <div class="account-popover">
+                  <a href="/orders">我的訂單</a>
+                  <button
+                    type="button"
+                    disabled={loggingOut}
+                    onClick={async () => {
+                      if (!onLogout || loggingOut) return
+                      setLoggingOut(true)
+                      try {
+                        await onLogout()
+                      } finally {
+                        setLoggingOut(false)
+                      }
+                    }}
+                  >
+                    {loggingOut ? '登出中…' : '登出'}
+                  </button>
+                </div>
+              </details>
+            ) : (
+              <a class="action" href={loginHref ?? '/orders'}>登入</a>
+            )
           )}
           {settings.headerShowCart && (
             <a

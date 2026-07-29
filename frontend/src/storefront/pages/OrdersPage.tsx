@@ -59,7 +59,7 @@ export function OrdersPage() {
 
       {orders.length === 0 ? (
         <p class="empty">
-          還沒有任何訂單。<a href="/shop">去看看商品</a>
+          還沒有任何訂單。<a class="inline-action" href="/shop">去看看商品</a>
         </p>
       ) : (
         <>
