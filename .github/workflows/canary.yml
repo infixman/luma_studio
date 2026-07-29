@@ -17,6 +17,9 @@ permissions:
 env:
   API: https://api.luma-studio.tw
   SITE: https://luma-studio.tw
+  # The back office is its own site now. /admin on the storefront is a
+  # redirect here, and where it lands is what the check is about.
+  ADMIN_SITE: https://admin.luma-studio.tw
   # A folder of its own, holding one small image. Not a customer's, because
   # this runs a real ibon upload every day.
   CANARY_ID: zz_canary
@@ -103,16 +106,29 @@ jobs:
           check "$API/api/health" 200
           check "$API/api/bio-link" 200
           check "$SITE/" 200
-          check "$SITE/admin" 200
-          check "$SITE/bio_link" 200
+          check "$SITE/card" 200
           check "$SITE/ibon_print/$CANARY_ID" 200
 
-          # The share link people actually paste must carry its preview tags.
-          if ! curl -sS "$SITE/bio_link" | grep -q 'property="og:image"'; then
-            echo "::error::/bio_link is missing its link-preview tags"
+          # /admin is a redirect on purpose: the back office moved to its own
+          # host. Checking the destination and not only the 301 is the point —
+          # a redirect to the wrong place is still a 301.
+          moved=$(curl -sS -o /dev/null -w "%{redirect_url}" -H "Accept: text/html" "$SITE/admin")
+          if [ "$moved" != "$ADMIN_SITE/" ]; then
+            echo "::error::${SITE}/admin redirects to '${moved}', expected '${ADMIN_SITE}/'"
             FAILED=1
           else
-            echo "ok  /bio_link carries og tags"
+            echo "ok  /admin -> $moved"
+          fi
+
+          # The share link people actually paste must carry its preview tags.
+          # The name card is at /card; it was /bio_link until 6c7eeb8, and this
+          # check went on passing against the old path for long enough to be
+          # worth saying so here.
+          if ! curl -sS "$SITE/card" | grep -q 'property="og:image"'; then
+            echo "::error::/card is missing its link-preview tags"
+            FAILED=1
+          else
+            echo "ok  /card carries og tags"
           fi
 
           exit $FAILED
