@@ -8,6 +8,7 @@ route selection, authentication boundaries, and Worker lifecycle hooks.
 
 import auth_customer
 from domain import bio_link, customer_activity, media, orders, pages, shipping, shop, site_chrome
+from api.front import learning as learning_api
 from api.front import routes as front_api
 import mail
 from shared import rate_limit, router
@@ -70,6 +71,7 @@ async def dispatch(ctx: Ctx):
         or path == "/api/checkout"
         or path == "/api/customer-events"
         or path.startswith("/api/orders")
+        or path.startswith("/api/learning/")
     ):
         customer = await auth_customer.current_customer(ctx.env, ctx.request)
         if customer is None:
@@ -114,7 +116,27 @@ async def dispatch(ctx: Ctx):
             )
         if path.startswith("/api/orders/") and method == "GET":
             return await front_api.order_response(ctx, customer, path.removeprefix("/api/orders/"))
+        if path == "/api/learning/courses" and method == "GET":
+            return await learning_api.my_courses_response(ctx, customer)
+        if path.startswith("/api/learning/lessons/") and path.endswith("/playback-session") and method == "POST":
+            if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "playback"):
+                return ctx.too_many_requests()
+            return await learning_api.playback_session_response(
+                ctx, customer, path.removeprefix("/api/learning/lessons/").removesuffix("/playback-session")
+            )
+        if path.startswith("/api/learning/lessons/") and path.endswith("/progress") and method == "PUT":
+            if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "progress"):
+                return ctx.too_many_requests()
+            return await learning_api.progress_response(
+                ctx, customer, path.removeprefix("/api/learning/lessons/").removesuffix("/progress")
+            )
         return ctx.error("Unknown endpoint", 404)
+
+    # The gateway is deliberately outside the block above: it verifies a
+    # signed token rather than a session, and runs hundreds of times per
+    # lesson. A database lookup here would cost more than it protects.
+    if path.startswith("/course-media/") and method == "GET":
+        return await learning_api.media_response(ctx, path.removeprefix("/course-media/"))
 
     if path == "/api/cart/validate" and method == "POST":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

@@ -193,3 +193,61 @@ class TestProgress:
 
         statement, _ = database.writes[0]
         assert "COALESCE(course_lesson_progress.completed_at" in statement
+
+
+class TestGatewayRoutes:
+    """The gateway trusts a signed cookie and nothing else."""
+
+    @pytest.fixture
+    def call(self):
+        import main
+        from shared import migrations
+
+        def run(request, database=None, **extra):
+            migrations._applied_names = None
+            worker = main.Default()
+            worker.env = make_env(database or FakeDatabase(), **extra)
+            return asyncio.run(worker.fetch(request))
+
+        return run
+
+    def _request(self, path, method="GET", **headers):
+        from conftest import FakeRequest, STOREFRONT_ORIGIN
+
+        base = {"Origin": STOREFRONT_ORIGIN, "x-luma-app": "1"}
+        base.update(headers)
+        return FakeRequest(path, method, base)
+
+    def test_a_media_request_with_no_cookie_is_refused(self, call):
+        response = call(self._request("/course-media/asset-1/1/master.m3u8"), PLAYBACK_SECRET="s")
+
+        assert response.status == 403
+
+    def test_a_path_the_pipeline_never_writes_is_not_found(self, call):
+        """Refused before any signature check, so probing costs nothing to
+        answer and reveals nothing about the token."""
+
+        response = call(
+            self._request("/course-media/asset-1/1/../../sources/asset-1/1/source.mp4"),
+            PLAYBACK_SECRET="s",
+        )
+
+        assert response.status == 404
+
+    def test_a_token_for_another_video_does_not_open_this_one(self, call):
+        from domain import playback
+        from shared.common import utc_timestamp
+
+        # Minted now, so the only thing wrong with it is what it covers.
+        token = playback.issue(
+            {"assetId": "asset-9", "encodeVersion": 1}, secret="s", now=utc_timestamp()
+        )
+        response = call(
+            self._request("/course-media/asset-1/1/master.m3u8", Cookie=f"luma_playback={token}"),
+            PLAYBACK_SECRET="s",
+        )
+
+        assert response.status == 403
+
+    def test_the_learning_routes_need_a_session(self, call):
+        assert call(self._request("/api/learning/courses")).status == 401
