@@ -73,6 +73,7 @@ export function SitePage() {
   const [savedSettings, setSavedSettings] = useState<SiteSettings | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [draft, setDraft] = useState(EMPTY_ITEM)
+  const [savingSection, setSavingSection] = useState<'header' | 'footer' | null>(null)
   /** The item being renamed, and what it is being renamed to. Null when closed. */
   const [renaming, setRenaming] = useState<{ item: MenuItem; label: string } | null>(null)
   const { message, showError, busy, run } = useStatus()
@@ -166,11 +167,13 @@ export function SitePage() {
   function saveSettings(event: Event) {
     event.preventDefault()
     if (!settings) return
+    const section = (event.currentTarget as HTMLFormElement).id === 'site-header-settings' ? 'header' : 'footer'
+    setSavingSection(section)
     void run(async () => {
       const next = await apiJson<{ settings: SiteSettings }>('/api/site', 'PUT', settings)
       setSettings(next.settings)
       setSavedSettings(next.settings)
-    }, '外框設定已儲存。')
+    }, '外框設定已儲存。').finally(() => setSavingSection(null))
   }
 
   function addItem(event: Event) {
@@ -420,7 +423,13 @@ export function SitePage() {
         <Panel
           title="頁首"
           actions={
-            <Button type="submit" form="site-header-settings" tone="primary" busy={busy} disabled={!headerDirty}>
+            <Button
+              type="submit"
+              form="site-header-settings"
+              tone="primary"
+              busy={savingSection === 'header'}
+              disabled={busy || !headerDirty}
+            >
               儲存頁首
             </Button>
           }
@@ -523,7 +532,13 @@ export function SitePage() {
         <Panel
           title="頁尾"
           actions={
-            <Button type="submit" form="site-footer-settings" tone="primary" busy={busy} disabled={!footerDirty}>
+            <Button
+              type="submit"
+              form="site-footer-settings"
+              tone="primary"
+              busy={savingSection === 'footer'}
+              disabled={busy || !footerDirty}
+            >
               儲存頁尾
             </Button>
           }
