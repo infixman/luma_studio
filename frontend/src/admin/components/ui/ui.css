@@ -633,11 +633,61 @@
 .ui-panel-actions {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.ui-panel-toggle {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.ui-panel-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--sunken);
+  color: var(--text);
+}
+
+.ui-panel-toggle svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+
+.ui-panel.is-collapsed .ui-panel-toggle svg {
+  transform: rotate(-90deg);
+}
+
+.ui-panel.is-collapsed .ui-panel-head {
+  border-bottom: 0;
 }
 
 .ui-panel-body {
   padding: var(--space-4);
+}
+
+.ui-panel-body[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-panel-toggle svg {
+    transition: none;
+  }
 }
 
 /* --- badge --- */

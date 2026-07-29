@@ -74,6 +74,7 @@ export function SitePage() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [draft, setDraft] = useState(EMPTY_ITEM)
   const [savingSection, setSavingSection] = useState<'header' | 'footer' | null>(null)
+  const [collapsed, setCollapsed] = useState({ menu: false, header: false, footer: false })
   /** The item being renamed, and what it is being renamed to. Null when closed. */
   const [renaming, setRenaming] = useState<{ item: MenuItem; label: string } | null>(null)
   const { message, showError, busy, run } = useStatus()
@@ -328,8 +329,11 @@ export function SitePage() {
           </div>
         </div>
 
-        <div class="card">
-          <h2>選單</h2>
+        <Panel
+          title="選單"
+          collapsed={collapsed.menu}
+          onCollapsedChange={(menu) => setCollapsed((current) => ({ ...current, menu }))}
+        >
           <p class="muted">
             拖曳可以上下移動，⇤ ⇥ 改變層級，最多三層。按鈕在所有裝置上都能用——拖曳只在有滑鼠時方便。
           </p>
@@ -418,10 +422,12 @@ export function SitePage() {
               新增項目
             </button>
           </form>
-        </div>
+        </Panel>
 
         <Panel
           title="頁首"
+          collapsed={collapsed.header}
+          onCollapsedChange={(header) => setCollapsed((current) => ({ ...current, header }))}
           actions={
             <Button
               type="submit"
@@ -531,6 +537,8 @@ export function SitePage() {
 
         <Panel
           title="頁尾"
+          collapsed={collapsed.footer}
+          onCollapsedChange={(footer) => setCollapsed((current) => ({ ...current, footer }))}
           actions={
             <Button
               type="submit"

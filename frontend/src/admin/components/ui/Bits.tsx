@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useId } from 'preact/hooks'
 
 /** The small pieces: panels, badges, empty states, and a table wrapper. */
 
@@ -7,22 +8,50 @@ export function Panel({
   actions,
   children,
   class: extra,
+  collapsed = false,
+  onCollapsedChange,
 }: {
   title?: string
   /** Buttons on the panel's own header row, beside its title. */
   actions?: ComponentChildren
   children: ComponentChildren
   class?: string
+  /** Controlled disclosure for long editor panels. */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
 }) {
+  const bodyId = useId()
+  const collapsible = onCollapsedChange !== undefined
   return (
-    <section class={['ui-panel', extra ?? ''].filter(Boolean).join(' ')}>
-      {(title || actions) && (
+    <section class={['ui-panel', collapsed ? 'is-collapsed' : '', extra ?? ''].filter(Boolean).join(' ')}>
+      {(title || actions || collapsible) && (
         <header class="ui-panel-head">
           {title && <h2 class="ui-panel-title">{title}</h2>}
-          {actions && <div class="ui-panel-actions">{actions}</div>}
+          {(actions || collapsible) && (
+            <div class="ui-panel-actions">
+              {actions}
+              {collapsible && (
+                <button
+                  type="button"
+                  class="ui-panel-toggle"
+                  aria-expanded={!collapsed}
+                  aria-controls={bodyId}
+                  aria-label={`${collapsed ? '展開' : '收合'}${title ?? '區塊'}`}
+                  title={`${collapsed ? '展開' : '收合'}${title ?? '區塊'}`}
+                  onClick={() => onCollapsedChange(!collapsed)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m7 10 5 5 5-5" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
         </header>
       )}
-      <div class="ui-panel-body">{children}</div>
+      <div id={bodyId} class="ui-panel-body" hidden={collapsed}>
+        {children}
+      </div>
     </section>
   )
 }
