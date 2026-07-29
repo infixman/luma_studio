@@ -175,7 +175,17 @@ export function ProductEditPage({ id }: { id: string }) {
     JSON.stringify([...chosen].sort()) !== JSON.stringify(detail.categories.map((category) => category.id).sort())
 
   return (
-    <AdminShell current="/products" back={{ href: '/products', label: '回到商品清單' }} message={message} onError={showError}>
+    <AdminShell
+      current="/products"
+      back={{ href: '/products', label: '回到商品清單' }}
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" busy={busy} disabled={!productDirty} onClick={() => saveProduct()}>
+          儲存商品
+        </Button>
+      }
+    >
       {dialog}
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
@@ -185,15 +195,7 @@ export function ProductEditPage({ id }: { id: string }) {
         <p class="notice warn">這個商品已上架，但沒有任何啟用的規格，顧客看得到卻買不了。</p>
       )}
 
-      <Panel
-        title="商品資料"
-        class="product-info-panel"
-        actions={
-          <Button tone="primary" busy={busy} disabled={!productDirty} onClick={() => saveProduct()}>
-            儲存商品
-          </Button>
-        }
-      >
+      <Panel title="商品資料" class="product-info-panel">
         <form class="product-editor-form" onSubmit={saveProduct}>
           <ProductFormFields
             value={form}
