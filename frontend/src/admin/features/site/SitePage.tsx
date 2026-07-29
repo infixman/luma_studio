@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../../components/AdminShell'
 import { MenuEditor } from '../../components/MenuEditor'
 import { useStatus } from '../../components/StatusBar'
-import { Button, Modal, RadioGroup, Spinner, TextField, useConfirm } from '../../components/ui'
+import { Button, Modal, Panel, RadioGroup, Spinner, TextField, useConfirm } from '../../components/ui'
 import { SiteFooter, SiteHeader } from '../../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../../shared/components/SocialIcon'
 import { api, apiJson, apiUrl, uploadHeaderImage } from '../../../shared/api'
@@ -43,6 +43,7 @@ function Choice<T extends string>({
 
 export function SitePage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const [savedSettings, setSavedSettings] = useState<SiteSettings | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [draft, setDraft] = useState(EMPTY_ITEM)
   /** The item being renamed, and what it is being renamed to. Null when closed. */
@@ -57,6 +58,7 @@ export function SitePage() {
         api<MenuState>('/api/menu'),
       ])
       setSettings(site.settings)
+      setSavedSettings(site.settings)
       setMenu(menuState)
     } catch (error) {
       showError(error)
@@ -140,6 +142,7 @@ export function SitePage() {
     void run(async () => {
       const next = await apiJson<{ settings: SiteSettings }>('/api/site', 'PUT', settings)
       setSettings(next.settings)
+      setSavedSettings(next.settings)
     }, '外框設定已儲存。')
   }
 
@@ -221,6 +224,28 @@ export function SitePage() {
       </AdminShell>
     )
   }
+
+  const headerDirty = savedSettings !== null && (
+    settings.headerBackground !== savedSettings.headerBackground ||
+    settings.headerColour !== savedSettings.headerColour ||
+    settings.headerHeight !== savedSettings.headerHeight ||
+    settings.headerText !== savedSettings.headerText ||
+    settings.headerLogoSize !== savedSettings.headerLogoSize ||
+    settings.headerSticky !== savedSettings.headerSticky ||
+    settings.headerShowCart !== savedSettings.headerShowCart ||
+    settings.headerShowLogin !== savedSettings.headerShowLogin ||
+    settings.headerCtaLabel !== savedSettings.headerCtaLabel ||
+    settings.headerCtaUrl !== savedSettings.headerCtaUrl ||
+    settings.headerImagePath !== savedSettings.headerImagePath
+  )
+  const footerDirty = savedSettings !== null && (
+    settings.footerColour !== savedSettings.footerColour ||
+    settings.footerText !== savedSettings.footerText ||
+    settings.footerBlurb !== savedSettings.footerBlurb ||
+    settings.footerCopyright !== savedSettings.footerCopyright ||
+    JSON.stringify(settings.footerColumns) !== JSON.stringify(savedSettings.footerColumns) ||
+    JSON.stringify(settings.footerSocials) !== JSON.stringify(savedSettings.footerSocials)
+  )
 
   return (
     <AdminShell current="/site" message={message} onError={showError}>
@@ -343,9 +368,15 @@ export function SitePage() {
           </form>
         </div>
 
-        <div class="card">
-          <h2>頁首</h2>
-          <form class="product-form" onSubmit={saveSettings}>
+        <Panel
+          title="頁首"
+          actions={
+            <Button type="submit" form="site-header-settings" tone="primary" busy={busy} disabled={!headerDirty}>
+              儲存頁首
+            </Button>
+          }
+        >
+          <form id="site-header-settings" class="product-form" onSubmit={saveSettings}>
             <Choice
               legend="背景"
               value={settings.headerBackground}
@@ -437,15 +468,18 @@ export function SitePage() {
               />
             </label>
 
-            <button type="submit" disabled={busy}>
-              儲存頁首
-            </button>
           </form>
-        </div>
+        </Panel>
 
-        <div class="card">
-          <h2>頁尾</h2>
-          <form class="product-form" onSubmit={saveSettings}>
+        <Panel
+          title="頁尾"
+          actions={
+            <Button type="submit" form="site-footer-settings" tone="primary" busy={busy} disabled={!footerDirty}>
+              儲存頁尾
+            </Button>
+          }
+        >
+          <form id="site-footer-settings" class="product-form" onSubmit={saveSettings}>
             <Choice legend="底色" value={settings.footerColour} options={COLOURS} onPick={(footerColour) => edit({ footerColour })} />
             <Choice
               legend="文字色"
@@ -578,11 +612,8 @@ export function SitePage() {
               加一個社群連結
             </button>
 
-            <button type="submit" disabled={busy}>
-              儲存頁尾
-            </button>
           </form>
-        </div>
+        </Panel>
       </section>
     </AdminShell>
   )

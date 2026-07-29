@@ -74,6 +74,7 @@ export function CustomersPage() {
   const [note, setNote] = useState('')
   const { message, show, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
+  const noteDirty = detail !== null && note !== detail.customer.notes
   const latest = useLatest()
 
   // Search stays on the server: the browser only holds one page, so searching
@@ -393,6 +394,9 @@ export function CustomersPage() {
                   清除個人資料
                 </Button>
               )}
+              <Button type="submit" form="customer-note" size="sm" tone="primary" busy={busy} disabled={!noteDirty}>
+                儲存備註
+              </Button>
               <Button size="sm" tone="ghost" onClick={() => setDetail(null)}>
                 關閉
               </Button>
@@ -426,6 +430,7 @@ export function CustomersPage() {
           </p>
 
           <form
+            id="customer-note"
             class="ui-inline-form"
             onSubmit={(event) => {
               event.preventDefault()
@@ -449,9 +454,6 @@ export function CustomersPage() {
               maxLength={ORDER_NOTE_MAX}
               onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
             />
-            <Button type="submit" tone="primary" busy={busy}>
-              儲存備註
-            </Button>
           </form>
 
           <h3>訂單</h3>

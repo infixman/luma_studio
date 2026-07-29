@@ -80,8 +80,8 @@ export function ProductEditPage({ id }: { id: string }) {
     void load()
   }, [load])
 
-  function saveProduct(event: Event) {
-    event.preventDefault()
+  function saveProduct(event?: Event) {
+    event?.preventDefault()
     void run(
       async () => apply(await apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, categoryIds: chosen })),
       '商品已儲存。',
@@ -170,6 +170,12 @@ export function ProductEditPage({ id }: { id: string }) {
   }
 
   const sellable = detail.variants.some((variant) => variant.enabled)
+  const productDirty =
+    form.title !== detail.product.title ||
+    form.slug !== detail.product.slug ||
+    form.description !== detail.product.description ||
+    form.status !== detail.product.status ||
+    JSON.stringify([...chosen].sort()) !== JSON.stringify(detail.categories.map((category) => category.id).sort())
 
   return (
     <AdminShell current="/products" back={{ href: '/products', label: '回到商品清單' }} message={message} onError={showError}>
@@ -182,7 +188,14 @@ export function ProductEditPage({ id }: { id: string }) {
         <p class="notice warn">這個商品已上架，但沒有任何啟用的規格，顧客看得到卻買不了。</p>
       )}
 
-      <Panel title="商品資料">
+      <Panel
+        title="商品資料"
+        actions={
+          <Button tone="primary" busy={busy} disabled={!productDirty} onClick={() => saveProduct()}>
+            儲存商品
+          </Button>
+        }
+      >
         <form class="product-form" onSubmit={saveProduct}>
           <TextField
             label="商品名稱"
@@ -236,11 +249,6 @@ export function ProductEditPage({ id }: { id: string }) {
             onChange={(status) => setForm({ ...form, status })}
           />
 
-          <ButtonRow>
-            <Button type="submit" tone="primary" busy={busy}>
-              儲存商品
-            </Button>
-          </ButtonRow>
         </form>
       </Panel>
 

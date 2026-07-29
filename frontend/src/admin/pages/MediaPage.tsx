@@ -53,6 +53,11 @@ export function MediaPage() {
   // a surprise.
   const pickedHere = shown.filter((item) => picked.includes(item.id))
   const allPicked = shown.length > 0 && pickedHere.length === shown.length
+  const metadataDirty = selected !== null && (
+    title !== selected.title ||
+    alt !== selected.alt ||
+    JSON.stringify(chosen) !== JSON.stringify(selected.tags)
+  )
 
   /** Opening an image also asks where it is used, so deleting is informed. */
   async function inspect(item: MediaItem) {
@@ -463,6 +468,11 @@ export function MediaPage() {
         title={selected ? mediaName(selected) : ''}
         open={selected !== null}
         width="lg"
+        actions={
+          <Button type="submit" form="media-metadata" size="sm" tone="primary" busy={busy} disabled={!metadataDirty}>
+            儲存
+          </Button>
+        }
         onClose={() => {
           setSelected(null)
           setUsedBy(null)
@@ -530,7 +540,7 @@ export function MediaPage() {
               </a>
             </p>
 
-            <form onSubmit={save}>
+            <form id="media-metadata" onSubmit={save}>
               <TextField
                 label="標題"
                 value={title}
@@ -559,10 +569,6 @@ export function MediaPage() {
                 maxLength={30}
                 hint="一張圖可以同時是「插畫」和「首頁用」，所以這裡沒有資料夾。"
               />
-
-              <Button type="submit" tone="primary" busy={busy}>
-                儲存
-              </Button>
             </form>
 
             {/* Kept, and kept above the delete button. Naming the pages that

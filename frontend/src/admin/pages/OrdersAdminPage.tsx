@@ -117,6 +117,7 @@ export function OrdersAdminPage() {
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE)
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [note, setNote] = useState('')
+  const noteDirty = detail !== null && note !== detail.order.adminNote
   /** The order and the move waiting on the dialog that collects its reason. */
   const [pending, setPending] = useState<{ order: AdminOrder; move: Move } | null>(null)
   const [answer, setAnswer] = useState('')
@@ -474,6 +475,9 @@ export function OrdersAdminPage() {
               ) : (
                 <span class="muted">已經結束</span>
               )}
+              <Button type="submit" form="order-note" size="sm" tone="primary" busy={busy} disabled={!noteDirty}>
+                儲存備註
+              </Button>
               <Button size="sm" tone="ghost" onClick={() => setDetail(null)}>
                 關閉
               </Button>
@@ -532,7 +536,7 @@ export function OrdersAdminPage() {
             )}
           </dl>
 
-          <form class="ui-inline-form" onSubmit={saveNote}>
+          <form id="order-note" class="ui-inline-form" onSubmit={saveNote}>
             <TextField
               label="店家備註"
               hint="只有你看得到，顧客的訂單頁不會出現。"
@@ -540,9 +544,6 @@ export function OrdersAdminPage() {
               maxLength={ORDER_NOTE_MAX}
               onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
             />
-            <Button type="submit" tone="primary" busy={busy}>
-              儲存備註
-            </Button>
           </form>
 
           {detail.attempts.length > 0 && (

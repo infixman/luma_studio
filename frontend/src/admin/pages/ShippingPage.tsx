@@ -25,12 +25,15 @@ function toDraft(method: ShippingMethod): Draft {
 
 export function ShippingPage() {
   const [drafts, setDrafts] = useState<Draft[] | null>(null)
+  const [savedDrafts, setSavedDrafts] = useState<Draft[] | null>(null)
   const { message, showError, busy, run } = useStatus()
 
   const load = useCallback(async () => {
     try {
       const data = await api<{ methods: ShippingMethod[] }>('/api/shipping-methods')
-      setDrafts(data.methods.map(toDraft))
+      const next = data.methods.map(toDraft)
+      setDrafts(next)
+      setSavedDrafts(next)
     } catch (error) {
       showError(error)
     }
@@ -58,9 +61,13 @@ export function ShippingPage() {
           freeThreshold: draft.freeThreshold.trim() === '' ? null : Number.parseInt(draft.freeThreshold, 10),
         })),
       })
-      setDrafts(data.methods.map(toDraft))
+      const next = data.methods.map(toDraft)
+      setDrafts(next)
+      setSavedDrafts(next)
     }, '運費已儲存。')
   }
+
+  const dirty = drafts !== null && savedDrafts !== null && JSON.stringify(drafts) !== JSON.stringify(savedDrafts)
 
   return (
     <AdminShell
@@ -68,7 +75,7 @@ export function ShippingPage() {
       message={message}
       onError={showError}
       actions={
-        <Button tone="primary" busy={busy} disabled={drafts === null} onClick={save}>
+        <Button tone="primary" busy={busy} disabled={!dirty} onClick={save}>
           儲存運費
         </Button>
       }

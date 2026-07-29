@@ -30,13 +30,15 @@ interface ModalProps {
   title: string
   open: boolean
   onClose: () => void
+  /** Actions belonging to the detail currently open in this dialog. */
+  actions?: ComponentChildren
   /** The buttons along the bottom. */
   footer?: ComponentChildren
   children: ComponentChildren
   width?: 'sm' | 'md' | 'lg'
 }
 
-export function Modal({ title, open, onClose, footer, children, width = 'sm' }: ModalProps) {
+export function Modal({ title, open, onClose, actions, footer, children, width = 'sm' }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null)
   const returnTo = useRef<HTMLElement | null>(null)
 
@@ -99,7 +101,10 @@ export function Modal({ title, open, onClose, footer, children, width = 'sm' }: 
         // The backdrop closes on click; the panel is not the backdrop.
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 class="ui-modal-title">{title}</h2>
+        <header class="ui-modal-head">
+          <h2 class="ui-modal-title">{title}</h2>
+          {actions && <div class="ui-modal-actions">{actions}</div>}
+        </header>
         <div class="ui-modal-body">{children}</div>
         {footer && <div class="ui-modal-footer">{footer}</div>}
       </div>

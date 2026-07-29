@@ -6,7 +6,7 @@ import { CopyButton, OpenButton } from '../../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../../shared/components/SocialIcon'
 import { AdminShell } from '../../components/AdminShell'
 import { useStatus } from '../../components/StatusBar'
-import { EmptyState, Spinner, useConfirm } from '../../components/ui'
+import { Button, EmptyState, Spinner, useConfirm } from '../../components/ui'
 import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../../shared/types'
 import '../../styles/bio-link-admin.css'
@@ -416,6 +416,17 @@ export function BioLinkAdminPage() {
       current="/card"
       message={message}
       onError={showError}
+      actions={
+        <>
+          {dirty && <span class="unsaved-mark">有未儲存的修改</span>}
+          <Button tone="ghost" disabled={!dirty} onClick={() => void revert()}>
+            還原
+          </Button>
+          <Button tone="primary" busy={busy} disabled={!dirty} onClick={() => void savePage()}>
+            儲存
+          </Button>
+        </>
+      }
       confirmLeave={async () =>
         !dirty ||
         (await ask({
@@ -581,22 +592,6 @@ export function BioLinkAdminPage() {
             <BioLinkStatsPanel onError={showError} />
           </div>
         </section>
-      )}
-
-      {/* Fixed to the bottom: the form is taller than a screen, and a save
-          button you have to scroll to find is one people forget to press. */}
-      {page !== null && (
-        <div class={dirty ? 'bio-savebar dirty' : 'bio-savebar'}>
-          <span class="bio-savebar-state">{dirty ? '有尚未儲存的修改' : '已是最新狀態'}</span>
-          <div class="bio-savebar-actions">
-            <button class="ghost" disabled={busy || !dirty} onClick={() => void revert()}>
-              還原
-            </button>
-            <button disabled={busy || !dirty} onClick={() => void savePage()}>
-              {busy ? '儲存中…' : '儲存'}
-            </button>
-          </div>
-        </div>
       )}
       {dialog}
     </AdminShell>
