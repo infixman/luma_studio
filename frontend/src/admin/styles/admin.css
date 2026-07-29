@@ -298,6 +298,25 @@ body.admin #status.visible {
 body.admin #status.error {
   background: var(--danger);
   color: var(--on-danger);
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate(-50%, 0); }
+  10% { transform: translate(calc(-50% + 6px), 0); }
+  30% { transform: translate(calc(-50% - 5px), 0); }
+  50% { transform: translate(calc(-50% + 4px), 0); }
+  70% { transform: translate(calc(-50% - 2px), 0); }
+  90% { transform: translate(calc(-50% + 1px), 0); }
+}
+
+@keyframes field-shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(5px); }
+  30% { transform: translateX(-4px); }
+  50% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+  90% { transform: translateX(1px); }
 }
 
 body.admin #status.ok {
@@ -305,6 +324,25 @@ body.admin #status.ok {
      on it, so the ink follows the same rule the danger button does. */
   background: var(--success);
   color: var(--on-success);
+}
+
+body.admin .status-check {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.15em;
+  margin-right: 0.4em;
+  flex-shrink: 0;
+}
+
+body.admin .status-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: check-draw 0.4s 0.15s ease forwards;
+}
+
+@keyframes check-draw {
+  to { stroke-dashoffset: 0; }
 }
 
 body.admin #status.warn {
@@ -540,5 +578,15 @@ body.admin .folder-actions {
     flex: 0 0 40px;
     width: 40px;
     height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.admin #status.error {
+    animation: none;
+  }
+  body.admin .status-check path {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }

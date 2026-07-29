@@ -39,7 +39,20 @@ export function CategoryPage({ filter }: { filter: string }) {
   }
 
   if (failed) return <main class="shop"><p class="empty">分類載入失敗，請稍後再試一次。</p></main>
-  if (page === null) return <main class="shop"><p class="empty">載入中…</p></main>
+  if (page === null) return (
+    <main class="shop">
+      <div class="skeleton" style={{ height: '1.4rem', width: '30%', marginBottom: '1.2rem' }} />
+      <ul class="product-grid">
+        {Array.from({ length: 4 }, (_, i) => (
+          <li key={i} class="card">
+            <div class="cover skeleton" />
+            <div class="skeleton" style={{ height: '0.9rem', width: '70%', marginTop: '0.5rem' }} />
+            <div class="skeleton" style={{ height: '0.8rem', width: '40%', marginTop: '0.3rem' }} />
+          </li>
+        ))}
+      </ul>
+    </main>
+  )
 
   return (
     <main class="shop">

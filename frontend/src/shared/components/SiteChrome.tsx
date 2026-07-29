@@ -140,7 +140,7 @@ export function SiteHeader({
             >
               <CartGlyph />
               {cartCount ? (
-                <span class="count" aria-hidden="true">
+                <span key={cartCount} class="count" aria-hidden="true">
                   {cartCount}
                 </span>
               ) : null}

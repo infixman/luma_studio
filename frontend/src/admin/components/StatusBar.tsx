@@ -75,7 +75,16 @@ export function useStatus() {
 export function StatusBar({ message }: { message: StatusMessage | null }) {
   return (
     <div id="status" class={message ? `visible ${message.kind}` : ''} aria-live="polite">
+      {message?.kind === 'ok' && <SuccessCheck />}
       {message?.text ?? ''}
     </div>
+  )
+}
+
+function SuccessCheck() {
+  return (
+    <svg class="status-check" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
   )
 }

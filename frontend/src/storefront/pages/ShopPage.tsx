@@ -43,7 +43,15 @@ export function ShopPage() {
       {failed ? (
         <p class="empty">商品載入失敗，請稍後再試一次。</p>
       ) : products === null ? (
-        <p class="empty">載入中…</p>
+        <ul class="product-grid">
+          {Array.from({ length: 6 }, (_, i) => (
+            <li key={i} class="card">
+              <div class="cover skeleton" />
+              <div class="skeleton" style={{ height: '0.9rem', width: '70%', marginTop: '0.5rem' }} />
+              <div class="skeleton" style={{ height: '0.8rem', width: '40%', marginTop: '0.3rem' }} />
+            </li>
+          ))}
+        </ul>
       ) : products.length === 0 ? (
         <p class="empty">目前沒有販售中的商品。</p>
       ) : (

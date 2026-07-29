@@ -22,3 +22,24 @@ body {
   background: var(--surface);
   color: #2b2622;
 }
+
+/* --- skeleton loading pulse --- */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--card) 25%, #ece5da 50%, var(--card) 75%);
+  background-size: 400% 100%;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--card);
+  }
+}

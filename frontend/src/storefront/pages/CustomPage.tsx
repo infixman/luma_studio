@@ -39,7 +39,15 @@ export function CustomPage({ path, onMissing }: { path: string; onMissing: () =>
 
   // Nothing is drawn while the answer is unknown. Showing "not found" first
   // and replacing it a moment later reads as a broken link that healed.
-  if (state.kind === 'loading') return <main class="custom-page" />
+  if (state.kind === 'loading') return (
+    <main class="custom-page">
+      <div class="skeleton" style={{ height: '1.2rem', width: '40%', marginBottom: '1rem' }} />
+      <div class="skeleton" style={{ height: '0.9rem', width: '100%', marginBottom: '0.6rem' }} />
+      <div class="skeleton" style={{ height: '0.9rem', width: '90%', marginBottom: '0.6rem' }} />
+      <div class="skeleton" style={{ height: '0.9rem', width: '75%', marginBottom: '2rem' }} />
+      <div class="skeleton" style={{ height: '14rem', width: '100%' }} />
+    </main>
+  )
   if (state.kind === 'missing') return onMissing()
   if (state.kind === 'failed') return <main class="custom-page"><p class="empty">頁面載入失敗，請稍後再試一次。</p></main>
 

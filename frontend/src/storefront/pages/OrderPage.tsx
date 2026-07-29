@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiUrl } from '../../shared/api'
+import { Confetti } from '../../shared/components/Confetti'
 import type { OrderStatus, OrderDetail } from '../../shared/types'
 import '../styles/shop.css'
 import { dateTime } from '../../shared/dates'
@@ -38,6 +39,14 @@ export function OrderPage({ id }: { id: string }) {
   const [missing, setMissing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [celebrate] = useState(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.has('placed')) {
+      history.replaceState(null, '', location.pathname)
+      return true
+    }
+    return false
+  })
 
   const load = useCallback(async () => {
     try {
@@ -91,6 +100,7 @@ export function OrderPage({ id }: { id: string }) {
 
   return (
     <main class="order">
+      <Confetti active={celebrate} />
       <div class="order-bar">
         <a class="back" href="/orders">
           ← 我的訂單

@@ -68,7 +68,7 @@ export function CheckoutPage() {
       // Only once the order exists. Clearing earlier would lose the basket
       // for anyone whose payment details were refused a second later.
       cart.clear()
-      location.assign(`/orders/${encodeURIComponent(placed.order.id)}`)
+      location.assign(`/orders/${encodeURIComponent(placed.order.id)}?placed=1`)
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : '結帳失敗，請再試一次。')
       setBusy(false)
