@@ -33,7 +33,7 @@ import type { CopiedBlock } from '../../lib/blockClipboard'
 import { followsTitle, nextPath } from '../../lib/slug'
 import { Blocks } from '../../../shared/components/Blocks'
 import { dateTime } from '../../../shared/dates'
-import { STOREFRONT_ORIGIN, api, apiJson, apiUrl } from '../../../shared/api'
+import { api, apiJson, apiUrl } from '../../../shared/api'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -49,6 +49,7 @@ import type {
 } from '../../../shared/types'
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
 import { projectDraftBlocks } from './preview/projectDraftBlocks'
+import { useLivePagePreview } from './hooks/useLivePagePreview'
 import '../../styles/pages-admin.css'
 import '../../styles/media-admin.css'
 
@@ -122,11 +123,9 @@ export function PageEditPage({ id }: { id: string }) {
   const [inserting, setInserting] = useState<number | null>(null)
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
   const [viewport, setViewport] = useState<ViewportId>('desktop')
-  /** The framed preview URL, or null while the block renderer is showing instead. */
-  const [frame, setFrame] = useState<string | null>(null)
-  const [framing, setFraming] = useState(false)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
+  const { frame, framing, openLivePreview } = useLivePagePreview(id, showError)
   const { ask, dialog } = useConfirm()
   const picker = useMediaPicker()
 
@@ -232,32 +231,6 @@ export function PageEditPage({ id }: { id: string }) {
     if (item) setLibrary((current) => (current.some((entry) => entry.id === item.id) ? current : [item, ...current]))
     return item
   }, [picker])
-
-  /**
-   * Mints a fresh token and points the frame at it.
-   *
-   * A new one every time rather than a stored URL: the token is spent by the
-   * load, so reusing it would show an expired page. That also means this is
-   * the refresh button — there is nothing else to refresh with.
-   */
-  async function openLivePreview() {
-    if (framing) return
-    setFraming(true)
-    try {
-      const { token } = await apiJson<{ token: string }>(
-        `/api/pages/${encodeURIComponent(id)}/preview-token`,
-        'POST',
-        {},
-      )
-      // Cache-busted because the browser will happily reuse the previous
-      // frame for the same URL, and the URL is the only thing that changed.
-      setFrame(`${STOREFRONT_ORIGIN}/__preview/${encodeURIComponent(token)}`)
-    } catch (error) {
-      showError(error)
-    } finally {
-      setFraming(false)
-    }
-  }
 
   /** Picking may upload, so this is the pick that also updates the preview. */
   async function chooseShareImage() {
