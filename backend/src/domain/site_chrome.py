@@ -8,8 +8,8 @@ These are site settings, not blocks a page includes. A header you have to
 remember to insert is a header you will one day forget to insert, and the
 page that goes out without one is the page a customer sees.
 
-Appearance normally comes from fixed sets. The footer also accepts a custom
-colour, but only as a validated six-digit hex value stored in its own column.
+Appearance normally comes from fixed sets. Header and footer custom colours
+are stored in dedicated columns and must be validated six-digit hex values.
 That keeps typed text out of class names and arbitrary CSS out of the page.
 """
 
@@ -29,6 +29,7 @@ BACKGROUNDS = ("transparent", "solid", "image")
 # editing at the time.
 COLOURS = ("cream", "sand", "clay", "forest", "ink")
 TEXT_TONES = ("dark", "light")
+HEADER_COLOURS = (*COLOURS, "custom")
 FOOTER_COLOURS = (*COLOURS, "custom")
 FOOTER_TEXT_TONES = (*TEXT_TONES, "custom")
 SIZES = ("small", "medium", "large")
@@ -52,6 +53,7 @@ IMAGE_PREFIX = "_site"
 IMAGE_URL_PREFIX = "/site-assets"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
+DEFAULT_HEADER_CUSTOM_COLOUR = "#faf7f2"
 DEFAULT_FOOTER_CUSTOM_COLOUR = "#ece2d2"
 DEFAULT_FOOTER_CUSTOM_TEXT = "#2b2622"
 
@@ -173,6 +175,7 @@ def _read_json_list(raw: str, validator) -> list[dict]:
 DEFAULTS = {
     "headerBackground": "solid",
     "headerColour": "cream",
+    "headerCustomColour": DEFAULT_HEADER_CUSTOM_COLOUR,
     "headerImagePath": None,
     "headerHeight": "medium",
     "headerText": "dark",
@@ -197,6 +200,9 @@ def settings_row(row: dict) -> dict:
     return {
         "headerBackground": row["header_background"],
         "headerColour": row["header_colour"],
+        "headerCustomColour": (
+            row["header_custom_colour"] if "header_custom_colour" in row else DEFAULT_HEADER_CUSTOM_COLOUR
+        ),
         "headerImagePath": image_path(row["header_image_key"]),
         "headerHeight": row["header_height"],
         "headerText": row["header_text"],
@@ -241,7 +247,10 @@ def validate_settings(body: dict) -> dict:
     cta_url = str(body.get("headerCtaUrl") or "")
     return {
         "header_background": choice(body.get("headerBackground"), BACKGROUNDS, "頁首背景"),
-        "header_colour": choice(body.get("headerColour"), COLOURS, "頁首底色"),
+        "header_colour": choice(body.get("headerColour"), HEADER_COLOURS, "頁首底色"),
+        "header_custom_colour": hex_colour(
+            body.get("headerCustomColour"), "頁首自訂底色", DEFAULT_HEADER_CUSTOM_COLOUR
+        ),
         "header_height": choice(body.get("headerHeight"), SIZES, "頁首高度"),
         "header_text": choice(body.get("headerText"), TEXT_TONES, "頁首文字色"),
         "header_logo_size": choice(body.get("headerLogoSize"), SIZES, "logo 大小"),
@@ -266,7 +275,7 @@ def validate_settings(body: dict) -> dict:
 
 
 _SETTINGS_COLUMNS = frozenset({
-    "header_background", "header_colour", "header_height", "header_text",
+    "header_background", "header_colour", "header_custom_colour", "header_height", "header_text",
     "header_logo_size", "header_sticky", "header_show_cart", "header_show_login",
     "header_cta_label", "header_cta_url",
     "footer_colour", "footer_text", "footer_custom_colour", "footer_custom_text",

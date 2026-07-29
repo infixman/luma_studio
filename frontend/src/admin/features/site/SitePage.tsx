@@ -265,6 +265,7 @@ export function SitePage() {
   const headerDirty = savedSettings !== null && (
     settings.headerBackground !== savedSettings.headerBackground ||
     settings.headerColour !== savedSettings.headerColour ||
+    settings.headerCustomColour !== savedSettings.headerCustomColour ||
     settings.headerHeight !== savedSettings.headerHeight ||
     settings.headerText !== savedSettings.headerText ||
     settings.headerLogoSize !== savedSettings.headerLogoSize ||
@@ -477,7 +478,32 @@ export function SitePage() {
                 </div>
               </div>
             )}
-            <Choice legend="底色" value={settings.headerColour} options={COLOURS} onPick={(headerColour) => edit({ headerColour })} />
+            {settings.headerBackground === 'solid' && (
+              <>
+                <Choice
+                  legend="底色"
+                  value={settings.headerColour}
+                  options={[
+                    ...COLOURS,
+                    { value: 'custom', label: '自訂', colour: settings.headerCustomColour },
+                  ]}
+                  onPick={(headerColour) => edit({ headerColour })}
+                />
+                {settings.headerColour === 'custom' && (
+                  <label class="site-custom-colour">
+                    <span>自訂底色</span>
+                    <input
+                      type="color"
+                      value={settings.headerCustomColour}
+                      onInput={(event) =>
+                        edit({ headerCustomColour: (event.currentTarget as HTMLInputElement).value })
+                      }
+                    />
+                    <code>{settings.headerCustomColour.toUpperCase()}</code>
+                  </label>
+                )}
+              </>
+            )}
             <Choice legend="高度" value={settings.headerHeight} options={SIZES} onPick={(headerHeight) => edit({ headerHeight })} />
             <Choice
               legend="文字色"

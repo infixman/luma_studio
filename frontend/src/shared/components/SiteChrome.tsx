@@ -13,8 +13,8 @@ import './site-chrome.css'
  * live here.
  *
  * Most appearance values arrive as constrained choices and become class
- * names. Footer custom colours are the exception: the API has already
- * reduced them to six-digit hex before they reach the inline style.
+ * names. Custom colours are the exception: the API has already reduced them
+ * to six-digit hex before they reach the inline style.
  */
 
 function children(menu: ResolvedMenuItem[], parentId: string | null): ResolvedMenuItem[] {
@@ -125,9 +125,14 @@ export function SiteHeader({
   ]
     .filter(Boolean)
     .join(' ')
+  const customStyle: JSX.CSSProperties = {
+    ...(settings.headerBackground === 'solid' && settings.headerColour === 'custom'
+      ? { backgroundColor: settings.headerCustomColour }
+      : {}),
+  }
 
   return (
-    <header class={classes}>
+    <header class={classes} style={customStyle}>
       {/* The image sits in its own layer with an overlay above it, so the
           menu stays readable whatever photograph gets uploaded. */}
       {settings.headerBackground === 'image' && settings.headerImagePath && (

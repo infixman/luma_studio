@@ -1,12 +1,14 @@
 export type SiteColour = 'cream' | 'sand' | 'clay' | 'forest' | 'ink'
 export type SiteTone = 'dark' | 'light'
+export type HeaderColour = SiteColour | 'custom'
 export type FooterColour = SiteColour | 'custom'
 export type FooterTone = SiteTone | 'custom'
 export type SiteSize = 'small' | 'medium' | 'large'
 
 export interface SiteSettings {
   headerBackground: 'transparent' | 'solid' | 'image'
-  headerColour: SiteColour
+  headerColour: HeaderColour
+  headerCustomColour: string
   headerImagePath: string | null
   headerHeight: SiteSize
   headerText: SiteTone

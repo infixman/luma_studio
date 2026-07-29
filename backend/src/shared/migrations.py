@@ -633,6 +633,14 @@ MIGRATIONS = [
         ],
         "statements": [],
     },
+    {
+        # Only used when the header background is the solid custom choice.
+        "name": "0024_add_header_custom_colour",
+        "add_columns": [
+            ("site_settings", "header_custom_colour", "TEXT NOT NULL DEFAULT '#faf7f2'"),
+        ],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()
