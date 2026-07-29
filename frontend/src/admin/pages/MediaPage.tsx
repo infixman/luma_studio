@@ -22,7 +22,6 @@ import { srcSetFor } from '../../shared/srcset'
 import { fileSize, mediaDimensions, mediaFormat, mediaName } from '../lib/mediaFacts'
 import { prepareUpload } from '../lib/mediaResize'
 import type { MediaItem } from '../../shared/types'
-import '../styles/shop-admin.css'
 import '../styles/media-admin.css'
 import { dateOnly } from '../../shared/dates'
 

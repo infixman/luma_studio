@@ -30,7 +30,6 @@ import type { AdminCustomer, AdminCustomerDetail, Order, PageInfo } from '../../
 import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
 import { ORDER_STATUS_TONES } from '../features/orders/presentation'
 import { ORDER_NOTE_MAX } from '../features/orders/constraints'
-import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
 import { dateOnly } from '../../shared/dates'
 import { useLatest } from '../lib/latest'

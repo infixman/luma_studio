@@ -33,6 +33,51 @@ body.admin p {
   color: var(--primary-text);
 }
 
+/* Shared page layout and feedback. Feature styles may extend these, but do
+   not need to import the catalogue stylesheet merely to get a stack or crumb. */
+body.admin .stack {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+body.admin .crumb {
+  margin: 0 0 var(--space-3);
+}
+
+body.admin .crumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  font-size: var(--font-sm);
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+body.admin .crumb a:hover {
+  background: var(--sunken);
+  color: var(--text);
+}
+
+body.admin .notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  border-left: 3px solid currentColor;
+}
+
+body.admin .notice.warn,
+body.admin .warn {
+  color: var(--warning);
+}
+
+body.admin .notice.warn {
+  background: var(--warning-soft);
+}
+
 /* --- the default a bare control gets ---
 
    Wrapped in `:where()`, which contributes nothing to specificity. That is

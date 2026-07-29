@@ -3,56 +3,8 @@
    Layout only. Colours, controls and cards come from tokens.css and the
    component set, so nothing here names a colour and both themes hold. */
 
-/* The single-column counterpart to admin.css's .grid, which is the two-column
-   layout the ibon page needs and nothing else does. */
-body.admin .stack {
-  display: grid;
-  gap: var(--space-5);
-  margin-top: var(--space-6);
-}
-
-body.admin .crumb {
-  margin: 0 0 var(--space-3);
-}
-
-body.admin .crumb a {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius);
-  font-size: var(--font-sm);
-  color: var(--muted);
-  text-decoration: none;
-  transition: background 0.15s, color 0.15s;
-}
-
-body.admin .crumb a:hover {
-  background: var(--sunken);
-  color: var(--text);
-}
-
 body.admin .product-heading {
   margin: 0 0 var(--space-4);
-}
-
-body.admin .notice {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
-  border-left: 3px solid currentColor;
-}
-
-/* Colour only on the bare `.warn`: it is used inline inside sentences and
-   table cells elsewhere in the back office, where a tinted block would read
-   as a banner that had lost its edges. */
-body.admin .notice.warn,
-body.admin .warn {
-  color: var(--warning);
-}
-
-body.admin .notice.warn {
-  background: var(--warning-soft);
 }
 
 body.admin .shop h3 {
