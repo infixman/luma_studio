@@ -107,21 +107,44 @@ body.admin .ui-table tbody tr.product-archived td {
 
 body.admin .product-form {
   display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.7fr);
+  align-items: start;
+  gap: clamp(var(--space-5), 4vw, var(--space-8));
+  max-width: 96rem;
+}
+
+body.admin .product-form-main,
+body.admin .product-form-side {
+  display: grid;
   gap: var(--space-4);
-  max-width: 46rem;
 }
 
-/* SitePage still builds its forms out of bare labels. Direct children only —
-   a descendant selector would also catch the <label> inside every component
-   field and stand it on end. */
-body.admin .product-form > label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+body.admin .product-identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
-body.admin .product-form > label > small {
-  color: var(--muted);
+body.admin .product-form-side {
+  margin: 0;
+  padding-left: clamp(var(--space-4), 3vw, var(--space-7));
+  border-left: 1px solid var(--border);
+}
+
+body.admin .product-form-side .ui-checkbox-set {
+  margin: 0;
+}
+
+/* On a broad editing canvas, the actual data gets most of the width and the
+   publishing choices stay in a compact, scanable rail. */
+@media (min-width: 80rem) {
+  body.admin .product-info-panel .ui-panel-body {
+    padding-block: clamp(var(--space-5), 2vw, var(--space-7));
+  }
+
+  body.admin .product-form-main .rte-content {
+    min-height: 19rem;
+  }
 }
 
 body.admin .variant-list {
@@ -133,8 +156,8 @@ body.admin .variant-list {
 }
 
 body.admin .variant {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) 7rem 7rem max-content max-content;
   gap: var(--space-3);
   align-items: flex-end;
   padding: var(--space-3);
@@ -148,17 +171,14 @@ body.admin .variant.off {
 
 body.admin .variant-title {
   display: flex;
-  flex: 1;
-  min-width: 8rem;
-  max-width: 14rem;
+  min-width: 0;
   align-items: baseline;
   gap: var(--space-2);
   font-weight: 600;
 }
 
 body.admin .variant .ui-field {
-  width: 7rem;
-  flex: none;
+  width: auto;
   margin-bottom: 0;
 }
 
@@ -166,12 +186,24 @@ body.admin .variant .ui-toggle-row {
   padding: 0;
 }
 
+body.admin .product-variant-create {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.2fr) minmax(9rem, 1fr) 8rem 8rem max-content;
+  align-items: end;
+  padding-bottom: 0;
+}
+
+body.admin .product-variant-create .ui-field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 body.admin .photo-grid {
   list-style: none;
   margin: 0 0 var(--space-3);
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 12rem));
   gap: var(--space-2);
 }
 
@@ -203,6 +235,80 @@ body.admin .photo-grid .ui-icon-button {
   background: var(--surface);
   box-shadow: var(--shadow-1);
   color: var(--text);
+}
+
+/* Narrow desktop and tablet: two working columns survive, but names and
+   URLs become a vertical sequence so their notes never compete for width. */
+@media (min-width: 48rem) and (max-width: 79.99rem) {
+  body.admin .product-form {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.7fr);
+    gap: var(--space-5);
+    max-width: none;
+  }
+
+  body.admin .product-identity {
+    grid-template-columns: 1fr;
+  }
+
+  body.admin .product-form-side {
+    padding-left: var(--space-4);
+  }
+
+  body.admin .variant {
+    grid-template-columns: minmax(8rem, 1fr) 6.5rem 6.5rem max-content max-content;
+    gap: var(--space-2);
+  }
+
+  body.admin .product-variant-create {
+    grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) 6.5rem 6.5rem max-content;
+    gap: var(--space-2);
+  }
+}
+
+/* Phone: one editing flow, full-width controls and no decorative side rail.
+   The layout is touch-first rather than a squeezed desktop grid. */
+@media (max-width: 47.99rem) {
+  body.admin .product-form,
+  body.admin .product-identity,
+  body.admin .product-form-side,
+  body.admin .product-variant-create {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin .product-form {
+    gap: var(--space-5);
+  }
+
+  body.admin .product-form-side {
+    padding: var(--space-4) 0 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  body.admin .variant {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  body.admin .variant-title {
+    grid-column: 1 / -1;
+  }
+
+  body.admin .variant .ui-toggle-row {
+    grid-column: 1;
+  }
+
+  body.admin .variant .ui-menu {
+    justify-self: end;
+  }
+
+  body.admin .product-variant-create .ui-button {
+    min-height: 2.75rem;
+  }
+
+  body.admin .photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* --- lightbox --- */

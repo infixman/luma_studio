@@ -190,6 +190,7 @@ export function ProductEditPage({ id }: { id: string }) {
 
       <Panel
         title="商品資料"
+        class="product-info-panel"
         actions={
           <Button tone="primary" busy={busy} disabled={!productDirty} onClick={() => saveProduct()}>
             儲存商品
@@ -197,62 +198,67 @@ export function ProductEditPage({ id }: { id: string }) {
         }
       >
         <form class="product-form" onSubmit={saveProduct}>
-          <TextField
-            label="商品名稱"
-            value={form.title}
-            maxLength={PRODUCT_TITLE_MAX}
-            required
-            onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
-          />
-          <TextField
-            label="網址代稱"
-            hint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
-            value={form.slug}
-            maxLength={PRODUCT_SLUG_MAX}
-            required
-            onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
-          />
+          <div class="product-form-main">
+            <div class="product-identity">
+              <TextField
+                label="商品名稱"
+                value={form.title}
+                maxLength={PRODUCT_TITLE_MAX}
+                required
+                onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
+              />
+              <TextField
+                label="網址代稱"
+                hint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
+                value={form.slug}
+                maxLength={PRODUCT_SLUG_MAX}
+                required
+                onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
+              />
+            </div>
 
-          <div class="ui-field">
-            <label class="ui-label">商品說明</label>
-            <RichTextEditor
-              config={{ body: textToHtml(form.description), format: 'html' }}
-              onChange={(next) => setForm({ ...form, description: next.body })}
-            />
+            <div class="ui-field">
+              <label class="ui-label">商品說明</label>
+              <RichTextEditor
+                config={{ body: textToHtml(form.description), format: 'html' }}
+                onChange={(next) => setForm({ ...form, description: next.body })}
+              />
+            </div>
           </div>
 
-          <fieldset class="ui-checkbox-set">
-            <legend class="ui-label">分類</legend>
-            {allCategories.length === 0 ? (
-              <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
-            ) : (
-              allCategories.map((category) => (
-                <Checkbox
-                  key={category.id}
-                  label={category.title}
-                  hint={`/shop/c/${category.slug}`}
-                  checked={chosen.includes(category.id)}
-                  onChange={(checked) =>
-                    setChosen((current) =>
-                      checked ? [...current, category.id] : current.filter((value) => value !== category.id),
-                    )
-                  }
-                />
-              ))
-            )}
-          </fieldset>
+          <aside class="product-form-side" aria-label="商品分類與狀態">
+            <fieldset class="ui-checkbox-set">
+              <legend class="ui-label">分類</legend>
+              {allCategories.length === 0 ? (
+                <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
+              ) : (
+                allCategories.map((category) => (
+                  <Checkbox
+                    key={category.id}
+                    label={category.title}
+                    hint={`/shop/c/${category.slug}`}
+                    checked={chosen.includes(category.id)}
+                    onChange={(checked) =>
+                      setChosen((current) =>
+                        checked ? [...current, category.id] : current.filter((value) => value !== category.id),
+                      )
+                    }
+                  />
+                ))
+              )}
+            </fieldset>
 
-          <RadioGroup
-            legend="狀態"
-            value={form.status}
-            options={STATUSES}
-            onChange={(status) => setForm({ ...form, status })}
-          />
-
+            <RadioGroup
+              legend="狀態"
+              value={form.status}
+              options={STATUSES}
+              onChange={(status) => setForm({ ...form, status })}
+            />
+          </aside>
         </form>
       </Panel>
 
-      <Panel title="規格與庫存">
+      <Panel title="規格與庫存" class="product-variants-panel">
         {detail.variants.length === 0 ? (
           <EmptyState title="還沒有規格" body="至少要有一個啟用的規格，商品才有價格、才能被買走。" />
         ) : (
@@ -304,7 +310,7 @@ export function ProductEditPage({ id }: { id: string }) {
           </ul>
         )}
 
-        <form class="ui-inline-form" onSubmit={addVariant}>
+        <form class="ui-inline-form product-variant-create" onSubmit={addVariant}>
           <TextField
             label="規格名稱"
             placeholder="例如 M／藍"
@@ -346,7 +352,7 @@ export function ProductEditPage({ id }: { id: string }) {
         </form>
       </Panel>
 
-      <Panel title="照片">
+      <Panel title="照片" class="product-photos-panel">
         <p class="muted">
           第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。
         </p>
