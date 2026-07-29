@@ -1,8 +1,9 @@
 import type { JSX } from 'preact'
 
 import { apiUrl } from '../../shared/api'
-import { escapeHtml } from '../../shared/markdown'
+import { htmlToPlainText, textToHtml } from '../lib/rich-text'
 import { RichTextEditor } from './RichTextEditor'
+import { RadioGroup } from './ui'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -126,7 +127,7 @@ export function blockSummary(type: PageBlock['type'], config: BlockConfig): stri
       const tc = config as TextBlockConfig
       const plain =
         tc.format === 'html'
-          ? tc.body.replace(/<[^>]*>/g, '').trim()
+          ? htmlToPlainText(tc.body)
           : tc.body.replace(/[#*_>`\-]/g, '').trim()
       return plain ? clip(plain.split('\n')[0] ?? '', 60) : '（還沒有內容）'
     }
@@ -148,7 +149,7 @@ export function blockSummary(type: PageBlock['type'], config: BlockConfig): stri
     }
     case 'about': {
       const about = config as AboutConfig
-      const plain = about.body.replace(/<[^>]*>/g, '').trim()
+      const plain = htmlToPlainText(about.body)
       return about.heading || clip(plain, 60) || '（還沒有內容）'
     }
     case 'contact': {
@@ -230,17 +231,7 @@ function Choices<T extends string | number>({
   options: { value: T; label: string }[]
   onPick: (next: T) => void
 }) {
-  return (
-    <fieldset class="statuses choice-row">
-      <legend>{legend}</legend>
-      {options.map((option) => (
-        <label key={option.value} class="radio">
-          <input type="radio" checked={value === option.value} onChange={() => onPick(option.value)} />
-          <span>{option.label}</span>
-        </label>
-      ))}
-    </fieldset>
-  )
+  return <RadioGroup legend={legend} value={value} options={options} onChange={onPick} inline />
 }
 
 export { RichTextEditor as TextEditor } from './RichTextEditor'
@@ -581,15 +572,6 @@ export function ShopEditor({
       </p>
     </div>
   )
-}
-
-function textToHtml(text: string): string {
-  if (/<[a-z][\s\S]*>/i.test(text)) return text
-  return text
-    .split(/\n{2,}/)
-    .filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('')
 }
 
 export function AboutEditor({

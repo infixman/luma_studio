@@ -157,6 +157,37 @@ export function dimensionsField(size: { width: number; height: number }): string
   return `${size.width}x${size.height}`
 }
 
+/**
+ * The browser owns multipart boundaries. This is the one upload transport so
+ * progress, credentials, auth recovery, and API errors cannot drift apart.
+ */
+function xhrUpload<T>(path: string, form: FormData, onProgress?: (event: ProgressEvent) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', `${API_BASE}${path}`)
+    request.withCredentials = true
+    request.setRequestHeader('x-luma-app', '1')
+    request.responseType = 'json'
+    request.upload.onprogress = (event) => onProgress?.(event)
+    request.onerror = () => reject(new ApiError('上傳連線失敗', 0))
+    request.onload = () => {
+      const body = (request.response ?? {}) as Record<string, unknown>
+      if (request.status >= 200 && request.status < 300) {
+        clearLoginAttempt()
+        resolve(body as T)
+        return
+      }
+      if (request.status === 401) {
+        reject(handleUnauthorized())
+        return
+      }
+      reject(new ApiError(typeof body.error === 'string' ? body.error : '上傳失敗', request.status))
+    }
+    // No content-type header: the browser has to set the multipart boundary.
+    request.send(form)
+  })
+}
+
 export function uploadMedia(
   upload: {
     file: File
@@ -180,30 +211,8 @@ export function uploadMedia(
     form.append(`size_${variant.label}_dimensions`, dimensionsField(variant))
   }
 
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest()
-    request.open('POST', `${API_BASE}/api/media`)
-    request.withCredentials = true
-    request.setRequestHeader('x-luma-app', '1')
-    request.responseType = 'json'
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total)
-    }
-    request.onerror = () => reject(new ApiError('上傳連線失敗', 0))
-    request.onload = () => {
-      const body = (request.response ?? {}) as Record<string, unknown>
-      if (request.status >= 200 && request.status < 300) {
-        resolve(body as { item: MediaItem })
-        return
-      }
-      if (request.status === 401) {
-        reject(handleUnauthorized())
-        return
-      }
-      reject(new ApiError(typeof body.error === 'string' ? body.error : '上傳失敗', request.status))
-    }
-    // No content-type header: the browser has to set the multipart boundary.
-    request.send(form)
+  return xhrUpload<{ item: MediaItem }>('/api/media', form, (event) => {
+    if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total)
   })
 }
 
@@ -277,31 +286,10 @@ export async function apiJson<T>(path: string, method: string, payload: unknown)
 
 /** XHR rather than fetch: upload progress events have no fetch equivalent. */
 export function uploadImage(folder: string, file: File, onProgress: (loaded: number) => void): Promise<{ key: string }> {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest()
-    request.open('POST', `${API_BASE}/api/upload`)
-    request.withCredentials = true
-    request.setRequestHeader('x-luma-app', '1')
-    request.responseType = 'json'
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(event.loaded)
-    }
-    request.onerror = () => reject(new ApiError('上傳連線失敗', 0))
-    request.onload = () => {
-      const body = (request.response ?? {}) as Record<string, unknown>
-      if (request.status >= 200 && request.status < 300) {
-        resolve(body as { key: string })
-        return
-      }
-      if (request.status === 401) {
-        reject(handleUnauthorized())
-        return
-      }
-      reject(new ApiError(typeof body.error === 'string' ? body.error : '上傳失敗', request.status))
-    }
-    const form = new FormData()
-    form.append('folder', folder)
-    form.append('file', file)
-    request.send(form)
+  const form = new FormData()
+  form.append('folder', folder)
+  form.append('file', file)
+  return xhrUpload<{ key: string }>('/api/upload', form, (event) => {
+    if (event.lengthComputable) onProgress(event.loaded)
   })
 }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { Button, Panel, Spinner, TextField, Toggle } from '../components/ui'
-import { api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson } from '../../shared/api'
 import type { ShippingMethod } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -27,14 +27,12 @@ function toDraft(method: ShippingMethod): Draft {
 
 export function ShippingPage() {
   const [drafts, setDrafts] = useState<Draft[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const { message, show, showError } = useStatus()
+  const { message, showError, busy, run } = useStatus()
 
   const load = useCallback(async () => {
     try {
       const data = await api<{ methods: ShippingMethod[] }>('/api/shipping-methods')
       setDrafts(data.methods.map(toDraft))
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -48,10 +46,9 @@ export function ShippingPage() {
     setDrafts((current) => current?.map((draft) => (draft.method === method ? { ...draft, ...patch } : draft)) ?? null)
   }
 
-  async function save() {
-    if (!drafts || busy) return
-    setBusy(true)
-    try {
+  function save() {
+    if (!drafts) return
+    void run(async () => {
       const data = await apiJson<{ methods: ShippingMethod[] }>('/api/shipping-methods', 'PUT', {
         methods: drafts.map((draft) => ({
           method: draft.method,
@@ -64,12 +61,7 @@ export function ShippingPage() {
         })),
       })
       setDrafts(data.methods.map(toDraft))
-      show('運費已儲存。', 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
+    }, '運費已儲存。')
   }
 
   return (
@@ -78,7 +70,7 @@ export function ShippingPage() {
       message={message}
       onError={showError}
       actions={
-        <Button tone="primary" busy={busy} disabled={drafts === null} onClick={() => void save()}>
+        <Button tone="primary" busy={busy} disabled={drafts === null} onClick={save}>
           儲存運費
         </Button>
       }

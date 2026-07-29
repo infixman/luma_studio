@@ -4,7 +4,7 @@ import { useState, useEffect } from 'preact/hooks'
 import { AdminSidebar, labelOf } from './AdminNav'
 import { ThemeToggle } from './ThemeToggle'
 import { StatusBar, type StatusKind } from './StatusBar'
-import { api, clearLoginAttempt } from '../../shared/api'
+import { api } from '../../shared/api'
 import { signedInEmail } from '../lib/session'
 
 /**
@@ -55,7 +55,6 @@ export function AdminShell({
       onError(error)
       return
     }
-    clearLoginAttempt()
     location.assign('/')
   }
 

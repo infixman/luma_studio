@@ -10,7 +10,7 @@
 const KEY = 'luma-cart'
 const CHANGED = 'luma-cart-changed'
 
-/* Both mirror backend/src/cart.py. The browser's copy only decides what the
+/* Both mirror the cart domain contract. The browser's copy only decides what the
    number field will accept; the one that matters is the server's, which
    re-checks every line at checkout.
 

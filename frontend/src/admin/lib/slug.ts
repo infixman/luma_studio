@@ -10,12 +10,18 @@
  * it again.
  */
 
-/** Turns a title into a path: latin letters and digits, which is what a URL should carry. */
-export function suggestPath(title: string): string {
-  const slug = title
+/** Turns text into an ASCII slug. Feature helpers add their own URL shape. */
+export function slugifyAscii(value: string, maxLength?: number): string {
+  const slug = value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+  return maxLength === undefined ? slug : slug.slice(0, maxLength).replace(/-+$/g, '')
+}
+
+/** Turns a title into a path: latin letters and digits, which is what a URL should carry. */
+export function suggestPath(title: string): string {
+  const slug = slugifyAscii(title)
   return slug ? `/${slug}` : ''
 }
 

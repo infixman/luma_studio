@@ -13,8 +13,8 @@ import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
 // Underscores are what keep this from colliding with a page somebody builds:
-// a page path is letters, digits and single hyphens (see PATH_PATTERN in
-// backend/src/pages.py), so no page can ever be created at this address.
+// a page path is letters, digits and single hyphens (see the pages domain
+// validation contract), so no page can ever be created at this address.
 const PREVIEW_PATH = /^\/__preview\/([A-Za-z0-9_-]{20,64})$/
 // /shop/c/... is matched first, so a category filter is never read as a
 // product slug. The `c` segment exists to make that impossible either way.

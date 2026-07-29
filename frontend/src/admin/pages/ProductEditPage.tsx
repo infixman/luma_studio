@@ -19,8 +19,14 @@ import {
 } from '../components/ui'
 import { RichTextEditor } from '../components/RichTextEditor'
 import { Lightbox } from '../components/Lightbox'
-import { api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
-import { escapeHtml } from '../../shared/markdown'
+import { api, apiJson, apiUrl, uploadProductImage } from '../../shared/api'
+import { textToHtml } from '../lib/rich-text'
+import {
+  PRODUCT_SLUG_MAX,
+  PRODUCT_TITLE_MAX,
+  PRODUCT_VARIANT_PRICE_MAX,
+  PRODUCT_VARIANT_STOCK_MAX,
+} from '../features/catalogue/constraints'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -36,25 +42,15 @@ const MAX_IMAGES = 8
 /** A blank row for the "add variant" form, and what reset returns it to. */
 const EMPTY_VARIANT = { title: '', sku: '', price: '', stock: '' }
 
-function textToHtml(text: string): string {
-  if (!text) return ''
-  if (/<[a-z][\s\S]*>/i.test(text)) return text
-  return text
-    .split(/\n{2,}/)
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('')
-}
-
 export function ProductEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null)
   const [form, setForm] = useState({ title: '', slug: '', description: '', status: 'draft' as ProductStatus })
   const [draft, setDraft] = useState(EMPTY_VARIANT)
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const { message, show, showError } = useStatus()
+  const { message, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
 
   const apply = useCallback((next: ProductDetail) => {
@@ -76,7 +72,6 @@ export function ProductEditPage({ id }: { id: string }) {
       ])
       setAllCategories(listing.categories)
       apply(detailed)
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -86,24 +81,10 @@ export function ProductEditPage({ id }: { id: string }) {
     void load()
   }, [load])
 
-  async function run(work: () => Promise<ProductDetail | void>, done: string) {
-    if (busy) return
-    setBusy(true)
-    try {
-      const next = await work()
-      if (next) apply(next)
-      show(done, 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   function saveProduct(event: Event) {
     event.preventDefault()
     void run(
-      () => apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, categoryIds: chosen }),
+      async () => apply(await apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, categoryIds: chosen })),
       '商品已儲存。',
     )
   }
@@ -118,21 +99,21 @@ export function ProductEditPage({ id }: { id: string }) {
         stock: Number.parseInt(draft.stock, 10),
       })
       setDraft(EMPTY_VARIANT)
-      return next
+      apply(next)
     }, '規格已新增。')
   }
 
   function saveVariant(variant: ProductVariant, patch: Partial<ProductVariant>) {
     const next = { ...variant, ...patch }
     void run(
-      () =>
-        apiJson<ProductDetail>(`/api/variants/${encodeURIComponent(variant.id)}`, 'PUT', {
+      async () =>
+        apply(await apiJson<ProductDetail>(`/api/variants/${encodeURIComponent(variant.id)}`, 'PUT', {
           title: next.title,
           sku: next.sku,
           price: next.price,
           stock: next.stock,
           enabled: next.enabled,
-        }),
+        })),
       '規格已更新。',
     )
   }
@@ -150,7 +131,7 @@ export function ProductEditPage({ id }: { id: string }) {
     })
     if (!ok) return
     void run(
-      () => api<ProductDetail>(`/api/variants/${encodeURIComponent(variant.id)}`, { method: 'DELETE' }),
+      async () => apply(await api<ProductDetail>(`/api/variants/${encodeURIComponent(variant.id)}`, { method: 'DELETE' })),
       '規格已刪除。',
     )
   }
@@ -162,7 +143,7 @@ export function ProductEditPage({ id }: { id: string }) {
     void run(async () => {
       const next = await uploadProductImage(id, file, '')
       input.value = ''
-      return next
+      apply(next)
     }, '照片已上傳。')
   }
 
@@ -176,7 +157,7 @@ export function ProductEditPage({ id }: { id: string }) {
       confirmLabel: '移除',
     })
     if (!ok) return
-    void run(() => api<ProductDetail>(`/api/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' }), '照片已移除。')
+    void run(async () => apply(await api<ProductDetail>(`/api/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' })), '照片已移除。')
   }
 
   if (detail === null) {
@@ -215,7 +196,7 @@ export function ProductEditPage({ id }: { id: string }) {
           <TextField
             label="商品名稱"
             value={form.title}
-            maxLength={80}
+            maxLength={PRODUCT_TITLE_MAX}
             required
             onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
           />
@@ -223,7 +204,7 @@ export function ProductEditPage({ id }: { id: string }) {
             label="網址代稱"
             hint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
             value={form.slug}
-            maxLength={64}
+            maxLength={PRODUCT_SLUG_MAX}
             required
             onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
           />
@@ -287,7 +268,7 @@ export function ProductEditPage({ id }: { id: string }) {
                   label="售價"
                   type="number"
                   min={1}
-                  max={20000}
+                  max={PRODUCT_VARIANT_PRICE_MAX}
                   step={1}
                   value={variant.price}
                   onChange={(event) =>
@@ -300,7 +281,7 @@ export function ProductEditPage({ id }: { id: string }) {
                   label="庫存"
                   type="number"
                   min={0}
-                  max={100000}
+                  max={PRODUCT_VARIANT_STOCK_MAX}
                   step={1}
                   value={variant.stock}
                   onChange={(event) =>
@@ -344,7 +325,7 @@ export function ProductEditPage({ id }: { id: string }) {
             label="售價"
             type="number"
             min={1}
-            max={20000}
+            max={PRODUCT_VARIANT_PRICE_MAX}
             step={1}
             value={draft.price}
             required
@@ -354,7 +335,7 @@ export function ProductEditPage({ id }: { id: string }) {
             label="庫存"
             type="number"
             min={0}
-            max={100000}
+            max={PRODUCT_VARIANT_STOCK_MAX}
             step={1}
             value={draft.stock}
             required

@@ -6,7 +6,8 @@ import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
 import { nextPath, suggestPath } from '../lib/slug'
-import { STOREFRONT_ORIGIN, api, apiJson, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api, apiJson } from '../../shared/api'
+import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from '../features/pages/constraints'
 import type { Page } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -17,15 +18,13 @@ export function PagesPage() {
   /* The lock starts shut on a page that does not exist yet: there is no
      address to protect, so following the title is free. */
   const [draft, setDraft] = useState({ title: '', path: '', locked: true })
-  const [busy, setBusy] = useState(false)
-  const { message, show, showError } = useStatus()
+  const { message, show, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     try {
       const data = await api<{ pages: Page[] }>('/api/pages')
       setPages(data.pages)
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -40,24 +39,17 @@ export function PagesPage() {
      is open and the owner left the box empty. */
   const newPath = draft.path.trim() || suggestPath(draft.title)
 
-  async function create(event: Event) {
+  function create(event: Event) {
     event.preventDefault()
-    if (busy) return
-    setBusy(true)
-    try {
+    void run(async () => {
       await apiJson('/api/pages', 'POST', {
         title: draft.title,
         path: newPath,
         status: 'draft',
       })
       setDraft({ title: '', path: '', locked: true })
-      show('頁面已建立，現在是草稿。', 'ok')
       await load()
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
+    }, '頁面已建立，現在是草稿。')
   }
 
   async function save(page: Page, patch: Partial<Page>) {
@@ -129,7 +121,7 @@ export function PagesPage() {
                 // here to end.
                 setDraft((current) => ({ ...current, title, path: nextPath(current.path, title, current.locked) }))
               }}
-              maxLength={80}
+              maxLength={PAGE_TITLE_MAX}
               required
             />
             <TextField
@@ -149,7 +141,7 @@ export function PagesPage() {
                     ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
                     : '首頁不用填——建好之後把下面的「首頁」打開就會接管 /'
               }
-              maxLength={120}
+              maxLength={PAGE_PATH_MAX}
             />
           </div>
           <Button type="submit" tone="primary" busy={busy} disabled={!draft.title.trim() || !newPath}>

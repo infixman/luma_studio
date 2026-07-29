@@ -12,7 +12,7 @@ import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/bio-link-admin.css'
 
-// Mirrors the limits in backend/src/bio_link.py, which is the source of truth.
+// Mirrors the bio-link domain contract; backend validation remains authoritative.
 const MAX_DISPLAY_NAME = 64
 const MAX_BIO = 300
 const MAX_TITLE = 80

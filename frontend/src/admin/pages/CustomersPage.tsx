@@ -24,33 +24,17 @@ import {
   useConfirm,
   writeHidden,
 } from '../components/ui'
-import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
-import { api, apiJson, clearLoginAttempt } from '../../shared/api'
-import type { AdminCustomer, AdminCustomerDetail, Order, OrderStatus, PageInfo } from '../../shared/types'
+import type { Column, FilterField, FilterRule } from '../components/ui'
+import { api, apiJson } from '../../shared/api'
+import type { AdminCustomer, AdminCustomerDetail, Order, PageInfo } from '../../shared/types'
+import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
+import { ORDER_STATUS_TONES } from '../features/orders/presentation'
+import { ORDER_NOTE_MAX } from '../features/orders/constraints'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
 import { dateOnly } from '../../shared/dates'
 import { useLatest } from '../lib/latest'
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: '等待付款',
-  paid: '已付款',
-  shipped: '已出貨',
-  completed: '已完成',
-  cancelled: '已取消',
-  expired: '已逾期',
-}
-
-/** The one place a status becomes a colour, so the two lists cannot disagree. */
-export const STATUS_TONES: Record<OrderStatus, BadgeTone> = {
-  pending: 'warning',
-  paid: 'info',
-  shipped: 'primary',
-  completed: 'success',
-  cancelled: 'danger',
-  expired: 'neutral',
-}
 
 const COLUMN_PAGE = 'customers'
 
@@ -90,8 +74,7 @@ export function CustomersPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null)
   const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const { message, show, showError } = useStatus()
+  const { message, show, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
   const latest = useLatest()
 
@@ -108,7 +91,6 @@ export function CustomersPage() {
           if (!isCurrent()) return
           setCustomers(data.customers)
           setInfo(data)
-          clearLoginAttempt()
         } catch (error) {
           if (isCurrent()) showError(error)
         }
@@ -143,19 +125,6 @@ export function CustomersPage() {
     change()
     setPage(1)
     setSelected([])
-  }
-
-  async function run(work: () => Promise<void>, done: string) {
-    if (busy) return
-    setBusy(true)
-    try {
-      await work()
-      show(done, 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
   }
 
   async function open(customer: AdminCustomer) {
@@ -479,7 +448,7 @@ export function CustomersPage() {
               label="店家備註"
               hint="只有你看得到，會員不會看到這段文字。"
               value={note}
-              maxLength={2000}
+              maxLength={ORDER_NOTE_MAX}
               onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
             />
             <Button type="submit" tone="primary" busy={busy}>
@@ -502,7 +471,7 @@ export function CustomersPage() {
                     </td>
                     <td class="numeric">NT${order.total}</td>
                     <td>
-                      <Badge tone={STATUS_TONES[order.status]}>{STATUS_LABELS[order.status]}</Badge>
+                      <Badge tone={ORDER_STATUS_TONES[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
                     </td>
                     <td>{dateOnly(order.createdAt)}</td>
                   </tr>

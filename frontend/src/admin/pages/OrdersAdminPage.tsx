@@ -26,35 +26,19 @@ import {
   useConfirm,
   writeHidden,
 } from '../components/ui'
-import type { BadgeTone, Column } from '../components/ui'
-import { api, apiJson, clearLoginAttempt } from '../../shared/api'
+import type { Column } from '../components/ui'
+import { api, apiJson } from '../../shared/api'
 import type { AdminOrder, AdminOrderDetail, AdminOrderList, OrderStatus } from '../../shared/types'
+import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
+import { ORDER_STATUS_TONES } from '../features/orders/presentation'
+import { ORDER_NOTE_MAX } from '../features/orders/constraints'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/orders-admin.css'
 import { dateTime } from '../../shared/dates'
 import { useLatest } from '../lib/latest'
 
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: '等待付款',
-  paid: '已付款',
-  shipped: '已出貨',
-  completed: '已完成',
-  cancelled: '已取消',
-  expired: '已逾期',
-}
-
-/** The one place a status becomes a colour, shared with the member page. */
-const STATUS_TONES: Record<OrderStatus, BadgeTone> = {
-  pending: 'warning',
-  paid: 'info',
-  shipped: 'primary',
-  completed: 'success',
-  cancelled: 'danger',
-  expired: 'neutral',
-}
-
-const STATUSES = Object.keys(STATUS_LABELS) as OrderStatus[]
+const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
 
 /**
  * What the shop can do to an order from where it is now.
@@ -135,11 +119,10 @@ export function OrdersAdminPage() {
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE)
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
   /** The order and the move waiting on the dialog that collects its reason. */
   const [pending, setPending] = useState<{ order: AdminOrder; move: Move } | null>(null)
   const [answer, setAnswer] = useState('')
-  const { message, show, showError } = useStatus()
+  const { message, show, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
   const latest = useLatest()
 
@@ -153,7 +136,6 @@ export function OrdersAdminPage() {
         try {
           const answer = await api<AdminOrderList>(`/api/orders${query ? `?${query}` : ''}`)
           if (isCurrent()) setList(answer)
-          clearLoginAttempt()
         } catch (error) {
           if (isCurrent()) showError(error)
         }
@@ -180,19 +162,6 @@ export function OrdersAdminPage() {
   function chooseColumns(next: string[]) {
     setHidden(next)
     writeHidden(COLUMN_PAGE, next)
-  }
-
-  async function run(work: () => Promise<void>, done: string) {
-    if (busy) return
-    setBusy(true)
-    try {
-      await work()
-      show(done, 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
   }
 
   async function open(order: AdminOrder) {
@@ -308,7 +277,7 @@ export function OrdersAdminPage() {
     {
       key: 'status',
       label: '狀態',
-      render: (order) => <Badge tone={STATUS_TONES[order.status]}>{STATUS_LABELS[order.status]}</Badge>,
+      render: (order) => <Badge tone={ORDER_STATUS_TONES[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>,
     },
     { key: 'createdAt', label: '成立時間', render: (order) => dateTime(order.createdAt) },
     { key: 'recipientPhone', label: '電話', render: (order) => order.recipientPhone || '—' },
@@ -359,7 +328,7 @@ export function OrdersAdminPage() {
           label={pending?.move.prompt ?? '說明'}
           hint="會記進稽核紀錄，顧客看不到。"
           value={answer}
-          maxLength={500}
+          maxLength={ORDER_NOTE_MAX}
           onInput={(event) => setAnswer((event.currentTarget as HTMLInputElement).value)}
         />
       </Modal>
@@ -374,7 +343,7 @@ export function OrdersAdminPage() {
                   checked={selectedStatuses.includes(status)}
                   onChange={() => toggleStatus(status)}
                 />
-                {STATUS_LABELS[status]}
+                {ORDER_STATUS_LABELS[status]}
                 {counts[status] ? <span class="count">{counts[status]}</span> : null}
               </label>
             ))}
@@ -490,7 +459,7 @@ export function OrdersAdminPage() {
           title={detail.order.id}
           actions={
             <>
-              <Badge tone={STATUS_TONES[detail.order.status]}>{STATUS_LABELS[detail.order.status]}</Badge>
+              <Badge tone={ORDER_STATUS_TONES[detail.order.status]}>{ORDER_STATUS_LABELS[detail.order.status]}</Badge>
               {(MOVES[detail.order.status] ?? []).length > 0 ? (
                 <Menu label="這筆訂單的動作" variant="button" trigger="動作">
                   {(MOVES[detail.order.status] ?? []).map((move) => (
@@ -570,7 +539,7 @@ export function OrdersAdminPage() {
               label="店家備註"
               hint="只有你看得到，顧客的訂單頁不會出現。"
               value={note}
-              maxLength={500}
+              maxLength={ORDER_NOTE_MAX}
               onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
             />
             <Button type="submit" tone="primary" busy={busy}>

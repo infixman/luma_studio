@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { ApiError, api, apiUrl } from '../../shared/api'
-import { priceLabel } from '../../shared/money'
+import { ApiError, api } from '../../shared/api'
 import type { CategoryPageData } from '../../shared/types'
+import { Skeleton } from '../components/Skeleton'
+import { ProductGrid } from '../features/catalogue/ProductGrid'
+import { ProductGridSkeleton } from '../features/catalogue/ProductGridSkeleton'
 import '../styles/shop.css'
 
 /**
@@ -44,16 +46,8 @@ export function CategoryPage({ filter }: { filter: string }) {
   if (failed) return <main class="shop"><p class="empty">分類載入失敗，請稍後再試一次。</p></main>
   if (page === null) return (
     <main class="shop">
-      <div class="skeleton" style={{ height: '1.4rem', width: '30%', marginBottom: '1.2rem' }} />
-      <ul class="product-grid">
-        {Array.from({ length: 4 }, (_, i) => (
-          <li key={i} class="card">
-            <div class="cover skeleton" />
-            <div class="skeleton" style={{ height: '0.9rem', width: '70%', marginTop: '0.5rem' }} />
-            <div class="skeleton" style={{ height: '0.8rem', width: '40%', marginTop: '0.3rem' }} />
-          </li>
-        ))}
-      </ul>
+      <Skeleton class="page-title" />
+      <ProductGridSkeleton count={4} />
     </main>
   )
 
@@ -68,20 +62,7 @@ export function CategoryPage({ filter }: { filter: string }) {
         // the truth. A 404 would read as though the link were broken.
         <p class="empty">這個分類還沒有商品。</p>
       ) : (
-        <ul class="product-grid">
-          {page.products.map((card) => (
-            <li key={card.slug} class={card.inStock ? 'card' : 'card sold-out'}>
-              <a href={`/shop/${encodeURIComponent(card.slug)}`}>
-                <div class="cover">
-                  {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
-                  {!card.inStock && <span class="ribbon">售完</span>}
-                </div>
-                <h2>{card.title}</h2>
-                <p class="price">{priceLabel(card.priceFrom, card.priceTo)}</p>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <ProductGrid products={page.products} />
       )}
     </main>
   )

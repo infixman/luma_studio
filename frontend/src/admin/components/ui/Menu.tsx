@@ -137,9 +137,10 @@ interface MenuItemProps {
   /** `danger` for the one that cannot be undone. */
   tone?: 'neutral' | 'danger'
   disabled?: boolean
+  title?: string
 }
 
-export function MenuItem({ children, onClick, tone = 'neutral', disabled }: MenuItemProps) {
+export function MenuItem({ children, onClick, tone = 'neutral', disabled, title }: MenuItemProps) {
   const close = useContext(Close)
   return (
     <button
@@ -147,6 +148,7 @@ export function MenuItem({ children, onClick, tone = 'neutral', disabled }: Menu
       role="menuitem"
       class={`ui-menu-item tone-${tone}`}
       disabled={disabled}
+      title={title}
       onClick={() => {
         onClick()
         // Every item here picks something and is done. A toggle that wanted

@@ -2,17 +2,9 @@ import { useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiUrl } from '../../shared/api'
 import type { OrderCard, OrderStatus } from '../../shared/types'
+import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
 import '../styles/shop.css'
 import { dateOnly } from '../../shared/dates'
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: '等待付款',
-  paid: '已付款',
-  shipped: '已出貨',
-  completed: '已完成',
-  cancelled: '已取消',
-  expired: '已逾期',
-}
 
 /**
  * The tabs across the top, in the order an order moves through them.
@@ -102,7 +94,7 @@ export function OrdersPage() {
                   <div class="card-head">
                     <span class="id">{order.id}</span>
                     <span class="date">{dateOnly(order.createdAt)}</span>
-                    <span class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
+                    <span class={`status ${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
                   </div>
 
                   <a class="card-items" href={`/orders/${encodeURIComponent(order.id)}`}>

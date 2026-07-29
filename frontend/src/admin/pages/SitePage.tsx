@@ -3,11 +3,12 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { MenuEditor } from '../components/MenuEditor'
 import { useStatus } from '../components/StatusBar'
-import { Button, Modal, Spinner, TextField, useConfirm } from '../components/ui'
+import { Button, Modal, RadioGroup, Spinner, TextField, useConfirm } from '../components/ui'
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../shared/components/SocialIcon'
-import { api, apiJson, apiUrl, clearLoginAttempt, uploadHeaderImage } from '../../shared/api'
+import { api, apiJson, apiUrl, uploadHeaderImage } from '../../shared/api'
 import type { MenuItem, MenuState, SiteSettings } from '../../shared/types'
+import { FOOTER_COLUMN_MAX, FOOTER_LINK_MAX } from '../features/site/constraints'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
@@ -39,17 +40,7 @@ function Choice<T extends string>({
   options: { value: T; label: string }[]
   onPick: (next: T) => void
 }) {
-  return (
-    <fieldset class="statuses choice-row">
-      <legend>{legend}</legend>
-      {options.map((option) => (
-        <label key={option.value} class="radio">
-          <input type="radio" checked={value === option.value} onChange={() => onPick(option.value)} />
-          <span>{option.label}</span>
-        </label>
-      ))}
-    </fieldset>
-  )
+  return <RadioGroup legend={legend} value={value} options={options} onChange={onPick} inline />
 }
 
 export function SitePage() {
@@ -58,8 +49,7 @@ export function SitePage() {
   const [draft, setDraft] = useState(EMPTY_ITEM)
   /** The item being renamed, and what it is being renamed to. Null when closed. */
   const [renaming, setRenaming] = useState<{ item: MenuItem; label: string } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const { message, show, showError } = useStatus()
+  const { message, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
@@ -70,7 +60,6 @@ export function SitePage() {
       ])
       setSettings(site.settings)
       setMenu(menuState)
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -79,19 +68,6 @@ export function SitePage() {
   useEffect(() => {
     void load()
   }, [load])
-
-  async function run(work: () => Promise<void>, done: string) {
-    if (busy) return
-    setBusy(true)
-    try {
-      await work()
-      show(done, 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   function edit(patch: Partial<SiteSettings>) {
     setSettings((current) => (current ? { ...current, ...patch } : current))
@@ -504,7 +480,7 @@ export function SitePage() {
             </label>
 
             <h3>連結欄位</h3>
-            <p class="muted">服務條款、退換貨政策、隱私權政策這類頁面放這裡。最多 4 欄，每欄 10 個連結。</p>
+            <p class="muted">服務條款、退換貨政策、隱私權政策這類頁面放這裡。最多 {FOOTER_COLUMN_MAX} 欄，每欄 {FOOTER_LINK_MAX} 個連結。</p>
             <ul class="footer-columns-editor">
               {settings.footerColumns.map((column, columnIndex) => (
                 <li key={columnIndex}>
@@ -550,7 +526,7 @@ export function SitePage() {
                   </ul>
                   <button
                     type="button"
-                    disabled={column.links.length >= 10}
+                    disabled={column.links.length >= FOOTER_LINK_MAX}
                     onClick={() => editColumn(columnIndex, { links: [...column.links, { label: '', url: '' }] })}
                   >
                     加一個連結
@@ -560,7 +536,7 @@ export function SitePage() {
             </ul>
             <button
               type="button"
-              disabled={settings.footerColumns.length >= 4}
+              disabled={settings.footerColumns.length >= FOOTER_COLUMN_MAX}
               onClick={() => edit({ footerColumns: [...settings.footerColumns, { title: '', links: [] }] })}
             >
               加一欄

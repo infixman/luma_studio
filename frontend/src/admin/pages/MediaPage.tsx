@@ -33,7 +33,7 @@ type Usage = { id: string; title: string; path: string }
 type UploadTask = { key: number; name: string; ratio: number; state: 'working' | 'done' | 'failed'; error?: string }
 
 export function MediaPage() {
-  const { message, show, showError } = useStatus()
+  const { message, showError, busy, run } = useStatus()
   const { query, setQuery, items, setItems, tags, loadTags, info, page, setPage } = useMediaLibrary(true, showError)
   const [selected, setSelected] = useState<MediaItem | null>(null)
   /** The usage lookup failed, so the dialog says so instead of pretending. */
@@ -46,7 +46,6 @@ export function MediaPage() {
   const [picked, setPicked] = useState<string[]>([])
   const [uploads, setUploads] = useState<UploadTask[]>([])
   const [dragging, setDragging] = useState(false)
-  const [busy, setBusy] = useState(false)
   const { ask, dialog } = useConfirm()
   const file = useRef<HTMLInputElement>(null)
 
@@ -56,26 +55,6 @@ export function MediaPage() {
   // a surprise.
   const pickedHere = shown.filter((item) => picked.includes(item.id))
   const allPicked = shown.length > 0 && pickedHere.length === shown.length
-
-  /**
-   * Run one action and report it.
-   *
-   * `work` may return its own sentence, for the actions whose outcome is not
-   * known until the server answers — a bulk delete where two of the ten were
-   * already gone should not claim ten.
-   */
-  async function run(work: () => Promise<string | void>, done: string) {
-    if (busy) return
-    setBusy(true)
-    try {
-      const said = await work()
-      show(said || done, said ? 'warn' : 'ok')
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   /** Opening an image also asks where it is used, so deleting is informed. */
   async function inspect(item: MediaItem) {
@@ -118,22 +97,21 @@ export function MediaPage() {
    * where the eleventh is a HEIC the browser will not take should leave
    * nineteen uploaded, not a batch to start again.
    */
-  async function acceptFiles(list: FileList | null) {
+  function acceptFiles(list: FileList | null) {
     const chosenFiles = [...(list ?? [])]
-    if (chosenFiles.length === 0 || busy) return
+    if (chosenFiles.length === 0) return
     const started = Date.now()
-    setUploads(
-      chosenFiles.map((entry, index) => ({ key: started + index, name: entry.name, ratio: 0, state: 'working' })),
-    )
-    setBusy(true)
-
-    let done = 0
-    let failed = 0
-    for (const [index, entry] of chosenFiles.entries()) {
-      const key = started + index
-      const update = (patch: Partial<UploadTask>) =>
-        setUploads((current) => current.map((task) => (task.key === key ? { ...task, ...patch } : task)))
-      try {
+    void run(async () => {
+      setUploads(
+        chosenFiles.map((entry, index) => ({ key: started + index, name: entry.name, ratio: 0, state: 'working' })),
+      )
+      let done = 0
+      let failed = 0
+      for (const [index, entry] of chosenFiles.entries()) {
+        const key = started + index
+        const update = (patch: Partial<UploadTask>) =>
+          setUploads((current) => current.map((task) => (task.key === key ? { ...task, ...patch } : task)))
+        try {
         // The responsive widths, and with them the EXIF rotation — see
         // prepareUpload: the decoder applies the orientation tag, so a photo
         // taken sideways is stored the right way up.
@@ -142,19 +120,17 @@ export function MediaPage() {
         setItems((current) => [item, ...(current ?? [])])
         update({ ratio: 1, state: 'done' })
         done += 1
-      } catch (error) {
-        update({ state: 'failed', error: error instanceof Error ? error.message : '上傳失敗' })
-        failed += 1
+        } catch (error) {
+          update({ state: 'failed', error: error instanceof Error ? error.message : '上傳失敗' })
+          failed += 1
+        }
       }
-    }
-
-    setBusy(false)
-    // The finished rows go; the failed ones stay on screen, because a file
-    // that did not upload is the only thing left to act on.
-    setUploads((current) => current.filter((task) => task.state === 'failed'))
-    if (failed === 0) show(`已上傳 ${done} 張。記得補上替代文字。`, 'ok')
-    else if (done === 0) show(`${failed} 張都沒有上傳成功。`, 'error')
-    else show(`已上傳 ${done} 張，${failed} 張失敗。`, 'error')
+      // The finished rows go; the failed ones stay on screen, because a file
+      // that did not upload is the only thing left to act on.
+      setUploads((current) => current.filter((task) => task.state === 'failed'))
+      if (failed === 0) return
+      return done === 0 ? `${failed} 張都沒有上傳成功。` : `已上傳 ${done} 張，${failed} 張失敗。`
+    }, `已上傳 ${chosenFiles.length} 張。記得補上替代文字。`)
   }
 
   function save(event: Event) {
@@ -343,11 +319,10 @@ export function MediaPage() {
         hidden
         onChange={(event) => {
           const input = event.currentTarget as HTMLInputElement
-          void acceptFiles(input.files).finally(() => {
-            // Cleared so that picking the same file twice in a row still
-            // counts as a change.
-            input.value = ''
-          })
+          acceptFiles(input.files)
+          // Cleared so that picking the same file twice in a row still
+          // counts as a change.
+          input.value = ''
         }}
         disabled={busy}
       />

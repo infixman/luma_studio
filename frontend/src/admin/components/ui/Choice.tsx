@@ -51,7 +51,7 @@ export function Checkbox({ label, checked, onChange, hint, disabled }: CheckboxP
   )
 }
 
-interface RadioGroupProps<T extends string> {
+interface RadioGroupProps<T extends string | number> {
   legend: string
   value: T | null
   options: { value: T; label: string; hint?: string; disabled?: boolean }[]
@@ -60,7 +60,7 @@ interface RadioGroupProps<T extends string> {
   inline?: boolean
 }
 
-export function RadioGroup<T extends string>({ legend, value, options, onChange, inline }: RadioGroupProps<T>) {
+export function RadioGroup<T extends string | number>({ legend, value, options, onChange, inline }: RadioGroupProps<T>) {
   const name = useId()
   return (
     <fieldset class={inline ? 'ui-radio-group is-inline' : 'ui-radio-group'}>

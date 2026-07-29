@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 
 import { BLOCK_KINDS, BlockIcon, blockSummary } from './BlockEditors'
-import { IconButton } from './ui'
+import { IconButton, Menu, MenuGroup, MenuItem } from './ui'
 import type { BlockConfig, PageBlock } from '../../shared/types'
 
 /**
@@ -71,24 +70,6 @@ export function BlockRow({
   dragging: boolean
   children: ComponentChildren
 }) {
-  const [menu, setMenu] = useState(false)
-  const wrap = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menu) return
-    const away = (event: PointerEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setMenu(false)
-    }
-    document.addEventListener('pointerdown', away)
-    return () => document.removeEventListener('pointerdown', away)
-  }, [menu])
-
-  /** Closes the menu first, so the row underneath is not left with a panel over it. */
-  const choose = (act: () => void) => () => {
-    setMenu(false)
-    act()
-  }
-
   return (
     <li
       id={domId}
@@ -135,7 +116,7 @@ export function BlockRow({
           </span>
         )}
 
-        <div class="block-actions" ref={wrap}>
+        <div class="block-actions">
           <span
             class="block-grip"
             draggable
@@ -165,54 +146,24 @@ export function BlockRow({
             </svg>
           </IconButton>
 
-          <IconButton label="更多" size="sm" onClick={() => setMenu(!menu)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="5" cy="12" r="1.4" />
-              <circle cx="12" cy="12" r="1.4" />
-              <circle cx="19" cy="12" r="1.4" />
-            </svg>
-          </IconButton>
-
-          {menu && (
-            <ul class="block-menu">
-              <li>
-                <button type="button" onClick={choose(() => onInsert('above'))}>
-                  在上方插入區塊
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={choose(() => onInsert('below'))}>
-                  在下方插入區塊
-                </button>
-              </li>
-
-              <li class="block-menu-sep" role="separator" />
-
-              <li>
-                <button type="button" onClick={choose(onDuplicate)}>
-                  複製
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={choose(onCopy)}>
-                  複製區塊
-                </button>
-              </li>
-              <li>
-                {/* Shown even with nothing to paste, and disabled instead of
-                    hidden: a gesture that only appears once you have already
-                    used the other half of it is a gesture nobody finds. */}
-                <button
-                  type="button"
-                  disabled={!onPaste}
-                  title={onPaste ? undefined : '沒有複製過的區塊，或那一個是這個版本認不得的型別'}
-                  onClick={onPaste ? choose(onPaste) : undefined}
-                >
-                  貼上區塊
-                </button>
-              </li>
-            </ul>
-          )}
+          <Menu label="更多區塊操作">
+            <MenuGroup label="插入" />
+            <MenuItem onClick={() => onInsert('above')}>在上方插入區塊</MenuItem>
+            <MenuItem onClick={() => onInsert('below')}>在下方插入區塊</MenuItem>
+            <MenuGroup label="區塊" />
+            <MenuItem onClick={onDuplicate}>複製</MenuItem>
+            <MenuItem onClick={onCopy}>複製區塊</MenuItem>
+            {/* Shown even with nothing to paste, and disabled instead of
+                hidden: a gesture that only appears once you have already
+                used the other half of it is a gesture nobody finds. */}
+            <MenuItem
+              disabled={!onPaste}
+              title={onPaste ? undefined : '沒有複製過的區塊，或那一個是這個版本認不得的型別'}
+              onClick={onPaste ?? (() => {})}
+            >
+              貼上區塊
+            </MenuItem>
+          </Menu>
         </div>
       </div>
 

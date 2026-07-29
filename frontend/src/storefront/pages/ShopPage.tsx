@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { api, apiUrl } from '../../shared/api'
-import { priceLabel } from '../../shared/money'
+import { api } from '../../shared/api'
 import type { PublicCategory, PublicProductCard } from '../../shared/types'
+import { ProductGrid } from '../features/catalogue/ProductGrid'
+import { ProductGridSkeleton } from '../features/catalogue/ProductGridSkeleton'
 import '../styles/shop.css'
 
 export function ShopPage() {
@@ -44,32 +45,11 @@ export function ShopPage() {
       {failed ? (
         <p class="empty">商品載入失敗，請稍後再試一次。</p>
       ) : products === null ? (
-        <ul class="product-grid">
-          {Array.from({ length: 6 }, (_, i) => (
-            <li key={i} class="card">
-              <div class="cover skeleton" />
-              <div class="skeleton" style={{ height: '0.9rem', width: '70%', marginTop: '0.5rem' }} />
-              <div class="skeleton" style={{ height: '0.8rem', width: '40%', marginTop: '0.3rem' }} />
-            </li>
-          ))}
-        </ul>
+        <ProductGridSkeleton />
       ) : products.length === 0 ? (
         <p class="empty">目前沒有販售中的商品。</p>
       ) : (
-        <ul class="product-grid">
-          {products.map((card) => (
-            <li key={card.slug} class={card.inStock ? 'card' : 'card sold-out'}>
-              <a href={`/shop/${encodeURIComponent(card.slug)}`}>
-                <div class="cover">
-                  {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
-                  {!card.inStock && <span class="ribbon">售完</span>}
-                </div>
-                <h2>{card.title}</h2>
-                <p class="price">{priceLabel(card.priceFrom, card.priceTo)}</p>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <ProductGrid products={products} />
       )}
     </main>
   )

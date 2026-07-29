@@ -76,7 +76,7 @@ describe('theme palettes', () => {
   })
 
   it('finds every theme the backend offers', () => {
-    // Mirrors THEMES in backend/src/bio_link.py.
+    // Mirrors the bio-link domain contract's theme set.
     expect(names.sort()).toEqual(['forest', 'ink', 'night', 'sand', 'warm'])
   })
 

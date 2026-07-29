@@ -3,17 +3,9 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { ApiError, api, apiUrl } from '../../shared/api'
 import { Confetti } from '../../shared/components/Confetti'
 import type { OrderStatus, OrderDetail } from '../../shared/types'
+import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
 import '../styles/shop.css'
 import { dateTime } from '../../shared/dates'
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: '等待付款',
-  paid: '已付款，準備出貨',
-  shipped: '已出貨',
-  completed: '已完成',
-  cancelled: '已取消',
-  expired: '已逾期',
-}
 
 /**
  * The road an order travels, and how far along it is.
@@ -114,7 +106,7 @@ export function OrderPage({ id }: { id: string }) {
           ← 我的訂單
         </a>
         <span class="order-id">訂單編號 {order.id}</span>
-        <span class={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
+        <span class={`status ${order.status}`}>{order.status === 'paid' ? '已付款，準備出貨' : ORDER_STATUS_LABELS[order.status]}</span>
       </div>
 
       <section class="panel">

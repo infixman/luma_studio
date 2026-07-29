@@ -19,8 +19,10 @@ import './blocks.css'
  * `config`. Nothing here turns an id into a picture, so nothing here has to
  * decide what to do when the picture is gone: it simply is not in `data`.
  *
- * Adding a block type means adding a case here and a validator in
- * backend/src/pages.py. Nothing else in the page machinery changes.
+ * Adding a block type changes the shared contracts, editor definition and
+ * dispatch, draft preview projection, this public renderer, and backend
+ * validation. Keeping those extension points explicit prevents a type that
+ * saves correctly but cannot be edited or previewed.
  */
 export function Blocks({ blocks }: { blocks: PageBlock[] }) {
   return (

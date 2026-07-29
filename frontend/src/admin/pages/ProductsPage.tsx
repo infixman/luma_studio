@@ -22,7 +22,9 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
-import { api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
+import { api, apiJson, apiUrl } from '../../shared/api'
+import { slugifyAscii } from '../lib/slug'
+import { CATEGORY_SLUG_MAX, CATEGORY_TITLE_MAX, PRODUCT_SLUG_MAX, PRODUCT_TITLE_MAX } from '../features/catalogue/constraints'
 import type { Category, Product, ProductListing, ProductStatus } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -46,11 +48,7 @@ const DEFAULT_HIDDEN = ['slug']
 
 /** Turns a title into a starting slug, which the owner can still overwrite. */
 function suggestSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64)
+  return slugifyAscii(title, PRODUCT_SLUG_MAX)
 }
 
 export function ProductsPage() {
@@ -70,7 +68,6 @@ export function ProductsPage() {
   const load = useCallback(async () => {
     try {
       setListing(await api<ProductListing>('/api/products'))
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -345,14 +342,14 @@ export function ProductsPage() {
           <TextField
             label="商品名稱"
             value={title}
-            maxLength={80}
+            maxLength={PRODUCT_TITLE_MAX}
             required
             onInput={(event) => setTitle((event.currentTarget as HTMLInputElement).value)}
           />
           <TextField
             label="網址代稱"
             value={slug}
-            maxLength={64}
+            maxLength={PRODUCT_SLUG_MAX}
             placeholder={suggestSlug(title) || '留空自動產生'}
             onInput={(event) => setSlug((event.currentTarget as HTMLInputElement).value)}
           />
@@ -443,7 +440,7 @@ export function ProductsPage() {
           <TextField
             label="分類名稱"
             value={newCategory.title}
-            maxLength={40}
+            maxLength={CATEGORY_TITLE_MAX}
             required
             onInput={(event) =>
               setNewCategory({ ...newCategory, title: (event.currentTarget as HTMLInputElement).value })
@@ -452,7 +449,7 @@ export function ProductsPage() {
           <TextField
             label="網址代稱"
             value={newCategory.slug}
-            maxLength={64}
+            maxLength={CATEGORY_SLUG_MAX}
             placeholder={suggestSlug(newCategory.title) || '留空自動產生'}
             onInput={(event) =>
               setNewCategory({ ...newCategory, slug: (event.currentTarget as HTMLInputElement).value })
@@ -472,7 +469,7 @@ export function ProductsPage() {
                 <TextField
                   label="分類名稱"
                   value={category.title}
-                  maxLength={40}
+                  maxLength={CATEGORY_TITLE_MAX}
                   onBlur={(event) => void renameCategory(category, (event.currentTarget as HTMLInputElement).value)}
                 />
                 <code>/shop/c/{category.slug}</code>

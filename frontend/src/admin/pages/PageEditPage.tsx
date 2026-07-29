@@ -33,7 +33,7 @@ import type { CopiedBlock } from '../lib/blockClipboard'
 import { followsTitle, nextPath } from '../lib/slug'
 import { Blocks } from '../../shared/components/Blocks'
 import { dateTime } from '../../shared/dates'
-import { STOREFRONT_ORIGIN, api, apiJson, apiUrl, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api, apiJson, apiUrl } from '../../shared/api'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -48,6 +48,7 @@ import type {
   ShopBlockConfig,
   TextBlockConfig,
 } from '../../shared/types'
+import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from '../features/pages/constraints'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
@@ -179,7 +180,6 @@ export function PageEditPage({ id }: { id: string }) {
       // can go on following. A path that was typed by hand cannot, or the
       // first keystroke in the title box would move a published address.
       setPathLocked(followsTitle(next.page.title, next.page.path))
-      clearLoginAttempt()
     } catch (error) {
       showError(error)
     }
@@ -903,7 +903,7 @@ export function PageEditPage({ id }: { id: string }) {
                   path: nextPath(current.path, title, pathLocked && !detail.page.isHome),
                 }))
               }}
-              maxLength={80}
+              maxLength={PAGE_TITLE_MAX}
               required
               hint="會成為瀏覽器分頁的標題。"
             />
@@ -911,7 +911,7 @@ export function PageEditPage({ id }: { id: string }) {
               label="網址路徑"
               value={form.path}
               onInput={(event) => setForm({ ...form, path: (event.currentTarget as HTMLInputElement).value })}
-              maxLength={120}
+              maxLength={PAGE_PATH_MAX}
               required
               disabled={detail.page.isHome || pathLocked}
               trailing={!detail.page.isHome && <SlugLock locked={pathLocked} onChange={setPathLocked} />}

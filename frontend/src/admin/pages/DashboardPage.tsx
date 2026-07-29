@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { Badge, EmptyState, Panel, Spinner, TableWrap } from '../components/ui'
-import { STOREFRONT_ORIGIN, api, clearLoginAttempt } from '../../shared/api'
+import { STOREFRONT_ORIGIN, api } from '../../shared/api'
 import type { DashboardSummary } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/dashboard.css'
@@ -35,7 +35,6 @@ export function DashboardPage() {
   const load = useCallback(async () => {
     try {
       setSummary(await api<DashboardSummary>('/api/dashboard'))
-      clearLoginAttempt()
     } catch (error) {
       setFailed(true)
       showError(error)
