@@ -1301,3 +1301,74 @@ body.admin .usage {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* Native colour input keeps the platform's full palette while the surrounding
+   copy makes the interaction and the selected colour unambiguous. */
+.ui-colour-picker {
+  width: max-content;
+  max-width: 100%;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ui-colour-picker-control {
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.ui-colour-picker-control:hover {
+  border-color: var(--border-strong);
+}
+
+.ui-colour-picker-control:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.ui-colour-picker input[type="color"] {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  padding: 0.18rem;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.ui-colour-picker input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.ui-colour-picker input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 3px;
+}
+
+.ui-colour-picker input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: 3px;
+}
+
+.ui-colour-picker-copy {
+  display: grid;
+  gap: 0.1rem;
+  text-align: left;
+}
+
+.ui-colour-picker-copy strong {
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 650;
+}
+
+.ui-colour-picker-copy code {
+  color: var(--text-soft);
+  font-size: var(--font-xs);
+}

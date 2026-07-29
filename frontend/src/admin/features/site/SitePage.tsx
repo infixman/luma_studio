@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useState } from 'preact/hooks'
 import { AdminShell } from '../../components/AdminShell'
 import { MenuEditor } from '../../components/MenuEditor'
 import { useStatus } from '../../components/StatusBar'
-import { Button, Modal, Panel, Spinner, TextField, useConfirm } from '../../components/ui'
+import { Button, ColourPicker, Modal, Panel, Spinner, TextField, useConfirm } from '../../components/ui'
 import { SiteFooter, SiteHeader } from '../../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../../shared/components/SocialIcon'
 import { api, apiJson, apiUrl, uploadHeaderImage } from '../../../shared/api'
@@ -491,17 +491,11 @@ export function SitePage() {
                   onPick={(headerColour) => edit({ headerColour })}
                 />
                 {settings.headerColour === 'custom' && (
-                  <label class="site-custom-colour">
-                    <span>自訂底色</span>
-                    <input
-                      type="color"
-                      value={settings.headerCustomColour}
-                      onInput={(event) =>
-                        edit({ headerCustomColour: (event.currentTarget as HTMLInputElement).value })
-                      }
-                    />
-                    <code>{settings.headerCustomColour.toUpperCase()}</code>
-                  </label>
+                  <ColourPicker
+                    label="自訂底色"
+                    value={settings.headerCustomColour}
+                    onChange={(headerCustomColour) => edit({ headerCustomColour })}
+                  />
                 )}
               </>
             )}
@@ -517,17 +511,11 @@ export function SitePage() {
               onPick={(headerText) => edit({ headerText })}
             />
             {settings.headerText === 'custom' && (
-              <label class="site-custom-colour">
-                <span>自訂文字色</span>
-                <input
-                  type="color"
-                  value={settings.headerCustomText}
-                  onInput={(event) =>
-                    edit({ headerCustomText: (event.currentTarget as HTMLInputElement).value })
-                  }
-                />
-                <code>{settings.headerCustomText.toUpperCase()}</code>
-              </label>
+              <ColourPicker
+                label="自訂文字色"
+                value={settings.headerCustomText}
+                onChange={(headerCustomText) => edit({ headerCustomText })}
+              />
             )}
             <Choice
               legend="logo 大小"
@@ -610,17 +598,11 @@ export function SitePage() {
               onPick={(footerColour) => edit({ footerColour })}
             />
             {settings.footerColour === 'custom' && (
-              <label class="site-custom-colour">
-                <span>自訂底色</span>
-                <input
-                  type="color"
-                  value={settings.footerCustomColour}
-                  onInput={(event) =>
-                    edit({ footerCustomColour: (event.currentTarget as HTMLInputElement).value })
-                  }
-                />
-                <code>{settings.footerCustomColour.toUpperCase()}</code>
-              </label>
+              <ColourPicker
+                label="自訂底色"
+                value={settings.footerCustomColour}
+                onChange={(footerCustomColour) => edit({ footerCustomColour })}
+              />
             )}
             <Choice
               legend="文字色"
@@ -633,17 +615,11 @@ export function SitePage() {
               onPick={(footerText) => edit({ footerText })}
             />
             {settings.footerText === 'custom' && (
-              <label class="site-custom-colour">
-                <span>自訂文字色</span>
-                <input
-                  type="color"
-                  value={settings.footerCustomText}
-                  onInput={(event) =>
-                    edit({ footerCustomText: (event.currentTarget as HTMLInputElement).value })
-                  }
-                />
-                <code>{settings.footerCustomText.toUpperCase()}</code>
-              </label>
+              <ColourPicker
+                label="自訂文字色"
+                value={settings.footerCustomText}
+                onChange={(footerCustomText) => edit({ footerCustomText })}
+              />
             )}
             <h3>品牌欄</h3>
             <p class="muted">頁尾左邊的那一塊：logo、一句話、版權。連結欄位會靠右排。</p>

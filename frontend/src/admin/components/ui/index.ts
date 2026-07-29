@@ -4,6 +4,7 @@ import './ui.css'
 
 export { Button, ButtonRow, IconButton, type ButtonTone } from './Button'
 export { Field, TextArea, TextField } from './Field'
+export { ColourPicker } from './ColourPicker'
 export { Select, type SelectOption } from './Select'
 export { TagInput, normaliseTag } from './TagInput'
 export { Checkbox, RadioGroup, Toggle } from './Choice'
