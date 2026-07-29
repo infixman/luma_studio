@@ -7,7 +7,7 @@ erasing them. Both answer with the customer as they now are, so the back
 office never has to guess whether the click landed.
 """
 
-from domain import customer_activity, customers, orders
+from domain import customer_activity, customers, entitlements, orders
 from shared import paging
 from shared.responses import Ctx
 
@@ -39,6 +39,8 @@ async def handle(ctx: Ctx):
         return ctx.error("Not found", 404)
 
     rest = path.removeprefix("/api/customers/")
+    # Split once: an action can itself contain a slash (`entitlements/gift`),
+    # and treating that as an action plus a tail would route it nowhere.
     customer_id, _, action = rest.partition("/")
     try:
         customer_id = customers.validate_customer_id(customer_id)
@@ -49,8 +51,27 @@ async def handle(ctx: Ctx):
         detail = await _detail(ctx, customer_id)
         return ctx.json(detail) if detail else ctx.error("Customer not found", 404)
 
+    if action == "entitlements" and method == "GET":
+        return ctx.json({"entitlements": await entitlements.list_for_customer(env, customer_id)})
+
     if method != "POST":
         return ctx.error("Not found", 404)
+
+    if action == "entitlements/gift":
+        # A gift with no reason is a grant nobody can account for, and
+        # therefore one nobody can undo with confidence later.
+        try:
+            body = await ctx.json_body()
+            await entitlements.grant_as_gift(
+                env,
+                customer_id=customer_id,
+                course_id=str(body.get("courseId") or ""),
+                actor=ctx.admin_email,
+                reason=str(body.get("reason") or "").strip(),
+            )
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid gift", 400)
+        return ctx.json({"granted": True}, 201)
 
     if action == "blocked":
         try:

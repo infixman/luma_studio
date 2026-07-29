@@ -273,3 +273,85 @@ async def start_viewing_window(env, *, entitlement_id: str, access_days: int | N
         " WHERE id = ?1 AND access_days IS NOT NULL AND first_viewed_at IS NULL AND revoked_at IS NULL"
     ).bind(entitlement_id, now, now + access_days * 86400).run()
     return d1_changed(result)
+
+
+async def list_for_customer(env, customer_id: str) -> list[dict]:
+    """Everything this member has been given, and why.
+
+    Sources come with it. "Do they still have access" and "what is still
+    paying for it" are different questions, and the second is the one that
+    matters when a refund is being argued about.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM course_entitlements WHERE customer_id = ?1 ORDER BY granted_at DESC LIMIT 200"
+        ).bind(customer_id)
+    )
+    if not rows:
+        return []
+
+    placeholders = ", ".join(f"?{index + 1}" for index in range(len(rows)))
+    sources = await d1_rows(
+        env.DB.prepare(
+            f"SELECT * FROM course_entitlement_sources WHERE entitlement_id IN ({placeholders})"
+        ).bind(*[row["id"] for row in rows])
+    )
+    by_entitlement: dict[str, list[dict]] = {}
+    for source in sources:
+        by_entitlement.setdefault(source["entitlement_id"], []).append(
+            {
+                "id": source["id"],
+                "kind": source["source_kind"],
+                "fulfillmentId": source["source_order_fulfillment_id"],
+                "actor": source["actor"],
+                "reason": source["reason"],
+                "revokedAt": source["revoked_at"],
+            }
+        )
+
+    now = utc_timestamp()
+    listed = []
+    for row in rows:
+        mapped = entitlement_row(row)
+        listed.append(
+            {
+                **mapped,
+                "active": is_active(mapped, now=now),
+                "sources": by_entitlement.get(row["id"], []),
+            }
+        )
+    return listed
+
+
+async def revoke_order_courses(
+    env, *, order_id: str, actor: str, reason: str, fulfillment_ids: list[str] | None = None
+) -> int:
+    """Take back what an order granted, in whole or by name.
+
+    `fulfillment_ids` of None means everything this order granted — a full
+    refund. A partial one has to name them: working out which course a member
+    loses from the amount refunded would be guessing, and the thing being
+    guessed at is somebody's access.
+
+    Returns how many sources were actually revoked, so the caller can tell
+    "nothing to do" from "done".
+    """
+
+    if not reason:
+        raise ValueError("撤銷觀看權必須填寫原因")
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM order_fulfillments WHERE order_id = ?1 AND fulfillment_type = 'course'"
+        ).bind(order_id)
+    )
+    wanted = [
+        row for row in rows if fulfillment_ids is None or row["id"] in set(fulfillment_ids)
+    ]
+
+    revoked = 0
+    for row in wanted:
+        if await revoke_source(env, fulfillment_id=row["id"], actor=actor, reason=reason):
+            revoked += 1
+    return revoked

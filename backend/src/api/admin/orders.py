@@ -11,7 +11,7 @@ not here — this file is the door, not the policy.
 """
 
 import mail
-from domain import orders
+from domain import entitlements, orders
 from shared import paging
 from shared.responses import Ctx
 
@@ -124,6 +124,34 @@ async def handle(ctx: Ctx):
 
     if method != "POST":
         return ctx.error("Not found", 404)
+
+    if action == "refund-record":
+        # Recording an external refund, and taking back what it paid for.
+        try:
+            body = await ctx.json_body()
+            scope = str(body.get("scope") or "")
+            reason = str(body.get("reason") or "").strip()[:MAX_REASON]
+            named = body.get("courseFulfillmentIds")
+            if scope not in ("full", "partial"):
+                raise ValueError("退款範圍必須是 full 或 partial")
+            if not reason:
+                raise ValueError("退款必須填寫原因")
+            if scope == "partial" and not (isinstance(named, list) and named):
+                # An empty list on a partial refund is ambiguous, and the
+                # ambiguity is somebody's access. Say which ones.
+                raise ValueError("部分退款必須指明要撤銷哪些課程")
+            revoked = await entitlements.revoke_order_courses(
+                env,
+                order_id=order_id,
+                actor=_actor(ctx),
+                reason=reason,
+                fulfillment_ids=None if scope == "full" else [str(value) for value in named],
+            )
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid refund", 400)
+        await orders.audit(env, order_id, _actor(ctx), "refund_recorded", detail=reason)
+        return ctx.json({"revoked": revoked})
+
 
     if action == "paid":
         # For a bank transfer that arrived before any gateway exists. The
