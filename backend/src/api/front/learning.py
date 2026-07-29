@@ -48,6 +48,13 @@ async def my_courses_response(ctx: Ctx, customer: dict):
     return ctx.json({"courses": await learning.my_courses(ctx.env, customer["id"])})
 
 
+async def course_response(ctx: Ctx, customer: dict, slug: str):
+    course = await learning.course_for_member(ctx.env, customer_id=customer["id"], slug=slug)
+    # 404 rather than 403: whether this member owns a course is not something
+    # a stranger should be able to establish by watching which error comes back.
+    return ctx.json(course) if course else ctx.error("找不到這門課程", 404)
+
+
 async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: str):
     """Check once, then hand out a token that says exactly what it opens."""
 

@@ -251,3 +251,52 @@ class TestGatewayRoutes:
 
     def test_the_learning_routes_need_a_session(self, call):
         assert call(self._request("/api/learning/courses")).status == 401
+
+
+class TestTheLearningPage:
+    """A course as somebody who owns it reads it."""
+
+    def _database(self, *, entitlements=None):
+        return FakeDatabase(
+            {
+                "SELECT * FROM course_entitlements": entitlements if entitlements is not None else [entitlement_row()],
+                "SELECT * FROM courses WHERE slug": [{
+                    "id": "course-1", "slug": "watercolour", "title": "水彩入門", "status": "published",
+                    "created_at": 0, "updated_at": 0,
+                }],
+                "SELECT * FROM course_sections": [
+                    {"id": "s1", "course_id": "course-1", "title": "第一章", "position": 0,
+                     "created_at": 0, "updated_at": 0}
+                ],
+                "SELECT * FROM course_lessons": [lesson_row(), lesson_row(id="lesson-2", title="調色練習")],
+                "SELECT lesson_id, completed_at FROM course_lesson_progress": [
+                    {"lesson_id": "lesson-1", "completed_at": 500}
+                ],
+            }
+        )
+
+    def test_an_owner_gets_the_lessons_and_their_content(self, learning):
+        page = asyncio.run(
+            learning.course_for_member(make_env(self._database()), customer_id="cust-1", slug="watercolour")
+        )
+
+        assert page["title"] == "水彩入門"
+        assert page["sections"][0]["lessons"][0]["contentHtml"] == "<p>你好</p>"
+
+    def test_progress_comes_back_with_it(self, learning):
+        """Otherwise the outline is a list with no sense of where you were."""
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(self._database()), customer_id="cust-1", slug="watercolour")
+        )
+
+        lessons = page["sections"][0]["lessons"]
+        assert lessons[0]["completed"] is True
+        assert lessons[1]["completed"] is False
+
+    def test_somebody_without_the_course_gets_nothing(self, learning):
+        """Not a redacted version — nothing. The lesson content is the product."""
+
+        assert asyncio.run(
+            learning.course_for_member(make_env(self._database(entitlements=[])), customer_id="cust-1", slug="watercolour")
+        ) is None

@@ -585,3 +585,34 @@ export interface OfferComponentsView {
   capabilities: OfferCapabilities
   blockers: OfferBlocker[]
 }
+
+
+/** One card on "my courses". */
+export interface EnrolledCourse {
+  id: string
+  slug: string
+  title: string
+  completedCount: number
+  /** Null until the member has finished a lesson in it. */
+  lastViewedAt: number | null
+}
+
+/**
+ * A short-lived permission to play one lesson.
+ *
+ * The token itself is in an HttpOnly cookie scoped to `playbackUrl`, so it is
+ * not here and cannot be read by page scripts or shared with the URL.
+ */
+export interface PlaybackSession {
+  playbackUrl: string
+  expiresAt: number
+}
+
+/** Why a lesson will not play, in a form the page can act on. */
+export type PlaybackRefusal =
+  | 'not_found'
+  | 'no_video'
+  | 'not_ready'
+  | 'not_entitled'
+  | 'expired'
+  | 'revoked'

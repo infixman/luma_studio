@@ -9,6 +9,8 @@ import { CheckoutPage } from './pages/CheckoutPage'
 import { ProductPage } from './pages/ProductPage'
 import { OrderPage } from './pages/OrderPage'
 import { OrdersPage } from './pages/OrdersPage'
+import { MyCoursesPage } from './pages/MyCoursesPage'
+import { LearnPage } from './pages/LearnPage'
 import { ShopPage } from './pages/ShopPage'
 
 const PRINT_PATH = /^\/ibon_print\/([^/]+)$/
@@ -21,6 +23,7 @@ const PREVIEW_PATH = /^\/__preview\/([A-Za-z0-9_-]{20,64})$/
 const CATEGORY_PATH = /^\/shop\/c\/(.+)$/
 const PRODUCT_PATH = /^\/shop\/([^/]+)$/
 const ORDER_PATH = /^\/orders\/([^/]+)$/
+const LEARN_PATH = /^\/learn\/([^/]+)$/
 
 /**
  * Every page's stylesheet ends up in one bundle, so each page's rules are
@@ -110,6 +113,17 @@ function route() {
   if (path === '/orders') {
     markBody('orders')
     return <OrdersPage />
+  }
+
+  if (path === '/account/courses') {
+    markBody('courses')
+    return <MyCoursesPage />
+  }
+
+  const learn = LEARN_PATH.exec(path)
+  if (learn) {
+    markBody('learn')
+    return <LearnPage slug={decodeURIComponent(learn[1]!)} />
   }
 
   const order = ORDER_PATH.exec(path)

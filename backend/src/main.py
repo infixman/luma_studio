@@ -118,6 +118,10 @@ async def dispatch(ctx: Ctx):
             return await front_api.order_response(ctx, customer, path.removeprefix("/api/orders/"))
         if path == "/api/learning/courses" and method == "GET":
             return await learning_api.my_courses_response(ctx, customer)
+        if path.startswith("/api/learning/courses/") and method == "GET":
+            return await learning_api.course_response(
+                ctx, customer, path.removeprefix("/api/learning/courses/")
+            )
         if path.startswith("/api/learning/lessons/") and path.endswith("/playback-session") and method == "POST":
             if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "playback"):
                 return ctx.too_many_requests()

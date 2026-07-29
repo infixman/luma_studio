@@ -166,3 +166,66 @@ async def my_courses(env, customer_id: str) -> list[dict]:
         )
     cards.sort(key=lambda card: card["lastViewedAt"] or 0, reverse=True)
     return cards
+
+
+async def course_for_member(env, *, customer_id: str, slug: str) -> dict | None:
+    """A course as somebody who owns it reads it, or None.
+
+    None rather than a redacted version: the lesson content *is* the product,
+    and a shape that sometimes carries it and sometimes does not is one
+    forgotten branch away from giving it away. What a visitor may see is a
+    different function, on the product page, built for that purpose.
+
+    Progress arrives with it. An outline without it is a list of names with no
+    sense of where you were, which is the one thing this page exists to answer.
+    """
+
+    rows = await d1_rows(env.DB.prepare("SELECT * FROM courses WHERE slug = ?1").bind(slug))
+    if not rows:
+        return None
+    course = rows[0]
+
+    if course["id"] not in await entitlements.active_course_ids(env, customer_id):
+        return None
+
+    sections = await d1_rows(
+        env.DB.prepare("SELECT * FROM course_sections WHERE course_id = ?1 ORDER BY position").bind(course["id"])
+    )
+    if not sections:
+        return {"title": course["title"], "slug": course["slug"], "sections": []}
+
+    placeholders = ", ".join(f"?{index + 1}" for index in range(len(sections)))
+    lessons = await d1_rows(
+        env.DB.prepare(
+            f"SELECT * FROM course_lessons WHERE section_id IN ({placeholders}) ORDER BY position"
+        ).bind(*[section["id"] for section in sections])
+    )
+    progress = await d1_rows(
+        env.DB.prepare(
+            "SELECT lesson_id, completed_at FROM course_lesson_progress"
+            " WHERE customer_id = ?1 AND course_id = ?2"
+        ).bind(customer_id, course["id"])
+    )
+    completed = {row["lesson_id"] for row in progress if row["completed_at"] is not None}
+
+    by_section: dict[str, list[dict]] = {}
+    for row in lessons:
+        by_section.setdefault(row["section_id"], []).append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "contentHtml": row["content_html"],
+                "hasVideo": bool(row["video_asset_id"]),
+                "isPreview": bool(row["is_preview"]),
+                "completed": row["id"] in completed,
+            }
+        )
+
+    return {
+        "title": course["title"],
+        "slug": course["slug"],
+        "sections": [
+            {"title": section["title"], "lessons": by_section.get(section["id"], [])}
+            for section in sections
+        ],
+    }
