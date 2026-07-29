@@ -89,6 +89,7 @@ export function CustomersPage() {
   const [hidden, setHidden] = useState<string[]>(() => readHidden(COLUMN_PAGE) ?? [])
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null)
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -159,7 +160,9 @@ export function CustomersPage() {
 
   async function open(customer: AdminCustomer) {
     try {
-      setDetail(await api<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}`))
+      const d = await api<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}`)
+      setDetail(d)
+      setNote(d.customer.notes)
     } catch (error) {
       showError(error)
     }
@@ -454,6 +457,35 @@ export function CustomersPage() {
           <p class="muted">
             封鎖只擋結帳，不會登出，也不會影響他們查看已成立的訂單。清除會覆蓋個人資料但保留訂單——那是店家的交易紀錄。
           </p>
+
+          <form
+            class="ui-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!detail) return
+              void run(async () => {
+                const d = await apiJson<AdminCustomerDetail>(
+                  `/api/customers/${encodeURIComponent(detail.customer.id)}/notes`,
+                  'POST',
+                  { notes: note },
+                )
+                setDetail(d)
+                setNote(d.customer.notes)
+                await load()
+              }, '備註已儲存。')
+            }}
+          >
+            <TextField
+              label="店家備註"
+              hint="只有你看得到，會員不會看到這段文字。"
+              value={note}
+              maxLength={2000}
+              onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
+            />
+            <Button type="submit" tone="primary" busy={busy}>
+              儲存備註
+            </Button>
+          </form>
 
           <h3>訂單</h3>
           {detail.orders.length === 0 ? (

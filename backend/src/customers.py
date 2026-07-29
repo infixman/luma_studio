@@ -39,6 +39,7 @@ def admin_row(row: dict) -> dict:
         "recipientPhone": row["default_recipient_phone"],
         "address": row["default_address"],
         "blocked": bool(row["blocked"]),
+        "notes": row.get("notes") or "",
         "anonymizedAt": int(row["anonymized_at"]) if row["anonymized_at"] is not None else None,
         "createdAt": int(row["created_at"]),
         "orderCount": int(row["order_count"]) if "order_count" in row else 0,
@@ -106,6 +107,22 @@ async def set_blocked(env, customer_id: str, blocked: bool) -> bool:
     result = await (
         env.DB.prepare("UPDATE customers SET blocked = ?2, updated_at = ?3 WHERE id = ?1")
         .bind(customer_id, 1 if blocked else 0, utc_timestamp())
+        .run()
+    )
+    try:
+        return int(result.meta.changes) == 1
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+MAX_NOTES = 2000
+
+
+async def set_notes(env, customer_id: str, notes: str) -> bool:
+    text = str(notes or "")[:MAX_NOTES]
+    result = await (
+        env.DB.prepare("UPDATE customers SET notes = ?2, updated_at = ?3 WHERE id = ?1")
+        .bind(customer_id, text, utc_timestamp())
         .run()
     )
     try:

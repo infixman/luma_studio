@@ -122,6 +122,10 @@ export function SiteHeader({
           <span aria-hidden="true">{open ? '✕' : '☰'}</span>
         </button>
 
+        <nav class="site-menu" aria-label="主選單">
+          <MenuTree menu={menu} parentId={null} depth={1} />
+        </nav>
+
         <div class="header-actions">
           {settings.headerCtaLabel && settings.headerCtaUrl && (
             <a class="cta" href={settings.headerCtaUrl}>
@@ -151,9 +155,6 @@ export function SiteHeader({
       </div>
 
       {open && <div class="menu-scrim" onClick={() => setOpen(false)} />}
-      <nav class="site-menu" aria-label="主選單">
-        <MenuTree menu={menu} parentId={null} depth={1} />
-      </nav>
     </header>
   )
 }

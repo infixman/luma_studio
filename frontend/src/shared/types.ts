@@ -380,6 +380,7 @@ export interface AdminCustomer {
   recipientPhone: string
   address: string
   blocked: boolean
+  notes: string
   anonymizedAt: number | null
   createdAt: number
   orderCount: number

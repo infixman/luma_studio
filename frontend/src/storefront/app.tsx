@@ -166,7 +166,7 @@ function notFound() {
     <main class="landing">
       <p>這個網址沒有對應的頁面。</p>
       <p>
-        <a href="/shop">看看商品</a>
+        <a href="/">回首頁</a>
       </p>
     </main>
   )

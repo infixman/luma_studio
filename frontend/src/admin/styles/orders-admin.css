@@ -5,45 +5,77 @@
    are Badge now, and a second set of status colours beside it would be a
    second set to keep in step. */
 
-/* The status tabs are a shortcut into the filter rows, not a second filter.
-   Clicking one writes a "狀態 是 X" rule, which is why they can carry counts
-   and still never disagree with what the list is actually showing. */
-body.admin .order-tabs {
+body.admin .order-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  align-items: flex-end;
+  gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
-body.admin .order-tabs button {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text-soft);
-  font: inherit;
-  font-size: var(--font-sm);
-  font-weight: 500;
-  cursor: pointer;
+body.admin .order-status-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
-body.admin .order-tabs button:hover {
+body.admin .order-status-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+body.admin .order-status-checks label:hover {
   border-color: var(--border-strong);
-  background: var(--sunken);
   color: var(--text);
 }
 
-body.admin .order-tabs button.current {
+body.admin .order-status-checks label.checked {
   border-color: var(--primary);
   background: var(--primary);
   color: var(--on-primary);
 }
 
-body.admin .order-tabs .count {
-  margin-left: var(--space-1);
+body.admin .order-status-checks input[type="checkbox"] {
+  display: none;
+}
+
+body.admin .order-status-checks .count {
   opacity: 0.75;
   font-size: var(--font-xs);
   font-variant-numeric: tabular-nums;
+}
+
+body.admin .order-date-range {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+body.admin .order-date-range label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--text-soft);
+}
+
+body.admin .order-date-range input[type="date"] {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-sm);
 }
 
 body.admin .order-link {
@@ -60,8 +92,7 @@ body.admin .order-link:hover code {
   text-decoration: underline;
 }
 
-/* The row whose detail panel is open, so the two are visibly the same order. */
-body.admin .ui-table tbody tr.current td {
+body.admin .ui-table tbody tr.current td:first-child {
   box-shadow: inset 2px 0 0 var(--primary);
 }
 

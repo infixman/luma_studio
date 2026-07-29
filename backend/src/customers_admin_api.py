@@ -62,6 +62,15 @@ async def handle(ctx: Ctx):
             return ctx.error("Customer not found", 404)
         return ctx.json(await _detail(ctx, customer_id))
 
+    if action == "notes":
+        try:
+            notes = str((await _read_json(ctx)).get("notes") or "")
+        except (ValueError, AttributeError):
+            return ctx.error("Invalid request", 400)
+        if not await customers.set_notes(env, customer_id, notes):
+            return ctx.error("Customer not found", 404)
+        return ctx.json(await _detail(ctx, customer_id))
+
     if action == "anonymise":
         # Erasing keeps the row and the orders. Only the profile goes.
         if not await customers.anonymise(env, customer_id):

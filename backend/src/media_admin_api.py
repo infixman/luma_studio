@@ -39,13 +39,10 @@ async def _read_variants(form) -> list[dict]:
             continue
         width, height = media.validate_dimensions(form.get(f"size_{label}_dimensions"))
         if not width:
-            # Unlike the original, a variant with no dimensions is worthless:
-            # a srcset entry is the width, so one that cannot state its own is
-            # a download the browser has no way to choose between.
-            raise media.MediaError("縮圖缺少尺寸")
+            continue
         content = await blob.bytes()
         if not content or len(content) > media.MAX_VARIANT_BYTES:
-            raise media.MediaError("縮圖大小不正確")
+            continue
         variants.append({"label": label, "content": content, "width": width, "height": height})
     return variants
 
@@ -154,13 +151,8 @@ async def handle(ctx: Ctx):
             if not content or len(content) > media.MAX_IMAGE_BYTES:
                 raise media.MediaError("圖片必須介於 1 byte 與 5 MB 之間")
             variants = await _read_variants(form)
-            if not width and variants:
-                # (0, 0) means "the browser could not decode this", and a
-                # browser that could not decode it could not have scaled it
-                # either. The two together describe an upload that cannot
-                # have happened, so it is refused rather than stored as a row
-                # that contradicts itself.
-                raise media.MediaError("縮圖缺少尺寸")
+            if not width:
+                variants = []
         except media.MediaError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):

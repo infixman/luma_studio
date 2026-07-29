@@ -10,7 +10,6 @@ import {
   DEFAULT_PER_PAGE,
   DataTable,
   EmptyState,
-  FilterBar,
   Menu,
   MenuGroup,
   MenuItem,
@@ -21,14 +20,13 @@ import {
   TableWrap,
   TextField,
   Toolbar,
-  activeCount,
   dayEnd,
   dayStart,
   readHidden,
   useConfirm,
   writeHidden,
 } from '../components/ui'
-import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
+import type { BadgeTone, Column } from '../components/ui'
 import { api, apiJson, clearLoginAttempt } from '../../shared/api'
 import type { AdminOrder, AdminOrderDetail, AdminOrderList, OrderStatus } from '../../shared/types'
 import '../styles/admin.css'
@@ -98,9 +96,6 @@ const CANCELLABLE: OrderStatus[] = ['pending', 'paid', 'shipped']
 
 const COLUMN_PAGE = 'orders'
 
-/** Marks the rule a status tab owns, so the next click can clear its own. */
-const TAB_RULE = 'tab-'
-
 /**
  * Nine columns is more than fits comfortably, so four start switched off.
  * They are the ones you go looking for rather than scan — a phone number is
@@ -108,62 +103,31 @@ const TAB_RULE = 'tab-'
  */
 const DEFAULT_HIDDEN = ['recipientPhone', 'recipientEmail', 'shippingMethod', 'adminNote']
 
-/**
- * The filter rules, as the query string the admin API takes.
- *
- * **Orders filter on the server.** The list stops at its limit, so narrowing
- * it here would narrow only the rows that made it back — and a list that has
- * silently filtered one page of an unknown many looks exactly like a complete
- * answer. Products and customers are small enough to do it in the browser;
- * this one is not, and the difference is the whole reason for this function.
- *
- * Dates are sent as seconds, worked out from the reader's own timezone. A
- * bare `2026-07-01` on the wire would have to be resolved by a server that
- * has no idea which midnight was meant, and would drop an order placed in the
- * evening out of a range that visibly includes its date.
- */
-function ordersQuery(rules: FilterRule[], search: string, page: number, perPage: number): string {
+function ordersQuery(
+  statuses: OrderStatus[],
+  dateFrom: string,
+  dateTo: string,
+  search: string,
+  page: number,
+  perPage: number,
+): string {
   const query = new URLSearchParams()
   if (search.trim()) query.set('q', search.trim())
   query.set('page', String(page))
   query.set('perPage', String(perPage))
-
-  for (const rule of rules) {
-    if (!rule.value.trim()) continue
-    if (rule.field === 'status') {
-      // Every rule is sent. Two "是" cannot both hold, and the server answers
-      // that with no orders — which is what the filter bar is asking for.
-      // Keeping only the last one would quietly ignore a row still on screen.
-      query.append(rule.operator === 'eq' ? 'status' : 'statusNot', rule.value)
-      continue
-    }
-    if (rule.field === 'createdAt') {
-      const bound = rule.operator === 'lte' ? dayEnd(rule.value) : dayStart(rule.value)
-      if (bound === null) continue
-      // Stacked date rules tighten rather than replace: the later "之後" and
-      // the earlier "之前" are the ones that survive an AND.
-      const key = rule.operator === 'lte' ? 'createdTo' : 'createdFrom'
-      const existing = query.get(key)
-      const kept =
-        existing === null ? bound : rule.operator === 'lte' ? Math.min(Number(existing), bound) : Math.max(Number(existing), bound)
-      query.set(key, String(kept))
-    }
-  }
+  for (const s of statuses) query.append('status', s)
+  const from = dayStart(dateFrom)
+  if (from !== null) query.set('createdFrom', String(from))
+  const to = dayEnd(dateTo)
+  if (to !== null) query.set('createdTo', String(to))
   return query.toString()
-}
-
-/** Which status the tabs should light up: exactly one plain "狀態 是 X" rule. */
-function tabStatus(rules: FilterRule[]): OrderStatus | '' {
-  const chosen = rules.filter((rule) => rule.field === 'status' && rule.operator === 'eq' && rule.value)
-  return chosen.length === 1 ? ((chosen[0]?.value ?? '') as OrderStatus) : ''
 }
 
 export function OrdersAdminPage() {
   const [list, setList] = useState<AdminOrderList | null>(null)
-  const [rules, setRules] = useState<FilterRule[]>([])
-  const [showFilters, setShowFilters] = useState(false)
-  // Seeded from the URL, because the member page links here with the order
-  // id in it. A link that lands on an unfiltered list is a link that lies.
+  const [selectedStatuses, setSelectedStatuses] = useState<OrderStatus[]>([])
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState(new URLSearchParams(location.search).get('q') ?? '')
   const [hidden, setHidden] = useState<string[]>(() => readHidden(COLUMN_PAGE) ?? DEFAULT_HIDDEN)
   const [selected, setSelected] = useState<string[]>([])
@@ -179,7 +143,7 @@ export function OrdersAdminPage() {
   const { ask, dialog } = useConfirm()
   const latest = useLatest()
 
-  const query = ordersQuery(rules, search, page, perPage)
+  const query = ordersQuery(selectedStatuses, dateFrom, dateTo, search, page, perPage)
 
   // Filtering and searching both re-run this, and a slow answer to an older
   // query must not land on top of a fast answer to the current one.
@@ -324,22 +288,7 @@ export function OrdersAdminPage() {
 
   const counts = list?.counts ?? {}
   const orders = useMemo(() => list?.orders ?? [], [list])
-  const current = tabStatus(rules)
-  const filtered = activeCount(rules) > 0 || search.trim() !== ''
-
-  /** Counts ride along in the option labels, so the tabs are not the only place they live. */
-  const fields: FilterField[] = [
-    {
-      name: 'status',
-      label: '狀態',
-      type: 'enum',
-      options: STATUSES.map((status) => ({
-        value: status,
-        label: counts[status] ? `${STATUS_LABELS[status]}（${counts[status]}）` : STATUS_LABELS[status],
-      })),
-    },
-    { name: 'createdAt', label: '成立時間', type: 'date' },
-  ]
+  const filtered = selectedStatuses.length > 0 || dateFrom !== '' || dateTo !== '' || search.trim() !== ''
 
   const columns: Column<AdminOrder>[] = [
     {
@@ -368,32 +317,10 @@ export function OrdersAdminPage() {
     { key: 'adminNote', label: '備註', render: (order) => order.adminNote || '—' },
   ]
 
-  /**
-   * A changed filter drops the selection. The rows behind a bulk button are
-   * not the rows that were ticked before it, and a selection that survived
-   * would act on orders no longer on screen.
-   */
-  function changeRules(next: FilterRule[]) {
-    narrow(() => setRules(next))
-  }
-
-  /** Puts the tabs and the filter rows on one model, so they cannot disagree. */
-  /**
-   * A tab click is a filter rule, which is what keeps the tabs and the list
-   * from ever disagreeing.
-   *
-   * Every rule this function put there is cleared first, not only the ones
-   * still shaped like `狀態 是 X`. Changing a tab rule's operator by hand left
-   * it behind, and clicking the same tab again appended a second rule with the
-   * same id — after which editing one row rewrote both, deleting one deleted
-   * both, and the query asked for status=paid AND statusNot=paid, which can
-   * never match anything.
-   */
-  function chooseTab(status: OrderStatus | '') {
-    const others = rules.filter((rule) => !rule.id.startsWith(TAB_RULE))
+  function toggleStatus(status: OrderStatus) {
     narrow(() =>
-      setRules(
-        status ? [...others, { id: `${TAB_RULE}${status}`, field: 'status', operator: 'eq', value: status }] : others,
+      setSelectedStatuses((prev) =>
+        prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
       ),
     )
   }
@@ -438,22 +365,35 @@ export function OrdersAdminPage() {
       </Modal>
 
       <Panel title="訂單">
-        <nav class="order-tabs" aria-label="依狀態篩選">
-          <button type="button" class={current === '' ? 'current' : ''} onClick={() => chooseTab('')}>
-            全部
-          </button>
-          {STATUSES.map((status) => (
-            <button
-              key={status}
-              type="button"
-              class={status === current ? 'current' : ''}
-              onClick={() => chooseTab(status)}
-            >
-              {STATUS_LABELS[status]}
-              {counts[status] ? <span class="count">{counts[status]}</span> : null}
-            </button>
-          ))}
-        </nav>
+        <div class="order-filters">
+          <div class="order-status-checks" role="group" aria-label="狀態篩選">
+            {STATUSES.map((status) => (
+              <label key={status} class={selectedStatuses.includes(status) ? 'checked' : ''}>
+                <input
+                  type="checkbox"
+                  checked={selectedStatuses.includes(status)}
+                  onChange={() => toggleStatus(status)}
+                />
+                {STATUS_LABELS[status]}
+                {counts[status] ? <span class="count">{counts[status]}</span> : null}
+              </label>
+            ))}
+          </div>
+          <div class="order-date-range">
+            <TextField
+              label="從"
+              type="date"
+              value={dateFrom}
+              onInput={(event) => narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))}
+            />
+            <TextField
+              label="到"
+              type="date"
+              value={dateTo}
+              onInput={(event) => narrow(() => setDateTo((event.currentTarget as HTMLInputElement).value))}
+            />
+          </div>
+        </div>
 
         <Toolbar>
           <TextField
@@ -464,14 +404,9 @@ export function OrdersAdminPage() {
             onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
           />
           <div class="ui-toolbar-end">
-            <Button size="sm" onClick={() => setShowFilters((open) => !open)}>
-              篩選{activeCount(rules) > 0 ? ` (${activeCount(rules)})` : ''}
-            </Button>
             <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
           </div>
         </Toolbar>
-
-        {showFilters && <FilterBar fields={fields} rules={rules} onChange={changeRules} />}
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void cancelSelected()}>
@@ -515,7 +450,9 @@ export function OrdersAdminPage() {
                     <Button
                       onClick={() =>
                         narrow(() => {
-                          setRules([])
+                          setSelectedStatuses([])
+                          setDateFrom('')
+                          setDateTo('')
                           setSearch('')
                         })
                       }

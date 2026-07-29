@@ -616,6 +616,11 @@ MIGRATIONS = [
                     AND NOT EXISTS (SELECT 1 FROM page_versions v WHERE v.page_id = p.id)"""
         ],
     },
+    {
+        "name": "0022_add_customer_notes",
+        "add_columns": [("customers", "notes", "TEXT NOT NULL DEFAULT ''")],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

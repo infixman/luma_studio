@@ -445,8 +445,7 @@ async def set_note(env, order_id: str, note: str, actor: str) -> bool:
 async def list_all(
     env,
     *,
-    status: str | None = "",
-    impossible: bool = False,
+    statuses: tuple[str, ...] = (),
     exclude_statuses: tuple[str, ...] = (),
     search: str = "",
     created_from: int | None = None,
@@ -454,30 +453,13 @@ async def list_all(
     page: int = 1,
     per_page: int = paging.DEFAULT_PER_PAGE,
 ) -> tuple[list[dict], int]:
-    """One page of the shop's orders, newest first, and how many there are
-    altogether.
-
-    Search covers the order id, the recipient and the email they gave at
-    checkout — the three things someone has in front of them when they write
-    in asking about an order.
-
-    The status and date bounds are here rather than in the browser because the
-    browser only holds one page. Narrowing a page reads exactly like narrowing
-    the list and is not the same thing. Every condition is AND-ed, which is
-    what the back office's stacked filter rows mean.
-
-    `impossible` is that AND taken to its conclusion: two "狀態 是" rules on
-    different statuses describe an order that cannot exist. No rows is the
-    honest answer, and cheaper than asking the database for it.
-    """
-
-    if impossible:
-        return [], 0
+    """One page of the shop's orders, newest first, and how many there are."""
 
     conditions, bindings = [], []
-    if status:
-        bindings.append(status)
-        conditions.append(f"status = ?{len(bindings)}")
+    if statuses:
+        placeholders = ", ".join(f"?{len(bindings) + i + 1}" for i in range(len(statuses)))
+        bindings.extend(statuses)
+        conditions.append(f"status IN ({placeholders})")
     for excluded in exclude_statuses:
         bindings.append(excluded)
         conditions.append(f"status != ?{len(bindings)}")

@@ -95,10 +95,7 @@ async def handle(ctx: Ctx):
         page, per_page = paging.clamp(_first(ctx, "page"), _first(ctx, "perPage"))
         rows, total = await orders.list_all(
             env,
-            status=wanted[0] if len(wanted) == 1 else None,
-            # Two different statuses AND-ed match nothing, and saying so is
-            # the honest answer.
-            impossible=len(wanted) > 1,
+            statuses=wanted,
             exclude_statuses=excluded,
             search=search,
             created_from=_seconds(ctx, "createdFrom"),
