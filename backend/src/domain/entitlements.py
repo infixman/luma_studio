@@ -250,3 +250,26 @@ async def release_holds(env, *, order_id: str) -> None:
     """The order will never pay, so nothing is being bought twice."""
 
     await env.DB.prepare("DELETE FROM course_offer_purchase_locks WHERE order_id = ?1").bind(order_id).run()
+
+
+async def start_viewing_window(env, *, entitlement_id: str, access_days: int | None, now: int) -> bool:
+    """Begin a timed grant's countdown, once.
+
+    Called on every playback, which is why the condition matters more than the
+    call does: `first_viewed_at IS NULL` means two requests arriving together
+    produce one write, and every request after the first produces none. Without
+    it, the window would quietly restart each time somebody pressed play, and a
+    thirty-day course would be permanent.
+
+    A permanent grant has no clock and writes nothing. A revoked one should not
+    be watchable at all, so it does not start either.
+    """
+
+    if access_days is None:
+        return False
+
+    result = await env.DB.prepare(
+        "UPDATE course_entitlements SET first_viewed_at = ?2, expires_at = ?3, updated_at = ?2"
+        " WHERE id = ?1 AND access_days IS NOT NULL AND first_viewed_at IS NULL AND revoked_at IS NULL"
+    ).bind(entitlement_id, now, now + access_days * 86400).run()
+    return d1_changed(result)

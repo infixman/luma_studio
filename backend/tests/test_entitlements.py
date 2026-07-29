@@ -283,3 +283,60 @@ class TestPurchaseLocks:
         statement, bindings = database.writes[0]
         assert "DELETE FROM course_offer_purchase_locks" in statement
         assert bindings == ("LS1",)
+
+
+class TestStartingTheViewingWindow:
+    """The clock starts at the first watch, and only at the first."""
+
+    def test_a_timed_grant_starts_counting(self, entitlements):
+        database = FakeDatabase(changes={"UPDATE course_entitlements SET first_viewed_at": 1})
+
+        started = asyncio.run(
+            entitlements.start_viewing_window(
+                make_env(database), entitlement_id="ent-1", access_days=30, now=1000
+            )
+        )
+
+        assert started is True
+        statement, bindings = database.writes[0]
+        # The condition is what makes this happen once. Two playback requests
+        # arriving together would otherwise both write, and the later one
+        # would quietly extend the member's window.
+        assert "first_viewed_at IS NULL" in statement
+        assert 1000 + 30 * 86400 in bindings
+
+    def test_a_permanent_grant_writes_nothing(self, entitlements):
+        database = FakeDatabase()
+
+        assert asyncio.run(
+            entitlements.start_viewing_window(
+                make_env(database), entitlement_id="ent-1", access_days=None, now=1000
+            )
+        ) is False
+        assert database.writes == []
+
+    def test_a_second_playback_changes_nothing(self, entitlements):
+        """The row no longer matches, so the update affects nothing — which is
+        the answer, not an error."""
+
+        database = FakeDatabase(changes={"UPDATE course_entitlements SET first_viewed_at": 0})
+
+        assert asyncio.run(
+            entitlements.start_viewing_window(
+                make_env(database), entitlement_id="ent-1", access_days=30, now=9999
+            )
+        ) is False
+
+    def test_a_revoked_grant_does_not_start_counting(self, entitlements):
+        """Nothing should be able to watch it, so nothing should start it."""
+
+        database = FakeDatabase(changes={"UPDATE course_entitlements SET first_viewed_at": 1})
+
+        asyncio.run(
+            entitlements.start_viewing_window(
+                make_env(database), entitlement_id="ent-1", access_days=30, now=1000
+            )
+        )
+
+        statement, _ = database.writes[0]
+        assert "revoked_at IS NULL" in statement
