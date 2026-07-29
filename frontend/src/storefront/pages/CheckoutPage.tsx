@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiJson, loginUrl } from '../../shared/api'
 import type { CartQuote, Customer, OrderDetail } from '../../shared/types'
+import { EMPTY_CART_QUOTE } from '../../shared/contracts/cart'
 import * as cart from '../lib/cart'
 import '../styles/shop.css'
 
@@ -38,7 +39,7 @@ export function CheckoutPage() {
 
     const lines = cart.read()
     if (lines.length === 0) {
-      setQuote({ lines: [], problems: [], subtotal: 0, shipping: [] })
+      setQuote(EMPTY_CART_QUOTE)
       return
     }
     try {

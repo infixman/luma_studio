@@ -32,13 +32,13 @@ def run(coroutine):
 class TestReadingTheBrowsersCart:
     def test_a_normal_cart_survives_intact(self, cart):
         lines = cart.parse_lines([{"variantId": "v1", "quantity": 2}])
-        assert lines == [{"variantId": "v1", "quantity": 2}]
+        assert lines == [{"variantId": "v1", "offerId": "v1", "quantity": 2}]
 
     def test_repeated_variants_are_merged_rather_than_refused(self, cart):
         """Two lines for one variant is a client-side merge that did not happen."""
 
         lines = cart.parse_lines([{"variantId": "v1", "quantity": 2}, {"variantId": "v1", "quantity": 3}])
-        assert lines == [{"variantId": "v1", "quantity": 5}]
+        assert lines == [{"variantId": "v1", "offerId": "v1", "quantity": 5}]
 
     def test_the_shop_does_not_decide_how_many_someone_may_buy(self, cart):
         """Whatever is on the shelf is for sale. `price_lines` reduces the line
@@ -79,10 +79,57 @@ class TestReadingTheBrowsersCart:
 
 
 def stocked(*, status="active", enabled=1, stock=10, price=300, is_default=0, title="M"):
-    """A database that answers with one product and one variant."""
+    """A database that answers with one product sold as one physical item.
 
+    Stock lives on the InventoryItem now, so a "one variant" fixture is really
+    an offer with a single inventory component behind it. The backfill gave
+    that item the offer's own id, which is why both are "v1".
+    """
+
+    product = {
+        "id": "p1",
+        "slug": "soda-tote",
+        "title": "蘇打托特包",
+        "description": "",
+        "status": status,
+        "position": 0,
+        "created_at": 1,
+        "updated_at": 1,
+    }
     return FakeDatabase(
         {
+            "FROM product_variants v JOIN products p": [
+                {
+                    "id": "v1",
+                    "product_id": "p1",
+                    "title": title,
+                    "price": price,
+                    "enabled": enabled,
+                    "product_status": status,
+                    "product_title": "蘇打托特包",
+                }
+            ],
+            "SELECT * FROM offer_components": [
+                {
+                    "id": "oc-v1",
+                    "offer_id": "v1",
+                    "component_type": "inventory",
+                    "component_id": "v1",
+                    "quantity": 1,
+                    "access_days": None,
+                    "position": 0,
+                }
+            ],
+            "SELECT * FROM inventory_items": [
+                {
+                    "id": "v1",
+                    "title": "蘇打托特包",
+                    "sku": "",
+                    "stock": stock,
+                    "enabled": enabled,
+                    "archived_at": None,
+                }
+            ],
             "FROM product_variants WHERE id": [
                 {
                     "id": "v1",
@@ -96,18 +143,7 @@ def stocked(*, status="active", enabled=1, stock=10, price=300, is_default=0, ti
                     "is_default": is_default,
                 }
             ],
-            "FROM products WHERE id": [
-                {
-                    "id": "p1",
-                    "slug": "soda-tote",
-                    "title": "蘇打托特包",
-                    "description": "",
-                    "status": status,
-                    "position": 0,
-                    "created_at": 1,
-                    "updated_at": 1,
-                }
-            ],
+            "FROM products WHERE id": [product],
         }
     )
 
@@ -127,17 +163,24 @@ class TestRepricing:
         assert priced["lines"] == [
             {
                 "variantId": "v1",
+                "offerId": "v1",
                 "productSlug": "soda-tote",
                 "productTitle": "蘇打托特包",
                 "variantTitle": "",
+                "offerTitle": None,
                 "imagePath": None,
                 "unitPrice": 350,
                 "quantity": 3,
                 "lineTotal": 1050,
-                "stockLeft": 3,
+                "containsCourse": False,
+                "requiresShipping": True,
+                "components": [{"type": "inventory", "title": "蘇打托特包"}],
+                "stockLeft": 0,
             }
         ]
-        assert priced["problems"] == [{"variantId": "v1", "title": "蘇打托特包", "reason": "reduced", "available": 3}]
+        assert priced["problems"] == [
+            {"variantId": "v1", "offerId": "v1", "title": "蘇打托特包", "reason": "reduced", "available": 3}
+        ]
 
     def test_a_quantity_beyond_stock_is_reduced_and_reported(self, cart):
         env = make_env(stocked(stock=3))
@@ -225,3 +268,139 @@ class TestCartRoute:
 
     def test_delivery_methods_are_public(self, call):
         assert call(FakeRequest("/api/shipping-methods")).status == 200
+
+
+class TestOfferIdCompatibility:
+    """`variantId` and `offerId` are the same value under two names.
+
+    A cart saved in localStorage months ago still says `variantId`, and that
+    browser has no idea a rename happened. Both are accepted; disagreeing with
+    yourself is not.
+    """
+
+    def test_the_old_name_is_still_read(self, cart):
+        assert cart.parse_lines([{"variantId": "off-1", "quantity": 1}]) == [
+            {"variantId": "off-1", "offerId": "off-1", "quantity": 1}
+        ]
+
+    def test_the_new_name_is_read_too(self, cart):
+        assert cart.parse_lines([{"offerId": "off-1", "quantity": 1}]) == [
+            {"variantId": "off-1", "offerId": "off-1", "quantity": 1}
+        ]
+
+    def test_both_names_agreeing_is_fine(self, cart):
+        assert cart.parse_lines([{"variantId": "off-1", "offerId": "off-1", "quantity": 1}])[0]["offerId"] == "off-1"
+
+    def test_both_names_disagreeing_is_refused(self, cart):
+        """Guessing which one the customer meant is how you charge for the
+        wrong thing."""
+
+        with pytest.raises(cart.CartError):
+            cart.parse_lines([{"variantId": "off-1", "offerId": "off-2", "quantity": 1}])
+
+
+class TestQuotingAnOffer:
+    """Pricing now runs through `resolve_offer`, the same call checkout makes."""
+
+    def _database(self, components: list[dict], *, stock: int = 12, price: int = 3980):
+        return FakeDatabase(
+            {
+                "FROM product_variants v JOIN products p": [{
+                    "id": "off-1", "product_id": "prod-1", "title": "", "price": price, "enabled": 1,
+                    "product_status": "active", "product_title": "水彩完整套組",
+                }],
+                "SELECT * FROM offer_components": components,
+                "SELECT * FROM inventory_items": [{
+                    "id": "kit-1", "title": "水彩材料包", "sku": "KIT-1", "stock": stock,
+                    "enabled": 1, "archived_at": None,
+                }],
+                "SELECT * FROM courses": [{"id": "course-1", "title": "水彩花卉入門", "status": "published"}],
+                "SELECT * FROM products WHERE id": [{
+                    "id": "prod-1", "slug": "watercolour-set", "title": "水彩完整套組", "description": "",
+                    "status": "active", "position": 0, "created_at": 0, "updated_at": 0,
+                }],
+            }
+        )
+
+    def _component(self, type_: str, component_id: str, quantity: int = 1, position: int = 0):
+        return {
+            "id": f"oc-{component_id}", "offer_id": "off-1", "component_type": type_,
+            "component_id": component_id, "quantity": quantity, "access_days": None, "position": position,
+        }
+
+    def test_a_course_only_cart_needs_no_delivery(self, cart):
+        quote = run(
+            cart.price_lines(
+                make_env(self._database([self._component("course", "course-1")])),
+                [{"variantId": "off-1", "offerId": "off-1", "quantity": 1}],
+            )
+        )
+
+        assert quote["requiresShipping"] is False
+        assert quote["containsCourse"] is True
+        assert quote["shippingSubtotal"] == 0
+
+    def test_only_lines_that_ship_count_towards_free_delivery(self, cart):
+        """A digital line must not push a cart over a physical threshold."""
+
+        quote = run(
+            cart.price_lines(
+                make_env(self._database([self._component("inventory", "kit-1")])),
+                [{"variantId": "off-1", "offerId": "off-1", "quantity": 1}],
+            )
+        )
+
+        assert quote["requiresShipping"] is True
+        assert quote["shippingSubtotal"] == quote["subtotal"]
+
+    def test_a_mixed_offer_counts_in_full_towards_delivery(self, cart):
+        """Its price cannot be split between the course and the kit without
+        inventing a number nobody set."""
+
+        quote = run(
+            cart.price_lines(
+                make_env(
+                    self._database(
+                        [self._component("course", "course-1"), self._component("inventory", "kit-1", position=1)]
+                    )
+                ),
+                [{"variantId": "off-1", "offerId": "off-1", "quantity": 1}],
+            )
+        )
+
+        assert quote["shippingSubtotal"] == 3980
+        assert quote["containsCourse"] is True
+
+    def test_a_course_line_cannot_be_bought_more_than_once(self, cart):
+        quote = run(
+            cart.price_lines(
+                make_env(self._database([self._component("course", "course-1")])),
+                [{"variantId": "off-1", "offerId": "off-1", "quantity": 3}],
+            )
+        )
+
+        assert [problem["reason"] for problem in quote["problems"]] == ["quantity_not_allowed"]
+        assert quote["lines"][0]["quantity"] == 1
+
+    def test_stock_is_judged_on_what_the_line_actually_needs(self, cart):
+        """Two kits per offer and three offers is six kits, not three."""
+
+        quote = run(
+            cart.price_lines(
+                make_env(self._database([self._component("inventory", "kit-1", quantity=2)], stock=5)),
+                [{"variantId": "off-1", "offerId": "off-1", "quantity": 3}],
+            )
+        )
+
+        assert [problem["reason"] for problem in quote["problems"]] == ["reduced"]
+        assert quote["lines"][0]["quantity"] == 2
+
+    def test_an_offer_whose_contents_vanished_is_not_quoted(self, cart):
+        database = self._database([self._component("inventory", "ghost")])
+
+        quote = run(
+            cart.price_lines(make_env(database), [{"variantId": "off-1", "offerId": "off-1", "quantity": 1}])
+        )
+
+        assert [problem["reason"] for problem in quote["problems"]] == ["component_unavailable"]
+        assert quote["lines"] == []

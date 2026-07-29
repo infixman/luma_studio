@@ -23,8 +23,14 @@ async def cart_validate_response(ctx: Ctx):
     except (ValueError, AttributeError):
         return ctx.error("Invalid cart", 400)
     priced = await cart.price_lines(ctx.env, lines)
+    if not priced["requiresShipping"]:
+        # Nothing in this cart is posted. Offering delivery options would ask
+        # the customer to pick between ways of sending them nothing.
+        return ctx.json({**priced, "shipping": []})
     methods = await shipping.list_methods(ctx.env, only_enabled=True)
-    return ctx.json({**priced, "shipping": shipping.quote(methods, priced["subtotal"])})
+    # Quoted against what actually ships, so a course in the cart cannot push
+    # the order over a free-delivery threshold it did not pay towards.
+    return ctx.json({**priced, "shipping": shipping.quote(methods, priced["shippingSubtotal"])})
 
 
 async def profile_response(ctx: Ctx, customer: dict):

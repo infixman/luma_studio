@@ -2,13 +2,19 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { apiJson, apiUrl } from '../../shared/api'
 import type { CartProblem, CartQuote } from '../../shared/types'
+import { EMPTY_CART_QUOTE } from '../../shared/contracts/cart'
 import * as cart from '../lib/cart'
 import '../styles/shop.css'
 
 function problemText(problem: CartProblem): string {
-  if (problem.reason === 'unavailable') return `${problem.title ?? '有一項商品'}已經停售，已從購物車移除。`
-  if (problem.reason === 'out_of_stock') return `${problem.title ?? '有一項商品'}目前缺貨，已從購物車移除。`
-  return `${problem.title ?? '有一項商品'}只剩 ${problem.available} 件，數量已調整。`
+  const name = problem.title ?? '有一項商品'
+  if (problem.reason === 'unavailable') return `${name}已經停售，已從購物車移除。`
+  if (problem.reason === 'out_of_stock') return `${name}目前缺貨，已從購物車移除。`
+  // Not a stock problem, and saying "sold out" would send the customer looking
+  // for a restock that is never coming.
+  if (problem.reason === 'component_unavailable') return `${name}的內容有調整，目前無法購買，已從購物車移除。`
+  if (problem.reason === 'quantity_not_allowed') return `${name}包含線上課程，一次只能購買一份，數量已調整。`
+  return `${name}只剩 ${problem.available} 件，數量已調整。`
 }
 
 export function CartPage() {
@@ -20,7 +26,7 @@ export function CartPage() {
   const revalidate = useCallback(async () => {
     const lines = cart.read()
     if (lines.length === 0) {
-      setQuote({ lines: [], problems: [], subtotal: 0, shipping: [] })
+      setQuote(EMPTY_CART_QUOTE)
       setNotes([])
       return
     }
@@ -118,24 +124,39 @@ export function CartPage() {
                   </div>
                   <div class="what">
                     <a href={`/shop/${encodeURIComponent(line.productSlug)}`}>{line.productTitle}</a>
-                    <p class="variant">規格：{line.variantTitle}</p>
+                    {/* A product sold without options has no variant to name,
+                        and "規格：" followed by nothing reads as a fault. */}
+                    {line.variantTitle !== '' && <p class="variant">規格：{line.variantTitle}</p>}
+                    {line.containsCourse && (
+                      <p class="variant">
+                        {line.components
+                          .filter((component) => component.type === 'course')
+                          .map((component) => component.title)
+                          .join('、')}
+                      </p>
+                    )}
                     {line.stockLeft !== null && <p class="note low">剩 {line.stockLeft} 件</p>}
                   </div>
                   <p class="unit">NT${line.unitPrice}</p>
-                  <label class="qty">
-                    <span class="qty-label">數量</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={cart.MAX_QUANTITY}
-                      step={1}
-                      value={line.quantity}
-                      onChange={(event) => {
-                        const n = Number.parseInt((event.target as HTMLInputElement).value, 10)
-                        if (!Number.isNaN(n)) change(line.variantId, n)
-                      }}
-                    />
-                  </label>
+                  {line.containsCourse ? (
+                    // One grant per purchase, so there is nothing to choose.
+                    <p class="qty-fixed">1</p>
+                  ) : (
+                    <label class="qty">
+                      <span class="qty-label">數量</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={cart.MAX_QUANTITY}
+                        step={1}
+                        value={line.quantity}
+                        onChange={(event) => {
+                          const n = Number.parseInt((event.target as HTMLInputElement).value, 10)
+                          if (!Number.isNaN(n)) change(line.variantId, n)
+                        }}
+                      />
+                    </label>
+                  )}
                   <p class="line-total">NT${line.lineTotal}</p>
                   <button type="button" class="drop" onClick={() => drop(line.variantId)}>
                     移除
@@ -150,8 +171,10 @@ export function CartPage() {
           </div>
 
           <section class="panel summary">
-            <h2>配送方式</h2>
-            <ul class="delivery">
+            {quote.requiresShipping ? (
+              <>
+                <h2>配送方式</h2>
+                <ul class="delivery">
               {quote.shipping.map((option) => (
                 <li key={option.method}>
                   <label>
@@ -165,21 +188,27 @@ export function CartPage() {
                     <span class="fee">{option.fee === 0 ? '免運' : `NT$${option.fee}`}</span>
                   </label>
                   {option.fee > 0 && option.freeThreshold !== null && (
-                    <p class="hint">再買 NT${option.freeThreshold - quote.subtotal} 就免運</p>
+                    <p class="hint">再買 NT${option.freeThreshold - quote.shippingSubtotal} 就免運</p>
                   )}
                 </li>
-              ))}
-            </ul>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p class="note">此購物車只有線上課程，不需要配送。</p>
+            )}
 
             <dl class="totals">
               <div>
                 <dt>小計</dt>
                 <dd>NT${quote.subtotal}</dd>
               </div>
-              <div>
-                <dt>運費</dt>
-                <dd>{delivery ? (delivery.fee === 0 ? '免運' : `NT$${delivery.fee}`) : '—'}</dd>
-              </div>
+              {quote.requiresShipping && (
+                <div>
+                  <dt>運費</dt>
+                  <dd>{delivery ? (delivery.fee === 0 ? '免運' : `NT$${delivery.fee}`) : '—'}</dd>
+                </div>
+              )}
               <div class="grand">
                 <dt>總計</dt>
                 <dd>NT${total}</dd>
