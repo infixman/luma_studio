@@ -5,6 +5,7 @@ import traceback
 import auth_customer
 from domain import cart, orders, shipping
 import mail
+from shared import flags
 from shared.common import d1_rows, env_var, taipei_day
 from shared.responses import Ctx
 
@@ -75,6 +76,12 @@ async def checkout_response(ctx: Ctx, customer: dict):
         return ctx.json({"error": "購物車內容已經變動，請回到購物車確認後再結帳", "problems": priced["problems"]}, 409)
     if not priced["lines"]:
         return ctx.error("購物車是空的", 400)
+
+    # Built and tested, and not for sale until somebody turns it on. The
+    # switch is here rather than only in the front end, because hiding the
+    # button leaves the endpoint open and the endpoint is what takes money.
+    if priced["containsCourse"] and not flags.enabled(ctx.env, flags.COURSE_CHECKOUT):
+        return ctx.error("課程商品尚未開放購買", 403)
 
     requires_shipping = priced["requiresShipping"]
 

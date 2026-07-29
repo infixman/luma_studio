@@ -16,12 +16,30 @@ from shared.common import (
     validate_file_name,
     validate_folder,
 )
+from domain import reconciliation
 from ibon import get_folder_select_type, invalidate_print_cache, print_spec, validate_select_type
+from shared import flags
 from shared.responses import Ctx
 
 
 async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
+
+    if path == "/api/health/reconciliation" and method == "GET":
+        # What the happy path dropped. Reported, never repaired here: the code
+        # that knows how to fix each of these already exists, and a repair
+        # written twice behaves two ways.
+        now = utc_timestamp()
+        return ctx.json(
+            {
+                "paidWithoutGrants": await reconciliation.orders_missing_grants(env),
+                "stockHeldPastExpiry": await reconciliation.orders_holding_stock_past_expiry(env, now=now),
+                "stuckTranscodes": await reconciliation.stuck_transcodes(env, now=now),
+                "accessWithoutSources": await reconciliation.entitlements_without_live_sources(env),
+                "orphanPurchaseLocks": await reconciliation.orphan_purchase_locks(env),
+                "flags": flags.snapshot(env),
+            }
+        )
 
     if path == "/api/print-settings" and method == "GET":
         try:

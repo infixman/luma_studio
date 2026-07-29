@@ -684,9 +684,12 @@ class TestCheckingOutSomethingWithNothingToPost:
     """A course has no address. Asking for one is asking for nothing."""
 
     def _checkout(self, call, body: dict, answers: dict | None = None):
+        # Courses are behind a switch until launch, so a test about buying one
+        # has to say the shop is open for them.
         return call(
             JsonStorefrontRequest("/api/checkout", body, **SESSION_COOKIE),
             FakeDatabase(answers or digital_catalogue()),
+            COURSE_CHECKOUT_ENABLED="1",
         )
 
     def test_a_course_can_be_bought_without_a_delivery_method(self, call):
@@ -975,3 +978,62 @@ class TestBuyingTheSameCourseTwice:
         )
 
         assert not any("course_offer_purchase_locks" in w[0] for w in database.writes)
+
+
+class TestTheCourseCheckoutSwitch:
+    """Built, tested, and not for sale until somebody says so.
+
+    The switch is on the server. Hiding the button would leave the endpoint
+    open, and the endpoint is the part that takes money.
+    """
+
+    def test_a_course_cannot_be_bought_while_the_switch_is_off(self, call):
+        response = call(
+            JsonStorefrontRequest(
+                "/api/checkout",
+                {
+                    "lines": [{"offerId": "off-1", "quantity": 1}],
+                    "recipientName": "王小明",
+                    "recipientEmail": "buyer@example.com",
+                },
+                **SESSION_COOKIE,
+            ),
+            FakeDatabase(digital_catalogue()),
+        )
+
+        assert response.status == 403
+
+    def test_a_physical_order_is_unaffected_by_it(self, call):
+        """The switch is about courses. A shop that already works must not
+        stop working because a course flag is off."""
+
+        answers = digital_catalogue()
+        answers["SELECT * FROM offer_components"] = [{
+            "id": "oc-1", "offer_id": "off-1", "component_type": "inventory",
+            "component_id": "kit-1", "quantity": 1, "access_days": None, "position": 0,
+        }]
+        answers["SELECT * FROM inventory_items"] = [{
+            "id": "kit-1", "title": "材料包", "sku": "KIT-1", "stock": 5, "enabled": 1, "archived_at": None,
+        }]
+        answers["SELECT * FROM shipping_methods"] = [{
+            "method": "home", "label": "宅配", "enabled": 1, "fee": 120,
+            "free_threshold": None, "position": 0, "updated_at": 0,
+        }]
+
+        response = call(
+            JsonStorefrontRequest(
+                "/api/checkout",
+                {
+                    "lines": [{"offerId": "off-1", "quantity": 1}],
+                    "shippingMethod": "home",
+                    "recipientName": "王小明",
+                    "recipientPhone": "0912345678",
+                    "recipientEmail": "buyer@example.com",
+                    "address": "台北市中山區",
+                },
+                **SESSION_COOKIE,
+            ),
+            FakeDatabase(answers),
+        )
+
+        assert response.status == 201
