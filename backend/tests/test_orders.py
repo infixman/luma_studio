@@ -922,3 +922,56 @@ class TestShippingSomethingThatWasNeverPosted:
         )
 
         assert run(orders.advance(make_env(database), "LS1", "shipped", "owner@example.com")) is not None
+
+
+class TestBuyingTheSameCourseTwice:
+    def test_a_second_order_for_a_held_course_is_refused(self, orders):
+        """The cart says "you already own this", but two tabs both pass that
+        check before either order exists. The lock is what settles it."""
+
+        database = FakeDatabase(
+            changes={
+                "INSERT OR IGNORE INTO course_offer_purchase_locks": 0,
+                "UPDATE course_offer_purchase_locks": 0,
+            }
+        )
+
+        with pytest.raises(orders.OrderError):
+            run(
+                orders.create_order(
+                    make_env(database),
+                    CUSTOMER,
+                    priced={
+                        "lines": [
+                            resolved_line(
+                                components=[course_component()], contains_course=True, requires_shipping=False
+                            )
+                        ],
+                        "problems": [],
+                        "subtotal": 3980,
+                        "shippingSubtotal": 0,
+                    },
+                    method=None,
+                    recipient=RECIPIENT,
+                    day="20260728",
+                )
+            )
+
+        # Nothing was taken off a shelf on the way to being turned away.
+        assert not any("UPDATE inventory_items SET stock = stock -" in w[0] for w in database.writes)
+
+    def test_a_physical_only_order_never_touches_the_locks(self, orders):
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 1})
+
+        run(
+            orders.create_order(
+                make_env(database),
+                CUSTOMER,
+                priced={"lines": [resolved_line()], "problems": [], "subtotal": 3980, "shippingSubtotal": 3980},
+                method=METHOD,
+                recipient=RECIPIENT,
+                day="20260728",
+            )
+        )
+
+        assert not any("course_offer_purchase_locks" in w[0] for w in database.writes)

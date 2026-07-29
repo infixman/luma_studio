@@ -215,3 +215,71 @@ class TestRevoking:
         )
 
         assert database.writes == []
+
+
+class TestPurchaseLocks:
+    """Stopping a member paying twice for one grant.
+
+    The cart can say "you already own this", but the cart is a page, not a
+    guarantee: two tabs, or two taps on a slow connection, both pass that
+    check before either order exists. The lock is what makes the second one
+    lose.
+    """
+
+    def test_a_first_checkout_takes_the_lock(self, entitlements):
+        database = FakeDatabase(changes={"INSERT OR IGNORE INTO course_offer_purchase_locks": 1})
+
+        assert asyncio.run(
+            entitlements.hold_offer(make_env(database), customer_id="c1", offer_id="off-1", order_id="LS1", expires_at=900)
+        ) is True
+
+    def test_a_second_checkout_for_the_same_offer_does_not(self, entitlements):
+        """INSERT OR IGNORE, so whoever loses the race is told, not crashed."""
+
+        # The insert loses, and the hold it lost to has not run out, so the
+        # takeover matches nothing either.
+        database = FakeDatabase(
+            changes={
+                "INSERT OR IGNORE INTO course_offer_purchase_locks": 0,
+                "UPDATE course_offer_purchase_locks": 0,
+            }
+        )
+
+        assert asyncio.run(
+            entitlements.hold_offer(make_env(database), customer_id="c1", offer_id="off-1", order_id="LS2", expires_at=900)
+        ) is False
+
+    def test_an_expired_hold_is_taken_over_rather_than_blocking_forever(self, entitlements):
+        """A cart abandoned at the payment page must not lock the member out
+        of ever buying that course."""
+
+        database = FakeDatabase(changes={"INSERT OR IGNORE INTO course_offer_purchase_locks": 0, "UPDATE course_offer_purchase_locks": 1})
+
+        assert asyncio.run(
+            entitlements.hold_offer(make_env(database), customer_id="c1", offer_id="off-1", order_id="LS2", expires_at=900)
+        ) is True
+
+        takeover = next(w for w in database.writes if "UPDATE course_offer_purchase_locks" in w[0])
+        assert "state = 'pending'" in takeover[0]
+        assert "expires_at <" in takeover[0]
+
+    def test_paying_keeps_the_hold_but_stops_it_expiring(self, entitlements):
+        """A paid grant is not a transient hold. It stays until the access it
+        produced is gone, or the member could buy the same course twice."""
+
+        database = FakeDatabase()
+
+        asyncio.run(entitlements.confirm_hold(make_env(database), order_id="LS1"))
+
+        statement, _ = database.writes[0]
+        assert "state = 'paid'" in statement
+        assert "expires_at = NULL" in statement
+
+    def test_an_order_that_never_paid_releases_its_hold(self, entitlements):
+        database = FakeDatabase()
+
+        asyncio.run(entitlements.release_holds(make_env(database), order_id="LS1"))
+
+        statement, bindings = database.writes[0]
+        assert "DELETE FROM course_offer_purchase_locks" in statement
+        assert bindings == ("LS1",)

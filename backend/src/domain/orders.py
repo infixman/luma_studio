@@ -230,6 +230,25 @@ async def create_order(env, customer: dict, *, priced: dict, method: dict | None
     if not priced["lines"]:
         raise OrderError("購物車是空的")
 
+    now = utc_timestamp()
+    order_id = new_order_id(day)
+
+    # Course holds come first. Turning a member away because they already own
+    # something should happen before anything is taken off a shelf for them.
+    for line in priced["lines"]:
+        if not line.get("containsCourse"):
+            continue
+        held = await entitlements.hold_offer(
+            env,
+            customer_id=customer["id"],
+            offer_id=line.get("offerId") or line["variantId"],
+            order_id=order_id,
+            expires_at=now + RESERVATION_SECONDS,
+        )
+        if not held:
+            await entitlements.release_holds(env, order_id=order_id)
+            raise OrderError(f"「{line['productTitle']}」你已經擁有，或有一筆尚未完成的訂單")
+
     taken: list[tuple[str, int]] = []
     for item_id, quantity in _stock_wanted(priced).items():
         if await inventory.take_stock(env, item_id, quantity):
@@ -237,16 +256,15 @@ async def create_order(env, customer: dict, *, priced: dict, method: dict | None
             continue
         for reserved_id, reserved_quantity in taken:
             await inventory.give_back_stock(env, reserved_id, reserved_quantity)
+        await entitlements.release_holds(env, order_id=order_id)
         raise OrderError("購物車中有商品剛剛被買走了，請重新確認")
 
-    now = utc_timestamp()
     subtotal = priced["subtotal"]
     requires_shipping = any(line.get("requiresShipping", True) for line in priced["lines"])
     # Nothing to post means no method and no fee. Storing a real method with
     # an empty address reads as lost data on the order page.
     fee = shipping.fee_for(method, priced.get("shippingSubtotal", subtotal)) if method and requires_shipping else 0
     method_name = method["method"] if method and requires_shipping else "none"
-    order_id = new_order_id(day)
 
     await env.DB.prepare(
         "INSERT INTO orders (id, customer_id, status, subtotal, shipping_fee, total, shipping_method,"
@@ -448,6 +466,10 @@ async def release_stock(env, order_id: str) -> None:
     for row in rows:
         await inventory.give_back_stock(env, row["target_id"], int(row["quantity"]))
 
+    # An order that will never pay must not keep a member from buying the
+    # course again.
+    await entitlements.release_holds(env, order_id=order_id)
+
 
 async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool:
     """Move a pending order to paid, once.
@@ -500,6 +522,8 @@ async def provision_paid_order(env, order_id: str) -> None:
     if not order_rows:
         return
     customer_id = order_rows[0]["customer_id"]
+
+    await entitlements.confirm_hold(env, order_id=order_id)
 
     granted = 0
     for row in rows:

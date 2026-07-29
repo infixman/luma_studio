@@ -17,7 +17,7 @@ payment would spend a member's window while they were still waiting for the
 material kit to arrive.
 """
 
-from shared.common import d1_rows, urlsafe_token, utc_timestamp
+from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
 
 
 def is_active(entitlement: dict, *, now: int) -> bool:
@@ -198,3 +198,55 @@ async def revoke_source(env, *, fulfillment_id: str, actor: str, reason: str) ->
         ).bind(source["entitlement_id"], now, reason).run()
 
     return True
+
+
+async def hold_offer(env, *, customer_id: str, offer_id: str, order_id: str, expires_at: int) -> bool:
+    """Claim the right to be the one order buying this offer for this member.
+
+    The cart already says "you already own this", but a page is not a
+    guarantee: two tabs, or two taps on a slow connection, both pass that
+    check before either order exists. This is what makes the second lose.
+
+    An expired hold is taken over rather than blocking forever — a cart
+    abandoned at the payment page must not lock somebody out of ever buying
+    that course.
+    """
+
+    now = utc_timestamp()
+    result = await env.DB.prepare(
+        "INSERT OR IGNORE INTO course_offer_purchase_locks"
+        " (customer_id, offer_id, order_id, state, expires_at, created_at, updated_at)"
+        " VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5)"
+    ).bind(customer_id, offer_id, order_id, expires_at, now).run()
+    if d1_changed(result):
+        return True
+
+    # Somebody holds it. Only a *pending* hold that has run out is up for
+    # grabs; a paid one stands until the access it produced is gone.
+    takeover = await env.DB.prepare(
+        "UPDATE course_offer_purchase_locks"
+        " SET order_id = ?3, state = 'pending', expires_at = ?4, updated_at = ?5"
+        " WHERE customer_id = ?1 AND offer_id = ?2 AND state = 'pending' AND expires_at IS NOT NULL"
+        " AND expires_at < ?5"
+    ).bind(customer_id, offer_id, order_id, expires_at, now).run()
+    return d1_changed(takeover)
+
+
+async def confirm_hold(env, *, order_id: str) -> None:
+    """Payment landed, so the hold stops being transient.
+
+    Clearing `expires_at` matters: a paid grant that expired like an abandoned
+    cart would let the member buy the same course again a quarter of an hour
+    later.
+    """
+
+    await env.DB.prepare(
+        "UPDATE course_offer_purchase_locks SET state = 'paid', expires_at = NULL, updated_at = ?2"
+        " WHERE order_id = ?1"
+    ).bind(order_id, utc_timestamp()).run()
+
+
+async def release_holds(env, *, order_id: str) -> None:
+    """The order will never pay, so nothing is being bought twice."""
+
+    await env.DB.prepare("DELETE FROM course_offer_purchase_locks WHERE order_id = ?1").bind(order_id).run()
