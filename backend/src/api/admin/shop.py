@@ -244,14 +244,20 @@ async def handle(ctx: Ctx):
                     return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
             await shop.update_product(env, product_id, **fields)
             if default_fields is not None and default_offer is not None:
-                await shop.update_variant(
-                    default_offer["id"],
-                    title="",
-                    sku=default_fields["sku"],
-                    price=default_fields["price"],
-                    stock=default_fields["stock"],
-                    enabled=default_fields["enabled"],
-                )
+                try:
+                    await shop.update_variant(
+                        env,
+                        default_offer["id"],
+                        title="",
+                        sku=default_fields["sku"],
+                        price=default_fields["price"],
+                        stock=default_fields["stock"],
+                        enabled=default_fields["enabled"],
+                    )
+                except ValueError as error:
+                    # Stock this page cannot own — a shared inventory item, or
+                    # more than one. Saying so beats a 500 the admin cannot act on.
+                    return ctx.error(str(error), 409)
             if category_ids is not None:
                 await categories.set_for_product(env, product_id, category_ids)
             return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)))
@@ -352,7 +358,10 @@ async def handle(ctx: Ctx):
             env, product["id"], changing_offer_id=variant_id, offer_enabled=enabled
         ):
             return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
-        await shop.update_variant(env, variant_id, **fields, enabled=enabled)
+        try:
+            await shop.update_variant(env, variant_id, **fields, enabled=enabled)
+        except ValueError as error:
+            return ctx.error(str(error), 409)
         return ctx.json(await _detail(ctx, product))
 
     if path.startswith("/api/images/") and method == "DELETE":

@@ -424,11 +424,25 @@ async def create_variant(
 
 
 async def update_variant(env, variant_id: str, *, title: str, sku: str, price: int, stock: int, enabled: bool) -> bool:
+    """Save an Offer, including the stock box the product editor still shows.
+
+    Stock lives on the InventoryItem now, so writing only the old column would
+    leave the admin's number and the count phase 3 reserves against drifting
+    apart from the first edit onwards. `set_simple_offer_stock` writes both and
+    refuses the cases this box cannot express — a shared item, or more than one
+    — by raising, because silently skipping the sync would make the number the
+    admin typed disappear without explanation.
+    """
+
     if await get_variant(env, variant_id) is None:
         return False
+
+    from domain import offers
+
+    await offers.set_simple_offer_stock(env, variant_id, stock)
     await env.DB.prepare(
-        "UPDATE product_variants SET title = ?2, sku = ?3, price = ?4, stock = ?5, enabled = ?6 WHERE id = ?1"
-    ).bind(variant_id, title, sku, price, stock, 1 if enabled else 0).run()
+        "UPDATE product_variants SET title = ?2, sku = ?3, price = ?4, enabled = ?5 WHERE id = ?1"
+    ).bind(variant_id, title, sku, price, 1 if enabled else 0).run()
     return True
 
 

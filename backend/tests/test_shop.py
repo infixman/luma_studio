@@ -239,6 +239,61 @@ class TestNewOffersGetSomewhereToKeepStock:
         assert bindings[2] == "T-shirt M"
 
 
+class TestStockEditsReachTheInventoryItem:
+    """The product editor's stock box has to write where stock now lives.
+
+    Leaving it on `product_variants.stock` alone would mean the admin's number
+    and the count phase 3 reserves against drift apart from the first edit.
+    """
+
+    def _database(self, *, referenced_by: list[str] | None = None):
+        offer_id = "v" * 18
+        return offer_id, FakeDatabase(
+            {
+                "SELECT * FROM product_variants WHERE id": [{
+                    "id": offer_id, "product_id": "p" * 18, "title": "", "sku": "KIT-1",
+                    "price": 300, "stock": 5, "position": 0, "enabled": 1, "is_default": 1,
+                }],
+                "SELECT * FROM offer_components": [{
+                    "id": "oc-1", "offer_id": offer_id, "component_type": "inventory",
+                    "component_id": offer_id, "quantity": 1, "access_days": None, "position": 0,
+                }],
+                "SELECT offer_id FROM offer_components": [
+                    {"offer_id": value} for value in (referenced_by or [offer_id])
+                ],
+                "SELECT * FROM inventory_items": [{
+                    "id": offer_id, "sku": "KIT-1", "title": "材料包", "stock": 5,
+                    "enabled": 1, "archived_at": None, "created_at": 0, "updated_at": 0,
+                }],
+            }
+        )
+
+    def test_editing_stock_updates_the_item_as_well_as_the_old_column(self, shop):
+        offer_id, database = self._database()
+
+        asyncio.run(
+            shop.update_variant(
+                make_env(database), offer_id, title="", sku="KIT-1", price=300, stock=12, enabled=True
+            )
+        )
+
+        statements = [statement for statement, _ in database.writes]
+        assert any("UPDATE inventory_items SET stock = ?2" in statement for statement in statements)
+        assert any("UPDATE product_variants SET title" in statement for statement in statements)
+
+    def test_stock_shared_with_another_offer_is_refused_rather_than_written_to_one_place(self, shop):
+        """Silently skipping the sync would make the typed number vanish."""
+
+        offer_id, database = self._database(referenced_by=["off-1", "off-2"])
+
+        with pytest.raises(ValueError):
+            asyncio.run(
+                shop.update_variant(
+                    make_env(database), offer_id, title="", sku="KIT-1", price=300, stock=12, enabled=True
+                )
+            )
+
+
 class TestUnsellableActiveProducts:
     """Migration 0027 only marked products that already had exactly one offer.
 

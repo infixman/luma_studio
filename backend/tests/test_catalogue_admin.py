@@ -173,6 +173,72 @@ class TestCourseWrites:
         assert response.status == 404
 
 
+class TestSingleOfferProductSave:
+    """Saving a no-options product saves its price and stock with it."""
+
+    def _catalogue(self, *, referenced_by: list[str] | None = None) -> dict:
+        product_id, offer_id = "p" * 18, "v" * 18
+        return {
+            "SELECT * FROM products WHERE id": [{
+                "id": product_id, "slug": "brush", "title": "畫筆", "description": "",
+                "status": "draft", "position": 0, "created_at": 0, "updated_at": 0,
+            }],
+            "SELECT * FROM product_variants WHERE product_id": [{
+                "id": offer_id, "product_id": product_id, "title": "", "sku": "BRUSH-01",
+                "price": 680, "stock": 5, "position": 0, "enabled": 1, "is_default": 1,
+            }],
+            "SELECT * FROM product_variants WHERE id": [{
+                "id": offer_id, "product_id": product_id, "title": "", "sku": "BRUSH-01",
+                "price": 680, "stock": 5, "position": 0, "enabled": 1, "is_default": 1,
+            }],
+            "SELECT * FROM offer_components": [{
+                "id": "oc-1", "offer_id": offer_id, "component_type": "inventory",
+                "component_id": offer_id, "quantity": 1, "access_days": None, "position": 0,
+            }],
+            "SELECT offer_id FROM offer_components": [
+                {"offer_id": value} for value in (referenced_by or [offer_id])
+            ],
+            "SELECT * FROM inventory_items": [{
+                "id": offer_id, "sku": "BRUSH-01", "title": "畫筆", "stock": 5,
+                "enabled": 1, "archived_at": None, "created_at": 0, "updated_at": 0,
+            }],
+        }
+
+    def test_saving_price_and_stock_from_the_product_page_succeeds(self, call):
+        response = call(
+            signed_in_json(
+                "/api/products/" + "p" * 18,
+                "PUT",
+                {
+                    "slug": "brush", "title": "畫筆", "description": "", "status": "draft",
+                    "price": 680, "sku": "BRUSH-01", "stock": 12, "enabled": True,
+                },
+            ),
+            self._catalogue(),
+        )
+
+        assert response.status == 200
+
+    def test_stock_the_product_page_cannot_own_is_explained_rather_than_a_server_error(self, call):
+        """A shared item's count belongs to every offer including it. The
+        editor cannot express that, so it says so instead of failing."""
+
+        response = call(
+            signed_in_json(
+                "/api/products/" + "p" * 18,
+                "PUT",
+                {
+                    "slug": "brush", "title": "畫筆", "description": "", "status": "draft",
+                    "price": 680, "sku": "BRUSH-01", "stock": 12, "enabled": True,
+                },
+            ),
+            self._catalogue(referenced_by=["v" * 18, "other-offer"]),
+        )
+
+        assert response.status == 409
+        assert "庫存" in response.json()["error"]
+
+
 class TestArchiveProtection:
     """Something an order or an offer names is archived, never deleted."""
 

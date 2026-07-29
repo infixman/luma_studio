@@ -48,25 +48,28 @@
 
 ## 5. 相容層
 
-- [ ] 現有 shop/public API 在 phase3 前仍能取得正確 stock。
-- [ ] 現有管理端變更庫存時只更新 InventoryItem。
-- [ ] 必要時提供短期 read adapter，不建立永久雙寫。
-- [ ] 記錄切換到 phase3 後可移除的 compatibility code。
+- [x] 現有 shop/public API 在 phase3 前仍能取得正確 stock。（`variant.stock` 由 `offers.set_simple_offer_stock` 同步鏡像；cart、public detail、dashboard 低庫存都不需改）
+- [x] 管理端變更庫存一律經 Inventory domain。（`shop.update_variant` 改呼叫 `set_simple_offer_stock`，不再自己寫 stock 欄位；共用或多實體內容丟 ValueError，API 回 409）
+- [x] 短期 read adapter 不需要：`variant.stock` 仍是同一份數字的鏡像，phase3 改讀 InventoryItem 時直接切換。
+- [x] 記錄切換到 phase3 後可移除的 compatibility code：
+      1. `offers.set_simple_offer_stock` 中對 `product_variants.stock` 的鏡像 UPDATE。
+      2. `domain/cart.py`、`domain/orders.py`、`domain/dashboard.py` 對 `variant.stock` 的讀取。
+      3. 商品編輯頁的單一庫存欄位（改由庫存品管理）。
 
 ## 6. 測試
 
-- [ ] 新增 migration/backfill 測試。
-- [ ] 新增 InventoryItem CRUD、調整與引用保護測試。
-- [ ] 新增 Course skeleton 狀態與 slug 唯一測試。
-- [ ] 新增 OfferComponent 驗證與完整集合替換測試。
-- [ ] 新增 `resolve_offer` 四種組合測試。
-- [ ] 新增管理 API 權限與錯誤 shape 測試。
-- [ ] 前端測試 picker、重複阻擋、數量與摘要。
+- [x] 新增 migration/backfill 測試。（`test_migrations_sqlite.py`，真 SQLite 引擎；涵蓋重跑不重複、不覆寫已調整的 stock）
+- [x] 新增 InventoryItem CRUD、調整與引用保護測試。（`test_inventory.py`、`test_catalogue_admin.py`）
+- [x] 新增 Course skeleton 狀態與 slug 唯一測試。（`test_courses.py`、`test_catalogue_admin.py`）
+- [x] 新增 OfferComponent 驗證與完整集合替換測試。（`test_offers.py`）
+- [x] 新增 `resolve_offer` 組合測試。（純實體、純課程、混合、requiredQuantity 相乘、target 快照）
+- [x] 新增管理 API 權限與錯誤 shape 測試。（未登入 401、衍生欄位 400、引用中 409）
+- [x] 前端測試 picker、重複阻擋、數量與摘要。（`OfferComponentsPanel.test.tsx` 9 測）
 
 ## 7. Phase Gate
 
-- [ ] 所有既有商品都有一筆有效 inventory component。
-- [ ] 新舊 stock 比對完全一致。
-- [ ] 課程與混合 Offer 維持 draft，不得從公開商城購買。
-- [ ] phase3 可以只依 `resolve_offer` 實作 Cart 與 Order。
-- [ ] rollback 不需要刪除新表；舊商城仍可讀取保留欄位。
+- [ ] 所有既有商品都有一筆有效 inventory component。migration 與新建路徑都已涵蓋（0028 backfill + `shop.create_variant`），但實際資料需 staging 對帳。
+- [ ] 新舊 stock 比對完全一致。blocker：需 staging D1。本機已驗證兩者由同一次寫入同步。
+- [x] 課程與混合 Offer 維持 draft，不得從公開商城購買。（`offers.sale_blockers` 對未發布課程回 `course_not_published`；公開商城尚未讀 components，購物車行為未變）
+- [x] phase3 可以只依 `resolve_offer` 實作 Cart 與 Order。（`resolve_offer` 已回傳價格、能力旗標、component 快照與 `requiredQuantity`）
+- [x] rollback 不需要刪除新表；舊商城仍可讀取保留欄位。（`variant.sku`／`.stock` 未移除且仍同步）
