@@ -228,6 +228,7 @@ def _validate_carousel(config: dict) -> dict:
         # Off by default. Something that moves on its own takes the page away
         # from whoever is reading it.
         "autoplay": bool(config.get("autoplay")),
+        "interval": max(1, min(30, int(config.get("interval") or 6))),
     }
 
 
@@ -281,9 +282,13 @@ def _validate_about(config: dict) -> dict:
         # Both or neither: a label with no URL is a button that does nothing.
         if url and label:
             links.append({"label": label, "url": url})
+    raw_body = str(config.get("body") or "")
+    body = sanitize_html(raw_body) if "<" in raw_body else _text(config.get("body"), MAX_ABOUT_BODY, "內文")
+    if len(body) > MAX_ABOUT_BODY:
+        raise PageError(f"內文請控制在 {MAX_ABOUT_BODY} 個字以內")
     return {
         "heading": _text(config.get("heading"), MAX_HEADING, "標題"),
-        "body": _text(config.get("body"), MAX_ABOUT_BODY, "內文"),
+        "body": body,
         "mediaId": _media_id(config.get("mediaId")),
         "imageSide": _choice(str(config.get("imageSide") or "left"), IMAGE_SIDES, "圖片位置"),
         "links": links,

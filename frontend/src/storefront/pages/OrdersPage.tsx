@@ -38,6 +38,7 @@ export function OrdersPage() {
   const [tab, setTab] = useState('all')
 
   useEffect(() => {
+    document.title = '我的訂單 | Luma Studio'
     api<{ orders: OrderCard[] }>('/api/orders')
       .then((data) => setOrders(data.orders))
       .catch((error) => {
@@ -48,7 +49,14 @@ export function OrdersPage() {
   }, [])
 
   if (failed) return <main class="orders"><p class="empty">訂單載入失敗，請稍後再試。</p></main>
-  if (orders === null) return <main class="orders"><p class="empty">載入中…</p></main>
+  if (orders === null) return (
+    <main class="orders">
+      <div class="skeleton" style={{ height: '1.4rem', width: '35%', marginBottom: '1rem' }} />
+      {Array.from({ length: 3 }, (_, i) => (
+        <div key={i} class="skeleton" style={{ height: '3.5rem', width: '100%', marginBottom: '0.8rem' }} />
+      ))}
+    </main>
+  )
 
   const current = TABS.find((entry) => entry.key === tab) ?? TABS[0]!
   const shown = orders.filter((order) => current.matches(order.status))

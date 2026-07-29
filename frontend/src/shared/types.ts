@@ -480,6 +480,7 @@ export interface CarouselConfig {
   slides: CarouselSlide[]
   ratio: BlockRatio
   autoplay: boolean
+  interval?: number
 }
 
 export interface AlbumConfig {

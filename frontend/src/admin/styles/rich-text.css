@@ -40,6 +40,13 @@
   height: 18px;
 }
 
+.rte-text-icon {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
 :where(body.admin) .rte-btn:hover {
   background: var(--primary-soft);
   color: var(--text);
@@ -119,6 +126,17 @@
 
 .rte-content em {
   font-style: italic;
+}
+
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.rte-content iframe {
+  border: 0;
+  max-width: 100%;
 }
 
 .rte-content:empty::before {

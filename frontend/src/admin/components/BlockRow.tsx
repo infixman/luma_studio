@@ -136,32 +136,17 @@ export function BlockRow({
         )}
 
         <div class="block-actions" ref={wrap}>
-          <IconButton label="刪除這個區塊" tone="danger" size="sm" onClick={onDelete}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" />
-            </svg>
-          </IconButton>
-
-          {/* The handle, not the whole row: a draggable row cannot have text
-              selected inside it, and these rows open into forms. */}
           <span
             class="block-grip"
             draggable
             role="button"
             tabIndex={0}
             aria-label="拖曳以調整順序"
-            title="拖曳以調整順序"
+            title="移動"
             onDragStart={(event) => {
-              // Firefox refuses to begin a drag unless something is written to
-              // the transfer. The payload is unused — the row being moved is
-              // held in state — but without this line reordering does nothing
-              // in that browser at all.
               event.dataTransfer?.setData('text/plain', block.id)
               onDragStart()
             }}
-            // Escape, or letting go over nothing. Without this the row stays
-            // dressed as the one being dragged until the next drag, and the
-            // next drop reads a stale origin.
             onDragEnd={onDragEnd}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -173,6 +158,12 @@ export function BlockRow({
               <circle cx="15" cy="18" r="1.4" />
             </svg>
           </span>
+
+          <IconButton label="刪除" tone="danger" size="sm" onClick={onDelete}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" />
+            </svg>
+          </IconButton>
 
           <IconButton label="更多" size="sm" onClick={() => setMenu(!menu)}>
             <svg viewBox="0 0 24 24" aria-hidden="true">

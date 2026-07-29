@@ -125,6 +125,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
+    color-scheme: dark;
     --page: #1a1817;
     --surface: #232120;
     --raised: #232120;

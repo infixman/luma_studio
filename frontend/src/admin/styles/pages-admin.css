@@ -516,6 +516,12 @@ body.admin .block-editor {
   margin: 0 0 0.8rem;
 }
 
+body.admin .block-editor > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 body.admin .block-editor .choice-row {
   display: flex;
   flex-wrap: wrap;

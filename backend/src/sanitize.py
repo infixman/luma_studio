@@ -34,14 +34,63 @@ ALLOWED_TAGS = frozenset(
         "li",
         "br",
         "blockquote",
+        "img",
+        "div",
+        "iframe",
     }
 )
 
 ALLOWED_ATTRS: dict[str, frozenset[str]] = {
     "a": frozenset({"href", "rel"}),
+    "img": frozenset({"src", "alt"}),
+    "iframe": frozenset({"src", "allowfullscreen", "style"}),
+    "div": frozenset({"style"}),
+    "p": frozenset({"style"}),
 }
 
+SAFE_IFRAME_HOSTS = frozenset(
+    {
+        "www.youtube.com",
+        "youtube.com",
+        "www.instagram.com",
+        "instagram.com",
+        "www.facebook.com",
+        "facebook.com",
+    }
+)
+
 SAFE_SCHEMES = ("http://", "https://", "mailto:", "/")
+
+SAFE_STYLE_PROPS = frozenset(
+    {
+        "text-align",
+        "position",
+        "width",
+        "height",
+        "padding-bottom",
+        "overflow",
+        "top",
+        "left",
+        "border",
+    }
+)
+
+
+def _sanitize_style(value: str) -> str:
+    """Keep only safe CSS properties from a style attribute."""
+    parts = []
+    for declaration in value.split(";"):
+        declaration = declaration.strip()
+        if not declaration:
+            continue
+        if ":" not in declaration:
+            continue
+        prop, _, val = declaration.partition(":")
+        prop = prop.strip().lower()
+        val = val.strip()
+        if prop in SAFE_STYLE_PROPS and "\\" not in val and "url(" not in val.lower():
+            parts.append(f"{prop}:{val}")
+    return ";".join(parts)
 
 OPAQUE_TAGS = frozenset({"script", "style"})
 
@@ -73,16 +122,27 @@ class _Sanitizer(HTMLParser):
             if name not in allowed:
                 continue
             if value is None:
+                if name == "allowfullscreen":
+                    safe_attrs.append(f" {name}")
                 continue
-            if name == "href":
+            if name in ("href", "src"):
                 trimmed = value.strip()
                 if not any(trimmed.lower().startswith(s) for s in SAFE_SCHEMES):
                     continue
+                if name == "src" and tag == "iframe":
+                    from urllib.parse import urlparse
+                    host = urlparse(trimmed).hostname or ""
+                    if host not in SAFE_IFRAME_HOSTS:
+                        continue
                 value = trimmed
+            if name == "style":
+                value = _sanitize_style(value)
+                if not value:
+                    continue
             safe_attrs.append(f' {name}="{_escape_attr(value)}"')
 
         if tag in VOID_TAGS:
-            self.parts.append(f"<{tag}>")
+            self.parts.append(f"<{tag}{''.join(safe_attrs)}>")
         else:
             self.parts.append(f"<{tag}{''.join(safe_attrs)}>")
 

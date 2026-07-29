@@ -11,6 +11,7 @@ export function ShopPage() {
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    document.title = '商品 | Luma Studio'
     api<{ products: PublicProductCard[] }>('/api/products')
       .then((data) => setProducts(data.products))
       .catch(() => setFailed(true))

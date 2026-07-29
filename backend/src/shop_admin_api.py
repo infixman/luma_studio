@@ -7,6 +7,7 @@ the amount charged to a card.
 """
 
 import categories
+import sanitize
 import shipping
 import shop
 from responses import Ctx
@@ -31,12 +32,12 @@ async def _detail(ctx: Ctx, product: dict) -> dict:
 
 
 def _product_fields(body: dict) -> dict:
+    raw_desc = str(body.get("description") or "")
+    desc = sanitize.sanitize_html(raw_desc) if "<" in raw_desc else raw_desc
     return {
         "slug": shop.validate_slug(str(body.get("slug") or "")),
         "title": shop.validate_text(str(body.get("title") or ""), shop.MAX_TITLE, "Title"),
-        "description": shop.validate_text(
-            str(body.get("description") or ""), shop.MAX_DESCRIPTION, "Description", required=False
-        ),
+        "description": shop.validate_text(desc, shop.MAX_DESCRIPTION, "Description", required=False),
         "status": shop.validate_status(str(body.get("status") or "draft")),
     }
 

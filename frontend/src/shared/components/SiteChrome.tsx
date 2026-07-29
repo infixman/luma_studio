@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 
 import { SocialIcon } from './SocialIcon'
 import type { ResolvedMenuItem, SiteSettings } from '../types'
@@ -80,6 +80,13 @@ export function SiteHeader({
 }) {
   const [open, setOpen] = useState(false)
 
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
   const classes = [
     'site-header',
     `bg-${settings.headerBackground}`,
@@ -115,10 +122,6 @@ export function SiteHeader({
           <span aria-hidden="true">{open ? '✕' : '☰'}</span>
         </button>
 
-        <nav class="site-menu" aria-label="主選單">
-          <MenuTree menu={menu} parentId={null} depth={1} />
-        </nav>
-
         <div class="header-actions">
           {settings.headerCtaLabel && settings.headerCtaUrl && (
             <a class="cta" href={settings.headerCtaUrl}>
@@ -130,8 +133,6 @@ export function SiteHeader({
               {signedIn ? '我的訂單' : '登入'}
             </a>
           )}
-          {/* The class is `cart-action`, not `cart`: the storefront's cart
-              page owns `.cart`, and every page's CSS ends up in one bundle. */}
           {settings.headerShowCart && (
             <a
               class="action cart-action"
@@ -148,6 +149,11 @@ export function SiteHeader({
           )}
         </div>
       </div>
+
+      {open && <div class="menu-scrim" onClick={() => setOpen(false)} />}
+      <nav class="site-menu" aria-label="主選單">
+        <MenuTree menu={menu} parentId={null} depth={1} />
+      </nav>
     </header>
   )
 }

@@ -219,32 +219,57 @@
   100% { transform: scale(1) translate(0); }
 }
 
-/* The count sits on a filled pill, so its text takes the header's background
-   rather than inheriting the colour it is painted with. */
-.site-header.text-light .header-actions .count { color: #2b2622; }
-.site-header.text-dark .header-actions .count { color: #faf7f2; }
+/* The count sits on a filled pill whose background is the header's ink and
+   whose text is the header's paper — readable over any photograph. */
+.site-header.text-dark .header-actions .count {
+  background: #2b2622;
+  color: #faf7f2;
+}
+.site-header.text-light .header-actions .count {
+  background: #fff;
+  color: #2b2622;
+}
+
+.menu-scrim {
+  display: none;
+}
 
 @media (max-width: 860px) {
   .menu-toggle {
     display: block;
+    margin-left: 0;
   }
 
   .site-menu {
-    display: none;
-    order: 3;
-    width: 100%;
-    margin: 0 0 0.8rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 80vw;
+    z-index: 200;
+    margin: 0;
+    padding: 1.4rem 1.2rem;
+    background: #faf7f2;
+    color: #2b2622;
+    box-shadow: 4px 0 24px rgb(0 0 0 / 0.12);
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
   }
 
   .site-header.open .site-menu {
+    transform: translateX(0);
+  }
+
+  .site-header.open .menu-scrim {
     display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: rgb(0 0 0 / 0.35);
   }
 
-  .site-header.open .header-inner {
-    flex-wrap: wrap;
-  }
-
-  /* No hover on a touch screen, so every level is simply shown, indented. */
   .site-menu .menu-level {
     flex-direction: column;
     gap: 0;
@@ -261,8 +286,18 @@
     padding: 0 0 0 1.1rem;
   }
 
+  .site-menu .menu-level a {
+    color: #2b2622;
+  }
+
   .header-actions {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .site-menu {
+    transition: none;
   }
 }
 

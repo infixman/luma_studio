@@ -34,7 +34,7 @@ export function contentSecurityPolicy(
     // Only the back office frames anything, and only the storefront's preview
     // route. Without this the admin's own default-src refuses the iframe —
     // which it did, silently, for as long as the feature existed.
-    `frame-src ${mayFrame ? `'self' ${mayFrame}` : "'none'"}`,
+    `frame-src 'self' https://www.youtube.com https://www.instagram.com https://www.facebook.com${mayFrame ? ` ${mayFrame}` : ''}`,
     "object-src 'none'",
     "base-uri 'none'",
     // No form on either site posts anywhere. When the PAYUNi payment form

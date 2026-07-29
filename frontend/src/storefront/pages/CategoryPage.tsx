@@ -20,7 +20,10 @@ export function CategoryPage({ filter }: { filter: string }) {
 
   useEffect(() => {
     api<CategoryPageData>(`/api/categories/${filter}`)
-      .then(setPage)
+      .then((data) => {
+        setPage(data)
+        document.title = `${data.title} | Luma Studio`
+      })
       .catch((error) => {
         if (error instanceof ApiError && error.status === 404) setMissing(true)
         else setFailed(true)
@@ -56,10 +59,6 @@ export function CategoryPage({ filter }: { filter: string }) {
 
   return (
     <main class="shop">
-      <p class="crumb">
-        <a href="/shop">← 所有商品</a>
-      </p>
-
       <h1 class="shop-title">{page.title}</h1>
 
       {page.description && <p class="category-blurb">{page.description}</p>}

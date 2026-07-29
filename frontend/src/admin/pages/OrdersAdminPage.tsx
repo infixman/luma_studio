@@ -348,7 +348,11 @@ export function OrdersAdminPage() {
       // Not offered in the chooser: a row with no id is a row nobody can act
       // on, and every other column here is about that id.
       fixed: true,
-      render: (order) => <code>{order.id}</code>,
+      render: (order) => (
+        <button type="button" class="order-link" onClick={() => open(order)}>
+          <code>{order.id}</code>
+        </button>
+      ),
     },
     { key: 'recipientName', label: '收件人', render: (order) => order.recipientName },
     { key: 'total', label: '金額', numeric: true, render: (order) => `NT$${order.total}` },

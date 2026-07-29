@@ -48,7 +48,7 @@ function Block({ block }: { block: PageBlock }) {
       )
 
     case 'carousel':
-      return <Carousel slides={block.data?.slides ?? []} ratio={block.config.ratio} autoplay={block.config.autoplay} />
+      return <Carousel slides={block.data?.slides ?? []} ratio={block.config.ratio} autoplay={block.config.autoplay} interval={block.config.interval} />
 
     case 'album':
       return <Album images={block.data?.images ?? []} columns={block.config.columns} ratio={block.config.ratio} />
@@ -114,21 +114,22 @@ function Carousel({
   slides,
   ratio,
   autoplay,
+  interval,
 }: {
   slides: { image: MediaRef; caption: string; href: string }[]
   ratio: string
   autoplay: boolean
+  interval?: number
 }) {
   const [index, setIndex] = useState(0)
   const total = slides.length
+  const ms = (interval && interval >= 1 && interval <= 30 ? interval : 6) * 1000
 
   useEffect(() => {
     if (!autoplay || total < 2) return
-    // Slow on purpose. A carousel that moves before the caption has been read
-    // is a carousel nobody reads.
-    const timer = setInterval(() => setIndex((current) => (current + 1) % total), 6000)
+    const timer = setInterval(() => setIndex((current) => (current + 1) % total), ms)
     return () => clearInterval(timer)
-  }, [autoplay, total])
+  }, [autoplay, total, ms])
 
   if (total === 0) return null
   const current = slides[Math.min(index, total - 1)]!
@@ -362,9 +363,14 @@ function About({ block }: { block: Extract<PageBlock, { type: 'about' }> }) {
       )}
       <div class="words">
         {heading && <h2>{heading}</h2>}
-        {/* Same escape-first renderer as the text block, so one paragraph of
-            prose behaves the same wherever it is written. */}
-        {body && <div class="body" dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }} />}
+        {body && (
+          <div
+            class="body"
+            dangerouslySetInnerHTML={{
+              __html: /<[a-z][\s\S]*>/i.test(body) ? body : renderMarkdown(body),
+            }}
+          />
+        )}
         {links.length > 0 && (
           <ul class="links">
             {links.map((link) => (

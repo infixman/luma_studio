@@ -51,6 +51,7 @@ export function CheckoutPage() {
   }, [])
 
   useEffect(() => {
+    document.title = '結帳 | Luma Studio'
     void load()
   }, [load])
 
@@ -86,7 +87,14 @@ export function CheckoutPage() {
     )
   }
 
-  if (quote === null) return <main class="checkout"><p class="empty">載入中…</p></main>
+  if (quote === null) return (
+    <main class="checkout">
+      <div class="skeleton" style={{ height: '1.4rem', width: '30%', marginBottom: '1rem' }} />
+      <div class="skeleton" style={{ height: '3.5rem', width: '100%', marginBottom: '0.8rem' }} />
+      <div class="skeleton" style={{ height: '3.5rem', width: '100%', marginBottom: '1.5rem' }} />
+      <div class="skeleton" style={{ height: '2.8rem', width: '50%' }} />
+    </main>
+  )
 
   if (quote.lines.length === 0) {
     return (

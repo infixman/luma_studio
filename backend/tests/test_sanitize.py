@@ -23,15 +23,24 @@ def test_strips_style():
 
 
 def test_strips_unknown_tags_keeps_text():
-    assert sanitize_html("<div><span>hello</span></div>") == "hello"
+    assert sanitize_html("<div><span>hello</span></div>") == "<div>hello</div>"
 
 
-def test_strips_img():
-    assert sanitize_html('<img src="x" onerror="alert(1)">text') == "text"
+def test_img_keeps_safe_src_strips_handlers():
+    assert sanitize_html('<img src="https://example.com/pic.jpg" onerror="alert(1)">text') == '<img src="https://example.com/pic.jpg">text'
 
 
-def test_strips_iframe():
-    assert sanitize_html('<iframe src="evil.com"></iframe>') == ""
+def test_img_strips_unsafe_src():
+    assert sanitize_html('<img src="javascript:alert(1)">text') == "<img>text"
+
+
+def test_iframe_allows_youtube():
+    raw = '<iframe src="https://www.youtube.com/embed/abc123" allowfullscreen></iframe>'
+    assert sanitize_html(raw) == '<iframe src="https://www.youtube.com/embed/abc123" allowfullscreen></iframe>'
+
+
+def test_iframe_strips_unknown_host():
+    assert sanitize_html('<iframe src="https://evil.com/x"></iframe>') == "<iframe></iframe>"
 
 
 def test_allows_safe_href():

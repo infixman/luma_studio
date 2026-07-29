@@ -45,6 +45,7 @@ export function CartPage() {
   }, [])
 
   useEffect(() => {
+    document.title = '購物車 | Luma Studio'
     void revalidate()
   }, [revalidate])
 
@@ -69,7 +70,9 @@ export function CartPage() {
   if (quote === null) {
     return (
       <main class="cart">
-        <p class="empty">載入中…</p>
+        <div class="skeleton" style={{ height: '1.4rem', width: '25%', marginBottom: '1rem' }} />
+        <div class="skeleton" style={{ height: '4rem', width: '100%', marginBottom: '0.8rem' }} />
+        <div class="skeleton" style={{ height: '4rem', width: '100%' }} />
       </main>
     )
   }

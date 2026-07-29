@@ -46,6 +46,20 @@ body.admin .order-tabs .count {
   font-variant-numeric: tabular-nums;
 }
 
+body.admin .order-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+body.admin .order-link:hover code {
+  text-decoration: underline;
+}
+
 /* The row whose detail panel is open, so the two are visibly the same order. */
 body.admin .ui-table tbody tr.current td {
   box-shadow: inset 2px 0 0 var(--primary);

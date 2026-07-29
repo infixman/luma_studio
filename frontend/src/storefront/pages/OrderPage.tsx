@@ -50,7 +50,9 @@ export function OrderPage({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      setDetail(await api<OrderDetail>(`/api/orders/${encodeURIComponent(id)}`))
+      const data = await api<OrderDetail>(`/api/orders/${encodeURIComponent(id)}`)
+      setDetail(data)
+      document.title = `訂單 ${id.slice(0, 8)} | Luma Studio`
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) setMissing(true)
     }
@@ -92,7 +94,13 @@ export function OrderPage({ id }: { id: string }) {
     )
   }
 
-  if (detail === null) return <main class="order"><p class="empty">載入中…</p></main>
+  if (detail === null) return (
+    <main class="order">
+      <div class="skeleton" style={{ height: '1.4rem', width: '40%', marginBottom: '1rem' }} />
+      <div class="skeleton" style={{ height: '3rem', width: '100%', marginBottom: '1rem' }} />
+      <div class="skeleton" style={{ height: '4rem', width: '100%' }} />
+    </main>
+  )
 
   const { order, items } = detail
   const remaining = order.status === 'pending' ? minutesLeft(order.reservedUntil) : null

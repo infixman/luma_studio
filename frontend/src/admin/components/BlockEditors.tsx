@@ -1,6 +1,7 @@
 import type { JSX } from 'preact'
 
 import { apiUrl } from '../../shared/api'
+import { RichTextEditor } from './RichTextEditor'
 import type {
   AboutConfig,
   AlbumConfig,
@@ -91,7 +92,7 @@ export function BlockIcon({ type }: { type: PageBlock['type'] }) {
 }
 
 export const BLOCK_KINDS: { type: PageBlock['type']; label: string; hint: string }[] = [
-  { type: 'text', label: '文字', hint: '標題、段落、清單，所見即所得編輯' },
+  { type: 'text', label: 'HTML', hint: '標題、段落、清單，所見即所得編輯' },
   { type: 'carousel', label: '輪播圖', hint: '一次一張，可以放圖說與連結' },
   { type: 'album', label: '相簿', hint: '格狀排列的作品照片' },
   { type: 'shop', label: '商城', hint: '指定商品，或整個分類' },
@@ -146,7 +147,8 @@ export function blockSummary(type: PageBlock['type'], config: BlockConfig): stri
     }
     case 'about': {
       const about = config as AboutConfig
-      return about.heading || clip(about.body.trim(), 60) || '（還沒有內容）'
+      const plain = about.body.replace(/<[^>]*>/g, '').trim()
+      return about.heading || clip(plain, 60) || '（還沒有內容）'
     }
     case 'contact': {
       const contact = config as ContactConfig
@@ -293,8 +295,21 @@ export function CarouselEditor({
         />
         自動播放
       </label>
-      {/* Said here rather than left to be discovered on the live page. */}
-      <p class="muted">自動播放會在讀者還在看的時候換頁，通常關著比較好。</p>
+      {config.autoplay && (
+        <label class="row">
+          每
+          <input
+            type="number"
+            min={1}
+            max={30}
+            style={{ width: '4rem' }}
+            value={config.interval ?? 6}
+            onChange={(event) => onChange({ ...config, interval: Number((event.target as HTMLInputElement).value) || 6 })}
+          />
+          秒換一張
+        </label>
+      )}
+      {!config.autoplay && <p class="muted">自動播放會在讀者還在看的時候換頁，通常關著比較好。</p>}
 
       <ul class="slide-list">
         {slides.map((slide, index) => (
@@ -567,6 +582,15 @@ export function ShopEditor({
   )
 }
 
+function textToHtml(text: string): string {
+  if (/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
 export function AboutEditor({
   config,
   onChange,
@@ -598,12 +622,9 @@ export function AboutEditor({
         />
       </label>
 
-      <textarea
-        rows={8}
-        maxLength={4000}
-        value={config.body}
-        placeholder={'關於我，或聯絡方式。\n\n支援 Markdown。'}
-        onInput={(event) => onChange({ ...config, body: (event.target as HTMLTextAreaElement).value })}
+      <RichTextEditor
+        config={{ body: textToHtml(config.body), format: 'html' }}
+        onChange={(next) => onChange({ ...config, body: next.body })}
       />
 
       <div class="portrait-row">

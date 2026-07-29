@@ -13,11 +13,12 @@ import {
   Panel,
   RadioGroup,
   Spinner,
-  TextArea,
   TextField,
   Toggle,
   useConfirm,
 } from '../components/ui'
+import { RichTextEditor } from '../components/RichTextEditor'
+import { Lightbox } from '../components/Lightbox'
 import { api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
@@ -34,6 +35,15 @@ const MAX_IMAGES = 8
 /** A blank row for the "add variant" form, and what reset returns it to. */
 const EMPTY_VARIANT = { title: '', sku: '', price: '', stock: '' }
 
+function textToHtml(text: string): string {
+  if (!text) return ''
+  if (/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
 export function ProductEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null)
   const [form, setForm] = useState({ title: '', slug: '', description: '', status: 'draft' as ProductStatus })
@@ -41,6 +51,7 @@ export function ProductEditPage({ id }: { id: string }) {
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -58,8 +69,6 @@ export function ProductEditPage({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      // Two calls rather than one: the editor needs every category to draw
-      // the checkboxes, not only the ones already ticked.
       const [detailed, listing] = await Promise.all([
         api<ProductDetail>(`/api/products/${encodeURIComponent(id)}`),
         api<{ categories: Category[] }>('/api/categories'),
@@ -101,8 +110,6 @@ export function ProductEditPage({ id }: { id: string }) {
   function addVariant(event: Event) {
     event.preventDefault()
     void run(async () => {
-      // The API refuses anything that is not already a whole number, so the
-      // conversion happens here rather than being left to the server to guess.
       const next = await apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}/variants`, 'POST', {
         title: draft.title,
         sku: draft.sku,
@@ -186,9 +193,15 @@ export function ProductEditPage({ id }: { id: string }) {
   return (
     <AdminShell current="/products" message={message} onError={showError}>
       {dialog}
+      {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
       <p class="crumb">
-        <a href="/products">← 回到商城</a>
+        <a href="/products">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          商品列表
+        </a>
       </p>
       <h2 class="product-heading">{detail.product.title}</h2>
 
@@ -213,13 +226,14 @@ export function ProductEditPage({ id }: { id: string }) {
             required
             onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
           />
-          <TextArea
-            label="商品說明"
-            value={form.description}
-            maxLength={2000}
-            rows={6}
-            onInput={(event) => setForm({ ...form, description: (event.currentTarget as HTMLTextAreaElement).value })}
-          />
+
+          <div class="ui-field">
+            <label class="ui-label">商品說明</label>
+            <RichTextEditor
+              config={{ body: textToHtml(form.description), format: 'html' }}
+              onChange={(next) => setForm({ ...form, description: next.body })}
+            />
+          </div>
 
           <fieldset class="ui-checkbox-set">
             <legend class="ui-label">分類</legend>
@@ -294,8 +308,6 @@ export function ProductEditPage({ id }: { id: string }) {
                     })
                   }
                 />
-                {/* A switch rather than a checkbox: this saves the moment it
-                    is flipped, there is no form waiting to be submitted. */}
                 <Toggle
                   label="啟用"
                   checked={variant.enabled}
@@ -372,7 +384,13 @@ export function ProductEditPage({ id }: { id: string }) {
           <ul class="photo-grid">
             {detail.images.map((image, position) => (
               <li key={image.id}>
-                {image.path && <img src={apiUrl(image.path)} alt={image.alt} />}
+                {image.path && (
+                  <img
+                    src={apiUrl(image.path)}
+                    alt={image.alt}
+                    onClick={() => image.path && setLightbox({ src: apiUrl(image.path), alt: image.alt })}
+                  />
+                )}
                 <IconButton
                   label="移除這張照片"
                   tone="danger"
@@ -389,9 +407,6 @@ export function ProductEditPage({ id }: { id: string }) {
           </ul>
         )}
 
-        {/* The file input itself stays out of sight: it is the one control the
-            component set cannot restyle, and it looks like a different
-            application on every operating system. */}
         <input
           ref={picker}
           class="ui-file-input"

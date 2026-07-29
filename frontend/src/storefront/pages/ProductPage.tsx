@@ -42,6 +42,7 @@ export function ProductPage({ slug }: { slug: string }) {
     api<PublicProductDetail>(`/api/products/${encodeURIComponent(slug)}`)
       .then((data) => {
         setProduct(data)
+        document.title = `${data.title} | Luma Studio`
         // Preselect when there is nothing to choose between: making someone
         // click the only option is a step that exists for the code's benefit.
         const available = data.variants.filter((variant) => variant.inStock)
@@ -65,7 +66,21 @@ export function ProductPage({ slug }: { slug: string }) {
   }
 
   if (failed) return <main class="product"><p class="empty">商品載入失敗，請稍後再試一次。</p></main>
-  if (product === null) return <main class="product"><p class="empty">載入中…</p></main>
+  if (product === null) return (
+    <main class="product">
+      <div class="layout">
+        <div class="gallery">
+          <div class="cover skeleton" />
+        </div>
+        <div class="info">
+          <div class="skeleton" style={{ height: '1.6rem', width: '60%', marginBottom: '0.8rem' }} />
+          <div class="skeleton" style={{ height: '1.2rem', width: '30%', marginBottom: '1.5rem' }} />
+          <div class="skeleton" style={{ height: '2.5rem', width: '100%', marginBottom: '0.8rem' }} />
+          <div class="skeleton" style={{ height: '2.8rem', width: '100%' }} />
+        </div>
+      </div>
+    </main>
+  )
 
   function addToCart() {
     if (!chosen) return
@@ -217,11 +232,13 @@ export function ProductPage({ slug }: { slug: string }) {
       {product.description && (
         <section class="description">
           <h2>商品描述</h2>
-          {product.description.split(/\n{2,}/).map((paragraph, index) => (
-            // Keyed by position: two identical paragraphs are legitimate
-            // in a description, and the text itself would collide.
-            <p key={index}>{paragraph}</p>
-          ))}
+          {/<[a-z][\s\S]*>/i.test(product.description) ? (
+            <div dangerouslySetInnerHTML={{ __html: product.description }} />
+          ) : (
+            product.description.split(/\n{2,}/).map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))
+          )}
         </section>
       )}
     </main>

@@ -71,18 +71,28 @@
   text-underline-offset: 0.2em;
 }
 
+.block-text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.block-text iframe {
+  border: 0;
+}
+
 .block-text strong {
   font-weight: 650;
 }
 
 /* --- carousel --- */
 
+.block-text,
 .block-carousel,
 .block-album,
 .block-shop,
 .block-about,
 .block-contact {
-  /* Wider than prose: a photograph cramped to reading width is a thumbnail. */
   max-width: 68rem;
 }
 
