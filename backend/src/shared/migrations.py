@@ -622,6 +622,17 @@ MIGRATIONS = [
         "add_columns": [("customers", "notes", "TEXT NOT NULL DEFAULT ''")],
         "statements": [],
     },
+    {
+        # Custom footer colours stay separate from the curated choice names.
+        # The domain only accepts six-digit hex values before these fields can
+        # be stored or rendered as inline colours.
+        "name": "0023_add_footer_custom_colours",
+        "add_columns": [
+            ("site_settings", "footer_custom_colour", "TEXT NOT NULL DEFAULT '#ece2d2'"),
+            ("site_settings", "footer_custom_text", "TEXT NOT NULL DEFAULT '#2b2622'"),
+        ],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

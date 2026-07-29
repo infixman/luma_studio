@@ -151,6 +151,27 @@ body.admin .site-colour-swatch.is-clay { background: var(--site-surface-clay); }
 body.admin .site-colour-swatch.is-forest { background: var(--site-surface-forest); }
 body.admin .site-colour-swatch.is-ink { background: var(--site-surface-ink); }
 
+body.admin .site-settings-form > label.site-custom-colour {
+  width: max-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+body.admin .site-settings-form > label.site-custom-colour input[type="color"] {
+  width: 2.5rem;
+  height: 2.25rem;
+  flex: none;
+  padding: 0.2rem;
+  cursor: pointer;
+}
+
+body.admin .site-custom-colour code {
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
 @media (max-width: 42rem) {
   body.admin .site-settings-form {
     width: 100%;

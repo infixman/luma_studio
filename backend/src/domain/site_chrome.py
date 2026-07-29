@@ -8,10 +8,9 @@ These are site settings, not blocks a page includes. A header you have to
 remember to insert is a header you will one day forget to insert, and the
 page that goes out without one is the page a customer sees.
 
-Appearance is chosen from fixed sets, never typed — the same rule `bio_link`
-states, for the same reason. Nothing the owner enters becomes CSS, so a
-curated palette can guarantee the menu stays legible on a screen that is not
-the one it was built on.
+Appearance normally comes from fixed sets. The footer also accepts a custom
+colour, but only as a validated six-digit hex value stored in its own column.
+That keeps typed text out of class names and arbitrary CSS out of the page.
 """
 
 import json
@@ -22,6 +21,7 @@ from shared.common import BASE_IMAGE_CONTENT_TYPES, d1_rows, next_position, rand
 
 
 MENU_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
+HEX_COLOUR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 BACKGROUNDS = ("transparent", "solid", "image")
 # Five surfaces chosen to sit under either text tone. Adding a sixth is a
@@ -29,6 +29,8 @@ BACKGROUNDS = ("transparent", "solid", "image")
 # editing at the time.
 COLOURS = ("cream", "sand", "clay", "forest", "ink")
 TEXT_TONES = ("dark", "light")
+FOOTER_COLOURS = (*COLOURS, "custom")
+FOOTER_TEXT_TONES = (*TEXT_TONES, "custom")
 SIZES = ("small", "medium", "large")
 
 TARGET_KINDS = ("parent", "page", "category", "url")
@@ -50,6 +52,8 @@ IMAGE_PREFIX = "_site"
 IMAGE_URL_PREFIX = "/site-assets"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
+DEFAULT_FOOTER_CUSTOM_COLOUR = "#ece2d2"
+DEFAULT_FOOTER_CUSTOM_TEXT = "#2b2622"
 
 
 class ChromeError(Exception):
@@ -62,6 +66,13 @@ def choice(value, allowed: tuple[str, ...], label: str) -> str:
 
 def text(value, limit: int, label: str, *, required: bool = False) -> str:
     return validate_text(value, limit, label, required=required, error_cls=ChromeError)
+
+
+def hex_colour(value, label: str, default: str) -> str:
+    colour = str(value or default).strip()
+    if not HEX_COLOUR_PATTERN.fullmatch(colour):
+        raise ChromeError(f"{label}必須是六位十六進位色碼")
+    return colour.lower()
 
 
 def validate_menu_id(menu_id: str) -> str:
@@ -173,6 +184,8 @@ DEFAULTS = {
     "headerCtaUrl": "",
     "footerColour": "ink",
     "footerText": "light",
+    "footerCustomColour": DEFAULT_FOOTER_CUSTOM_COLOUR,
+    "footerCustomText": DEFAULT_FOOTER_CUSTOM_TEXT,
     "footerBlurb": "",
     "footerCopyright": "",
     "footerColumns": [],
@@ -195,6 +208,12 @@ def settings_row(row: dict) -> dict:
         "headerCtaUrl": row["header_cta_url"],
         "footerColour": row["footer_colour"],
         "footerText": row["footer_text"],
+        "footerCustomColour": (
+            row["footer_custom_colour"] if "footer_custom_colour" in row else DEFAULT_FOOTER_CUSTOM_COLOUR
+        ),
+        "footerCustomText": (
+            row["footer_custom_text"] if "footer_custom_text" in row else DEFAULT_FOOTER_CUSTOM_TEXT
+        ),
         # Read defensively: both Workers read this table and only the admin one
         # applies migrations, so the public deployment can see a row from
         # before this column existed. An empty blurb is a footer without a
@@ -217,7 +236,7 @@ async def header_image_key(env) -> str | None:
 
 
 def validate_settings(body: dict) -> dict:
-    """Every field, checked against its fixed set. Nothing here becomes CSS."""
+    """Every field checked before storage; custom colours are strict hex."""
 
     cta_url = str(body.get("headerCtaUrl") or "")
     return {
@@ -231,8 +250,14 @@ def validate_settings(body: dict) -> dict:
         "header_show_login": 1 if body.get("headerShowLogin", True) else 0,
         "header_cta_label": text(body.get("headerCtaLabel"), MAX_CTA_LABEL, "按鈕文字"),
         "header_cta_url": validate_url(cta_url) if cta_url else "",
-        "footer_colour": choice(body.get("footerColour"), COLOURS, "頁尾底色"),
-        "footer_text": choice(body.get("footerText"), TEXT_TONES, "頁尾文字色"),
+        "footer_colour": choice(body.get("footerColour"), FOOTER_COLOURS, "頁尾底色"),
+        "footer_text": choice(body.get("footerText"), FOOTER_TEXT_TONES, "頁尾文字色"),
+        "footer_custom_colour": hex_colour(
+            body.get("footerCustomColour"), "頁尾自訂底色", DEFAULT_FOOTER_CUSTOM_COLOUR
+        ),
+        "footer_custom_text": hex_colour(
+            body.get("footerCustomText"), "頁尾自訂文字色", DEFAULT_FOOTER_CUSTOM_TEXT
+        ),
         "footer_blurb": text(body.get("footerBlurb"), MAX_BLURB, "頁尾介紹"),
         "footer_copyright": text(body.get("footerCopyright"), MAX_COPYRIGHT, "版權文字"),
         "footer_columns": json.dumps(validate_footer_columns(body.get("footerColumns") or []), ensure_ascii=False),
@@ -244,7 +269,8 @@ _SETTINGS_COLUMNS = frozenset({
     "header_background", "header_colour", "header_height", "header_text",
     "header_logo_size", "header_sticky", "header_show_cart", "header_show_login",
     "header_cta_label", "header_cta_url",
-    "footer_colour", "footer_text", "footer_blurb", "footer_copyright",
+    "footer_colour", "footer_text", "footer_custom_colour", "footer_custom_text",
+    "footer_blurb", "footer_copyright",
     "footer_columns", "footer_socials",
 })
 

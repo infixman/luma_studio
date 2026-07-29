@@ -36,7 +36,7 @@ function Choice<T extends string>({
 }: {
   legend: string
   value: T
-  options: { value: T; label: string; swatch?: string }[]
+  options: { value: T; label: string; swatch?: string; colour?: string }[]
   onPick: (next: T) => void
 }) {
   const name = useId()
@@ -57,7 +57,13 @@ function Choice<T extends string>({
                 onChange={() => onPick(option.value)}
               />
               <label class="site-choice-label" for={id}>
-                {option.swatch && <span class={`site-colour-swatch is-${option.swatch}`} aria-hidden="true" />}
+                {(option.swatch || option.colour) && (
+                  <span
+                    class={['site-colour-swatch', option.swatch ? `is-${option.swatch}` : ''].filter(Boolean).join(' ')}
+                    style={option.colour ? { backgroundColor: option.colour } : undefined}
+                    aria-hidden="true"
+                  />
+                )}
                 {option.label}
               </label>
             </span>
@@ -272,6 +278,8 @@ export function SitePage() {
   const footerDirty = savedSettings !== null && (
     settings.footerColour !== savedSettings.footerColour ||
     settings.footerText !== savedSettings.footerText ||
+    settings.footerCustomColour !== savedSettings.footerCustomColour ||
+    settings.footerCustomText !== savedSettings.footerCustomText ||
     settings.footerBlurb !== savedSettings.footerBlurb ||
     settings.footerCopyright !== savedSettings.footerCopyright ||
     JSON.stringify(settings.footerColumns) !== JSON.stringify(savedSettings.footerColumns) ||
@@ -551,16 +559,51 @@ export function SitePage() {
           }
         >
           <form id="site-footer-settings" class="site-settings-form" onSubmit={saveSettings}>
-            <Choice legend="底色" value={settings.footerColour} options={COLOURS} onPick={(footerColour) => edit({ footerColour })} />
+            <Choice
+              legend="底色"
+              value={settings.footerColour}
+              options={[
+                ...COLOURS,
+                { value: 'custom', label: '自訂', colour: settings.footerCustomColour },
+              ]}
+              onPick={(footerColour) => edit({ footerColour })}
+            />
+            {settings.footerColour === 'custom' && (
+              <label class="site-custom-colour">
+                <span>自訂底色</span>
+                <input
+                  type="color"
+                  value={settings.footerCustomColour}
+                  onInput={(event) =>
+                    edit({ footerCustomColour: (event.currentTarget as HTMLInputElement).value })
+                  }
+                />
+                <code>{settings.footerCustomColour.toUpperCase()}</code>
+              </label>
+            )}
             <Choice
               legend="文字色"
               value={settings.footerText}
               options={[
-                { value: 'dark', label: '深' },
-                { value: 'light', label: '淺' },
+                { value: 'dark', label: '深', colour: '#2b2622' },
+                { value: 'light', label: '淺', colour: '#f3efe9' },
+                { value: 'custom', label: '自訂', colour: settings.footerCustomText },
               ]}
               onPick={(footerText) => edit({ footerText })}
             />
+            {settings.footerText === 'custom' && (
+              <label class="site-custom-colour">
+                <span>自訂文字色</span>
+                <input
+                  type="color"
+                  value={settings.footerCustomText}
+                  onInput={(event) =>
+                    edit({ footerCustomText: (event.currentTarget as HTMLInputElement).value })
+                  }
+                />
+                <code>{settings.footerCustomText.toUpperCase()}</code>
+              </label>
+            )}
             <h3>品牌欄</h3>
             <p class="muted">頁尾左邊的那一塊：logo、一句話、版權。連結欄位會靠右排。</p>
             <label>

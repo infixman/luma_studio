@@ -31,7 +31,7 @@ class TestModuleName:
         assert site_chrome.__name__ == "domain.site_chrome"
 
 
-class TestAppearanceIsChosenNotTyped:
+class TestAppearanceValidation:
     @pytest.mark.parametrize(
         "field,value",
         [
@@ -44,7 +44,7 @@ class TestAppearanceIsChosenNotTyped:
         ],
     )
     def test_a_value_outside_the_fixed_set_is_refused(self, site_chrome, field, value):
-        """Nothing the owner enters becomes CSS. That is the whole rule."""
+        """Choice fields stay choices; custom colours have separate hex fields."""
 
         body = {
             "headerBackground": "solid",
@@ -76,6 +76,41 @@ class TestAppearanceIsChosenNotTyped:
         assert fields["header_background"] == "image"
         assert fields["header_sticky"] == 0
         assert fields["footer_copyright"] == "© 苒光繪誌"
+
+    def test_custom_footer_colours_are_validated_and_normalised(self, site_chrome):
+        fields = site_chrome.validate_settings(
+            {
+                "headerBackground": "solid",
+                "headerColour": "cream",
+                "headerHeight": "medium",
+                "headerText": "dark",
+                "headerLogoSize": "medium",
+                "footerColour": "custom",
+                "footerText": "custom",
+                "footerCustomColour": "#Aa33CC",
+                "footerCustomText": "#123456",
+            }
+        )
+        assert fields["footer_colour"] == "custom"
+        assert fields["footer_text"] == "custom"
+        assert fields["footer_custom_colour"] == "#aa33cc"
+        assert fields["footer_custom_text"] == "#123456"
+
+    @pytest.mark.parametrize("field,value", [("footerCustomColour", "red"), ("footerCustomText", "#12345g")])
+    def test_custom_footer_colours_refuse_arbitrary_css(self, site_chrome, field, value):
+        with pytest.raises(site_chrome.ChromeError):
+            site_chrome.validate_settings(
+                {
+                    "headerBackground": "solid",
+                    "headerColour": "cream",
+                    "headerHeight": "medium",
+                    "headerText": "dark",
+                    "headerLogoSize": "medium",
+                    "footerColour": "custom",
+                    "footerText": "custom",
+                    **{field: value},
+                }
+            )
 
 
 class TestFooterBlurb:
@@ -152,7 +187,10 @@ class TestFooterBlurb:
             "footer_columns": "[]",
             "footer_socials": "[]",
         }
-        assert site_chrome.settings_row(row)["footerBlurb"] == ""
+        settings = site_chrome.settings_row(row)
+        assert settings["footerBlurb"] == ""
+        assert settings["footerCustomColour"] == site_chrome.DEFAULT_FOOTER_CUSTOM_COLOUR
+        assert settings["footerCustomText"] == site_chrome.DEFAULT_FOOTER_CUSTOM_TEXT
 
 
 class TestFooterStructure:

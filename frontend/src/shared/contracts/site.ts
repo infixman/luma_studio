@@ -1,5 +1,7 @@
 export type SiteColour = 'cream' | 'sand' | 'clay' | 'forest' | 'ink'
 export type SiteTone = 'dark' | 'light'
+export type FooterColour = SiteColour | 'custom'
+export type FooterTone = SiteTone | 'custom'
 export type SiteSize = 'small' | 'medium' | 'large'
 
 export interface SiteSettings {
@@ -14,8 +16,10 @@ export interface SiteSettings {
   headerShowLogin: boolean
   headerCtaLabel: string
   headerCtaUrl: string
-  footerColour: SiteColour
-  footerText: SiteTone
+  footerColour: FooterColour
+  footerText: FooterTone
+  footerCustomColour: string
+  footerCustomText: string
   footerBlurb: string
   footerCopyright: string
   footerColumns: { title: string; links: { label: string; url: string }[] }[]

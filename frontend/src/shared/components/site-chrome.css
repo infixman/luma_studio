@@ -396,6 +396,12 @@
   opacity: 0.85;
 }
 
+.site-footer .footer-blurb,
+.site-footer .footer-copyright,
+.site-footer .footer-column h2 {
+  color: inherit;
+}
+
 .footer-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

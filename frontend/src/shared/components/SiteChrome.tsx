@@ -1,3 +1,4 @@
+import type { JSX } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 
 import { SocialIcon } from './SocialIcon'
@@ -11,9 +12,9 @@ import './site-chrome.css'
  * same code the storefront renders — the same reason the block components
  * live here.
  *
- * Every appearance value arrives already constrained to a fixed set by the
- * API, so these become class names rather than inline styles. Nothing the
- * owner typed becomes CSS.
+ * Most appearance values arrive as constrained choices and become class
+ * names. Footer custom colours are the exception: the API has already
+ * reduced them to six-digit hex before they reach the inline style.
  */
 
 function children(menu: ResolvedMenuItem[], parentId: string | null): ResolvedMenuItem[] {
@@ -206,8 +207,16 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
   // so an unconfigured site gets no footer at all rather than an empty one.
   if (!hasContent) return null
 
+  const customStyle: JSX.CSSProperties = {
+    ...(settings.footerColour === 'custom' ? { backgroundColor: settings.footerCustomColour } : {}),
+    ...(settings.footerText === 'custom' ? { color: settings.footerCustomText } : {}),
+  }
+
   return (
-    <footer class={`site-footer colour-${settings.footerColour} text-${settings.footerText}`}>
+    <footer
+      class={`site-footer colour-${settings.footerColour} text-${settings.footerText}`}
+      style={customStyle}
+    >
       <div class="footer-inner">
         <div class="footer-brand">
           <a class="footer-mark" href="/">
