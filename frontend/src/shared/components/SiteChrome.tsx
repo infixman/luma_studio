@@ -252,7 +252,12 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
             <ul class="footer-socials">
               {settings.footerSocials.map((social) => (
                 <li key={social.platform}>
-                  <a href={social.url} rel="noopener" aria-label={social.platform}>
+                  <a
+                    href={social.url}
+                    target={social.newTab ? '_blank' : undefined}
+                    rel={social.newTab ? 'noopener' : undefined}
+                    aria-label={social.platform}
+                  >
                     <SocialIcon platform={social.platform} />
                   </a>
                 </li>
@@ -272,7 +277,13 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
                 <ul>
                   {column.links.map((link, linkIndex) => (
                     <li key={linkIndex}>
-                      <a href={link.url}>{link.label}</a>
+                      <a
+                        href={link.url}
+                        target={link.newTab ? '_blank' : undefined}
+                        rel={link.newTab ? 'noopener' : undefined}
+                      >
+                        {link.label}
+                      </a>
                     </li>
                   ))}
                 </ul>

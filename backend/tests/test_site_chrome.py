@@ -242,6 +242,45 @@ class TestFooterStructure:
         )
         assert columns[0]["title"] == "客服"
         assert columns[0]["links"][0]["label"] == "服務條款"
+        assert columns[0]["links"][0]["newTab"] is True
+
+    def test_same_tab_footer_links_are_preserved(self, site_chrome):
+        columns = site_chrome.validate_footer_columns(
+            [
+                {
+                    "title": "客服",
+                    "links": [
+                        {
+                            "label": "服務條款",
+                            "url": "https://luma-studio.tw/terms",
+                            "newTab": False,
+                        }
+                    ],
+                }
+            ]
+        )
+        socials = site_chrome.validate_footer_socials(
+            [{"platform": "instagram", "url": "https://instagram.com/luma", "newTab": False}]
+        )
+        assert columns[0]["links"][0]["newTab"] is False
+        assert socials[0]["newTab"] is False
+
+    @pytest.mark.parametrize(
+        "validator,payload",
+        [
+            (
+                "validate_footer_columns",
+                [{"title": "客服", "links": [{"label": "服務條款", "url": "https://example.com", "newTab": "yes"}]}],
+            ),
+            (
+                "validate_footer_socials",
+                [{"platform": "instagram", "url": "https://instagram.com/luma", "newTab": 1}],
+            ),
+        ],
+    )
+    def test_new_tab_must_be_boolean(self, site_chrome, validator, payload):
+        with pytest.raises(site_chrome.ChromeError):
+            getattr(site_chrome, validator)(payload)
 
     def test_an_unknown_social_platform_is_refused(self, site_chrome):
         with pytest.raises(site_chrome.ChromeError):

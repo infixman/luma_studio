@@ -125,6 +125,9 @@ def validate_footer_columns(raw) -> list[dict]:
             raise ChromeError("頁尾欄位的連結必須是列表")
         if len(links) > MAX_FOOTER_LINKS:
             raise ChromeError(f"每欄最多 {MAX_FOOTER_LINKS} 個連結")
+        for link in links:
+            if isinstance(link, dict) and not isinstance(link.get("newTab", True), bool):
+                raise ChromeError("另開分頁設定格式不正確")
         columns.append(
             {
                 "title": text(entry.get("title"), MAX_LABEL, "欄位標題"),
@@ -132,6 +135,7 @@ def validate_footer_columns(raw) -> list[dict]:
                     {
                         "label": text(link.get("label"), MAX_LABEL, "連結文字", required=True),
                         "url": validate_url(str(link.get("url") or "")),
+                        "newTab": link.get("newTab", True),
                     }
                     for link in links
                     if isinstance(link, dict)
@@ -154,7 +158,15 @@ def validate_footer_socials(raw) -> list[dict]:
         platform = str(entry.get("platform") or "")
         if platform not in SOCIAL_PLATFORMS:
             raise ChromeError(f"未知的社群平台：{platform}")
-        socials.append({"platform": platform, "url": validate_url(str(entry.get("url") or ""))})
+        if not isinstance(entry.get("newTab", True), bool):
+            raise ChromeError("另開分頁設定格式不正確")
+        socials.append(
+            {
+                "platform": platform,
+                "url": validate_url(str(entry.get("url") or "")),
+                "newTab": entry.get("newTab", True),
+            }
+        )
     return socials
 
 

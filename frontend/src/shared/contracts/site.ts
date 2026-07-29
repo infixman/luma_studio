@@ -26,8 +26,8 @@ export interface SiteSettings {
   footerCustomText: string
   footerBlurb: string
   footerCopyright: string
-  footerColumns: { title: string; links: { label: string; url: string }[] }[]
-  footerSocials: { platform: string; url: string }[]
+  footerColumns: { title: string; links: { label: string; url: string; newTab: boolean }[] }[]
+  footerSocials: { platform: string; url: string; newTab: boolean }[]
 }
 
 export interface MenuItem {

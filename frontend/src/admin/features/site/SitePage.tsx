@@ -146,7 +146,11 @@ export function SitePage() {
     )
   }
 
-  function editLink(columnIndex: number, linkIndex: number, patch: Partial<{ label: string; url: string }>) {
+  function editLink(
+    columnIndex: number,
+    linkIndex: number,
+    patch: Partial<{ label: string; url: string; newTab: boolean }>,
+  ) {
     setSettings((current) => {
       if (!current) return current
       return {
@@ -160,7 +164,7 @@ export function SitePage() {
     })
   }
 
-  function editSocial(index: number, patch: Partial<{ platform: string; url: string }>) {
+  function editSocial(index: number, patch: Partial<{ platform: string; url: string; newTab: boolean }>) {
     setSettings((current) =>
       current
         ? {
@@ -677,6 +681,18 @@ export function SitePage() {
                           value={link.url}
                           onInput={(event) => editLink(columnIndex, linkIndex, { url: (event.target as HTMLInputElement).value })}
                         />
+                        <label class="link-new-tab">
+                          <input
+                            type="checkbox"
+                            checked={link.newTab}
+                            onChange={(event) =>
+                              editLink(columnIndex, linkIndex, {
+                                newTab: (event.currentTarget as HTMLInputElement).checked,
+                              })
+                            }
+                          />
+                          另開分頁
+                        </label>
                         <button
                           type="button"
                           class="danger"
@@ -690,7 +706,11 @@ export function SitePage() {
                   <button
                     type="button"
                     disabled={column.links.length >= FOOTER_LINK_MAX}
-                    onClick={() => editColumn(columnIndex, { links: [...column.links, { label: '', url: '' }] })}
+                    onClick={() =>
+                      editColumn(columnIndex, {
+                        links: [...column.links, { label: '', url: '', newTab: true }],
+                      })
+                    }
                   >
                     加一個連結
                   </button>
@@ -725,6 +745,16 @@ export function SitePage() {
                     value={social.url}
                     onInput={(event) => editSocial(index, { url: (event.target as HTMLInputElement).value })}
                   />
+                  <label class="link-new-tab">
+                    <input
+                      type="checkbox"
+                      checked={social.newTab}
+                      onChange={(event) =>
+                        editSocial(index, { newTab: (event.currentTarget as HTMLInputElement).checked })
+                      }
+                    />
+                    另開分頁
+                  </label>
                   <button
                     type="button"
                     class="danger"
@@ -738,7 +768,14 @@ export function SitePage() {
             <button
               type="button"
               disabled={settings.footerSocials.length >= 10}
-              onClick={() => edit({ footerSocials: [...settings.footerSocials, { platform: 'instagram', url: '' }] })}
+              onClick={() =>
+                edit({
+                  footerSocials: [
+                    ...settings.footerSocials,
+                    { platform: 'instagram', url: '', newTab: true },
+                  ],
+                })
+              }
             >
               加一個社群連結
             </button>

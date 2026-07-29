@@ -323,8 +323,27 @@ body.admin .card .link-list li {
   gap: 0.4rem;
 }
 
-body.admin .card .link-list input,
+body.admin .card .link-list input:not([type="checkbox"]),
 body.admin .card .link-list select {
   flex: 1;
   min-width: 8rem;
+}
+
+body.admin .card .link-list .link-new-tab {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body.admin .card .link-list .link-new-tab input {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  accent-color: var(--primary);
 }
