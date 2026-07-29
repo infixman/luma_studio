@@ -41,7 +41,6 @@ import type {
   CarouselConfig,
   ContactConfig,
   MediaItem,
-  MediaRef,
   PageBlock,
   PageDetail,
   PageVersion,
@@ -49,6 +48,7 @@ import type {
   TextBlockConfig,
 } from '../../../shared/types'
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
+import { projectDraftBlocks } from './preview/projectDraftBlocks'
 import '../../styles/pages-admin.css'
 import '../../styles/media-admin.css'
 
@@ -90,14 +90,6 @@ type ViewportId = (typeof VIEWPORTS)[number]['id']
  * the storefront would. Without them the preview would quietly be the only
  * place that always loads the full-size original.
  */
-const asRef = (item: MediaItem) => ({
-  id: item.id,
-  path: item.path,
-  alt: item.alt,
-  width: item.width,
-  sizes: item.sizes,
-})
-
 export function PageEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<PageDetail | null>(null)
   const [form, setForm] = useState({
@@ -580,68 +572,7 @@ export function PageEditPage({ id }: { id: string }) {
    * convincing evidence that their images are gone is worse than showing them
    * a slightly stale one.
    */
-  const previewBlocks: PageBlock[] = detail.blocks.map((block) => {
-    const config = drafts[block.id] ?? block.config
-    switch (block.type) {
-      case 'carousel': {
-        const draft = config as CarouselConfig
-        return {
-          ...block,
-          config: draft,
-          data: {
-            slides: draft.slides
-              .map((slide) => ({ image: byId.get(slide.mediaId), slide }))
-              .map(({ image, slide }, index) => ({
-                // The server's copy of this slide, when the library does not
-                // reach far enough back to hold its picture.
-                image: image ? asRef(image) : block.data?.slides?.[index]?.image,
-                caption: slide.caption,
-                href: slide.href,
-              }))
-              .filter((slide): slide is { image: MediaRef; caption: string; href: string } => Boolean(slide.image)),
-          },
-        }
-      }
-      case 'album': {
-        const draft = config as AlbumConfig
-        return {
-          ...block,
-          config: draft,
-          data: {
-            images: draft.mediaIds
-              .map((mediaId, index) => {
-                const item = byId.get(mediaId)
-                return item ? asRef(item) : block.data?.images?.[index]
-              })
-              .filter((image): image is MediaRef => Boolean(image)),
-          },
-        }
-      }
-      case 'about': {
-        const draft = config as AboutConfig
-        const item = draft.mediaId ? byId.get(draft.mediaId) : undefined
-        return {
-          ...block,
-          config: draft,
-          data: { image: item ? asRef(item) : block.data?.image ?? null },
-        }
-      }
-      // Same single picture beside its words, resolved the same way.
-      case 'contact': {
-        const draft = config as ContactConfig
-        const item = draft.mediaId ? byId.get(draft.mediaId) : undefined
-        return {
-          ...block,
-          config: draft,
-          data: { image: item ? asRef(item) : block.data?.image ?? null },
-        }
-      }
-      case 'shop':
-        return { ...block, config: config as ShopBlockConfig }
-      default:
-        return { ...block, config: config as TextBlockConfig }
-    }
-  })
+  const previewBlocks: PageBlock[] = projectDraftBlocks(detail.blocks, drafts, byId)
 
   const unsaved = pageChanged || dirty.length > 0
 
