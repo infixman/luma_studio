@@ -803,8 +803,8 @@ export function PageEditPage({ id }: { id: string }) {
                 detail.page.isHome
                   ? '這一頁是首頁，網址固定是 /。取消首頁後才能改路徑。'
                   : pathLocked
-                    ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
-                    : '例如 /about。/shop、/cart 這類系統路徑不能使用。'
+                    ? '網址會跟著頁面名稱更新。要自訂網址，按右邊「手動輸入」。'
+                    : '正在手動設定網址，例如 /about。/shop、/cart 這類系統路徑不能使用。'
               }
             />
             <Toggle

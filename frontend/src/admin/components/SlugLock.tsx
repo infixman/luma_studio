@@ -1,4 +1,4 @@
-import { IconButton } from './ui'
+import { Button } from './ui'
 
 /**
  * The padlock beside a page's path.
@@ -9,8 +9,9 @@ import { IconButton } from './ui'
  * the two have to mean the same thing, and a lock whose labels disagree
  * between two screens is a lock nobody trusts.
  *
- * A padlock rather than a checkbox reading "自動產生網址": the state worth
- * showing is whether the field is yours, and that is what a lock says.
+ * The lock state is paired with a plain-language action. A padlock alone is
+ * easy to miss beside a disabled field, while "手動輸入" says what the next
+ * click will do.
  */
 
 const stroke = {
@@ -21,31 +22,34 @@ const stroke = {
   'stroke-linejoin': 'round',
 } as const
 
-const shut = (
+const automatic = (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
     <rect x="5" y="11" width="14" height="9" rx="1.5" />
     <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
   </svg>
 )
 
-/* The shackle swung clear of the body, which is the whole difference — at
-   this size a colour change alone is not one. */
-const open = (
+const manual = (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
-    <rect x="5" y="11" width="14" height="9" rx="1.5" />
-    <path d="M8 11V7.5a4 4 0 0 1 7.7-1.5" />
+    <path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+    <path d="m13.5 6.5 4 4" />
   </svg>
 )
 
 export function SlugLock({ locked, onChange }: { locked: boolean; onChange: (locked: boolean) => void }) {
+  const label = locked ? '手動輸入' : '自動產生'
+
   return (
-    <IconButton
-      label={locked ? '解鎖，改成自己填網址' : '鎖上，讓網址跟著頁面名稱'}
+    <Button
+      aria-label={locked ? '改成手動輸入網址' : '改成依頁面名稱自動產生網址'}
       size="sm"
-      class={locked ? 'slug-lock is-locked' : 'slug-lock'}
+      tone="neutral"
+      class={locked ? 'slug-lock is-automatic' : 'slug-lock is-manual'}
+      icon={locked ? manual : automatic}
+      aria-pressed={!locked}
       onClick={() => onChange(!locked)}
     >
-      {locked ? shut : open}
-    </IconButton>
+      {label}
+    </Button>
   )
 }

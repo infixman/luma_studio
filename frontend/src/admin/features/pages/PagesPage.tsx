@@ -130,14 +130,13 @@ export function PagesPage() {
               trailing={<SlugLock locked={draft.locked} onChange={(locked) => setDraft({ ...draft, locked })} />}
               placeholder={suggestPath(draft.title) || '留空自動產生'}
               hint={
-                /* A Chinese title romanises to nothing, so a shut lock leaves
-                   this empty — and an empty, read-only field with a disabled
-                   button is a dead end unless it says which key opens it. */
+                /* A Chinese title romanises to nothing, so automatic mode can
+                   leave this empty. The named action makes the escape clear. */
                 draft.locked && !newPath
-                  ? '頁面名稱裡沒有可以放進網址的英數字。按右邊的鎖，自己填一個，例如 /about。'
+                  ? '頁面名稱裡沒有可以放進網址的英數字。按右邊「手動輸入」設定一個，例如 /about。'
                   : draft.locked
-                    ? '跟著頁面名稱走。要自己填的話，按右邊的鎖。'
-                    : '首頁不用填——建好之後把下面的「首頁」打開就會接管 /'
+                    ? '網址會跟著頁面名稱更新。要自訂網址，按右邊「手動輸入」。'
+                    : '請輸入網址，例如 /about。建好後可在下方把這一頁設為首頁。'
               }
               maxLength={PAGE_PATH_MAX}
             />

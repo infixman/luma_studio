@@ -508,12 +508,16 @@ body.admin .preview-jump:focus-visible {
   opacity: 1;
 }
 
-/* --- the path lock --- */
+/* --- the path mode switch --- */
 
-/* Shut reads as the stronger of the two states because it is the one that is
-   doing something: the field below it is not the owner's to type in. */
-body.admin .slug-lock.is-locked {
+/* This needs words as well as an icon: an empty-looking square beside a
+   disabled input does not explain how to edit the address. */
+body.admin .slug-lock.is-automatic {
   color: var(--primary-text);
+}
+
+body.admin .ui-input-wrap:has(.slug-lock) .ui-input {
+  padding-right: 7.25rem;
 }
 
 @media (max-width: 1100px) {
