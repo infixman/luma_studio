@@ -335,7 +335,7 @@ export function OrdersAdminPage() {
         <div class="order-filter-bar" aria-label="訂單篩選">
           <section class="order-status-filter" aria-labelledby="order-status-filter-label">
             <div class="order-filter-heading">
-              <h2 id="order-status-filter-label">訂單狀態</h2>
+              <h2 id="order-status-filter-label">狀態</h2>
               <span>可複選，符合任一狀態（OR）</span>
             </div>
             <div class="order-status-checks">
@@ -353,20 +353,10 @@ export function OrdersAdminPage() {
             </div>
           </section>
 
-          <div class="order-query-row">
-            <div class="order-search">
-              <TextField
-                label="搜尋"
-                type="search"
-                placeholder="訂單編號、收件人或 email"
-                value={search}
-                onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
-              />
-            </div>
-
-            <section class="order-date-filter" aria-labelledby="order-date-filter-label">
-              <h2 id="order-date-filter-label">訂單成立日期</h2>
-              <div class="order-date-fields">
+          <section class="order-date-filter" aria-labelledby="order-date-filter-label">
+            <h2 id="order-date-filter-label">訂單成立日期</h2>
+            <div class="order-date-fields">
+              <div class={dateFrom ? 'order-date-control' : 'order-date-control is-empty'}>
                 <TextField
                   label="從"
                   type="date"
@@ -375,6 +365,8 @@ export function OrdersAdminPage() {
                     narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))
                   }
                 />
+              </div>
+              <div class={dateTo ? 'order-date-control' : 'order-date-control is-empty'}>
                 <TextField
                   label="到"
                   type="date"
@@ -384,13 +376,26 @@ export function OrdersAdminPage() {
                   }
                 />
               </div>
-            </section>
-
-            <div class="order-list-settings">
-              <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
             </div>
+          </section>
+
+          <div class="order-search">
+            <TextField
+              label="搜尋"
+              type="search"
+              placeholder="訂單編號、收件人或 email"
+              value={search}
+              onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
+            />
           </div>
+
           <p class="order-filter-logic">狀態、成立日期與搜尋會同時套用（AND）。</p>
+        </div>
+
+        <div class="order-list-toolbar">
+          <div class="order-list-settings">
+            <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
+          </div>
         </div>
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>

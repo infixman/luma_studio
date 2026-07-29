@@ -11,7 +11,9 @@ body.admin .orders-list-panel .ui-panel-body {
 
 body.admin .order-filter-bar {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: minmax(32rem, 1.4fr) minmax(25rem, 0.9fr) minmax(20rem, 1fr);
+  gap: var(--space-4) clamp(var(--space-4), 2.5vw, var(--space-6));
+  align-items: end;
   padding-bottom: var(--space-4);
   margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
@@ -90,16 +92,8 @@ body.admin .order-status-checks .count {
   font-variant-numeric: tabular-nums;
 }
 
-body.admin .order-query-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-4);
-}
-
 body.admin .order-search {
-  flex: 1 1 22rem;
-  max-width: 32rem;
+  min-width: 0;
 }
 
 body.admin .order-search .ui-field,
@@ -109,7 +103,7 @@ body.admin .order-date-fields .ui-field {
 }
 
 body.admin .order-date-filter h2 {
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
 body.admin .order-date-fields {
@@ -117,46 +111,84 @@ body.admin .order-date-fields {
   gap: var(--space-2);
 }
 
-body.admin .order-date-fields .ui-field {
-  width: 10.5rem;
+body.admin .order-date-control {
+  min-width: 0;
+  flex: 1 1 0;
 }
 
-body.admin .order-list-settings {
-  flex: 0 0 auto;
-  margin-left: auto;
+body.admin .order-date-control .ui-field {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+body.admin .order-date-control .ui-input {
+  min-width: 0;
+}
+
+/* Chromium localises an empty date input to `yyyy/月/dd` on a zh-TW
+   machine, and the native placeholder attribute cannot override it. Keep the
+   native picker and ISO value, but draw the product's own neutral format
+   while the field is empty. */
+body.admin .order-date-control.is-empty .ui-input {
+  color: transparent;
+}
+
+body.admin .order-date-control.is-empty .ui-input::-webkit-datetime-edit {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+body.admin .order-date-control.is-empty .ui-input-wrap::before {
+  content: "yyyy/mm/dd";
+  position: absolute;
+  left: 0.7rem;
+  z-index: 1;
+  color: var(--muted);
+  font-size: var(--font-base);
+  pointer-events: none;
 }
 
 body.admin .order-filter-logic {
-  margin: calc(var(--space-2) * -1) 0 0;
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
-@media (max-width: 64rem) {
-  body.admin .order-search {
-    flex-basis: 100%;
-    max-width: 36rem;
+body.admin .order-list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 86rem) {
+  body.admin .order-filter-bar {
+    grid-template-columns: minmax(22rem, 1fr) minmax(18rem, 1fr);
+  }
+
+  body.admin .order-status-filter {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 47.99rem) {
-  body.admin .order-query-row {
+  body.admin .order-filter-bar {
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  body.admin .order-status-filter,
+  body.admin .order-filter-logic {
+    grid-column: auto;
+  }
+
+  body.admin .order-date-fields {
     flex-direction: column;
-    gap: var(--space-3);
   }
 
-  body.admin .order-search {
-    flex: none;
-    width: 100%;
-    max-width: none;
-  }
-
-  body.admin .order-date-fields .ui-field {
-    flex: 1 1 0;
-    width: auto;
-  }
-
-  body.admin .order-list-settings {
-    margin-left: 0;
+  body.admin .order-date-control .ui-field {
+    grid-template-columns: 1.5rem minmax(0, 1fr);
   }
 }
 
