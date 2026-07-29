@@ -1,5 +1,5 @@
-import { useRef, useEffect, useCallback } from 'preact/hooks'
 import type { JSX } from 'preact'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { renderMarkdown } from '../../shared/markdown'
 import type { TextBlockConfig } from '../../shared/types'
@@ -24,8 +24,16 @@ const icons = {
       <path d="M10 4h8M6 20h8M14 4l-4 16" />
     </svg>
   ),
-  h2: (<span class="rte-text-icon">大標</span>),
-  h3: (<span class="rte-text-icon">小標</span>),
+  underline: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M6 3v7a6 6 0 0 0 12 0V3M4 21h16" />
+    </svg>
+  ),
+  strike: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M17 5.5A7 7 0 0 0 12 4c-3 0-5 1.3-5 3.5 0 1.6 1.1 2.5 3 3M7 18.5A8 8 0 0 0 12 20c3 0 5-1.3 5-3.5 0-1.7-1.2-2.6-3.2-3.2M3 12h18" />
+    </svg>
+  ),
   ul: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="M9 6h11M9 12h11M9 18h11" />
@@ -42,17 +50,9 @@ const icons = {
       <text x="4" y="20" font-size="7" fill="currentColor" stroke="none" font-weight="600">3</text>
     </svg>
   ),
-  link: (
+  quote: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
-      <path d="M10 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6" />
-      <path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6" />
-    </svg>
-  ),
-  unlink: (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
-      <path d="M10 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6" />
-      <path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6" />
-      <path d="M3 21 21 3" stroke-width="2" />
+      <path d="M5 17h4l2-5V6H5v6h3l-3 5ZM13 17h4l2-5V6h-6v6h3l-3 5Z" />
     </svg>
   ),
   alignLeft: (
@@ -70,6 +70,18 @@ const icons = {
       <path d="M3 6h18M9 10h12M3 14h18M9 18h12" />
     </svg>
   ),
+  link: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M10 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6" />
+      <path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6" />
+    </svg>
+  ),
+  unlink: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M10 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6" />
+      <path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6M3 21 21 3" />
+    </svg>
+  ),
   image: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -82,12 +94,55 @@ const icons = {
       <path d="m7 8-4 4 4 4M17 8l4 4-4 4M14 4l-4 16" />
     </svg>
   ),
+  hr: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M3 12h18" />
+    </svg>
+  ),
+  table: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="3" y="4" width="18" height="16" rx="1" />
+      <path d="M3 9h18M9 4v16M15 4v16M3 15h18" />
+    </svg>
+  ),
+  undo: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="m9 7-5 5 5 5M5 12h8a6 6 0 0 1 6 6" />
+    </svg>
+  ),
+  redo: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6" />
+    </svg>
+  ),
   clear: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="M4 7h16M10 11v6M14 11v6" />
       <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
     </svg>
   ),
+  expand: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+    </svg>
+  ),
+  collapse: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5" />
+    </svg>
+  ),
+}
+
+const BLOCK_SELECTOR = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,div,td,th'
+const EMPTY_HTML = new Set(['<br>', '<div><br></div>', '<p><br></p>'])
+
+function htmlFromConfig(config: TextBlockConfig): string {
+  return config.format === 'html' ? config.body : config.body ? renderMarkdown(config.body) : ''
+}
+
+function cleanEmptyHtml(html: string): string {
+  const trimmed = html.trim().toLowerCase()
+  return EMPTY_HTML.has(trimmed) ? '' : html
 }
 
 function ToolButton({
@@ -106,13 +161,47 @@ function ToolButton({
       type="button"
       class={`rte-btn${active ? ' is-active' : ''}`}
       title={label}
-      onMouseDown={(e) => {
-        e.preventDefault()
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(event) => {
+        event.preventDefault()
         onClick()
       }}
     >
       {icon}
     </button>
+  )
+}
+
+function ToolbarSelect({
+  label,
+  value,
+  options,
+  onBeforeOpen,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onBeforeOpen: () => void
+  onChange: (value: string) => void
+}) {
+  return (
+    <label class="rte-select-label">
+      <span class="sr-only">{label}</span>
+      <select
+        class="rte-select"
+        aria-label={label}
+        title={label}
+        value={value}
+        onMouseDown={onBeforeOpen}
+        onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
   )
 }
 
@@ -124,158 +213,405 @@ export function RichTextEditor({
   onChange: (next: TextBlockConfig) => void
 }) {
   const editorRef = useRef<HTMLDivElement>(null)
-  const initialised = useRef(false)
+  const savedRangeRef = useRef<Range | null>(null)
+  const [mode, setMode] = useState<'visual' | 'source'>('visual')
+  const [sourceDraft, setSourceDraft] = useState(() => htmlFromConfig(config))
+  const [fullscreen, setFullscreen] = useState(false)
 
-  useEffect(() => {
-    if (!editorRef.current || initialised.current) return
-    initialised.current = true
-    const html =
-      config.format === 'html' ? config.body : config.body ? renderMarkdown(config.body) : ''
-    editorRef.current.innerHTML = html
+  const saveSelection = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection || selection.rangeCount === 0) return
+    const range = selection.getRangeAt(0)
+    if (editor.contains(range.commonAncestorContainer)) {
+      savedRangeRef.current = range.cloneRange()
+    }
   }, [])
 
-  const emit = useCallback(() => {
-    const html = editorRef.current?.innerHTML ?? ''
-    const cleaned = html === '<br>' || html === '<div><br></div>' ? '' : html
+  const restoreSelection = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection) return false
+    editor.focus()
+    const saved = savedRangeRef.current
+    if (!saved || !editor.contains(saved.commonAncestorContainer)) return false
+    selection.removeAllRanges()
+    selection.addRange(saved)
+    return true
+  }, [])
+
+  const emitHtml = useCallback((html: string) => {
+    const cleaned = cleanEmptyHtml(html)
+    setSourceDraft(cleaned)
     onChange({ body: cleaned, format: 'html' })
   }, [onChange])
 
+  const emitVisual = useCallback(() => {
+    emitHtml(editorRef.current?.innerHTML ?? '')
+    saveSelection()
+  }, [emitHtml, saveSelection])
+
+  useEffect(() => {
+    const next = htmlFromConfig(config)
+    const editor = editorRef.current
+    setSourceDraft(next)
+    if (editor && editor.innerHTML !== next) editor.innerHTML = next
+  }, [config.body, config.format])
+
+  useEffect(() => {
+    const listener = () => saveSelection()
+    document.addEventListener('selectionchange', listener)
+    return () => document.removeEventListener('selectionchange', listener)
+  }, [saveSelection])
+
+  useEffect(() => {
+    if (!fullscreen) return
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false)
+    }
+    document.addEventListener('keydown', listener)
+    return () => document.removeEventListener('keydown', listener)
+  }, [fullscreen])
+
   function exec(command: string, value?: string) {
+    restoreSelection()
     document.execCommand(command, false, value)
-    editorRef.current?.focus()
-    emit()
+    emitVisual()
   }
 
-  function toggleBlock(tag: string) {
-    const current = document.queryCommandValue('formatBlock')
-    if (current.toLowerCase() === tag.toLowerCase()) {
-      exec('formatBlock', 'p')
-    } else {
-      exec('formatBlock', tag)
+  function setBlock(tag: string) {
+    restoreSelection()
+    document.execCommand('formatBlock', false, tag)
+    emitVisual()
+  }
+
+  function selectedBlocks(): HTMLElement[] {
+    const editor = editorRef.current
+    if (!editor) return []
+    restoreSelection()
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return []
+    const range = selection.getRangeAt(0)
+    const start = closestElement(range.startContainer)?.closest(BLOCK_SELECTOR) as HTMLElement | null
+    if (range.collapsed && start && editor.contains(start)) return [start]
+
+    return Array.from(editor.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)).filter((element) => {
+      try {
+        return range.intersectsNode(element)
+      } catch {
+        return false
+      }
+    })
+  }
+
+  function align(alignment: 'left' | 'center' | 'right') {
+    let blocks = selectedBlocks()
+    if (blocks.length === 0) {
+      setBlock('p')
+      blocks = selectedBlocks()
     }
+    for (const block of blocks) block.style.textAlign = alignment
+    emitVisual()
+  }
+
+  function replaceLegacyFonts(attribute: 'face' | 'size', cssProperty: 'fontFamily' | 'fontSize', value: string) {
+    const editor = editorRef.current
+    if (!editor) return
+    for (const font of Array.from(editor.querySelectorAll<HTMLFontElement>(`font[${attribute}]`))) {
+      const span = document.createElement('span')
+      span.style[cssProperty] = value
+      while (font.firstChild) span.appendChild(font.firstChild)
+      font.replaceWith(span)
+    }
+  }
+
+  function setFontFamily(fontFamily: string) {
+    if (!fontFamily) return
+    restoreSelection()
+    document.execCommand('styleWithCSS', false, 'false')
+    document.execCommand('fontName', false, fontFamily)
+    replaceLegacyFonts('face', 'fontFamily', fontFamily)
+    emitVisual()
+  }
+
+  function setFontSize(fontSize: string) {
+    if (!fontSize) return
+    restoreSelection()
+    document.execCommand('styleWithCSS', false, 'false')
+    document.execCommand('fontSize', false, '7')
+    replaceLegacyFonts('size', 'fontSize', fontSize)
+    emitVisual()
+  }
+
+  function insertHtml(html: string) {
+    restoreSelection()
+    document.execCommand('insertHTML', false, html)
+    emitVisual()
   }
 
   function insertLink() {
+    restoreSelection()
     const selection = window.getSelection()
-    if (!selection || selection.isCollapsed) return
-
+    if (!selection || selection.isCollapsed) {
+      alert('請先選取要加上連結的文字。')
+      return
+    }
+    saveSelection()
     const existing = findParentTag(selection.anchorNode, 'A') as HTMLAnchorElement | null
     const href = prompt('連結網址', existing?.href ?? 'https://')
     if (href === null) return
-
-    if (!href.trim()) {
-      exec('unlink')
-    } else {
-      exec('createLink', href)
-    }
-  }
-
-  function removeLink() {
-    exec('unlink')
+    restoreSelection()
+    if (!href.trim()) exec('unlink')
+    else exec('createLink', href.trim())
   }
 
   function insertImage() {
+    saveSelection()
     const src = prompt('圖片網址', 'https://')
     if (!src?.trim()) return
     const href = prompt('點擊圖片要前往的連結（可留空）', '')
-    const img = document.createElement('img')
-    img.src = src.trim()
-    img.alt = ''
-    if (href?.trim()) {
-      const a = document.createElement('a')
-      a.href = href.trim()
-      a.appendChild(img)
-      document.execCommand('insertHTML', false, a.outerHTML)
-    } else {
-      exec('insertImage', src.trim())
-    }
-    emit()
+    const image = `<img src="${escapeAttribute(src.trim())}" alt="">`
+    insertHtml(href?.trim() ? `<a href="${escapeAttribute(href.trim())}">${image}</a>` : image)
   }
 
   function insertEmbed() {
+    saveSelection()
     const url = prompt('貼上 YouTube、Instagram 或 Facebook 連結', 'https://')
     if (!url?.trim()) return
     const iframe = buildEmbed(url.trim())
     if (!iframe) {
-      alert('無法辨識這個連結，目前支援 YouTube、Instagram、Facebook')
+      alert('無法辨識這個連結，目前支援 YouTube、Instagram、Facebook。')
       return
     }
-    document.execCommand('insertHTML', false, iframe)
-    emit()
+    insertHtml(iframe)
+  }
+
+  function insertTable(value: string) {
+    if (!value) return
+    const [rows, columns] = value.split('x').map(Number)
+    if (!rows || !columns) return
+    insertHtml(buildTable(rows, columns))
   }
 
   function clearFormatting() {
     exec('removeFormat')
-    exec('formatBlock', 'p')
+    for (const block of selectedBlocks()) {
+      block.style.removeProperty('text-align')
+    }
+    emitVisual()
   }
 
-  function handlePaste(e: ClipboardEvent) {
-    e.preventDefault()
-    const html = e.clipboardData?.getData('text/html')
-    const text = e.clipboardData?.getData('text/plain') ?? ''
+  function handlePaste(event: ClipboardEvent) {
+    event.preventDefault()
+    const html = event.clipboardData?.getData('text/html')
+    const text = event.clipboardData?.getData('text/plain') ?? ''
+    insertHtml(html ? sanitizeEditorHtml(html) : escapeHtml(text).replace(/\n/g, '<br>'))
+  }
 
-    if (html) {
-      const cleaned = stripPastedHTML(html)
-      document.execCommand('insertHTML', false, cleaned)
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key !== 'Enter' || event.shiftKey) return
+    const block = document.queryCommandValue('formatBlock')
+    if (block && /^h[1-6]$/i.test(block)) {
+      event.preventDefault()
+      exec('formatBlock', 'p')
+      document.execCommand('insertParagraph', false)
+      emitVisual()
+    }
+  }
+
+  function switchMode(next: 'visual' | 'source') {
+    if (next === mode) return
+    if (next === 'source') {
+      const html = editorRef.current?.innerHTML ?? ''
+      setSourceDraft(html)
+      emitHtml(html)
     } else {
-      document.execCommand('insertText', false, text)
+      const safe = sanitizeEditorHtml(sourceDraft)
+      if (editorRef.current) editorRef.current.innerHTML = safe
+      emitHtml(safe)
     }
-    emit()
+    setMode(next)
   }
 
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      const block = document.queryCommandValue('formatBlock')
-      if (block && /^h[2-4]$/i.test(block)) {
-        e.preventDefault()
-        exec('formatBlock', 'p')
-        document.execCommand('insertParagraph', false)
-      }
-    }
+  function commitSource() {
+    const safe = sanitizeEditorHtml(sourceDraft)
+    setSourceDraft(safe)
+    if (editorRef.current) editorRef.current.innerHTML = safe
+    emitHtml(safe)
   }
 
   return (
-    <div class="rte-wrap">
-      <div class="rte-toolbar" role="toolbar" aria-label="格式工具列">
-        <ToolButton icon={icons.bold} label="粗體 (Ctrl+B)" onClick={() => exec('bold')} />
-        <ToolButton icon={icons.italic} label="斜體 (Ctrl+I)" onClick={() => exec('italic')} />
-        <span class="rte-sep" />
-        <ToolButton icon={icons.h2} label="標題 H2" onClick={() => toggleBlock('h2')} />
-        <ToolButton icon={icons.h3} label="標題 H3" onClick={() => toggleBlock('h3')} />
-        <span class="rte-sep" />
-        <ToolButton icon={icons.ul} label="無序清單" onClick={() => exec('insertUnorderedList')} />
-        <ToolButton icon={icons.ol} label="有序清單" onClick={() => exec('insertOrderedList')} />
-        <span class="rte-sep" />
-        <ToolButton icon={icons.alignLeft} label="置左" onClick={() => exec('justifyLeft')} />
-        <ToolButton icon={icons.alignCenter} label="置中" onClick={() => exec('justifyCenter')} />
-        <ToolButton icon={icons.alignRight} label="置右" onClick={() => exec('justifyRight')} />
-        <span class="rte-sep" />
-        <ToolButton icon={icons.link} label="插入連結" onClick={insertLink} />
-        <ToolButton icon={icons.unlink} label="移除連結" onClick={removeLink} />
-        <ToolButton icon={icons.image} label="插入圖片" onClick={insertImage} />
-        <ToolButton icon={icons.embed} label="嵌入 YouTube / IG / FB" onClick={insertEmbed} />
-        <span class="rte-sep" />
-        <ToolButton icon={icons.clear} label="清除格式" onClick={clearFormatting} />
+    <div class={`rte-wrap${fullscreen ? ' is-fullscreen' : ''}`}>
+      <div class="rte-topbar">
+        <div class="rte-tabs" role="tablist" aria-label="編輯模式">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'visual'}
+            class={mode === 'visual' ? 'is-active' : ''}
+            onClick={() => switchMode('visual')}
+          >
+            視覺編輯
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'source'}
+            class={mode === 'source' ? 'is-active' : ''}
+            onClick={() => switchMode('source')}
+          >
+            HTML
+          </button>
+        </div>
+        <ToolButton
+          icon={fullscreen ? icons.collapse : icons.expand}
+          label={fullscreen ? '離開全螢幕 (Esc)' : '全螢幕編輯'}
+          onClick={() => setFullscreen((current) => !current)}
+        />
       </div>
+
+      {mode === 'visual' && (
+        <div class="rte-toolbar" role="toolbar" aria-label="格式工具列">
+          <div class="rte-tool-group">
+            <ToolButton icon={icons.undo} label="復原 (Ctrl+Z)" onClick={() => exec('undo')} />
+            <ToolButton icon={icons.redo} label="重做 (Ctrl+Y)" onClick={() => exec('redo')} />
+          </div>
+          <span class="rte-sep" />
+          <div class="rte-tool-group">
+            <ToolbarSelect
+              label="段落格式"
+              value=""
+              onBeforeOpen={saveSelection}
+              onChange={setBlock}
+              options={[
+                { value: '', label: '段落' },
+                { value: 'h1', label: '標題 1' },
+                { value: 'h2', label: '標題 2' },
+                { value: 'h3', label: '標題 3' },
+                { value: 'h4', label: '標題 4' },
+                { value: 'h5', label: '標題 5' },
+                { value: 'h6', label: '標題 6' },
+                { value: 'p', label: '內文' },
+              ]}
+            />
+            <ToolbarSelect
+              label="字型"
+              value=""
+              onBeforeOpen={saveSelection}
+              onChange={setFontFamily}
+              options={[
+                { value: '', label: '字型' },
+                { value: '"Noto Sans TC","Microsoft JhengHei",sans-serif', label: '黑體' },
+                { value: '"Noto Serif TC","PMingLiU",serif', label: '明體' },
+                { value: '"DFKai-SB","BiauKai",cursive', label: '楷體' },
+                { value: 'Consolas,monospace', label: '等寬' },
+              ]}
+            />
+            <ToolbarSelect
+              label="字體大小"
+              value=""
+              onBeforeOpen={saveSelection}
+              onChange={setFontSize}
+              options={[
+                { value: '', label: '字級' },
+                ...[12, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((size) => ({
+                  value: `${size}px`,
+                  label: `${size}px`,
+                })),
+              ]}
+            />
+          </div>
+          <span class="rte-sep" />
+          <div class="rte-tool-group">
+            <ToolButton icon={icons.bold} label="粗體 (Ctrl+B)" onClick={() => exec('bold')} />
+            <ToolButton icon={icons.italic} label="斜體 (Ctrl+I)" onClick={() => exec('italic')} />
+            <ToolButton icon={icons.underline} label="底線 (Ctrl+U)" onClick={() => exec('underline')} />
+            <ToolButton icon={icons.strike} label="刪除線" onClick={() => exec('strikeThrough')} />
+          </div>
+          <span class="rte-sep" />
+          <div class="rte-tool-group">
+            <ToolButton icon={icons.ul} label="無序清單" onClick={() => exec('insertUnorderedList')} />
+            <ToolButton icon={icons.ol} label="有序清單" onClick={() => exec('insertOrderedList')} />
+            <ToolButton icon={icons.quote} label="引用" onClick={() => setBlock('blockquote')} />
+          </div>
+          <span class="rte-sep" />
+          <div class="rte-tool-group">
+            <ToolButton icon={icons.alignLeft} label="靠左" onClick={() => align('left')} />
+            <ToolButton icon={icons.alignCenter} label="置中" onClick={() => align('center')} />
+            <ToolButton icon={icons.alignRight} label="靠右" onClick={() => align('right')} />
+          </div>
+          <span class="rte-sep" />
+          <div class="rte-tool-group">
+            <ToolButton icon={icons.link} label="插入連結" onClick={insertLink} />
+            <ToolButton icon={icons.unlink} label="移除連結" onClick={() => exec('unlink')} />
+            <ToolButton icon={icons.image} label="插入圖片" onClick={insertImage} />
+            <ToolButton icon={icons.embed} label="嵌入 YouTube / IG / FB" onClick={insertEmbed} />
+            <ToolButton icon={icons.hr} label="水平分隔線" onClick={() => insertHtml('<hr><p><br></p>')} />
+            <label class="rte-table-control" title="插入表格">
+              <span class="rte-table-icon" aria-hidden="true">{icons.table}</span>
+              <select
+                aria-label="插入表格"
+                value=""
+                onMouseDown={saveSelection}
+                onChange={(event) => insertTable((event.currentTarget as HTMLSelectElement).value)}
+              >
+                <option value="">表格</option>
+                <option value="2x2">2 × 2</option>
+                <option value="3x2">3 × 2</option>
+                <option value="3x3">3 × 3</option>
+                <option value="4x3">4 × 3</option>
+                <option value="4x4">4 × 4</option>
+              </select>
+            </label>
+          </div>
+          <span class="rte-sep" />
+          <ToolButton icon={icons.clear} label="清除格式" onClick={clearFormatting} />
+        </div>
+      )}
+
       <div
         ref={editorRef}
-        class="rte-content"
-        contentEditable
+        class={`rte-content${mode === 'visual' ? '' : ' is-hidden'}`}
+        contentEditable={mode === 'visual'}
         role="textbox"
         aria-multiline="true"
         aria-label="文字內容"
-        onInput={emit}
+        onInput={emitVisual}
+        onFocus={saveSelection}
+        onMouseUp={saveSelection}
+        onKeyUp={saveSelection}
         onPaste={handlePaste as any}
         onKeyDown={handleKeyDown as any}
       />
+
+      {mode === 'source' && (
+        <textarea
+          class="rte-source"
+          aria-label="HTML 原始碼"
+          spellcheck={false}
+          value={sourceDraft}
+          onInput={(event) => setSourceDraft((event.currentTarget as HTMLTextAreaElement).value)}
+          onBlur={commitSource}
+        />
+      )}
+      <div class="rte-status">
+        {mode === 'source'
+          ? '切回視覺編輯時會移除不安全的標籤與屬性。'
+          : '先選取文字再套用字型、字級或連結；對齊會套用到目前段落。'}
+      </div>
     </div>
   )
+}
+
+function closestElement(node: Node | null): Element | null {
+  if (!node) return null
+  return node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement
 }
 
 function findParentTag(node: Node | null, tag: string): HTMLElement | null {
   let current = node
   while (current) {
-    if (current.nodeType === 1 && (current as HTMLElement).tagName === tag) {
+    if (current.nodeType === Node.ELEMENT_NODE && (current as HTMLElement).tagName === tag) {
       return current as HTMLElement
     }
     current = current.parentNode
@@ -283,120 +619,168 @@ function findParentTag(node: Node | null, tag: string): HTMLElement | null {
   return null
 }
 
-function stripPastedHTML(html: string): string {
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value)
+}
+
+function buildTable(rows: number, columns: number): string {
+  const head = Array.from({ length: columns }, (_, index) => `<th>欄位 ${index + 1}</th>`).join('')
+  const body = Array.from({ length: Math.max(1, rows - 1) }, () => (
+    `<tr>${Array.from({ length: columns }, () => '<td><br></td>').join('')}</tr>`
+  )).join('')
+  return (
+    '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse">'
+    + `<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div><p><br></p>`
+  )
+}
+
+const KEEP_TAGS = new Set([
+  'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
+  'SPAN', 'A', 'UL', 'OL', 'LI', 'BR', 'HR', 'BLOCKQUOTE', 'IMG', 'DIV', 'IFRAME',
+  'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD',
+])
+
+const STYLE_TAGS = new Set([
+  'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SPAN', 'LI', 'BLOCKQUOTE', 'DIV',
+  'IFRAME', 'TABLE', 'TH', 'TD',
+])
+
+function sanitizeEditorHtml(html: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
-  const KEEP = new Set([
-    'P',
-    'H2',
-    'H3',
-    'H4',
-    'STRONG',
-    'B',
-    'EM',
-    'I',
-    'A',
-    'UL',
-    'OL',
-    'LI',
-    'BR',
-    'BLOCKQUOTE',
-    'IMG',
-    'DIV',
-    'IFRAME',
-  ])
-
   function clean(node: Node): DocumentFragment {
-    const frag = document.createDocumentFragment()
-
+    const fragment = document.createDocumentFragment()
     for (const child of Array.from(node.childNodes)) {
-      if (child.nodeType === 3) {
-        frag.appendChild(document.createTextNode(child.textContent ?? ''))
+      if (child.nodeType === Node.TEXT_NODE) {
+        fragment.appendChild(document.createTextNode(child.textContent ?? ''))
         continue
       }
-      if (child.nodeType !== 1) continue
+      if (child.nodeType !== Node.ELEMENT_NODE) continue
 
-      const el = child as HTMLElement
-      const tag = el.tagName
-
-      if (KEEP.has(tag)) {
-        let mapped = tag
-        if (tag === 'B') mapped = 'STRONG'
-        if (tag === 'I') mapped = 'EM'
-
-        const kept = document.createElement(mapped)
-        if (tag === 'A') {
-          const href = el.getAttribute('href')
-          if (href) kept.setAttribute('href', href)
-        }
-        if (tag === 'IMG') {
-          const src = el.getAttribute('src')
-          if (src) kept.setAttribute('src', src)
-          kept.setAttribute('alt', el.getAttribute('alt') ?? '')
-        }
-        if (tag === 'IFRAME') {
-          const src = el.getAttribute('src')
-          if (src) kept.setAttribute('src', src)
-          if (el.hasAttribute('allowfullscreen')) kept.setAttribute('allowfullscreen', '')
-        }
-        if ((tag === 'DIV' || tag === 'IFRAME' || tag === 'P') && el.getAttribute('style')) {
-          const safe = sanitizePastedStyle(el.getAttribute('style')!)
-          if (safe) kept.setAttribute('style', safe)
-        }
-        kept.appendChild(clean(el))
-        frag.appendChild(kept)
-      } else {
-        frag.appendChild(clean(el))
+      const element = child as HTMLElement
+      const tag = element.tagName
+      if (tag === 'SCRIPT' || tag === 'STYLE') continue
+      if (!KEEP_TAGS.has(tag)) {
+        fragment.appendChild(clean(element))
+        continue
       }
+
+      const mapped = tag === 'B' ? 'STRONG' : tag === 'I' ? 'EM' : tag
+      const kept = document.createElement(mapped)
+      if (tag === 'A') {
+        const href = safeUrl(element.getAttribute('href'))
+        if (href) kept.setAttribute('href', href)
+      }
+      if (tag === 'IMG') {
+        const src = safeUrl(element.getAttribute('src'))
+        if (src) kept.setAttribute('src', src)
+        kept.setAttribute('alt', element.getAttribute('alt') ?? '')
+      }
+      if (tag === 'IFRAME') {
+        const src = safeEmbedUrl(element.getAttribute('src'))
+        if (src) kept.setAttribute('src', src)
+        if (element.hasAttribute('allowfullscreen')) kept.setAttribute('allowfullscreen', '')
+      }
+      if (STYLE_TAGS.has(tag) && element.getAttribute('style')) {
+        const safe = sanitizeInlineStyle(element.getAttribute('style') ?? '')
+        if (safe) kept.setAttribute('style', safe)
+      }
+      kept.appendChild(clean(element))
+      fragment.appendChild(kept)
     }
-    return frag
+    return fragment
   }
 
-  const result = clean(doc.body)
   const wrapper = document.createElement('div')
-  wrapper.appendChild(result)
+  wrapper.appendChild(clean(doc.body))
   return wrapper.innerHTML
 }
 
 const SAFE_STYLE_PROPS = new Set([
-  'text-align', 'position', 'width', 'height', 'padding-bottom',
-  'overflow', 'top', 'left', 'border',
+  'text-align', 'position', 'width', 'height', 'padding-bottom', 'overflow',
+  'top', 'left', 'border', 'border-collapse', 'font-family', 'font-size',
+  'text-decoration',
 ])
 
-function sanitizePastedStyle(raw: string): string {
+function sanitizeInlineStyle(raw: string): string {
   return raw
     .split(';')
-    .map((d) => d.trim())
-    .filter((d) => {
-      if (!d || !d.includes(':')) return false
-      const prop = d.slice(0, d.indexOf(':')).trim().toLowerCase()
-      const val = d.slice(d.indexOf(':') + 1).trim()
-      return SAFE_STYLE_PROPS.has(prop) && !val.includes('\\') && !val.toLowerCase().includes('url(')
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => {
+      if (!declaration || !declaration.includes(':')) return false
+      const [property, ...valueParts] = declaration.split(':')
+      if (!property) return false
+      const normalizedProperty = property.trim().toLowerCase()
+      const value = valueParts.join(':').trim().toLowerCase()
+      return SAFE_STYLE_PROPS.has(normalizedProperty)
+        && isSafeStyleValue(normalizedProperty, value)
     })
     .join(';')
+}
+
+function isSafeStyleValue(property: string, value: string): boolean {
+  if (value.includes('\\') || value.includes('url(') || value.includes('expression(')) return false
+  if (property === 'text-align') return ['left', 'center', 'right', 'justify'].includes(value)
+  if (property === 'position') return ['relative', 'absolute'].includes(value)
+  if (property === 'overflow') return ['hidden', 'auto', 'scroll'].includes(value)
+  if (['width', 'height', 'padding-bottom', 'top', 'left', 'font-size'].includes(property)) {
+    return /^(?:0|(?:\d{1,3}(?:\.\d{1,2})?)(?:px|rem|em|%))$/.test(value)
+  }
+  if (property === 'border') return value === '0'
+  if (property === 'border-collapse') return ['collapse', 'separate'].includes(value)
+  if (property === 'font-family') return /^[\w\s"',-]+$/.test(value)
+  if (property === 'text-decoration') return ['none', 'underline', 'line-through'].includes(value)
+  return false
+}
+
+function safeUrl(raw: string | null): string {
+  const value = raw?.trim() ?? ''
+  return /^(https?:\/\/|mailto:|\/)/i.test(value) ? value : ''
+}
+
+function safeEmbedUrl(raw: string | null): string {
+  const value = safeUrl(raw)
+  if (!value) return ''
+  try {
+    const host = new URL(value, window.location.origin).hostname
+    return [
+      'youtube.com', 'www.youtube.com', 'instagram.com', 'www.instagram.com',
+      'facebook.com', 'www.facebook.com',
+    ].includes(host) ? value : ''
+  } catch {
+    return ''
+  }
 }
 
 const EMBED_STYLE = 'position:relative;width:100%;padding-bottom:56.25%;height:0;overflow:hidden'
 const IFRAME_STYLE = 'position:absolute;top:0;left:0;width:100%;height:100%;border:0'
 
 function buildEmbed(url: string): string | null {
-  let m: RegExpMatchArray | null
+  let match: RegExpMatchArray | null
 
-  m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)/)
-  if (m) {
-    return `<div style="${EMBED_STYLE}"><iframe src="https://www.youtube.com/embed/${m[1]}" style="${IFRAME_STYLE}" allowfullscreen></iframe></div><p></p>`
+  match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)/)
+  if (match) {
+    return `<div style="${EMBED_STYLE}"><iframe src="https://www.youtube.com/embed/${match[1]}" style="${IFRAME_STYLE}" allowfullscreen></iframe></div><p><br></p>`
   }
 
-  m = url.match(/instagram\.com\/(?:p|reel)\/([\w-]+)/)
-  if (m) {
-    return `<div style="${EMBED_STYLE}"><iframe src="https://www.instagram.com/p/${m[1]}/embed/" style="${IFRAME_STYLE}"></iframe></div><p></p>`
+  match = url.match(/instagram\.com\/(?:p|reel)\/([\w-]+)/)
+  if (match) {
+    return `<div style="${EMBED_STYLE}"><iframe src="https://www.instagram.com/p/${match[1]}/embed/" style="${IFRAME_STYLE}"></iframe></div><p><br></p>`
   }
 
-  m = url.match(/facebook\.com\//)
-  if (m) {
+  if (/facebook\.com\//.test(url)) {
     const encoded = encodeURIComponent(url)
-    return `<div style="${EMBED_STYLE}"><iframe src="https://www.facebook.com/plugins/post.php?href=${encoded}&show_text=true" style="${IFRAME_STYLE}"></iframe></div><p></p>`
+    return `<div style="${EMBED_STYLE}"><iframe src="https://www.facebook.com/plugins/post.php?href=${encoded}&show_text=true" style="${IFRAME_STYLE}"></iframe></div><p><br></p>`
   }
 
   return null

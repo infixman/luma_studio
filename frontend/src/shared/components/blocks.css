@@ -27,6 +27,13 @@
   color: var(--block-ink);
 }
 
+.block-text h1 {
+  margin: 2.2rem 0 0.9rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .block-text h2 {
   margin: 2rem 0 0.8rem;
   font-size: 1.35rem;
@@ -44,6 +51,19 @@
   margin: 1.3rem 0 0.5rem;
   font-size: 1rem;
   font-weight: 650;
+}
+
+.block-text h5 {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.block-text h6 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 /* The first heading in a block should not push it away from what came
@@ -82,6 +102,65 @@
 }
 
 .block-text strong {
+  font-weight: 650;
+}
+
+.block-text hr {
+  margin: 1.6rem 0;
+  border: 0;
+  border-top: 1px solid var(--block-line);
+}
+
+.block-text table {
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  border-collapse: collapse;
+  background: var(--block-card);
+}
+
+.block-text th,
+.block-text td {
+  min-width: 7rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--block-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.block-text th {
+  background: var(--block-page);
+  font-weight: 650;
+}
+
+.block-about .body hr {
+  margin: 1.6rem 0;
+  border: 0;
+  border-top: 1px solid var(--block-line);
+}
+
+.block-about .body > div[style*="overflow"] {
+  max-width: 100%;
+  overflow-x: auto !important;
+}
+
+.block-about .body table {
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  border-collapse: collapse;
+  background: var(--block-card);
+}
+
+.block-about .body th,
+.block-about .body td {
+  min-width: 7rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--block-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.block-about .body th {
+  background: var(--block-page);
   font-weight: 650;
 }
 

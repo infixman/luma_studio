@@ -18,25 +18,39 @@ Workers without a native extension.
 """
 
 import html
+import re
 from html.parser import HTMLParser
 
 ALLOWED_TAGS = frozenset(
     {
         "p",
+        "h1",
         "h2",
         "h3",
         "h4",
+        "h5",
+        "h6",
         "strong",
         "em",
+        "u",
+        "s",
+        "span",
         "a",
         "ul",
         "ol",
         "li",
         "br",
+        "hr",
         "blockquote",
         "img",
         "div",
         "iframe",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
     }
 )
 
@@ -46,6 +60,18 @@ ALLOWED_ATTRS: dict[str, frozenset[str]] = {
     "iframe": frozenset({"src", "allowfullscreen", "style"}),
     "div": frozenset({"style"}),
     "p": frozenset({"style"}),
+    "h1": frozenset({"style"}),
+    "h2": frozenset({"style"}),
+    "h3": frozenset({"style"}),
+    "h4": frozenset({"style"}),
+    "h5": frozenset({"style"}),
+    "h6": frozenset({"style"}),
+    "blockquote": frozenset({"style"}),
+    "li": frozenset({"style"}),
+    "span": frozenset({"style"}),
+    "table": frozenset({"style"}),
+    "th": frozenset({"style"}),
+    "td": frozenset({"style"}),
 }
 
 SAFE_IFRAME_HOSTS = frozenset(
@@ -72,6 +98,10 @@ SAFE_STYLE_PROPS = frozenset(
         "top",
         "left",
         "border",
+        "border-collapse",
+        "font-family",
+        "font-size",
+        "text-decoration",
     }
 )
 
@@ -88,9 +118,36 @@ def _sanitize_style(value: str) -> str:
         prop, _, val = declaration.partition(":")
         prop = prop.strip().lower()
         val = val.strip()
-        if prop in SAFE_STYLE_PROPS and "\\" not in val and "url(" not in val.lower():
+        if prop in SAFE_STYLE_PROPS and _safe_style_value(prop, val):
             parts.append(f"{prop}:{val}")
     return ";".join(parts)
+
+
+_LENGTH = re.compile(r"^(?:0|(?:\d{1,3}(?:\.\d{1,2})?)(?:px|rem|em|%))$")
+_FONT_FAMILY = re.compile(r"""^[\w\s"',-]+$""")
+
+
+def _safe_style_value(prop: str, value: str) -> bool:
+    lowered = value.lower()
+    if "\\" in value or "url(" in lowered or "expression(" in lowered:
+        return False
+    if prop == "text-align":
+        return lowered in {"left", "center", "right", "justify"}
+    if prop == "position":
+        return lowered in {"relative", "absolute"}
+    if prop == "overflow":
+        return lowered in {"hidden", "auto", "scroll"}
+    if prop in {"width", "height", "padding-bottom", "top", "left", "font-size"}:
+        return bool(_LENGTH.fullmatch(lowered))
+    if prop == "border":
+        return lowered == "0"
+    if prop == "border-collapse":
+        return lowered in {"collapse", "separate"}
+    if prop == "font-family":
+        return bool(_FONT_FAMILY.fullmatch(value))
+    if prop == "text-decoration":
+        return lowered in {"none", "underline", "line-through"}
+    return False
 
 OPAQUE_TAGS = frozenset({"script", "style"})
 

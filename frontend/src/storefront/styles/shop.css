@@ -384,10 +384,56 @@ main.product .description h2 {
   font-weight: 600;
 }
 
+main.product .description h1,
+main.product .description h3,
+main.product .description h4,
+main.product .description h5,
+main.product .description h6 {
+  margin: 1.2rem 0 0.6rem;
+  line-height: 1.35;
+}
+
+main.product .description h1 { font-size: 1.65rem; }
+main.product .description h3 { font-size: 1.25rem; }
+main.product .description h4 { font-size: 1.1rem; }
+main.product .description h5 { font-size: 1rem; }
+main.product .description h6 { font-size: 0.88rem; letter-spacing: 0.04em; }
+
 main.product .description p {
   margin: 0 0 0.9rem;
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+main.product .description hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+main.product .description div[style*="overflow"] {
+  max-width: 100%;
+  overflow-x: auto !important;
+}
+
+main.product .description table {
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  border-collapse: collapse;
+}
+
+main.product .description th,
+main.product .description td {
+  min-width: 7rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+main.product .description th {
+  background: var(--surface);
+  font-weight: 650;
 }
 
 @media (max-width: 720px) {

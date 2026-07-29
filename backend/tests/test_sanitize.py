@@ -22,8 +22,8 @@ def test_strips_style():
     assert sanitize_html("<style>body{display:none}</style><p>hi</p>") == "<p>hi</p>"
 
 
-def test_strips_unknown_tags_keeps_text():
-    assert sanitize_html("<div><span>hello</span></div>") == "<div>hello</div>"
+def test_keeps_inline_span_for_authored_text_styles():
+    assert sanitize_html("<div><span>hello</span></div>") == "<div><span>hello</span></div>"
 
 
 def test_img_keeps_safe_src_strips_handlers():
@@ -81,8 +81,32 @@ def test_escapes_text_content():
 
 
 def test_heading_levels():
-    raw = "<h2>Two</h2><h3>Three</h3><h4>Four</h4><h1>One</h1>"
-    assert sanitize_html(raw) == "<h2>Two</h2><h3>Three</h3><h4>Four</h4>One"
+    raw = "<h1>One</h1><h2>Two</h2><h3>Three</h3><h4>Four</h4><h5>Five</h5><h6>Six</h6>"
+    assert sanitize_html(raw) == raw
+
+
+def test_rich_text_styles_survive_without_unsafe_css():
+    raw = (
+        '<p style="text-align:center;font-family:serif;font-size:24px;'
+        'background:url(javascript:evil);position:fixed">Centered</p>'
+    )
+    assert sanitize_html(raw) == (
+        '<p style="text-align:center;font-family:serif;font-size:24px">Centered</p>'
+    )
+
+
+def test_table_and_horizontal_rule():
+    raw = (
+        '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse">'
+        "<thead><tr><th>名稱</th><th>數量</th></tr></thead>"
+        "<tbody><tr><td>畫紙</td><td>2</td></tr></tbody></table></div><hr>"
+    )
+    assert sanitize_html(raw) == raw
+
+
+def test_inline_text_tags():
+    raw = "<p><span style=\"font-size:18px\"><u>底線</u>與<s>刪除線</s></span></p>"
+    assert sanitize_html(raw) == raw
 
 
 def test_lists():
