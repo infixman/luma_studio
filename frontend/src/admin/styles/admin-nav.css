@@ -20,8 +20,11 @@
 .admin-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  height: 100vh;
-  height: 100dvh;
+  /* `dvh` is normally the right answer, but Chromium can briefly report a
+     smaller dynamic viewport while a form control triggers a reflow. The
+     admin shell owns scrolling, so a short value clips the entire back
+     office. Keep the larger layout or dynamic viewport instead. */
+  height: max(100vh, 100dvh);
   background: var(--page);
 }
 
