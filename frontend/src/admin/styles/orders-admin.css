@@ -6,11 +6,25 @@
    second set to keep in step. */
 
 body.admin .order-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  display: grid;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+}
+
+body.admin .order-filter-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+body.admin .order-filter-group legend {
+  padding: 0;
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 650;
 }
 
 body.admin .order-status-checks {
@@ -54,13 +68,16 @@ body.admin .order-status-checks .count {
   font-variant-numeric: tabular-nums;
 }
 
-body.admin .order-date-range {
+body.admin .order-date-fields {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2);
 }
 
-body.admin .order-date-range label {
+body.admin .order-date-fields label {
+  flex: 1 1 11rem;
+  max-width: 14rem;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -68,7 +85,8 @@ body.admin .order-date-range label {
   color: var(--text-soft);
 }
 
-body.admin .order-date-range input[type="date"] {
+body.admin .order-date-fields input[type="date"] {
+  min-width: 0;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -76,6 +94,13 @@ body.admin .order-date-range input[type="date"] {
   color: var(--text);
   font: inherit;
   font-size: var(--font-sm);
+}
+
+@media (max-width: 36rem) {
+  body.admin .order-date-fields label {
+    flex-basis: 100%;
+    max-width: none;
+  }
 }
 
 body.admin .order-link {

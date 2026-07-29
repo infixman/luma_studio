@@ -334,33 +334,39 @@ export function OrdersAdminPage() {
 
       <Panel title="訂單">
         <div class="order-filters">
-          <div class="order-status-checks" role="group" aria-label="狀態篩選">
-            {STATUSES.map((status) => (
-              <label key={status} class={selectedStatuses.includes(status) ? 'checked' : ''}>
-                <input
-                  type="checkbox"
-                  checked={selectedStatuses.includes(status)}
-                  onChange={() => toggleStatus(status)}
-                />
-                {ORDER_STATUS_LABELS[status]}
-                {counts[status] ? <span class="count">{counts[status]}</span> : null}
-              </label>
-            ))}
-          </div>
-          <div class="order-date-range">
-            <TextField
-              label="從"
-              type="date"
-              value={dateFrom}
-              onInput={(event) => narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))}
-            />
-            <TextField
-              label="到"
-              type="date"
-              value={dateTo}
-              onInput={(event) => narrow(() => setDateTo((event.currentTarget as HTMLInputElement).value))}
-            />
-          </div>
+          <fieldset class="order-filter-group">
+            <legend>訂單狀態</legend>
+            <div class="order-status-checks">
+              {STATUSES.map((status) => (
+                <label key={status} class={selectedStatuses.includes(status) ? 'checked' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={selectedStatuses.includes(status)}
+                    onChange={() => toggleStatus(status)}
+                  />
+                  {ORDER_STATUS_LABELS[status]}
+                  {counts[status] ? <span class="count">{counts[status]}</span> : null}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset class="order-filter-group">
+            <legend>訂單成立日期</legend>
+            <div class="order-date-fields">
+              <TextField
+                label="從"
+                type="date"
+                value={dateFrom}
+                onInput={(event) => narrow(() => setDateFrom((event.currentTarget as HTMLInputElement).value))}
+              />
+              <TextField
+                label="到"
+                type="date"
+                value={dateTo}
+                onInput={(event) => narrow(() => setDateTo((event.currentTarget as HTMLInputElement).value))}
+              />
+            </div>
+          </fieldset>
         </div>
 
         <Toolbar>
