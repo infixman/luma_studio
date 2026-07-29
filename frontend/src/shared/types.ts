@@ -109,16 +109,6 @@ export interface PublicProductDetail {
   categories: { slug: string; title: string }[]
 }
 
-export interface Customer {
-  id: string
-  email: string
-  displayName: string
-  recipientName: string
-  recipientPhone: string
-  address: string
-  blocked: boolean
-}
-
 export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'completed' | 'cancelled' | 'expired'
 
 export interface Order {

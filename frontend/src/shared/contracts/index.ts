@@ -1,5 +1,6 @@
 export * from './bio-link'
 export * from './cart'
+export * from './customers'
 export * from './dashboard'
 export * from './media'
 export * from './print'
