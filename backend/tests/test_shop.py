@@ -17,7 +17,7 @@ SIGNED_IN = {"SELECT email FROM admin_sessions": [{"email": "owner@example.com"}
 
 @pytest.fixture
 def shop():
-    import shop as module
+    from domain import shop as module
 
     return module
 

@@ -6,8 +6,7 @@ block whose config the frontend has no component for, must be refused at the
 door rather than discovered by a visitor.
 """
 
-import block_data
-import pages
+from domain import block_data, pages
 from responses import Ctx
 
 

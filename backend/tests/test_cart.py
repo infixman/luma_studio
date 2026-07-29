@@ -13,14 +13,14 @@ from conftest import FakeDatabase, FakeRequest, STOREFRONT_ORIGIN, make_env
 
 @pytest.fixture
 def cart():
-    import cart as module
+    from domain import cart as module
 
     return module
 
 
 @pytest.fixture
 def shipping():
-    import shipping as module
+    from domain import shipping as module
 
     return module
 

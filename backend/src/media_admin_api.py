@@ -11,7 +11,7 @@ library in a Python Worker — so its job is to check that what arrived is
 plausible and to store all of it under one image.
 """
 
-import media
+from domain import media
 import paging
 from responses import Ctx
 
@@ -42,10 +42,10 @@ async def _read_variants(form) -> list[dict]:
             continue
         width, height = media.validate_dimensions(await _form_text(form, f"size_{label}_dimensions"))
         if not width:
-            continue
+            raise media.MediaError(f"{label} 尺寸格式不正確")
         content = await blob.bytes()
         if not content or len(content) > media.MAX_VARIANT_BYTES:
-            continue
+            raise media.MediaError(f"{label} 圖片必須介於 1 byte 與 5 MB 之間")
         variants.append({"label": label, "content": content, "width": width, "height": height})
     return variants
 

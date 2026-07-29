@@ -10,7 +10,7 @@ from conftest import ADMIN_ORIGIN, FakeDatabase, FakeRequest, make_env
 
 @pytest.fixture
 def orders():
-    import orders as module
+    from domain import orders as module
 
     return module
 

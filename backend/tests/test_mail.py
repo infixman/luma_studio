@@ -219,7 +219,7 @@ class TestSending:
 
 class TestOrdersQueueTheirOwnNotices:
     def test_marking_paid_queues_the_receipt(self, monkeypatch):
-        import orders
+        from domain import orders
 
         database = FakeDatabase({"FROM orders": [_order_record()]}, {"UPDATE orders": 1})
         asyncio.run(orders.mark_paid(configured_env(database), "LS20260728abcdefg", "owner@example.com"))
@@ -229,7 +229,7 @@ class TestOrdersQueueTheirOwnNotices:
         """The order moved. A mail row is not worth reversing that."""
 
         import mail as mail_module
-        import orders
+        from domain import orders
 
         async def explode(*_args, **_kwargs):
             raise RuntimeError("outbox is on fire")

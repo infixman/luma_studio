@@ -11,9 +11,7 @@ is why a deleted image loses one slide instead of breaking the page: the id is
 still in the config to be repaired, and the render simply has one fewer picture.
 """
 
-import categories
-import media
-import shop
+from domain import categories, media, shop
 
 
 async def hydrate(env, blocks: list[dict]) -> list[dict]:

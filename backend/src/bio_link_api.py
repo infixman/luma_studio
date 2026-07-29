@@ -5,7 +5,7 @@ hostname, and no way to confuse the two: the cookies that authorise this one
 are never sent to the other.
 """
 
-import bio_link
+from domain import bio_link
 from responses import Ctx
 
 

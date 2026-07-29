@@ -13,8 +13,8 @@ older version of this code cannot take a page down.
 import json
 import re
 
-import media
-from bio_link import validate_url
+from domain import media
+from domain.bio_link import validate_url
 from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp, validate_choice, validate_text
 from sanitize import sanitize_html
 
@@ -690,4 +690,4 @@ async def reorder_blocks(env, page_id: str, ordered_ids: list[str]) -> bool:
     return True
 
 
-from page_versions import blocks_of_snapshot, current_version, list_versions, version_payload, publish, unpublish, restore, publish_state, snapshot_of, MAX_VERSIONS
+from domain.page_versions import blocks_of_snapshot, current_version, list_versions, version_payload, publish, unpublish, restore, publish_state, snapshot_of, MAX_VERSIONS

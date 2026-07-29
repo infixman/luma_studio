@@ -221,7 +221,7 @@ def make_env(database=None, bucket=None, *, origins: str | None = None, frontend
 
 @pytest.fixture
 def bio_link():
-    import bio_link as module
+    from domain import bio_link as module
 
     return module
 

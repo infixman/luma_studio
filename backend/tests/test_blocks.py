@@ -10,14 +10,14 @@ from conftest import FakeDatabase, make_env
 
 @pytest.fixture
 def pages():
-    import pages as module
+    from domain import pages as module
 
     return module
 
 
 @pytest.fixture
 def block_data():
-    import block_data as module
+    from domain import block_data as module
 
     return module
 

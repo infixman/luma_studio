@@ -9,7 +9,7 @@ from conftest import ADMIN_ORIGIN, STOREFRONT_ORIGIN, FakeDatabase, FakeRequest,
 
 @pytest.fixture
 def categories():
-    import categories as module
+    from domain import categories as module
 
     return module
 

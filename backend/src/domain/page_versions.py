@@ -18,7 +18,7 @@ MAX_VERSIONS = 20
 def _pages_module():
     """Return page primitives after both modules have finished importing."""
 
-    import pages
+    from domain import pages
 
     return pages
 

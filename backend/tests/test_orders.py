@@ -18,7 +18,7 @@ def run(coroutine):
 
 @pytest.fixture
 def orders():
-    import orders as module
+    from domain import orders as module
 
     return module
 

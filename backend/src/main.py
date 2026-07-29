@@ -7,17 +7,11 @@ route selection, authentication boundaries, and Worker lifecycle hooks.
 """
 
 import auth_customer
-import bio_link
+from domain import bio_link, media, orders, pages, shipping, shop, site_chrome
 import front_api
 import mail
-import media
-import orders
-import pages
 import rate_limit
 import router
-import shipping
-import shop
-import site_chrome
 from common import IDENTIFIER_PATTERN, OAuthError
 from migrations import applied_migration_names
 from responses import Ctx

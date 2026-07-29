@@ -10,7 +10,7 @@ from conftest import ADMIN_ORIGIN, FakeDatabase, FakeRequest, make_env
 
 @pytest.fixture
 def site_chrome():
-    import site_chrome as module
+    from domain import site_chrome as module
 
     return module
 
@@ -28,7 +28,7 @@ class TestModuleName:
         worth a test that names the reason.
         """
 
-        assert site_chrome.__name__ == "site_chrome"
+        assert site_chrome.__name__ == "domain.site_chrome"
 
 
 class TestAppearanceIsChosenNotTyped:

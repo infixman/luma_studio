@@ -10,7 +10,7 @@ from conftest import ADMIN_ORIGIN, FakeDatabase, FakeRequest, make_env
 
 @pytest.fixture
 def pages():
-    import pages as module
+    from domain import pages as module
 
     return module
 

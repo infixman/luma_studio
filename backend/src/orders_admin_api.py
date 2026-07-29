@@ -11,7 +11,7 @@ not here — this file is the door, not the policy.
 """
 
 import mail
-import orders
+from domain import orders
 import paging
 from responses import Ctx
 
@@ -86,6 +86,15 @@ async def handle(ctx: Ctx):
                 return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
         search = _first(ctx, "q")[:60]
         page, per_page = paging.clamp(_first(ctx, "page"), _first(ctx, "perPage"))
+        if len(wanted) > 1:
+            rows = []
+            return ctx.json(
+                {
+                    "orders": rows,
+                    "counts": await orders.counts_by_status(env),
+                    **paging.envelope(rows, 0, page, per_page),
+                }
+            )
         rows, total = await orders.list_all(
             env,
             statuses=wanted,

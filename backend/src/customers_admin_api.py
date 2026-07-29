@@ -7,8 +7,7 @@ erasing them. Both answer with the customer as they now are, so the back
 office never has to guess whether the click landed.
 """
 
-import customers
-import orders
+from domain import customers, orders
 import paging
 from responses import Ctx
 

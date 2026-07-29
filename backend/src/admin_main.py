@@ -18,7 +18,7 @@ import admin_api
 import auth_admin
 import bio_link_api
 import customers_admin_api
-import dashboard
+from domain import dashboard
 import media_admin_api
 import orders_admin_api
 import pages_admin_api

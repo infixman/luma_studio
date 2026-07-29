@@ -15,8 +15,7 @@ written once, here.
 import re
 
 import paging
-import shipping
-import shop
+from domain import shipping, shop
 import mail
 from common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
 
@@ -445,9 +444,13 @@ async def list_all(
 
     conditions, bindings = [], []
     if statuses:
-        placeholders = ", ".join(f"?{len(bindings) + i + 1}" for i in range(len(statuses)))
-        bindings.extend(statuses)
-        conditions.append(f"status IN ({placeholders})")
+        if len(statuses) == 1:
+            bindings.append(statuses[0])
+            conditions.append(f"status = ?{len(bindings)}")
+        else:
+            placeholders = ", ".join(f"?{len(bindings) + i + 1}" for i in range(len(statuses)))
+            bindings.extend(statuses)
+            conditions.append(f"status IN ({placeholders})")
     for excluded in exclude_statuses:
         bindings.append(excluded)
         conditions.append(f"status != ?{len(bindings)}")

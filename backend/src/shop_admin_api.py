@@ -6,10 +6,8 @@ the way in: these rows end up in customer-facing pages and, before long, in
 the amount charged to a card.
 """
 
-import categories
+from domain import categories, shipping, shop
 import sanitize
-import shipping
-import shop
 from responses import Ctx
 
 

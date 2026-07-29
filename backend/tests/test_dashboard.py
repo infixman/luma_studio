@@ -18,14 +18,14 @@ def run(coroutine):
 
 @pytest.fixture
 def dashboard():
-    import dashboard as module
+    from domain import dashboard as module
 
     return module
 
 
 @pytest.fixture
 def shop():
-    import shop as module
+    from domain import shop as module
 
     return module
 

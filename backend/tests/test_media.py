@@ -10,7 +10,7 @@ from conftest import ADMIN_ORIGIN, FakeBucket, FakeDatabase, FakeRequest, make_e
 
 @pytest.fixture
 def media():
-    import media as module
+    from domain import media as module
 
     return module
 

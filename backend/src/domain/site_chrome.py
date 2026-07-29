@@ -17,7 +17,7 @@ the one it was built on.
 import json
 import re
 
-from bio_link import SOCIAL_PLATFORMS, validate_url
+from domain.bio_link import SOCIAL_PLATFORMS, validate_url
 from common import BASE_IMAGE_CONTENT_TYPES, d1_rows, next_position, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_choice, validate_image_suffix as _validate_image_suffix, validate_text
 
 

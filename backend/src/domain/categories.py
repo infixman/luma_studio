@@ -10,7 +10,7 @@ means "any of these", a plus means "all of these", and the two cannot be
 mixed — see `parse_filter`.
 """
 
-import shop
+from domain import shop
 from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp
 
 

@@ -12,17 +12,8 @@ import traceback
 import workers
 
 import auth_customer
-import bio_link
-import block_data
-import cart
-import categories
+from domain import bio_link, block_data, cart, categories, media, orders, pages, shipping, shop, site_chrome
 import mail
-import media
-import orders
-import pages
-import shipping
-import shop
-import site_chrome
 from common import (
     CACHE_1D,
     CACHE_1H,

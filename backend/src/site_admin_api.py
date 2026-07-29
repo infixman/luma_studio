@@ -6,9 +6,7 @@ item nobody can see is an item nobody can delete, so the editor sees
 everything.
 """
 
-import categories
-import pages
-import site_chrome
+from domain import categories, pages, site_chrome
 from responses import Ctx
 
 

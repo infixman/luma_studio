@@ -289,7 +289,7 @@ class TestCalendarIsItsOwnRequest:
     """The schedule costs a fetch to Google; the links must not wait for it."""
 
     def test_the_page_payload_carries_no_events(self, call, monkeypatch):
-        import bio_link
+        from domain import bio_link
 
         async def explode(*_args, **_kwargs):
             raise AssertionError("the page response must not fetch the calendar")
@@ -304,7 +304,7 @@ class TestCalendarIsItsOwnRequest:
         assert body["hasCalendar"] is False
 
     def test_the_schedule_has_its_own_route(self, call, monkeypatch):
-        import bio_link
+        from domain import bio_link
 
         async def one_event(_env, _settings):
             return {"title": "近期課程", "events": [{"id": "e1", "title": "夏日蘇打大作戰"}]}
@@ -318,7 +318,7 @@ class TestCalendarIsItsOwnRequest:
     def test_an_unreadable_calendar_is_not_an_error(self, call, monkeypatch):
         # The page is complete without a schedule, so this answers 200 with
         # nothing rather than failing and colouring the whole page red.
-        import bio_link
+        from domain import bio_link
 
         async def nothing(_env, _settings):
             return None
@@ -332,7 +332,7 @@ class TestCalendarIsItsOwnRequest:
     def test_asking_for_the_schedule_is_not_a_second_visit(self, call, monkeypatch):
         """Otherwise every visit would count twice in the stats."""
 
-        import bio_link
+        from domain import bio_link
 
         async def nothing(_env, _settings):
             return None

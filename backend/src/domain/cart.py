@@ -10,7 +10,7 @@ totals a customer is shown and the totals they are charged cannot be produced
 by two pieces of code that disagree.
 """
 
-import shop
+from domain import shop
 
 
 # How many different items a cart may hold. This one is about the Worker: one
