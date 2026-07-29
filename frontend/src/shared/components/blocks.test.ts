@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { CONTACT_LABELS, contactHref } from './Blocks'
-import { blockSummary, emptyConfig } from '../../admin/components/BlockEditors'
+import { blockSummary, emptyConfig } from '../../admin/features/pages/blocks/BlockEditor'
 import type { ContactConfig, ShopBlockConfig } from '../types'
 
 /**

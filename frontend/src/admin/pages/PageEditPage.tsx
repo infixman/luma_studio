@@ -11,8 +11,8 @@ import {
   ShopEditor,
   TextEditor,
   emptyConfig,
-} from '../components/BlockEditors'
-import type { Catalogue } from '../components/BlockEditors'
+} from '../features/pages/blocks/BlockEditor'
+import type { Catalogue } from '../features/pages/blocks/BlockEditor'
 import { BlockPicker, BlockRow } from '../components/BlockRow'
 import { useMediaPicker } from '../components/MediaPicker'
 import { PublishPanel } from '../components/PublishPanel'

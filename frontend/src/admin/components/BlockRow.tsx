@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 
-import { BLOCK_KINDS, BlockIcon, blockSummary } from './BlockEditors'
+import { BLOCK_KINDS, BlockIcon, blockSummary } from '../features/pages/blocks/BlockEditor'
 import { IconButton, Menu, MenuGroup, MenuItem } from './ui'
 import type { BlockConfig, PageBlock } from '../../shared/types'
 
