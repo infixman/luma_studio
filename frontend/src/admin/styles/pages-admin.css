@@ -256,6 +256,24 @@ body.admin .block-actions {
   gap: 2px;
 }
 
+/* These sit beside a fixed 18px drag mark, so their SVGs use the same
+   absolute size. An em here followed the compact row's inherited font size
+   and reduced both the trash and overflow marks to near-invisible specks. */
+body.admin .block-actions .ui-icon-button {
+  color: var(--text-soft);
+}
+
+body.admin .block-actions .ui-icon-button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+body.admin .block-actions .ui-icon-button.tone-danger {
+  color: var(--danger);
+}
+
 body.admin .block-grip {
   display: grid;
   place-items: center;
