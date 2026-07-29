@@ -23,6 +23,16 @@ async def _read_json(ctx: Ctx) -> dict:
     return body
 
 
+async def _form_text(form, name: str) -> str:
+    """Read a text field that Workers Python may have wrapped in a File."""
+    raw = form.get(name)
+    if raw is None:
+        return ""
+    if hasattr(raw, "bytes"):
+        return (await raw.bytes()).decode("utf-8", errors="replace")
+    return str(raw)
+
+
 async def _read_variants(form) -> list[dict]:
     """The pre-scaled widths attached to an upload, if the browser made any.
 
@@ -37,7 +47,7 @@ async def _read_variants(form) -> list[dict]:
         blob = form.get(f"size_{label}")
         if blob is None:
             continue
-        width, height = media.validate_dimensions(form.get(f"size_{label}_dimensions"))
+        width, height = media.validate_dimensions(await _form_text(form, f"size_{label}_dimensions"))
         if not width:
             continue
         content = await blob.bytes()
@@ -144,9 +154,9 @@ async def handle(ctx: Ctx):
                 raise media.MediaError("缺少檔案")
             file_name = media.clean_file_name(uploaded.name)
             suffix = media.validate_image_suffix(file_name)
-            title = media.validate_title(form.get("title"))
-            alt = media.validate_alt(form.get("alt"))
-            width, height = media.validate_dimensions(form.get("dimensions"))
+            title = media.validate_title(await _form_text(form, "title"))
+            alt = media.validate_alt(await _form_text(form, "alt"))
+            width, height = media.validate_dimensions(await _form_text(form, "dimensions"))
             content = await uploaded.bytes()
             if not content or len(content) > media.MAX_IMAGE_BYTES:
                 raise media.MediaError("圖片必須介於 1 byte 與 5 MB 之間")

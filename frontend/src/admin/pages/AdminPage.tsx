@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { CopyButton, OpenButton } from '../components/IconButtons'
+import { Lightbox } from '../components/Lightbox'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import { EmptyState, Spinner, useConfirm } from '../components/ui'
@@ -40,6 +41,7 @@ export function AdminPage() {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<UploadProgress | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const remaining = Math.max(0, MAX_FILE_COUNT - files.length)
@@ -372,7 +374,13 @@ export function AdminPage() {
               files.map((item) => (
                 <li key={item.key}>
                   <div class="file-main">
-                    <img class="file-thumb" src={thumbnailUrl(item.key, item.size)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
+                    <button
+                      type="button"
+                      class="file-thumb-btn"
+                      onClick={() => setLightbox({ src: publicImageUrl(item.key), alt: item.name })}
+                    >
+                      <img class="file-thumb" src={thumbnailUrl(item.key, item.size)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
+                    </button>
                     <span class="file-name">{`${item.name} (${fileSize(item.size)})`}</span>
                   </div>
                   <div class="file-actions">
@@ -393,6 +401,7 @@ export function AdminPage() {
           </ul>
         </div>
       </section>
+      {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </AdminShell>
   )
 }

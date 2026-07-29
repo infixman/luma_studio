@@ -239,6 +239,13 @@ body.admin .file-main {
   align-items: center;
 }
 
+body.admin .file-thumb-btn {
+  all: unset;
+  cursor: zoom-in;
+  flex: none;
+  line-height: 0;
+}
+
 body.admin .file-thumb {
   flex: 0 0 46px;
   width: 46px;
