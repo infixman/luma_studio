@@ -363,6 +363,85 @@ class TestFulfilmentAndEntitlementSchema:
         assert {"product_id", "offer_id", "requires_shipping", "contains_course"} <= columns
 
 
+class TestVideoSchema:
+    """Assets, upload sessions and transcode jobs.
+
+    Versioned keys are the point: re-encoding an asset must be able to happen
+    alongside the version members are currently watching, and only become
+    live once every output is verified.
+    """
+
+    def _asset(self, database, asset_id="asset-1", status="uploading", **extra):
+        columns = {
+            "id": asset_id,
+            "title": "第一課",
+            "original_filename": "lesson-01.mp4",
+            "source_key": f"sources/{asset_id}/1/source.mp4",
+            "status": status,
+            "byte_size": 2_000_000,
+            "duration_seconds": None,
+            "width": None,
+            "height": None,
+            "active_encode_version": None,
+            "master_key": None,
+            "poster_key": None,
+            "error_code": None,
+            "error_detail": None,
+            "created_at": 0,
+            "updated_at": 0,
+            **extra,
+        }
+        names = ", ".join(columns)
+        placeholders = ", ".join("?" for _ in columns)
+        database.execute(f"INSERT INTO video_assets ({names}) VALUES ({placeholders})", tuple(columns.values()))
+
+    def test_an_asset_records_where_its_source_went(self, database):
+        self._asset(database)
+
+        stored = database.execute("SELECT source_key, status FROM video_assets").fetchone()
+        assert stored == ("sources/asset-1/1/source.mp4", "uploading")
+
+    def test_an_upload_session_belongs_to_exactly_one_asset(self, database):
+        self._asset(database)
+        database.execute(
+            "INSERT INTO video_upload_sessions (id, asset_id, upload_id, part_size, status, expires_at,"
+            " created_at, updated_at) VALUES ('s1', 'asset-1', 'r2-upload-1', 16777216, 'uploading', 900, 0, 0)"
+        )
+
+        assert database.execute("SELECT COUNT(*) FROM video_upload_sessions").fetchone()[0] == 1
+
+    def test_two_encodes_of_one_asset_can_exist_side_by_side(self, database):
+        """Re-encoding must not disturb the version people are watching."""
+
+        self._asset(database, status="ready", active_encode_version=1)
+        for version in (1, 2):
+            database.execute(
+                "INSERT INTO video_transcode_jobs (id, asset_id, encode_version, attempt, status,"
+                " started_at, finished_at, container_job_id, error_code, error_detail, created_at, updated_at)"
+                " VALUES (?, 'asset-1', ?, 1, 'ready', 0, 0, NULL, NULL, NULL, 0, 0)",
+                (f"job-{version}", version),
+            )
+
+        assert database.execute("SELECT COUNT(*) FROM video_transcode_jobs").fetchone()[0] == 2
+
+    def test_one_asset_cannot_run_the_same_encode_version_twice_at_once(self, database):
+        """Two containers writing the same version would race on every object."""
+
+        self._asset(database)
+        database.execute(
+            "INSERT INTO video_transcode_jobs (id, asset_id, encode_version, attempt, status,"
+            " started_at, finished_at, container_job_id, error_code, error_detail, created_at, updated_at)"
+            " VALUES ('job-1', 'asset-1', 1, 1, 'processing', 0, NULL, NULL, NULL, NULL, 0, 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO video_transcode_jobs (id, asset_id, encode_version, attempt, status,"
+                " started_at, finished_at, container_job_id, error_code, error_detail, created_at, updated_at)"
+                " VALUES ('job-2', 'asset-1', 1, 1, 'processing', 0, NULL, NULL, NULL, NULL, 0, 0)"
+            )
+
+
 class TestDefaultOfferBackfill:
     """0027 marks a product's only offer and refuses to guess for the rest."""
 

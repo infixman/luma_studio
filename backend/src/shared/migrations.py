@@ -876,6 +876,76 @@ MIGRATIONS = [
             " ON course_offer_purchase_locks (order_id)",
         ],
     },
+    {
+        # Phase 4: course video, from the browser to a playable HLS ladder.
+        #
+        # Outputs are versioned. Re-encoding an asset happens alongside the
+        # version members are watching, and `active_encode_version` only moves
+        # once every object of the new one is verified — a half-written ladder
+        # that a player could select is worse than an old one.
+        #
+        # No R2 credential ever lands here. The keys are paths; the signing
+        # happens in the media Worker with secrets it alone holds.
+        "name": "0030_create_video_assets",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS video_assets (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 title TEXT NOT NULL DEFAULT '',
+                 original_filename TEXT NOT NULL DEFAULT '',
+                 source_key TEXT NOT NULL DEFAULT '',
+                 status TEXT NOT NULL DEFAULT 'uploading',
+                 byte_size INTEGER NOT NULL DEFAULT 0,
+                 duration_seconds INTEGER,
+                 width INTEGER,
+                 height INTEGER,
+                 active_encode_version INTEGER,
+                 master_key TEXT,
+                 poster_key TEXT,
+                 error_code TEXT,
+                 error_detail TEXT,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_video_assets_status ON video_assets (status, created_at DESC)",
+            """CREATE TABLE IF NOT EXISTS video_upload_sessions (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 asset_id TEXT NOT NULL,
+                 upload_id TEXT NOT NULL,
+                 part_size INTEGER NOT NULL,
+                 status TEXT NOT NULL DEFAULT 'uploading',
+                 expires_at INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_video_upload_sessions_asset ON video_upload_sessions (asset_id)",
+            "CREATE INDEX IF NOT EXISTS idx_video_upload_sessions_stale"
+            " ON video_upload_sessions (status, expires_at)",
+            """CREATE TABLE IF NOT EXISTS video_transcode_jobs (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 asset_id TEXT NOT NULL,
+                 encode_version INTEGER NOT NULL,
+                 attempt INTEGER NOT NULL DEFAULT 1,
+                 status TEXT NOT NULL DEFAULT 'queued',
+                 started_at INTEGER,
+                 finished_at INTEGER,
+                 container_job_id TEXT,
+                 error_code TEXT,
+                 error_detail TEXT,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            # One live attempt per version. Two containers writing the same
+            # version would race on every object they produce, and the loser's
+            # half of the ladder would be indistinguishable from the winner's.
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_video_transcode_jobs_live"
+            " ON video_transcode_jobs (asset_id, encode_version)"
+            " WHERE status IN ('queued', 'processing')",
+            "CREATE INDEX IF NOT EXISTS idx_video_transcode_jobs_asset"
+            " ON video_transcode_jobs (asset_id, encode_version)",
+            "CREATE INDEX IF NOT EXISTS idx_video_transcode_jobs_stuck"
+            " ON video_transcode_jobs (status, started_at)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()
