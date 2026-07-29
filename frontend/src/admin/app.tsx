@@ -1,7 +1,7 @@
 import { AdminGate } from './components/AdminGate'
 import { AdminPage } from './pages/AdminPage'
 import { DashboardPage } from './pages/DashboardPage'
-import { BioLinkAdminPage } from './pages/BioLinkAdminPage'
+import { BioLinkAdminPage } from './features/bio-link/BioLinkAdminPage'
 import { PageEditPage } from './features/pages/PageEditPage'
 import { PagesPage } from './pages/PagesPage'
 import { ProductEditPage } from './pages/ProductEditPage'
