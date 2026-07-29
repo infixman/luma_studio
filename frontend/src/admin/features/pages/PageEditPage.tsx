@@ -13,7 +13,7 @@ import {
   emptyConfig,
 } from './blocks/BlockEditor'
 import type { Catalogue } from './blocks/BlockEditor'
-import { BlockPicker, BlockRow } from '../../components/BlockRow'
+import { BlockPicker, BlockRow } from './components/BlockRow'
 import { useMediaPicker } from '../../components/MediaPicker'
 import { PublishPanel } from '../../components/PublishPanel'
 import { SlugLock } from '../../components/SlugLock'
