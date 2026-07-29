@@ -26,13 +26,13 @@
 
 ## 3. 管理 API
 
-- [ ] 新增 InventoryItem list/create/detail/update/archive/reference endpoints。
-- [ ] 新增 Course skeleton endpoints。
-- [ ] 新增 Offer components get/put endpoints。
-- [ ] components 更新先完整驗證再寫入。
-- [ ] 只有管理 Worker 可寫入上述資料。
-- [ ] 回傳後端計算的能力摘要，不接受前端覆寫。
-- [ ] 庫存調整保存操作原因與前後值。
+- [x] 新增 InventoryItem list/create/detail/update/archive/reference endpoints。（`backend/src/api/admin/catalogue.py`）
+- [x] 新增 Course skeleton endpoints。
+- [x] 新增 Offer components get/put endpoints。
+- [x] components 更新先完整驗證再寫入。（`validate_components` + `validate_targets` 都通過才 `replace_components`）
+- [x] 只有管理 Worker 可寫入上述資料。（僅掛在 `admin_main.dispatch`，未登入回 401）
+- [x] 回傳後端計算的能力摘要，不接受前端覆寫。（`DERIVED_FIELDS` 出現在 request 即 400；忽略會讓呼叫端以為被採納）
+- [ ] 庫存調整保存操作原因與前後值。部分完成：`inventory.adjust_stock` 已回傳 before/after，尚未接上 audit log 寫入。
 
 ## 4. 管理前端
 

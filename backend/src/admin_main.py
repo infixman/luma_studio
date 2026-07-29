@@ -16,6 +16,7 @@ from workers import WorkerEntrypoint
 
 from api.admin import routes as admin_api
 from api.admin import bio_link as bio_link_api
+from api.admin import catalogue as catalogue_admin_api
 from api.admin import customers as customers_admin_api
 from api.admin import media as media_admin_api
 from api.admin import orders as orders_admin_api
@@ -86,6 +87,15 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/customers" or path.startswith("/api/customers/"):
         return await customers_admin_api.handle(ctx)
+
+    if (
+        path == "/api/inventory-items"
+        or path.startswith("/api/inventory-items/")
+        or path == "/api/courses"
+        or path.startswith("/api/courses/")
+        or path.startswith("/api/offers/")
+    ):
+        return await catalogue_admin_api.handle(ctx)
 
     if (
         path == "/api/products"
