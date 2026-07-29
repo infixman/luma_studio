@@ -43,6 +43,15 @@ export function productReturnTarget(search: string): { href: string; label: stri
   return { href: from, label: '上一頁' }
 }
 
+/** A one-Offer product must not make the visitor select an invisible option. */
+export function initialOfferId(product: PublicProductDetail): string | null {
+  return product.requiresOfferSelection ? null : product.variants[0]?.id ?? null
+}
+
+export function showOfferChooser(product: PublicProductDetail): boolean {
+  return product.requiresOfferSelection && product.variants.length > 0
+}
+
 export function ProductPage({ slug }: { slug: string }) {
   const customer = useContext(CustomerContext)
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
@@ -58,10 +67,7 @@ export function ProductPage({ slug }: { slug: string }) {
       .then((data) => {
         setProduct(data)
         document.title = `${data.title} | Luma Studio`
-        // Preselect when there is nothing to choose between: making someone
-        // click the only option is a step that exists for the code's benefit.
-        const available = data.variants.filter((variant) => variant.inStock)
-        if (available.length === 1) setChosen(available[0]!.id)
+        setChosen(initialOfferId(data))
       })
       .catch((error) => {
         if (error instanceof ApiError && error.status === 404) setMissing(true)
@@ -140,6 +146,7 @@ export function ProductPage({ slug }: { slug: string }) {
   const images = product.images.filter((image) => image.path)
   const cover = images[Math.min(shown, images.length - 1)]
   const picked = product.variants.find((variant) => variant.id === chosen) ?? null
+  const needsOfferChoice = showOfferChooser(product)
   const back = productReturnTarget(location.search)
   // Only the server knows the real ceiling; this one exists so the stepper
   // stops somewhere sensible when the shop has said how many are left.
@@ -184,9 +191,9 @@ export function ProductPage({ slug }: { slug: string }) {
 
           {product.variants.length === 0 ? (
             <p class="empty">這個商品目前沒有可販售的規格。</p>
-          ) : (
+          ) : needsOfferChoice ? (
             <div class="chooser">
-              <span class="chooser-label">規格</span>
+              <span class="chooser-label">方案</span>
               <ul class="variants">
                 {product.variants.map((variant) => {
                   const note = stockNote(variant)
@@ -208,7 +215,9 @@ export function ProductPage({ slug }: { slug: string }) {
                 })}
               </ul>
             </div>
-          )}
+          ) : !picked?.inStock ? (
+            <p class="notice warn">此商品目前售完。</p>
+          ) : null}
 
           {product.variants.length > 0 && (
             <>
@@ -218,7 +227,7 @@ export function ProductPage({ slug }: { slug: string }) {
                   <button
                     type="button"
                     aria-label="減一"
-                    disabled={!picked || wanted <= 1}
+                    disabled={!picked || !picked.inStock || wanted <= 1}
                     onClick={() => setWanted(Math.max(1, wanted - 1))}
                   >
                     −
@@ -238,7 +247,7 @@ export function ProductPage({ slug }: { slug: string }) {
                   <button
                     type="button"
                     aria-label="加一"
-                    disabled={!picked || wanted >= ceiling}
+                    disabled={!picked || !picked.inStock || wanted >= ceiling}
                     onClick={() => setWanted(Math.min(ceiling, wanted + 1))}
                   >
                     +
@@ -248,8 +257,8 @@ export function ProductPage({ slug }: { slug: string }) {
               </div>
 
               <div class="buy">
-                <button type="button" class="add" disabled={!chosen} onClick={addToCart}>
-                  {chosen ? '加入購物車' : '請先選擇規格'}
+                <button type="button" class="add" disabled={!picked || !picked.inStock} onClick={addToCart}>
+                  {!picked ? '請先選擇方案' : picked.inStock ? '加入購物車' : '已售完'}
                 </button>
                 {added && (
                   <p class="added" aria-live="polite">

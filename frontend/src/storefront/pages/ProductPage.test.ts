@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { productReturnTarget } from './ProductPage'
+import type { PublicProductDetail } from '../../shared/types'
+import { initialOfferId, productReturnTarget, showOfferChooser } from './ProductPage'
+
+const singleOffer: PublicProductDetail = {
+  slug: 'canvas-bag',
+  title: 'Canvas bag',
+  description: '',
+  images: [],
+  requiresOfferSelection: false,
+  variants: [{ id: 'offer-1', title: null, price: 300, inStock: true, stockLeft: null }],
+  categories: [],
+}
 
 describe('productReturnTarget', () => {
   it('returns to the page that embedded the shop row', () => {
@@ -16,5 +27,26 @@ describe('productReturnTarget', () => {
 
   it('does not accept a protocol-relative return target', () => {
     expect(productReturnTarget('?from=%2F%2Fevil.example')).toEqual({ href: '/shop', label: '商品列表' })
+  })
+})
+
+describe('Offer selection', () => {
+  it('automatically uses the only Offer and hides its chooser', () => {
+    expect(initialOfferId(singleOffer)).toBe('offer-1')
+    expect(showOfferChooser(singleOffer)).toBe(false)
+  })
+
+  it('keeps a multi-Offer product unselected until the visitor chooses', () => {
+    const multiOffer = {
+      ...singleOffer,
+      requiresOfferSelection: true,
+      variants: [
+        { id: 'offer-1', title: '標準版', price: 300, inStock: true, stockLeft: null },
+        { id: 'offer-2', title: '加大版', price: 500, inStock: true, stockLeft: null },
+      ],
+    }
+
+    expect(initialOfferId(multiOffer)).toBeNull()
+    expect(showOfferChooser(multiOffer)).toBe(true)
   })
 })

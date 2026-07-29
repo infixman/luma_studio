@@ -150,6 +150,7 @@ def variant_row(row: dict) -> dict:
         "stock": int(row["stock"]),
         "position": int(row["position"]),
         "enabled": bool(row["enabled"]),
+        "isDefault": bool(row.get("is_default", 0)),
     }
 
 
@@ -186,12 +187,14 @@ def public_summary(product: dict, variants: list[dict], images: list[dict]) -> d
 def public_detail(product: dict, variants: list[dict], images: list[dict], product_categories: list[dict]) -> dict:
     """One product page. Disabled variants are withheld entirely."""
 
+    sellable = [variant for variant in variants if variant["enabled"]]
     return {
         "slug": product["slug"],
         "title": product["title"],
         "description": product["description"],
         "images": [{"path": image["path"], "alt": image["alt"]} for image in images],
-        "variants": [public_variant(variant) for variant in variants if variant["enabled"]],
+        "requiresOfferSelection": len(sellable) > 1,
+        "variants": [public_variant(variant) for variant in sellable],
         "categories": [{"slug": c["slug"], "title": c["title"]} for c in product_categories],
     }
 
@@ -206,7 +209,7 @@ def public_variant(variant: dict) -> dict:
     stock = variant["stock"]
     return {
         "id": variant["id"],
-        "title": variant["title"],
+        "title": None if variant.get("isDefault", False) else variant["title"],
         "price": variant["price"],
         "inStock": stock > 0,
         "stockLeft": stock if 0 < stock <= LOW_STOCK_THRESHOLD else None,
@@ -250,6 +253,27 @@ async def create_product(env, *, slug: str, title: str, description: str, status
         "INSERT INTO products (id, slug, title, description, status, position, created_at, updated_at)"
         " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"
     ).bind(product_id, slug, title, description, status, position, now).run()
+    return product_id
+
+
+async def create_product_with_default_offer(
+    env, *, slug: str, title: str, description: str, status: str, price: int, sku: str, stock: int, enabled: bool
+) -> str:
+    """Create a Product and its only purchasable Offer as one operation.
+
+    The Python D1 binding has no proven batch call in this project. If the Offer
+    write fails, remove the just-created Product rather than returning an
+    orphan that has no price or purchasable line.
+    """
+
+    product_id = await create_product(env, slug=slug, title=title, description=description, status=status)
+    try:
+        await create_variant(
+            env, product_id, title="", sku=sku, price=price, stock=stock, enabled=enabled, is_default=True
+        )
+    except Exception:
+        await delete_product(env, product_id)
+        raise
     return product_id
 
 
@@ -311,6 +335,40 @@ async def get_variant(env, variant_id: str) -> dict | None:
     return variant_row(rows[0]) if rows else None
 
 
+async def get_default_offer(env, product_id: str) -> dict | None:
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM product_variants WHERE product_id = ?1 AND is_default = 1"
+        ).bind(product_id)
+    )
+    return variant_row(rows[0]) if rows else None
+
+
+def sales_mode(variants: list[dict]) -> str:
+    """The editor mode is an Offer concept, not a count of arbitrary rows."""
+
+    return "single" if any(variant["isDefault"] for variant in variants) else "multi"
+
+
+async def has_enabled_offer(env, product_id: str, *, excluding_id: str | None = None) -> bool:
+    query = "SELECT id FROM product_variants WHERE product_id = ?1 AND enabled = 1"
+    bindings = [product_id]
+    if excluding_id is not None:
+        query += " AND id != ?2"
+        bindings.append(excluding_id)
+    return bool(await d1_rows(env.DB.prepare(query).bind(*bindings)))
+
+
+async def can_be_active(
+    env, product_id: str, *, changing_offer_id: str | None = None, offer_enabled: bool | None = None
+) -> bool:
+    """Whether an active Product would retain an enabled Offer."""
+
+    if offer_enabled:
+        return True
+    return await has_enabled_offer(env, product_id, excluding_id=changing_offer_id)
+
+
 async def count_variants(env, product_id: str) -> int:
     rows = await d1_rows(
         env.DB.prepare("SELECT COUNT(*) AS total FROM product_variants WHERE product_id = ?1").bind(product_id)
@@ -318,13 +376,15 @@ async def count_variants(env, product_id: str) -> int:
     return int(rows[0]["total"]) if rows else 0
 
 
-async def create_variant(env, product_id: str, *, title: str, sku: str, price: int, stock: int) -> str:
+async def create_variant(
+    env, product_id: str, *, title: str, sku: str, price: int, stock: int, enabled: bool = True, is_default: bool = False
+) -> str:
     position = await next_position(env, "product_variants", "product_id = ?1", (product_id,))
     variant_id = urlsafe_token(18)
     await env.DB.prepare(
-        "INSERT INTO product_variants (id, product_id, title, sku, price, stock, position, enabled)"
-        " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)"
-    ).bind(variant_id, product_id, title, sku, price, stock, position).run()
+        "INSERT INTO product_variants (id, product_id, title, sku, price, stock, position, enabled, is_default)"
+        " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+    ).bind(variant_id, product_id, title, sku, price, stock, position, 1 if enabled else 0, 1 if is_default else 0).run()
     return variant_id
 
 
@@ -337,9 +397,24 @@ async def update_variant(env, variant_id: str, *, title: str, sku: str, price: i
     return True
 
 
-async def delete_variant(env, variant_id: str) -> bool:
-    if await get_variant(env, variant_id) is None:
+async def convert_default_offer_to_multi(env, product_id: str, *, title: str) -> bool:
+    """Keep the Offer id when exposing it as the first visible choice."""
+
+    default = await get_default_offer(env, product_id)
+    if default is None:
         return False
+    await env.DB.prepare(
+        "UPDATE product_variants SET title = ?2, is_default = 0 WHERE id = ?1 AND is_default = 1"
+    ).bind(default["id"], title).run()
+    return True
+
+
+async def delete_variant(env, variant_id: str) -> bool:
+    variant = await get_variant(env, variant_id)
+    if variant is None:
+        return False
+    if variant["isDefault"]:
+        raise ValueError("Default Offer cannot be deleted; convert it to multiple offers first")
     await env.DB.prepare("DELETE FROM product_variants WHERE id = ?1").bind(variant_id).run()
     return True
 

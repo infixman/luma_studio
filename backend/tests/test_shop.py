@@ -75,6 +75,20 @@ class TestProductCreation:
         insert, values = next((write for write in database.writes if "INSERT INTO products" in write[0]))
         assert values[:6] == (product_id, "canvas-bag", "Canvas bag", "", "draft", 4)
 
+    def test_single_offer_is_inserted_as_the_default_without_a_visible_title(self, shop):
+        database = FakeDatabase({"SELECT COALESCE(MAX(position)": [{"last": -1}]})
+
+        asyncio.run(
+            shop.create_product_with_default_offer(
+                make_env(database), slug="canvas-bag", title="Canvas bag", description="", status="draft",
+                sku="CANVAS-1", price=300, stock=4, enabled=False,
+            )
+        )
+
+        insert, values = next((write for write in database.writes if "INSERT INTO product_variants" in write[0]))
+        assert "is_default" in insert
+        assert values[2:] == ("", "CANVAS-1", 300, 4, 0, 0, 1)
+
 
 class TestWhatACustomerLearnsAboutStock:
     def test_a_low_count_is_shown(self, shop):
@@ -98,6 +112,29 @@ class TestWhatACustomerLearnsAboutStock:
     def test_the_payload_carries_no_internal_fields(self, shop):
         variant = {"id": "v1", "productId": "p1", "title": "M", "sku": "COST-12", "price": 300, "stock": 2}
         assert set(shop.public_variant(variant)) == {"id", "title", "price", "inStock", "stockLeft"}
+
+    def test_a_default_offer_hides_its_internal_empty_title_and_needs_no_choice(self, shop):
+        product = {"slug": "canvas-bag", "title": "Canvas bag", "description": ""}
+        variants = [{"id": "v1", "title": "", "price": 300, "stock": 4, "enabled": True, "isDefault": True}]
+
+        public = shop.public_detail(product, variants, [], [])
+
+        assert public["requiresOfferSelection"] is False
+        assert public["variants"][0]["title"] is None
+
+    def test_multiple_offers_require_a_customer_choice(self, shop):
+        variants = [
+            {"id": "v1", "title": "M", "price": 300, "stock": 4, "enabled": True, "isDefault": False},
+            {"id": "v2", "title": "L", "price": 300, "stock": 4, "enabled": True, "isDefault": False},
+        ]
+
+        assert shop.public_detail({"slug": "shirt", "title": "Shirt", "description": ""}, variants, [], [])["requiresOfferSelection"] is True
+
+
+class TestOfferMode:
+    def test_default_marker_not_variant_count_selects_single_mode(self, shop):
+        assert shop.sales_mode([{"isDefault": True}, {"isDefault": False}]) == "single"
+        assert shop.sales_mode([{"isDefault": False}]) == "multi"
 
 
 class TestImageKeys:

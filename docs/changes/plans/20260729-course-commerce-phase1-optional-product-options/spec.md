@@ -22,9 +22,11 @@
 ```text
 price: integer
 sku: string
-trackStock: boolean
 stock: integer
+enabled: boolean
 ```
+
+`trackStock` 尚無資料模型，不在 phase1 request 中接受；不得以巨大庫存數字模擬 unlimited。
 
 API 建立 Product 後立即建立 default Offer。回應必須包含兩者。建立中任何一步失敗，
 不得回傳成功。

@@ -673,6 +673,22 @@ MIGRATIONS = [
             " ON customer_events (customer_id, created_at DESC)",
         ],
     },
+    {
+        # Phase 1 keeps the existing table and ids, but names the one Offer
+        # that needs no customer-facing choice.
+        "name": "0027_add_default_product_offers",
+        "add_columns": [
+            ("product_variants", "is_default", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "statements": [
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_variants_one_default"
+            " ON product_variants (product_id) WHERE is_default = 1",
+            # Do not guess a default for a real multi-offer product.
+            "UPDATE product_variants SET is_default = 1"
+            " WHERE product_id IN (SELECT product_id FROM product_variants"
+            " GROUP BY product_id HAVING COUNT(*) = 1)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

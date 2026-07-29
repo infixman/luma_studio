@@ -570,7 +570,7 @@ export function RichTextEditor({
     saveSelection()
     const existing = findParentTag(selection.anchorNode, 'A') as HTMLAnchorElement | null
     setLinkDraft(existing?.getAttribute('href') ?? 'https://')
-    setLinkTarget(safeLinkTarget(existing?.getAttribute('target')) ?? '_blank')
+    setLinkTarget(safeLinkTarget(existing ? existing.getAttribute('target') : null) ?? '_blank')
     setLinkDialogOpen(true)
   }
 

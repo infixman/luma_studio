@@ -14,9 +14,12 @@ from shared.responses import Ctx
 async def _detail(ctx: Ctx, product: dict) -> dict:
     """A product with everything the editor needs to render it in one go."""
 
+    variants = await shop.list_variants(ctx.env, product["id"])
     return {
         "product": product,
-        "variants": await shop.list_variants(ctx.env, product["id"]),
+        "variants": variants,
+        "salesMode": shop.sales_mode(variants),
+        "defaultOffer": next((variant for variant in variants if variant["isDefault"]), None),
         "images": await shop.list_images(ctx.env, product["id"]),
         "categories": await categories.of_product(ctx.env, product["id"]),
     }
@@ -65,6 +68,17 @@ def _variant_fields(body: dict) -> dict:
         "sku": shop.validate_text(str(body.get("sku") or ""), shop.MAX_SKU, "SKU", required=False),
         "price": shop.validate_price(body.get("price")),
         "stock": shop.validate_stock(body.get("stock")),
+    }
+
+
+def _default_offer_fields(body: dict) -> dict:
+    """The single-offer editor deliberately has no customer-facing title."""
+
+    return {
+        "sku": shop.validate_text(str(body.get("sku") or ""), shop.MAX_SKU, "SKU", required=False),
+        "price": shop.validate_price(body.get("price")),
+        "stock": shop.validate_stock(body.get("stock")),
+        "enabled": bool(body.get("enabled", True)),
     }
 
 
@@ -162,12 +176,18 @@ async def handle(ctx: Ctx):
         try:
             body = await ctx.json_body()
             fields = _product_fields(body)
+            offer_fields = _default_offer_fields(body)
             category_ids = _category_ids(body)
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid product", 400)
         if await shop.slug_taken(env, fields["slug"]):
             return ctx.error("Another product already uses that slug", 409)
-        product_id = await shop.create_product(env, **fields)
+        if fields["status"] == "active" and not offer_fields["enabled"]:
+            return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
+        try:
+            product_id = await shop.create_product_with_default_offer(env, **fields, **offer_fields)
+        except Exception:
+            return ctx.error("商品與銷售資訊建立失敗，請再試一次", 500)
         if category_ids is not None:
             await categories.set_for_product(env, product_id, category_ids)
         return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)), 201)
@@ -204,11 +224,30 @@ async def handle(ctx: Ctx):
                 body = await ctx.json_body()
                 fields = _product_fields(body)
                 category_ids = _category_ids(body)
+                has_sales_fields = any(key in body for key in ("price", "sku", "stock", "enabled"))
+                default_fields = _default_offer_fields(body) if has_sales_fields else None
             except (ValueError, AttributeError) as error:
                 return ctx.error(str(error) or "Invalid product", 400)
             if await shop.slug_taken(env, fields["slug"], excluding=product_id):
                 return ctx.error("Another product already uses that slug", 409)
+            default_offer = await shop.get_default_offer(env, product_id)
+            if default_fields is not None and default_offer is None:
+                return ctx.error("這個商品沒有單一銷售方案", 409)
+            if fields["status"] == "active":
+                changing_id = default_offer["id"] if default_fields is not None and default_offer is not None else None
+                enabled = default_fields["enabled"] if default_fields is not None else None
+                if not await shop.can_be_active(env, product_id, changing_offer_id=changing_id, offer_enabled=enabled):
+                    return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
             await shop.update_product(env, product_id, **fields)
+            if default_fields is not None and default_offer is not None:
+                await shop.update_variant(
+                    default_offer["id"],
+                    title="",
+                    sku=default_fields["sku"],
+                    price=default_fields["price"],
+                    stock=default_fields["stock"],
+                    enabled=default_fields["enabled"],
+                )
             if category_ids is not None:
                 await categories.set_for_product(env, product_id, category_ids)
             return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)))
@@ -226,8 +265,21 @@ async def handle(ctx: Ctx):
                 return ctx.error(str(error) or "Invalid variant", 400)
             if await shop.count_variants(env, product_id) >= shop.MAX_VARIANTS:
                 return ctx.error(f"A product can hold at most {shop.MAX_VARIANTS} variants", 409)
+            if await shop.get_default_offer(env, product_id) is not None:
+                return ctx.error("請先將單一商品轉為多方案，再新增方案", 409)
             await shop.create_variant(env, product_id, **fields)
             return ctx.json(await _detail(ctx, product), 201)
+
+        if tail == "offers/convert-to-multi" and method == "POST":
+            try:
+                title = shop.validate_text(
+                    str((await ctx.json_body()).get("title") or ""), shop.MAX_VARIANT_TITLE, "方案名稱"
+                )
+            except (ValueError, AttributeError) as error:
+                return ctx.error(str(error) or "Invalid offer conversion", 400)
+            if not await shop.convert_default_offer_to_multi(env, product_id, title=title):
+                return ctx.error("這個商品不是單一方案模式", 409)
+            return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)))
 
         if tail == "images/order" and method == "PUT":
             try:
@@ -275,15 +327,28 @@ async def handle(ctx: Ctx):
         product = await shop.get_product(env, variant["productId"])
 
         if method == "DELETE":
+            if variant["isDefault"]:
+                return ctx.error("單一銷售方案不能刪除；請先轉為多方案", 409)
+            if product["status"] == "active" and not await shop.can_be_active(
+                env, product["id"], changing_offer_id=variant_id, offer_enabled=False
+            ):
+                return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
             await shop.delete_variant(env, variant_id)
             return ctx.json(await _detail(ctx, product))
 
+        if variant["isDefault"]:
+            return ctx.error("單一銷售方案請由商品的銷售資訊儲存", 409)
         try:
             body = await ctx.json_body()
             fields = _variant_fields(body)
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid variant", 400)
-        await shop.update_variant(env, variant_id, **fields, enabled=bool(body.get("enabled", True)))
+        enabled = bool(body.get("enabled", True))
+        if product["status"] == "active" and not await shop.can_be_active(
+            env, product["id"], changing_offer_id=variant_id, offer_enabled=enabled
+        ):
+            return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
+        await shop.update_variant(env, variant_id, **fields, enabled=enabled)
         return ctx.json(await _detail(ctx, product))
 
     if path.startswith("/api/images/") and method == "DELETE":

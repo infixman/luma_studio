@@ -41,7 +41,10 @@ export function ProductEditPage({ id }: { id: string }) {
     description: '',
     status: 'draft',
   })
+  const [singleOffer, setSingleOffer] = useState<ProductVariant | null>(null)
   const [draft, setDraft] = useState(EMPTY_VARIANT)
+  const [conversionTitle, setConversionTitle] = useState('')
+  const [showConversion, setShowConversion] = useState(false)
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
@@ -53,6 +56,7 @@ export function ProductEditPage({ id }: { id: string }) {
 
   const apply = useCallback((next: ProductDetail) => {
     setDetail(next)
+    setSingleOffer(next.defaultOffer)
     setChosen(next.categories.map((category) => category.id))
     setForm({
       title: next.product.title,
@@ -82,9 +86,33 @@ export function ProductEditPage({ id }: { id: string }) {
   function saveProduct(event?: Event) {
     event?.preventDefault()
     void run(
-      async () => apply(await apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, categoryIds: chosen })),
+      async () => {
+        const sales = detail?.salesMode === 'single' && singleOffer
+          ? {
+              sku: singleOffer.sku,
+              price: singleOffer.price,
+              stock: singleOffer.stock,
+              enabled: singleOffer.enabled,
+            }
+          : {}
+        apply(await apiJson<ProductDetail>(`/api/products/${encodeURIComponent(id)}`, 'PUT', { ...form, ...sales, categoryIds: chosen }))
+      },
       '商品已儲存。',
     )
+  }
+
+  function convertToMulti(event: Event) {
+    event.preventDefault()
+    void run(async () => {
+      const next = await apiJson<ProductDetail>(
+        `/api/products/${encodeURIComponent(id)}/offers/convert-to-multi`,
+        'POST',
+        { title: conversionTitle.trim() },
+      )
+      setConversionTitle('')
+      setShowConversion(false)
+      apply(next)
+    }, '已改為多方案商品。')
   }
 
   function addVariant(event: Event) {
@@ -203,6 +231,12 @@ export function ProductEditPage({ id }: { id: string }) {
     form.slug !== detail.product.slug ||
     form.description !== detail.product.description ||
     form.status !== detail.product.status ||
+    (detail.salesMode === 'single' && singleOffer !== null && (
+      singleOffer.sku !== detail.defaultOffer?.sku ||
+      singleOffer.price !== detail.defaultOffer?.price ||
+      singleOffer.stock !== detail.defaultOffer?.stock ||
+      singleOffer.enabled !== detail.defaultOffer?.enabled
+    )) ||
     JSON.stringify([...chosen].sort()) !== JSON.stringify(detail.categories.map((category) => category.id).sort())
 
   return (
@@ -238,98 +272,110 @@ export function ProductEditPage({ id }: { id: string }) {
           </form>
         </Panel>
 
-        <Panel title="規格與庫存" class="product-variants-panel">
-          {detail.variants.length === 0 ? (
-            <EmptyState title="還沒有規格" body="至少要有一個啟用的規格，商品才有價格、才能被買走。" />
+        <Panel title={detail.salesMode === 'single' ? '銷售資訊' : '方案與庫存'} class="product-variants-panel">
+          {detail.salesMode === 'single' && singleOffer ? (
+            <>
+              <p class="muted">此商品目前沒有顧客需選擇的規格；售價、庫存與貨號由單一銷售方案提供。</p>
+              <div class="ui-inline-form product-variant-create">
+                <TextField
+                  label="貨號"
+                  hint="選填"
+                  value={singleOffer.sku}
+                  maxLength={40}
+                  onInput={(event) => setSingleOffer({ ...singleOffer, sku: (event.currentTarget as HTMLInputElement).value })}
+                />
+                <TextField
+                  label="售價"
+                  type="number"
+                  min={1}
+                  max={PRODUCT_VARIANT_PRICE_MAX}
+                  step={1}
+                  value={singleOffer.price}
+                  onInput={(event) => setSingleOffer({ ...singleOffer, price: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10) })}
+                />
+                <TextField
+                  label="庫存"
+                  type="number"
+                  min={0}
+                  max={PRODUCT_VARIANT_STOCK_MAX}
+                  step={1}
+                  value={singleOffer.stock}
+                  onInput={(event) => setSingleOffer({ ...singleOffer, stock: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10) })}
+                />
+                <Toggle label="啟用" checked={singleOffer.enabled} onChange={(enabled) => setSingleOffer({ ...singleOffer, enabled })} />
+              </div>
+              {showConversion ? (
+                <form class="ui-inline-form product-variant-create" onSubmit={convertToMulti}>
+                  <p class="muted">目前的售價、庫存與貨號會保留在第一個方案，只需要命名它。</p>
+                  <TextField
+                    label="第一個方案名稱"
+                    placeholder="例如 標準版"
+                    value={conversionTitle}
+                    maxLength={60}
+                    required
+                    onInput={(event) => setConversionTitle((event.currentTarget as HTMLInputElement).value)}
+                  />
+                  <Button type="submit" tone="primary" busy={busy} disabled={conversionTitle.trim() === ''}>
+                    確認改為多方案
+                  </Button>
+                  <Button type="button" disabled={busy} onClick={() => setShowConversion(false)}>
+                    取消
+                  </Button>
+                </form>
+              ) : (
+                <Button disabled={busy} onClick={() => setShowConversion(true)}>新增規格選項</Button>
+              )}
+            </>
           ) : (
-            <ul class="variant-list">
-              {detail.variants.map((variant) => (
-                <li key={variant.id} class={variant.enabled ? 'variant' : 'variant off'}>
-                  <span class="variant-title">
-                    {variant.title}
-                    {variant.sku && <code>{variant.sku}</code>}
-                  </span>
-                  <TextField
-                    label="售價"
-                    type="number"
-                    min={1}
-                    max={PRODUCT_VARIANT_PRICE_MAX}
-                    step={1}
-                    value={variant.price}
-                    onChange={(event) =>
-                      saveVariant(variant, {
-                        price: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10),
-                      })
-                    }
-                  />
-                  <TextField
-                    label="庫存"
-                    type="number"
-                    min={0}
-                    max={PRODUCT_VARIANT_STOCK_MAX}
-                    step={1}
-                    value={variant.stock}
-                    onChange={(event) =>
-                      saveVariant(variant, {
-                        stock: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10),
-                      })
-                    }
-                  />
-                  <Toggle
-                    label="啟用"
-                    checked={variant.enabled}
-                    onChange={(enabled) => saveVariant(variant, { enabled })}
-                  />
-                  <Menu label={`「${variant.title}」的動作`}>
-                    <MenuItem tone="danger" disabled={busy} onClick={() => void removeVariant(variant)}>
-                      刪除規格
-                    </MenuItem>
-                  </Menu>
-                </li>
-              ))}
-            </ul>
-          )}
+            <>
+              {detail.variants.length === 0 ? (
+                <EmptyState title="還沒有銷售方案" body="至少要有一個啟用的方案，商品才有價格、才能被買走。" />
+              ) : (
+                <ul class="variant-list">
+                  {detail.variants.map((variant) => (
+                    <li key={variant.id} class={variant.enabled ? 'variant' : 'variant off'}>
+                      <span class="variant-title">
+                        {variant.title}
+                        {variant.sku && <code>{variant.sku}</code>}
+                      </span>
+                      <TextField
+                        label="售價"
+                        type="number"
+                        min={1}
+                        max={PRODUCT_VARIANT_PRICE_MAX}
+                        step={1}
+                        value={variant.price}
+                        onChange={(event) => saveVariant(variant, { price: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10) })}
+                      />
+                      <TextField
+                        label="庫存"
+                        type="number"
+                        min={0}
+                        max={PRODUCT_VARIANT_STOCK_MAX}
+                        step={1}
+                        value={variant.stock}
+                        onChange={(event) => saveVariant(variant, { stock: Number.parseInt((event.currentTarget as HTMLInputElement).value, 10) })}
+                      />
+                      <Toggle label="啟用" checked={variant.enabled} onChange={(enabled) => saveVariant(variant, { enabled })} />
+                      <Menu label={`「${variant.title}」的動作`}>
+                        <MenuItem tone="danger" disabled={busy} onClick={() => void removeVariant(variant)}>
+                          刪除方案
+                        </MenuItem>
+                      </Menu>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-          <form class="ui-inline-form product-variant-create" onSubmit={addVariant}>
-            <TextField
-              label="規格名稱"
-              placeholder="例如 M／藍"
-              value={draft.title}
-              maxLength={60}
-              required
-              onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })}
-            />
-            <TextField
-              label="貨號"
-              hint="選填"
-              value={draft.sku}
-              maxLength={40}
-              onInput={(event) => setDraft({ ...draft, sku: (event.currentTarget as HTMLInputElement).value })}
-            />
-            <TextField
-              label="售價"
-              type="number"
-              min={1}
-              max={PRODUCT_VARIANT_PRICE_MAX}
-              step={1}
-              value={draft.price}
-              required
-              onInput={(event) => setDraft({ ...draft, price: (event.currentTarget as HTMLInputElement).value })}
-            />
-            <TextField
-              label="庫存"
-              type="number"
-              min={0}
-              max={PRODUCT_VARIANT_STOCK_MAX}
-              step={1}
-              value={draft.stock}
-              required
-              onInput={(event) => setDraft({ ...draft, stock: (event.currentTarget as HTMLInputElement).value })}
-            />
-            <Button type="submit" tone="primary" busy={busy}>
-              新增規格
-            </Button>
-          </form>
+              <form class="ui-inline-form product-variant-create" onSubmit={addVariant}>
+                <TextField label="方案名稱" placeholder="例如 M／藍" value={draft.title} maxLength={60} required onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })} />
+                <TextField label="貨號" hint="選填" value={draft.sku} maxLength={40} onInput={(event) => setDraft({ ...draft, sku: (event.currentTarget as HTMLInputElement).value })} />
+                <TextField label="售價" type="number" min={1} max={PRODUCT_VARIANT_PRICE_MAX} step={1} value={draft.price} required onInput={(event) => setDraft({ ...draft, price: (event.currentTarget as HTMLInputElement).value })} />
+                <TextField label="庫存" type="number" min={0} max={PRODUCT_VARIANT_STOCK_MAX} step={1} value={draft.stock} required onInput={(event) => setDraft({ ...draft, stock: (event.currentTarget as HTMLInputElement).value })} />
+                <Button type="submit" tone="primary" busy={busy}>新增方案</Button>
+              </form>
+            </>
+          )}
         </Panel>
       </div>
 

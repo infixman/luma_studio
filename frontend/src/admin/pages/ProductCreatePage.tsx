@@ -2,13 +2,17 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { Button, Panel, Spinner } from '../components/ui'
+import { Button, Panel, Spinner, TextField, Toggle } from '../components/ui'
 import {
   ProductFormFields,
   type ProductFormValue,
 } from '../features/catalogue/ProductFormFields'
 import { api, apiJson } from '../../shared/api'
 import type { Category, ProductDetail } from '../../shared/types'
+import {
+  PRODUCT_VARIANT_PRICE_MAX,
+  PRODUCT_VARIANT_STOCK_MAX,
+} from '../features/catalogue/constraints'
 import '../styles/shop-admin.css'
 
 const EMPTY_PRODUCT: ProductFormValue = {
@@ -18,10 +22,13 @@ const EMPTY_PRODUCT: ProductFormValue = {
   status: 'draft',
 }
 
+const EMPTY_SALES = { sku: '', price: '', stock: '', enabled: true }
+
 export function ProductCreatePage() {
   const [form, setForm] = useState<ProductFormValue>(EMPTY_PRODUCT)
   const [categories, setCategories] = useState<Category[] | null>(null)
   const [chosen, setChosen] = useState<string[]>([])
+  const [sales, setSales] = useState(EMPTY_SALES)
   const { message, showError, busy, run } = useStatus()
 
   const load = useCallback(async () => {
@@ -46,6 +53,10 @@ export function ProductCreatePage() {
         title: form.title.trim(),
         slug: form.slug.trim(),
         categoryIds: chosen,
+        sku: sales.sku.trim(),
+        price: Number.parseInt(sales.price, 10),
+        stock: Number.parseInt(sales.stock, 10),
+        enabled: sales.enabled,
       })
       result.id = created.product.id
     }, '商品已建立。')
@@ -55,7 +66,11 @@ export function ProductCreatePage() {
     }
   }
 
-  const complete = form.title.trim() !== '' && form.slug.trim() !== ''
+  const complete =
+    form.title.trim() !== '' &&
+    form.slug.trim() !== '' &&
+    sales.price !== '' &&
+    sales.stock !== ''
 
   return (
     <AdminShell
@@ -90,6 +105,39 @@ export function ProductCreatePage() {
             />
           </form>
         )}
+      </Panel>
+      <Panel title="銷售資訊" class="product-variants-panel">
+        <p class="muted">沒有規格的商品會建立一筆隱藏的單一銷售方案，顧客不需要再選一次。</p>
+        <div class="ui-inline-form product-variant-create">
+          <TextField
+            label="貨號"
+            hint="選填"
+            value={sales.sku}
+            maxLength={40}
+            onInput={(event) => setSales({ ...sales, sku: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="售價"
+            type="number"
+            min={1}
+            max={PRODUCT_VARIANT_PRICE_MAX}
+            step={1}
+            value={sales.price}
+            required
+            onInput={(event) => setSales({ ...sales, price: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <TextField
+            label="庫存"
+            type="number"
+            min={0}
+            max={PRODUCT_VARIANT_STOCK_MAX}
+            step={1}
+            value={sales.stock}
+            required
+            onInput={(event) => setSales({ ...sales, stock: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <Toggle label="啟用" checked={sales.enabled} onChange={(enabled) => setSales({ ...sales, enabled })} />
+        </div>
       </Panel>
     </AdminShell>
   )

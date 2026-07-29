@@ -27,6 +27,8 @@ export interface ProductVariant {
   stock: number
   position: number
   enabled: boolean
+  /** The hidden-choice Offer used by products sold without options. */
+  isDefault: boolean
 }
 
 export interface ProductImage {
@@ -41,6 +43,8 @@ export interface ProductImage {
 export interface ProductDetail {
   product: Product
   variants: ProductVariant[]
+  salesMode: 'single' | 'multi'
+  defaultOffer: ProductVariant | null
   images: ProductImage[]
   categories: Category[]
 }
@@ -68,7 +72,8 @@ export interface Category {
 /** What an anonymous visitor is told about a variant. Stock is deliberately vague above the low-stock threshold. */
 export interface PublicVariant {
   id: string
-  title: string
+  /** Null when this is the product's no-choice default Offer. */
+  title: string | null
   price: number
   inStock: boolean
   stockLeft: number | null
@@ -105,6 +110,8 @@ export interface PublicProductDetail {
   title: string
   description: string
   images: { path: string | null; alt: string }[]
+  /** The page only renders an Offer picker when the customer must choose. */
+  requiresOfferSelection: boolean
   variants: PublicVariant[]
   categories: { slug: string; title: string }[]
 }
