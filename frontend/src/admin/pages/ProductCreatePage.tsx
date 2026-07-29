@@ -60,27 +60,23 @@ export function ProductCreatePage() {
   return (
     <AdminShell
       current="/products"
+      title="新增商品"
       back={{ href: '/products', label: '回到商品清單' }}
       message={message}
       onError={showError}
+      actions={
+        <Button
+          type="submit"
+          form="product-create-form"
+          tone="primary"
+          busy={busy}
+          disabled={!complete || categories === null}
+        >
+          新增商品
+        </Button>
+      }
     >
-      <h2 class="product-heading">新增商品</h2>
-
-      <Panel
-        title="商品資料"
-        class="product-info-panel"
-        actions={
-          <Button
-            type="submit"
-            form="product-create-form"
-            tone="primary"
-            busy={busy}
-            disabled={!complete || categories === null}
-          >
-            新增商品
-          </Button>
-        }
-      >
+      <Panel title="商品資料" class="product-info-panel">
         {categories === null ? (
           <Spinner />
         ) : (

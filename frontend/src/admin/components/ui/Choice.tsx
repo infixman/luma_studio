@@ -58,12 +58,27 @@ interface RadioGroupProps<T extends string | number> {
   onChange: (value: T) => void
   /** Laid out across rather than down, for two or three short options. */
   inline?: boolean
+  /** A compact set of mutually exclusive cards, for short workflow states. */
+  variant?: 'default' | 'segmented'
 }
 
-export function RadioGroup<T extends string | number>({ legend, value, options, onChange, inline }: RadioGroupProps<T>) {
+export function RadioGroup<T extends string | number>({
+  legend,
+  value,
+  options,
+  onChange,
+  inline,
+  variant = 'default',
+}: RadioGroupProps<T>) {
   const name = useId()
   return (
-    <fieldset class={inline ? 'ui-radio-group is-inline' : 'ui-radio-group'}>
+    <fieldset
+      class={[
+        'ui-radio-group',
+        inline ? 'is-inline' : '',
+        variant === 'segmented' ? 'is-segmented' : '',
+      ].filter(Boolean).join(' ')}
+    >
       <legend class="ui-label">{legend}</legend>
       {options.map((option) => {
         const id = `${name}-${option.value}`

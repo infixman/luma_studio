@@ -554,6 +554,47 @@
   width: 100%;
 }
 
+.ui-radio-group.is-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.ui-radio-group.is-segmented legend {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.ui-radio-group.is-segmented .ui-choice-label {
+  width: 100%;
+  min-height: 4rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ui-radio-group.is-segmented .ui-dot {
+  display: none;
+}
+
+.ui-radio-group.is-segmented .ui-choice-input:checked + .ui-choice-label {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.ui-radio-group.is-segmented .ui-choice-input:focus-visible + .ui-choice-label {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 30rem) {
+  .ui-radio-group.is-segmented {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* --- toggle --- */
 
 .ui-toggle-row {

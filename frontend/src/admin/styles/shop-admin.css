@@ -3,10 +3,6 @@
    Layout only. Colours, controls and cards come from tokens.css and the
    component set, so nothing here names a colour and both themes hold. */
 
-body.admin .product-heading {
-  margin: 0 0 var(--space-4);
-}
-
 body.admin .shop h3 {
   margin: 0 0 var(--space-3);
   font-size: var(--font-lg);
@@ -105,6 +101,18 @@ body.admin .ui-table tbody tr.product-archived td {
 
 /* --- editor --- */
 
+body.admin .product-edit-layout {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+  margin-bottom: var(--space-4);
+}
+
+body.admin .product-edit-layout > .ui-panel {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 body.admin .product-editor-form {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.7fr);
@@ -131,19 +139,51 @@ body.admin .product-form-side {
   border-left: 1px solid var(--border);
 }
 
-body.admin .product-form-side .ui-checkbox-set {
-  margin: 0;
+body.admin .product-category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.4rem;
+}
+
+body.admin .product-category-tags .ui-menu {
+  left: 0;
+  right: auto;
+}
+
+body.admin .category-add-icon {
+  font-size: 1.1em;
+  line-height: 1;
 }
 
 /* On a broad editing canvas, the actual data gets most of the width and the
    publishing choices stay in a compact, scanable rail. */
 @media (min-width: 80rem) {
+  body.admin .product-edit-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(32rem, 0.8fr);
+  }
+
   body.admin .product-info-panel .ui-panel-body {
     padding-block: clamp(var(--space-5), 2vw, var(--space-7));
   }
 
   body.admin .product-form-main .rte-content {
     min-height: 19rem;
+  }
+
+  body.admin .product-edit-layout .variant {
+    grid-template-columns: minmax(7rem, 1fr) 5.75rem 5.75rem max-content max-content;
+    gap: var(--space-2);
+  }
+
+  body.admin .product-edit-layout .product-variant-create {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 5.75rem 5.75rem;
+  }
+
+  body.admin .product-edit-layout .product-variant-create .ui-button {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 }
 
