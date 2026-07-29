@@ -1,6 +1,7 @@
 import type { JSX } from 'preact'
 
 import { apiUrl } from '../../shared/api'
+import { escapeHtml } from '../../shared/markdown'
 import { RichTextEditor } from './RichTextEditor'
 import type {
   AboutConfig,
@@ -587,7 +588,7 @@ function textToHtml(text: string): string {
   return text
     .split(/\n{2,}/)
     .filter(Boolean)
-    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
     .join('')
 }
 

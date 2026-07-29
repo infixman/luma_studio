@@ -102,7 +102,7 @@ class Ctx:
     def preflight(self) -> Response:
         headers = self._headers(
             {
-                "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
                 "access-control-allow-headers": ALLOWED_REQUEST_HEADERS,
                 "access-control-max-age": "86400",
                 "cache-control": "no-store",

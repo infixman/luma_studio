@@ -178,8 +178,14 @@ export function RichTextEditor({
     const src = prompt('圖片網址', 'https://')
     if (!src?.trim()) return
     const href = prompt('點擊圖片要前往的連結（可留空）', '')
+    const img = document.createElement('img')
+    img.src = src.trim()
+    img.alt = ''
     if (href?.trim()) {
-      document.execCommand('insertHTML', false, `<a href="${href.trim()}"><img src="${src.trim()}" alt="" /></a>`)
+      const a = document.createElement('a')
+      a.href = href.trim()
+      a.appendChild(img)
+      document.execCommand('insertHTML', false, a.outerHTML)
     } else {
       exec('insertImage', src.trim())
     }
@@ -335,7 +341,8 @@ function stripPastedHTML(html: string): string {
           if (el.hasAttribute('allowfullscreen')) kept.setAttribute('allowfullscreen', '')
         }
         if ((tag === 'DIV' || tag === 'IFRAME' || tag === 'P') && el.getAttribute('style')) {
-          kept.setAttribute('style', el.getAttribute('style')!)
+          const safe = sanitizePastedStyle(el.getAttribute('style')!)
+          if (safe) kept.setAttribute('style', safe)
         }
         kept.appendChild(clean(el))
         frag.appendChild(kept)
@@ -350,6 +357,24 @@ function stripPastedHTML(html: string): string {
   const wrapper = document.createElement('div')
   wrapper.appendChild(result)
   return wrapper.innerHTML
+}
+
+const SAFE_STYLE_PROPS = new Set([
+  'text-align', 'position', 'width', 'height', 'padding-bottom',
+  'overflow', 'top', 'left', 'border',
+])
+
+function sanitizePastedStyle(raw: string): string {
+  return raw
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => {
+      if (!d || !d.includes(':')) return false
+      const prop = d.slice(0, d.indexOf(':')).trim().toLowerCase()
+      const val = d.slice(d.indexOf(':') + 1).trim()
+      return SAFE_STYLE_PROPS.has(prop) && !val.includes('\\') && !val.toLowerCase().includes('url(')
+    })
+    .join(';')
 }
 
 const EMBED_STYLE = 'position:relative;width:100%;padding-bottom:56.25%;height:0;overflow:hidden'

@@ -20,6 +20,7 @@ import {
 import { RichTextEditor } from '../components/RichTextEditor'
 import { Lightbox } from '../components/Lightbox'
 import { api, apiJson, apiUrl, clearLoginAttempt, uploadProductImage } from '../../shared/api'
+import { escapeHtml } from '../../shared/markdown'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
 import '../styles/admin.css'
 import '../styles/shop-admin.css'
@@ -40,7 +41,7 @@ function textToHtml(text: string): string {
   if (/<[a-z][\s\S]*>/i.test(text)) return text
   return text
     .split(/\n{2,}/)
-    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
     .join('')
 }
 

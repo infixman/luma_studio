@@ -30,7 +30,7 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function safeHref(href: string): string | null {
+export function safeHref(href: string): string | null {
   const trimmed = href.trim()
   // Already escaped by the time this runs, so a quote cannot break out of the
   // attribute; this check is about where the link goes, not how it is written.

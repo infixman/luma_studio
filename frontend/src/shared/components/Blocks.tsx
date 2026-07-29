@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { priceLabel } from '../money'
 import { srcSetFor } from '../srcset'
 import { apiUrl } from '../api'
-import { renderMarkdown } from '../markdown'
+import { renderMarkdown, safeHref } from '../markdown'
 import type { ContactDetail, MediaRef, PageBlock, PublicProductCard } from '../types'
 import './blocks.css'
 
@@ -373,13 +373,16 @@ function About({ block }: { block: Extract<PageBlock, { type: 'about' }> }) {
         )}
         {links.length > 0 && (
           <ul class="links">
-            {links.map((link) => (
-              <li key={link.url}>
-                <a href={link.url} rel="noopener">
-                  {link.label}
-                </a>
-              </li>
-            ))}
+            {links.map((link) => {
+              const href = safeHref(link.url)
+              return href ? (
+                <li key={link.url}>
+                  <a href={href} rel="noopener">
+                    {link.label}
+                  </a>
+                </li>
+              ) : null
+            })}
           </ul>
         )}
       </div>

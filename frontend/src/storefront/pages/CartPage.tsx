@@ -130,9 +130,10 @@ export function CartPage() {
                       max={cart.MAX_QUANTITY}
                       step={1}
                       value={line.quantity}
-                      onChange={(event) =>
-                        change(line.variantId, Number.parseInt((event.target as HTMLInputElement).value, 10))
-                      }
+                      onChange={(event) => {
+                        const n = Number.parseInt((event.target as HTMLInputElement).value, 10)
+                        if (!Number.isNaN(n)) change(line.variantId, n)
+                      }}
                     />
                   </label>
                   <p class="line-total">NT${line.lineTotal}</p>

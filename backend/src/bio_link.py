@@ -6,7 +6,7 @@ phase. They are recorded from the start so that phase has history to show.
 
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import ics
@@ -418,8 +418,6 @@ DEFAULT_STATS_DAYS = 30
 
 
 def _window_start(days: int) -> str:
-    from datetime import datetime, timedelta, timezone
-
     taipei_now = datetime.now(timezone.utc) + timedelta(hours=8)
     return (taipei_now - timedelta(days=days - 1)).strftime("%Y-%m-%d")
 
