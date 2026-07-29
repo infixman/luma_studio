@@ -29,6 +29,18 @@ function headlinePrice(product: PublicProductDetail, chosen: PublicVariant | nul
   return priceLabel(Math.min(...prices), Math.max(...prices))
 }
 
+export function productReturnTarget(search: string): { href: string; label: string } {
+  const from = new URLSearchParams(search).get('from')
+
+  // `from` is only ever emitted by a page-embedded shop row. Still validate
+  // it here: a product URL is public, so it must not become an open redirect.
+  if (!from || !from.startsWith('/') || from.startsWith('//') || from.startsWith('/\\')) {
+    return { href: '/shop', label: '商品列表' }
+  }
+
+  return { href: from, label: '原本的頁面' }
+}
+
 export function ProductPage({ slug }: { slug: string }) {
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
   const [missing, setMissing] = useState(false)
@@ -101,6 +113,7 @@ export function ProductPage({ slug }: { slug: string }) {
   const images = product.images.filter((image) => image.path)
   const cover = images[Math.min(shown, images.length - 1)]
   const picked = product.variants.find((variant) => variant.id === chosen) ?? null
+  const back = productReturnTarget(location.search)
   // Only the server knows the real ceiling; this one exists so the stepper
   // stops somewhere sensible when the shop has said how many are left.
   const ceiling = picked?.stockLeft ?? cart.MAX_QUANTITY
@@ -108,7 +121,7 @@ export function ProductPage({ slug }: { slug: string }) {
   return (
     <main class="product">
       <p class="crumb">
-        <a href="/shop">← 商品列表</a>
+        <a href={back.href}>← 返回{back.label}</a>
       </p>
 
       <div class="layout">

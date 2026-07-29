@@ -53,7 +53,7 @@ export function CustomPage({ path, onMissing }: { path: string; onMissing: () =>
 
   return (
     <main class="custom-page">
-      <Blocks blocks={state.page.blocks} />
+      <Blocks blocks={state.page.blocks} productReturnPath={path} />
     </main>
   )
 }

@@ -24,17 +24,17 @@ import './blocks.css'
  * validation. Keeping those extension points explicit prevents a type that
  * saves correctly but cannot be edited or previewed.
  */
-export function Blocks({ blocks }: { blocks: PageBlock[] }) {
+export function Blocks({ blocks, productReturnPath }: { blocks: PageBlock[]; productReturnPath?: string }) {
   return (
     <>
       {blocks.map((block) => (
-        <Block key={block.id} block={block} />
+        <Block key={block.id} block={block} productReturnPath={productReturnPath} />
       ))}
     </>
   )
 }
 
-function Block({ block }: { block: PageBlock }) {
+function Block({ block, productReturnPath }: { block: PageBlock; productReturnPath?: string }) {
   switch (block.type) {
     case 'text':
       return (
@@ -62,6 +62,7 @@ function Block({ block }: { block: PageBlock }) {
           products={block.data?.products ?? []}
           layout={block.config.layout}
           overlayLabels={block.config.overlayLabels}
+          productReturnPath={productReturnPath}
         />
       )
 
@@ -234,11 +235,14 @@ function ShopRow({
   products,
   layout,
   overlayLabels,
+  productReturnPath,
 }: {
   heading: string
   products: PublicProductCard[]
   layout: string
   overlayLabels: boolean
+  /** A page-embedded shop returns here; the standalone catalogue does not. */
+  productReturnPath?: string
 }) {
   // An empty row is drawn as nothing rather than as a heading over a gap. The
   // editor is where "this block shows no products" needs saying.
@@ -250,7 +254,13 @@ function ShopRow({
       <ul>
         {products.map((card) => (
           <li key={card.slug} class={card.inStock ? '' : 'sold-out'}>
-            <a href={`/shop/${encodeURIComponent(card.slug)}`}>
+            <a
+              href={
+                productReturnPath
+                  ? `/shop/${encodeURIComponent(card.slug)}?from=${encodeURIComponent(productReturnPath)}`
+                  : `/shop/${encodeURIComponent(card.slug)}`
+              }
+            >
               <span class="cover">
                 {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
                 {!card.inStock && <span class="ribbon">售完</span>}
