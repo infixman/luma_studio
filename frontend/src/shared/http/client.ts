@@ -46,4 +46,3 @@ export async function probeSession<T>(path: string): Promise<T | null> {
 export async function apiJson<T>(path: string, method: string, payload: unknown): Promise<T> {
   return api<T>(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
 }
-

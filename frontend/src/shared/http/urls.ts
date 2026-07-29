@@ -33,4 +33,3 @@ export function bioLinkRedirectUrl(itemId: string): string {
 export function bioLinkPageUrl(): string {
   return `${STOREFRONT_ORIGIN}/card`
 }
-

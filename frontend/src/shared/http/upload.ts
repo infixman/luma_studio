@@ -83,4 +83,3 @@ export function uploadImage(folder: string, file: File, onProgress: (loaded: num
     if (event.lengthComputable) onProgress(event.loaded)
   })
 }
-
