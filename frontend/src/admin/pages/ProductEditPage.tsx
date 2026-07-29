@@ -45,7 +45,9 @@ export function ProductEditPage({ id }: { id: string }) {
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
+  const [photoDropTarget, setPhotoDropTarget] = useState<string | null>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const draggedPhoto = useRef<string | null>(null)
   const { message, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
 
@@ -154,6 +156,35 @@ export function ProductEditPage({ id }: { id: string }) {
     })
     if (!ok) return
     void run(async () => apply(await api<ProductDetail>(`/api/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' })), '照片已移除。')
+  }
+
+  function reorderPhoto(imageId: string, targetPosition: number) {
+    if (busy || detail === null) return
+    const sourcePosition = detail.images.findIndex((image) => image.id === imageId)
+    if (sourcePosition < 0 || sourcePosition === targetPosition) return
+
+    const previousImages = detail.images
+    const reordered = [...previousImages]
+    const [moved] = reordered.splice(sourcePosition, 1)
+    if (!moved) return
+    reordered.splice(targetPosition, 0, moved)
+    const positioned = reordered.map((image, position) => ({ ...image, position }))
+    setDetail({ ...detail, images: positioned })
+
+    void run(async () => {
+      try {
+        const next = await apiJson<ProductDetail>(
+          `/api/products/${encodeURIComponent(id)}/images/order`,
+          'PUT',
+          { ids: positioned.map((image) => image.id) },
+        )
+        // Reordering photos must not discard unsaved product fields.
+        setDetail(next)
+      } catch (error) {
+        setDetail((current) => current ? { ...current, images: previousImages } : current)
+        throw error
+      }
+    }, '照片順序已更新。')
   }
 
   if (detail === null) {
@@ -304,7 +335,7 @@ export function ProductEditPage({ id }: { id: string }) {
 
       <Panel title="照片" class="product-photos-panel">
         <p class="muted">
-          第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。
+          拖曳照片可以換順序，第一張是列表上的封面。最多 {MAX_IMAGES} 張，每張 3 MB 以內。
         </p>
 
         {detail.images.length === 0 ? (
@@ -320,7 +351,53 @@ export function ProductEditPage({ id }: { id: string }) {
         ) : (
           <ul class="photo-grid">
             {detail.images.map((image, position) => (
-              <li key={image.id}>
+              <li
+                key={image.id}
+                class={photoDropTarget === image.id ? 'is-drop-target' : ''}
+                draggable={!busy && detail.images.length > 1}
+                onDragStart={(event) => {
+                  draggedPhoto.current = image.id
+                  if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', image.id)
+                  }
+                }}
+                onDragOver={(event) => {
+                  if (!draggedPhoto.current || draggedPhoto.current === image.id) return
+                  event.preventDefault()
+                  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+                  setPhotoDropTarget(image.id)
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setPhotoDropTarget((current) => current === image.id ? null : current)
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  const draggedId = draggedPhoto.current || event.dataTransfer?.getData('text/plain')
+                  draggedPhoto.current = null
+                  setPhotoDropTarget(null)
+                  if (draggedId) reorderPhoto(draggedId, position)
+                }}
+                onDragEnd={() => {
+                  draggedPhoto.current = null
+                  setPhotoDropTarget(null)
+                }}
+              >
+                <span class="photo-drag-handle" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="8" cy="6" r="1" />
+                    <circle cx="16" cy="6" r="1" />
+                    <circle cx="8" cy="12" r="1" />
+                    <circle cx="16" cy="12" r="1" />
+                    <circle cx="8" cy="18" r="1" />
+                    <circle cx="16" cy="18" r="1" />
+                  </svg>
+                </span>
+                <span class={position === 0 ? 'photo-position is-cover' : 'photo-position'}>
+                  {position === 0 ? '封面' : position + 1}
+                </span>
                 {image.path && (
                   <img
                     src={apiUrl(image.path)}
@@ -328,17 +405,39 @@ export function ProductEditPage({ id }: { id: string }) {
                     onClick={() => image.path && setLightbox({ src: apiUrl(image.path), alt: image.alt })}
                   />
                 )}
-                <IconButton
-                  label="移除這張照片"
-                  tone="danger"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => void removePhoto(image.id, position)}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </IconButton>
+                <div class="photo-actions">
+                  <IconButton
+                    label="向前移動照片"
+                    size="sm"
+                    disabled={busy || position === 0}
+                    onClick={() => reorderPhoto(image.id, position - 1)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </IconButton>
+                  <IconButton
+                    label="向後移動照片"
+                    size="sm"
+                    disabled={busy || position === detail.images.length - 1}
+                    onClick={() => reorderPhoto(image.id, position + 1)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </IconButton>
+                  <IconButton
+                    label="移除這張照片"
+                    tone="danger"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void removePhoto(image.id, position)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </IconButton>
+                </div>
               </li>
             ))}
           </ul>

@@ -372,6 +372,30 @@ async def add_image(env, product_id: str, key: str, alt: str) -> str:
     return image_id
 
 
+async def reorder_images(env, product_id: str, ordered_ids: list[str]) -> bool:
+    """Persist one product's complete photo order.
+
+    The caller must send every photo exactly once. Without that check, an id
+    from another product could be assigned a position here, or two omitted
+    photos could retain duplicate positions and make the cover unpredictable.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT id FROM product_images WHERE product_id = ?1 ORDER BY position, id"
+        ).bind(product_id)
+    )
+    current_ids = [str(row["id"]) for row in rows]
+    if (
+        len(ordered_ids) != len(current_ids)
+        or len(set(ordered_ids)) != len(ordered_ids)
+        or set(ordered_ids) != set(current_ids)
+    ):
+        return False
+    await reorder_rows(env, "product_images", "id", ordered_ids)
+    return True
+
+
 async def delete_image(env, image_id: str) -> dict | None:
     """Remove the row, and hand back what the caller still needs.
 

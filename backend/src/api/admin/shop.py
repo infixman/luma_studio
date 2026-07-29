@@ -229,6 +229,18 @@ async def handle(ctx: Ctx):
             await shop.create_variant(env, product_id, **fields)
             return ctx.json(await _detail(ctx, product), 201)
 
+        if tail == "images/order" and method == "PUT":
+            try:
+                raw_ids = (await ctx.json_body()).get("ids")
+                if not isinstance(raw_ids, list):
+                    raise ValueError("Expected an array of photo ids")
+                ordered = [shop.validate_product_id(str(image_id)) for image_id in raw_ids]
+            except (ValueError, AttributeError) as error:
+                return ctx.error(str(error) or "Invalid photo ordering", 400)
+            if not await shop.reorder_images(env, product_id, ordered):
+                return ctx.error("Photo ordering must contain every product photo exactly once", 400)
+            return ctx.json(await _detail(ctx, product))
+
         if tail == "images" and method == "POST":
             try:
                 form = await ctx.request.form_data()

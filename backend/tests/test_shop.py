@@ -117,6 +117,107 @@ class TestImageKeys:
             shop.validate_image_suffix(name)
 
 
+class TestImageOrdering:
+    def test_reordering_updates_every_photo_position(self, shop):
+        first, second = "a" * 18, "b" * 18
+        database = FakeDatabase(
+            {"SELECT id FROM product_images": [{"id": first}, {"id": second}]}
+        )
+
+        changed = asyncio.run(
+            shop.reorder_images(make_env(database), "p" * 18, [second, first])
+        )
+
+        assert changed is True
+        writes = [
+            bindings
+            for statement, bindings in database.writes
+            if statement.startswith("UPDATE product_images SET position")
+        ]
+        assert writes == [(second, 0), (first, 1)]
+
+    @pytest.mark.parametrize(
+        "ordered",
+        [
+            ["a" * 18],
+            ["a" * 18, "a" * 18],
+            ["a" * 18, "c" * 18],
+        ],
+    )
+    def test_reordering_requires_the_complete_photo_set(self, shop, ordered):
+        database = FakeDatabase(
+            {
+                "SELECT id FROM product_images": [
+                    {"id": "a" * 18},
+                    {"id": "b" * 18},
+                ]
+            }
+        )
+
+        changed = asyncio.run(
+            shop.reorder_images(make_env(database), "p" * 18, ordered)
+        )
+
+        assert changed is False
+        assert not [
+            statement
+            for statement, _ in database.writes
+            if statement.startswith("UPDATE product_images SET position")
+        ]
+
+    def test_admin_endpoint_persists_the_submitted_order(self):
+        from api.admin import shop as shop_admin_api
+        from shared.responses import Ctx
+        from urllib.parse import parse_qs, urlsplit
+
+        product_id, first, second = "p" * 18, "a" * 18, "b" * 18
+        product = {
+            "id": product_id,
+            "slug": "soda-tote",
+            "title": "蘇打托特包",
+            "description": "",
+            "status": "active",
+            "position": 0,
+            "created_at": 1,
+            "updated_at": 1,
+        }
+        images = [
+            {"id": first, "product_id": product_id, "r2_key": "_shop/a.jpg", "alt": "", "position": 0},
+            {"id": second, "product_id": product_id, "r2_key": "_shop/b.jpg", "alt": "", "position": 1},
+        ]
+        database = FakeDatabase(
+            {
+                "SELECT * FROM products WHERE id": [product],
+                "SELECT id FROM product_images": [{"id": first}, {"id": second}],
+                "SELECT * FROM product_images": images,
+            }
+        )
+
+        class JsonRequest(FakeRequest):
+            async def json(self):
+                return {"ids": [second, first]}
+
+        request = JsonRequest(
+            f"/api/products/{product_id}/images/order",
+            "PUT",
+            {"Origin": ADMIN_ORIGIN},
+            host=ADMIN_HOST,
+        )
+        parts = urlsplit(request.url)
+        response = asyncio.run(
+            shop_admin_api.handle(
+                Ctx(make_env(database), request, parts.path, parse_qs(parts.query))
+            )
+        )
+
+        assert response.status == 200
+        assert [
+            bindings
+            for statement, bindings in database.writes
+            if statement.startswith("UPDATE product_images SET position")
+        ] == [(second, 0), (first, 1)]
+
+
 @pytest.fixture
 def call():
     """Run one request through the admin Worker's entry point."""

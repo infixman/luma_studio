@@ -251,6 +251,24 @@ body.admin .photo-grid li {
   position: relative;
   display: grid;
   gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) + var(--space-1));
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+body.admin .photo-grid li[draggable="true"] {
+  cursor: grab;
+}
+
+body.admin .photo-grid li[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+body.admin .photo-grid li.is-drop-target {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: translateY(-2px);
 }
 
 body.admin .photo-grid img {
@@ -268,13 +286,69 @@ body.admin .photo-grid img {
   cursor: zoom-in;
 }
 
-body.admin .photo-grid .ui-icon-button {
+body.admin .photo-actions {
   position: absolute;
   top: var(--space-1);
   right: var(--space-1);
+  display: flex;
+  gap: 2px;
+}
+
+body.admin .photo-actions .ui-icon-button {
   background: var(--surface);
   box-shadow: var(--shadow-1);
   color: var(--text);
+}
+
+body.admin .photo-drag-handle {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-2);
+  left: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+body.admin .photo-drag-handle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+body.admin .photo-position {
+  position: absolute;
+  z-index: 1;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  min-width: 1.75rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  pointer-events: none;
+}
+
+body.admin .photo-position.is-cover {
+  background: var(--text);
+  color: var(--surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.admin .photo-grid li {
+    transition: none;
+  }
 }
 
 /* Narrow desktop and tablet: two working columns survive, but names and
