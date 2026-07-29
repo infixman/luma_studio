@@ -140,10 +140,14 @@ AND course fulfillment status != fulfilled
 只有符合以下條件才能移除 `product_variants.stock`／舊 variant API 或 localStorage shape：
 
 1. 所有 InventoryItem backfill 比對完成。
-2. production 已無舊前端版本使用舊寫入。
-3. 觀察期內沒有舊 request。
+2. 至少兩個已發布前端版本都寫入新 shape，production 已無舊前端版本使用舊寫入。
+3. 舊 shape request 連續 90 天為零，且有指標可證明。門檻與理由見
+   `phase1/spec.md`「`variantId` 相容觀察期」：`luma-cart` 沒有 TTL，久未回訪的
+   瀏覽器仍可能持有數月前的舊格式購物車。
 4. rollback 版本也已支援新 schema。
 5. 備份與還原腳本已更新。
+
+`order_items.variant_id` 不在清理範圍：它是訂單快照，永久保留。
 
 D1 欄位刪除成本較高時，可以停止使用並保留欄位，不為了 schema 好看冒 migration 風險。
 

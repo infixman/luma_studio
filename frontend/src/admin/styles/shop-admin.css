@@ -56,6 +56,18 @@ body.admin .statuses.categories {
 
 /* --- the catalogue list --- */
 
+/* Active products with nothing to sell. The panel only exists when the list
+   is non-empty, so this is a short list read once and acted on, not a
+   standing part of the page. */
+body.admin .product-unsellable-list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* The picture and the name are one target: the whole cell goes to the editor,
    because aiming at a 24px name is a worse click than it looks on paper. */
 body.admin .product-cell {

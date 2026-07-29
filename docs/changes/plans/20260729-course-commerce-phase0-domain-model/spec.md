@@ -144,9 +144,9 @@ stateDiagram-v2
 
 Phase 1 可以開始，但須先將下列 gate 寫入 implementation plan／review：
 
-- [ ] 確認 migration 使用 partial unique index 是否在目標 D1 migration 環境可驗證；否則明確採 API invariant 並以並發測試覆蓋。
-- [ ] 定義 existing single-variant backfill、zero-variant active Product 的處理，以及 `active -> no enabled Offer` 的拒絕規則。
-- [ ] 實作／測試 Product + default Offer 的一致性策略；現行 Python binding 沒有已驗證的 D1 batch 用法，需採已驗證的補償或在測試環境驗證 batch。
-- [ ] 保留 `variantId` localStorage/API；明訂舊 key 移除前的版本與觀察期。
+- [x] 確認 migration 使用 partial unique index 是否在目標 D1 migration 環境可驗證。`backend/tests/test_migrations_sqlite.py` 以真 SQLite 引擎證明索引會拒絕第二筆 default 且不波及非 default；D1 是 SQLite，但這不等於已驗證部署中的資料庫，故 API invariant（`can_be_active`、default 刪除保護）一併保留。staging 以 `PRAGMA index_list(product_variants)` 複驗。
+- [x] 定義 existing single-variant backfill、zero-variant active Product 的處理，以及 `active -> no enabled Offer` 的拒絕規則。0027 只標 `COUNT(*) = 1`；寫入端由 `can_be_active` 拒絕；既有髒資料由 `GET /api/products/unsellable` 盤點後人工處理，不自動下架。
+- [x] 實作／測試 Product + default Offer 的一致性策略。採明確補償：`create_product_with_default_offer` 在 Offer 寫入失敗時刪除剛建立的 Product，不使用未經驗證的 D1 batch。
+- [x] 保留 `variantId` localStorage/API；明訂舊 key 移除前的版本與觀察期。見 `phase1/spec.md`「`variantId` 相容觀察期」：兩個已發布前端版本 + 90 天零舊 request。
 
 退款、混合開課、期限、數量、免運、純數位 completed、封存可看與 gifting 已於 2026-07-30 決定，不再阻擋 Phase 3 對課程 checkout／fulfillment 的公開啟用；Phase 3 仍須實作其 schema、競態保護與測試。

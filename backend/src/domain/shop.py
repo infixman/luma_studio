@@ -359,6 +359,25 @@ async def has_enabled_offer(env, product_id: str, *, excluding_id: str | None = 
     return bool(await d1_rows(env.DB.prepare(query).bind(*bindings)))
 
 
+async def unsellable_active_products(env) -> list[dict]:
+    """Active products that no customer can actually buy.
+
+    `can_be_active` only guards writes. Rows that reached this state before
+    that rule existed - no offer at all, or every offer disabled - stay active
+    and stay invisible. Report them so the catalogue can be cleaned up rather
+    than discovered by a customer.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT id, slug, title FROM products WHERE status = 'active'"
+            " AND id NOT IN (SELECT product_id FROM product_variants WHERE enabled = 1)"
+            " ORDER BY position"
+        )
+    )
+    return [{"id": row["id"], "slug": row["slug"], "title": row["title"]} for row in rows]
+
+
 async def can_be_active(
     env, product_id: str, *, changing_offer_id: str | None = None, offer_enabled: bool | None = None
 ) -> bool:

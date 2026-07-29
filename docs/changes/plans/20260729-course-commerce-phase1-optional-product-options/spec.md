@@ -114,6 +114,36 @@ phase1 必須完成 `Single -> Multi`；`Multi -> Single` 可以列為後續項�
 - Product create 不要求規格名稱。
 - 從單一模式開啟多方案時保留售價與庫存輸入。
 
+## `variantId` 相容觀察期
+
+`offerId` 是 API 名詞，值等於 `variantId`。舊名稱要保留多久不能用「一週」這種猜測。
+
+### 保留範圍
+
+| 介面 | 保留內容 |
+| --- | --- |
+| localStorage `luma-cart` | `[{variantId, quantity}]` 的讀取 |
+| `POST /api/cart/validate` | request 的 `variantId` 欄位 |
+| checkout lines | request 的 `variantId` 欄位 |
+| `order_items.variant_id` | 欄位本身永久保留（訂單快照） |
+
+phase1 不改任何一項；phase3 升級 shape 時新增 `offerId`，兩者同時可收，同傳但不同值回 400。
+
+### 移除門檻
+
+四項全部成立才能停止讀舊名稱：
+
+1. 至少**兩個**已發布的前端版本都寫入新 shape。一個版本不夠：回滾到前一版就會再度寫入舊 key。
+2. 舊 shape 的 production request 連續 **90 天**為零，且有 log 或指標可以證明。
+3. 能讀新 shape 的後端版本已經是可回滾的版本之一。
+4. phase7 的 backfill 對帳與備份／還原 runbook 已完成。
+
+90 天不是通則，是這個 cart 的實際條件：`luma-cart` **沒有 TTL**
+（`frontend/src/storefront/lib/cart.ts`），久未回訪的顧客瀏覽器可能還存著數月前的
+舊格式購物車。縮短這個數字等於選擇讓那些人的購物車靜默清空。
+
+`order_items.variant_id` 不適用上述門檻：它是歷史快照，永遠不移除。
+
 ## 驗收標準
 
 - 新增單一實體商品不需要進入規格編輯器。

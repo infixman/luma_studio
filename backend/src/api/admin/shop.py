@@ -192,6 +192,10 @@ async def handle(ctx: Ctx):
             await categories.set_for_product(env, product_id, category_ids)
         return ctx.json(await _detail(ctx, await shop.get_product(env, product_id)), 201)
 
+    # Before the {id} routes below, or the name would be read as a product id.
+    if path == "/api/products/unsellable" and method == "GET":
+        return ctx.json({"products": await shop.unsellable_active_products(env)})
+
     # Before the {id} routes below, or "order" would be read as a product id.
     if path == "/api/products/order" and method == "PUT":
         try:

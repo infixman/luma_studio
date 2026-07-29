@@ -4,7 +4,9 @@
 
 - [x] 新增 `is_default` 欄位與必要索引。（`backend/src/shared/migrations.py`：`0027_add_default_product_offers`）
 - [x] 撰寫既有單一 variant 商品的 backfill。（同一 migration 只標記 `COUNT(*) = 1` 的商品）
-- [ ] 驗證多 variant 商品不被標記 default。blocker：需在部署前以實際 D1 備份或 staging migration 比對資料。
+- [ ] 驗證多 variant 商品不被標記 default。部分完成：`backend/tests/test_migrations_sqlite.py` 以真 SQLite 重放 0027，證明只有單一 offer 的商品被標記、0 offer 與多 offer 都不動。仍需在部署前以實際 D1 備份或 staging migration 比對真實資料。
+- [x] 確認 partial unique index 在 SQLite 引擎真的生效。（`test_migrations_sqlite.py`：第二筆 default 被 IntegrityError 拒絕，非 default 不受限，跨商品各自可有 default）
+- [x] 盤點既有 active 但無可販售 Offer 的商品。（`shop.unsellable_active_products`、`GET /api/products/unsellable`；`can_be_active` 只擋寫入，既有資料需另外查）
 - [x] 在 shop domain 引入 Offer 命名或 adapter，避免新增程式繼續假設「每筆都是規格」。（`isDefault`、`sales_mode`）
 - [x] 新增取得 default Offer、計算 sales mode、檢查 enabled Offer 的函式。
 - [x] 保留既有 variant id，不重新產生 id。（`convert_default_offer_to_multi` 原地更新同一列）
@@ -43,9 +45,13 @@
 - [x] 擴充 `backend/tests/test_shop.py`：建立、更新、backfill、上架驗證。（覆蓋 default Offer 建立、Single → Multi 原地更新、0027 migration SQL、上架拒絕與 default 刪除保護）
 - [x] 擴充 `backend/tests/test_cart.py`：default Offer 價格與庫存。（既有 `variantId` 對 default Offer 仍以資料庫價格與庫存驗算）
 - [x] 擴充 `ProductPage.test.ts`：單一、多方案、售完。（覆蓋選取、是否顯示 chooser 與購買狀態契約）
-- [ ] 新增 ProductCreatePage／ProductEditPage 的 single mode 測試。blocker：目前前端測試只有無 DOM 的 Vitest 設定，需先選定渲染測試基礎設施。
+- [x] 新增 ProductCreatePage／ProductEditPage 的 single mode 測試。（`happy-dom` + 每檔 `// @vitest-environment happy-dom`，不裝 testing-library；`ProductCreatePage.test.tsx` 驗證不出現規格名稱欄位，`ProductEditPage.test.tsx` 驗證 single/multi 面板切換）
+- [x] 加入真 SQLite 的 migration 測試。（`backend/tests/test_migrations_sqlite.py`：整份 MIGRATIONS 可被 SQLite 接受，partial unique index 生效，0027 backfill 只標單一 offer）
 - [x] 驗證現有商品、購物車與訂單測試不因欄位增加而失敗。（`test_shop.py`、`test_cart.py`、`test_orders.py` 通過）
-- [ ] 執行 migration 後比對商品數、Offer 數與既有 variant id。blocker：不可在本機正式 D1 執行 migration，需 staging/production 部署窗口。
+- [ ] 執行 migration 後比對商品數、Offer 數與既有 variant id。blocker：不可在本機正式 D1 執行 migration，需 staging/production 部署窗口。部署後至少確認：
+      `PRAGMA index_list(product_variants)` 含 `idx_product_variants_one_default`、
+      `SELECT COUNT(*) FROM product_variants WHERE is_default = 1` 等於單一 offer 商品數、
+      `GET /api/products/unsellable` 的清單已處理完畢。
 
 ## 6. 部署與驗收
 

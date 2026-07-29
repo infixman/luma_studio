@@ -84,7 +84,9 @@
 
 ## 8. 相容程式清理
 
-- [ ] 觀察 production 是否仍收到舊 `variantId` request。
+- [ ] 建立舊 shape request 的計數指標，作為 90 天觀察期的證據來源。
+- [ ] 觀察 production 是否仍收到舊 `variantId` request，連續 90 天為零才可清理。
+- [ ] 確認至少兩個已發布前端版本都寫入新 shape。
 - [ ] 確認所有 stock 寫入都在 InventoryItem。
 - [ ] 移除不再使用的 variant.stock compatibility write。
 - [ ] 評估舊欄位保留或 migration 移除；無實際收益則保留。

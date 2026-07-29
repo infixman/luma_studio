@@ -188,6 +188,30 @@ class TestOfferLifecycle:
         ) is True
 
 
+class TestUnsellableActiveProducts:
+    """Migration 0027 only marked products that already had exactly one offer.
+
+    An active product with zero offers, or with every offer disabled, predates
+    the rule that refuses that state on write. Nothing sweeps for it, so the
+    admin needs a way to see the list before the phase 2 deploy.
+    """
+
+    def test_it_asks_for_active_products_with_no_enabled_offer(self, shop):
+        database = FakeDatabase(
+            {"FROM products": [{"id": "p" * 18, "slug": "ghost", "title": "Ghost", "status": "active"}]}
+        )
+
+        found = asyncio.run(shop.unsellable_active_products(make_env(database)))
+
+        query, _ = database.reads[0]
+        assert "status = 'active'" in query
+        assert "product_variants WHERE enabled = 1" in query
+        assert found == [{"id": "p" * 18, "slug": "ghost", "title": "Ghost"}]
+
+    def test_a_catalogue_where_everything_can_be_sold_reports_nothing(self, shop):
+        assert asyncio.run(shop.unsellable_active_products(make_env(FakeDatabase()))) == []
+
+
 class TestDefaultOfferMigration:
     def test_migration_adds_marker_index_before_backfilling_only_single_offer_products(self):
         from shared import migrations
@@ -371,6 +395,12 @@ class TestCatalogueRoutes:
         # It got to the handler rather than 404ing as a missing product; the
         # body is absent, so the handler rejects it as malformed.
         assert response.status == 400
+
+    def test_the_unsellable_report_is_not_read_as_a_product_id(self, call):
+        response = call(signed_in("/api/products/unsellable"))
+
+        assert response.status == 200
+        assert response.json() == {"products": []}
 
     def test_an_unknown_variant_is_reported_as_missing(self, call):
         assert call(signed_in("/api/variants/" + "a" * 18, "DELETE")).status == 404

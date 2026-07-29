@@ -45,6 +45,16 @@ const DEFAULT_HIDDEN = ['slug']
 
 export function ProductsPage() {
   const [listing, setListing] = useState<ProductListing | null>(null)
+  /**
+   * Active products no customer can buy.
+   *
+   * The rule that refuses this state only runs on write, so rows that predate
+   * it stay active and stay invisible. The server owns the definition; asking
+   * it is a second request, but re-deriving "active with no enabled offer" in
+   * the client would be a second copy of the rule that can drift from the one
+   * checkout actually uses.
+   */
+  const [unsellable, setUnsellable] = useState<Product[]>([])
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [rules, setRules] = useState<FilterRule[]>([])
@@ -56,7 +66,12 @@ export function ProductsPage() {
 
   const load = useCallback(async () => {
     try {
-      setListing(await api<ProductListing>('/api/products'))
+      const [catalogue, unsellableProducts] = await Promise.all([
+        api<ProductListing>('/api/products'),
+        api<{ products: Product[] }>('/api/products/unsellable'),
+      ])
+      setListing(catalogue)
+      setUnsellable(unsellableProducts.products)
     } catch (error) {
       showError(error)
     }
@@ -249,6 +264,23 @@ export function ProductsPage() {
   return (
     <AdminShell current="/products" message={message} onError={showError}>
       {dialog}
+
+      {unsellable.length > 0 && (
+        <Panel title="無法販售的上架商品">
+          <p class="muted">
+            這些商品是上架狀態，但沒有任何啟用的銷售方案，顧客看得到卻買不了。
+            開啟每個商品，補上售價與庫存後啟用，或先改回草稿。
+          </p>
+          <ul class="product-unsellable-list">
+            {unsellable.map((product) => (
+              <li key={product.id}>
+                <a href={`/products/${encodeURIComponent(product.id)}`}>{product.title}</a>
+                <span class="muted"> /{product.slug}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <Panel
         title="商品"
