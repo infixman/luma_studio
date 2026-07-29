@@ -551,16 +551,30 @@ body.admin .category-total {
   font-weight: 600;
 }
 
+/* Each field hands its three parts — label, control, note — to the form's own
+   rows. Aligning on the bottom edge instead put the slug input a hint-line
+   higher than the name input beside it, because only one of the two has a
+   hint underneath. */
 body.admin .category-create-form {
   display: grid;
   grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 1fr) max-content;
+  grid-template-rows: auto auto auto;
   align-items: end;
-  gap: var(--space-3);
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
 }
 
 body.admin .category-create-form .ui-field {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
   min-width: 0;
   margin-bottom: 0;
+}
+
+body.admin .category-create-form .ui-button {
+  grid-row: 2;
+  grid-column: 3;
 }
 
 body.admin .category-list {
@@ -651,8 +665,13 @@ body.admin .category-list .ui-icon-button svg {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Both fields still share a row, so they keep the subgrid; the button drops
+     below them. */
   body.admin .category-create-form .ui-button {
+    grid-row: 4;
+    grid-column: 1;
     justify-self: start;
+    margin-top: var(--space-2);
   }
 
   body.admin .category-list li {
@@ -669,8 +688,23 @@ body.admin .category-list .ui-icon-button svg {
     gap: var(--space-5);
   }
 
+  /* Stacked, nothing shares a row with anything: the fields go back to
+     managing their own three parts. */
   body.admin .category-create-form {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3);
+  }
+
+  body.admin .category-create-form .ui-field {
+    display: flex;
+    grid-row: auto;
+    gap: var(--space-1);
+  }
+
+  body.admin .category-create-form .ui-button {
+    grid-row: auto;
+    grid-column: auto;
+    margin-top: 0;
   }
 
   body.admin .category-section-head.is-row {
