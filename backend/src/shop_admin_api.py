@@ -13,13 +13,6 @@ import shop
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _detail(ctx: Ctx, product: dict) -> dict:
     """A product with everything the editor needs to render it in one go."""
 
@@ -85,7 +78,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/shipping-methods" and method == "PUT":
         try:
-            raw = (await _read_json(ctx)).get("methods")
+            raw = (await ctx.json_body()).get("methods")
             if not isinstance(raw, list):
                 raise ValueError("Expected an array of delivery methods")
             updates = [
@@ -111,7 +104,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/categories" and method == "POST":
         try:
-            fields = _category_fields(await _read_json(ctx))
+            fields = _category_fields(await ctx.json_body())
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid category", 400)
         if await categories.slug_taken(env, fields["slug"]):
@@ -122,7 +115,7 @@ async def handle(ctx: Ctx):
     # Before the {id} route below, or "order" would be read as a category id.
     if path == "/api/categories/order" and method == "PUT":
         try:
-            raw_ids = (await _read_json(ctx)).get("ids")
+            raw_ids = (await ctx.json_body()).get("ids")
             if not isinstance(raw_ids, list):
                 raise ValueError("Expected an array of category ids")
             ordered = [categories.validate_id(str(value)) for value in raw_ids]
@@ -146,7 +139,7 @@ async def handle(ctx: Ctx):
             return ctx.json({"categories": await categories.list_all(env), "counts": await categories.counts(env)})
 
         try:
-            fields = _category_fields(await _read_json(ctx))
+            fields = _category_fields(await ctx.json_body())
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid category", 400)
         if await categories.slug_taken(env, fields["slug"], excluding=category_id):
@@ -169,7 +162,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/products" and method == "POST":
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             fields = _product_fields(body)
             category_ids = _category_ids(body)
         except (ValueError, AttributeError) as error:
@@ -184,7 +177,7 @@ async def handle(ctx: Ctx):
     # Before the {id} routes below, or "order" would be read as a product id.
     if path == "/api/products/order" and method == "PUT":
         try:
-            raw_ids = (await _read_json(ctx)).get("ids")
+            raw_ids = (await ctx.json_body()).get("ids")
             if not isinstance(raw_ids, list):
                 raise ValueError("Expected an array of product ids")
             ordered = [shop.validate_product_id(str(product_id)) for product_id in raw_ids]
@@ -210,7 +203,7 @@ async def handle(ctx: Ctx):
 
         if not tail and method == "PUT":
             try:
-                body = await _read_json(ctx)
+                body = await ctx.json_body()
                 fields = _product_fields(body)
                 category_ids = _category_ids(body)
             except (ValueError, AttributeError) as error:
@@ -230,7 +223,7 @@ async def handle(ctx: Ctx):
 
         if tail == "variants" and method == "POST":
             try:
-                fields = _variant_fields(await _read_json(ctx))
+                fields = _variant_fields(await ctx.json_body())
             except (ValueError, AttributeError) as error:
                 return ctx.error(str(error) or "Invalid variant", 400)
             if await shop.count_variants(env, product_id) >= shop.MAX_VARIANTS:
@@ -276,7 +269,7 @@ async def handle(ctx: Ctx):
             return ctx.json(await _detail(ctx, product))
 
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             fields = _variant_fields(body)
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid variant", 400)

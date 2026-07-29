@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import ics
-from common import d1_rows, env_var, js_options, secure_bytes, taipei_day, urlsafe_token, utc_timestamp
+from common import IMAGE_CONTENT_TYPES, d1_rows, env_var, js_options, next_position, random_object_key, reorder_rows, secure_bytes, storage_key_to_url, taipei_day, urlsafe_token, utc_timestamp, validate_choice, validate_text
 from js import fetch as js_fetch
 
 
@@ -49,13 +49,6 @@ SOCIAL_PLATFORMS = frozenset(
 
 AVATAR_PREFIX = "_bio-link"
 AVATAR_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-AVATAR_CONTENT_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
 # Link unfurlers are the traffic a share link attracts most, and each one can
@@ -131,21 +124,6 @@ def validate_url(url: str) -> str:
     return urlunsplit(parts)
 
 
-def validate_text(value: str, limit: int, label: str, required: bool = True) -> str:
-    value = value.strip()
-    if required and not value:
-        raise ValueError(f"{label} is required")
-    if len(value) > limit:
-        raise ValueError(f"{label} must be {limit} characters or fewer")
-    return value
-
-
-def validate_choice(value, allowed: tuple[str, ...], label: str) -> str:
-    if value not in allowed:
-        raise ValueError(f"{label} must be one of: {', '.join(allowed)}")
-    return str(value)
-
-
 def validate_calendar_url(url: str) -> str:
     """Accept only an https Google Calendar address, or nothing at all."""
 
@@ -189,7 +167,7 @@ def validate_platform(kind: str, platform) -> str | None:
 def avatar_key(suffix: str) -> str:
     # The underscore prefix keeps this out of IDENTIFIER_PATTERN, so avatars
     # never appear as ibon folders and /images/ cannot reach them.
-    return f"{AVATAR_PREFIX}/{urlsafe_token(12)}{suffix}"
+    return random_object_key(AVATAR_PREFIX, suffix)
 
 
 AVATAR_URL_PREFIX = "/bio-link-assets"
@@ -202,9 +180,7 @@ def avatar_path(key: str | None) -> str | None:
     being reconstructed by every caller.
     """
 
-    if not key or not key.startswith(f"{AVATAR_PREFIX}/"):
-        return None
-    return f"{AVATAR_URL_PREFIX}/{key.removeprefix(AVATAR_PREFIX + '/')}"
+    return storage_key_to_url(key, AVATAR_PREFIX, AVATAR_URL_PREFIX)
 
 
 def item_row(row: dict) -> dict:
@@ -310,10 +286,7 @@ async def count_items(env) -> int:
 
 
 async def create_item(env, kind: str, title: str, url: str, platform: str | None) -> str:
-    rows = await d1_rows(
-        env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM bio_link_items WHERE kind = ?1").bind(kind)
-    )
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "bio_link_items", "kind = ?1", (kind,))
     item_id, now = urlsafe_token(18), utc_timestamp()
     await env.DB.prepare(
         "INSERT INTO bio_link_items (id, kind, title, url, platform, position, enabled, created_at, updated_at)"
@@ -406,11 +379,7 @@ async def reorder_items(env, ordered_ids: list[str]):
     if len(seen) > MAX_ITEMS:
         raise ValueError(f"At most {MAX_ITEMS} links can be ordered at once")
 
-    now = utc_timestamp()
-    for position, item_id in enumerate(seen):
-        await env.DB.prepare("UPDATE bio_link_items SET position = ?2, updated_at = ?3 WHERE id = ?1").bind(
-            item_id, position, now
-        ).run()
+    await reorder_rows(env, "bio_link_items", "id", seen, timestamp_col="updated_at")
 
 
 MAX_STATS_DAYS = 90

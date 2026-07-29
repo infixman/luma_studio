@@ -11,7 +11,7 @@ mixed — see `parse_filter`.
 """
 
 import shop
-from common import d1_rows, urlsafe_token, utc_timestamp
+from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp
 
 
 MAX_TITLE = 40
@@ -58,7 +58,7 @@ def parse_filter(raw: str) -> tuple[list[str], str]:
     return list(dict.fromkeys(slugs)), SEPARATORS[separator]
 
 
-def row(record: dict) -> dict:
+def category_row(record: dict) -> dict:
     return {
         "id": record["id"],
         "slug": record["slug"],
@@ -90,7 +90,7 @@ def filter_title(categories: list[dict], mode: str) -> str:
 
 async def list_all(env) -> list[dict]:
     return [
-        row(record)
+        category_row(record)
         for record in await d1_rows(env.DB.prepare("SELECT * FROM product_categories ORDER BY position, title, id"))
     ]
 
@@ -115,7 +115,7 @@ async def counts(env) -> dict:
 
 async def get(env, category_id: str) -> dict | None:
     records = await d1_rows(env.DB.prepare("SELECT * FROM product_categories WHERE id = ?1").bind(category_id))
-    return row(records[0]) if records else None
+    return category_row(records[0]) if records else None
 
 
 async def by_slugs(env, slugs: list[str]) -> list[dict]:
@@ -128,7 +128,7 @@ async def by_slugs(env, slugs: list[str]) -> list[dict]:
     if not slugs:
         return []
     query = f"SELECT * FROM product_categories WHERE slug IN ({_placeholders(1, len(slugs))})"
-    found = {record["slug"]: row(record) for record in await d1_rows(env.DB.prepare(query).bind(*slugs))}
+    found = {record["slug"]: category_row(record) for record in await d1_rows(env.DB.prepare(query).bind(*slugs))}
     return [found[slug] for slug in slugs if slug in found]
 
 
@@ -147,7 +147,7 @@ async def of_product(env, product_id: str) -> list[dict]:
             " WHERE l.product_id = ?1 ORDER BY c.position, c.title, c.id"
         ).bind(product_id)
     )
-    return [row(record) for record in records]
+    return [category_row(record) for record in records]
 
 
 async def products_in(env, category_ids: list[str], mode: str) -> list[dict]:
@@ -189,8 +189,7 @@ async def products_in(env, category_ids: list[str], mode: str) -> list[dict]:
 
 
 async def create(env, *, slug: str, title: str, description: str) -> str:
-    records = await d1_rows(env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM product_categories"))
-    position = (int(records[0]["last"]) if records else -1) + 1
+    position = await next_position(env, "product_categories")
     category_id, now = urlsafe_token(18), utc_timestamp()
     await env.DB.prepare(
         "INSERT INTO product_categories (id, slug, title, description, position, created_at, updated_at)"
@@ -223,11 +222,7 @@ async def remove(env, category_id: str) -> bool:
 
 
 async def reorder(env, ordered_ids: list[str]) -> None:
-    now = utc_timestamp()
-    for index, category_id in enumerate(ordered_ids):
-        await env.DB.prepare("UPDATE product_categories SET position = ?2, updated_at = ?3 WHERE id = ?1").bind(
-            category_id, index, now
-        ).run()
+    await reorder_rows(env, "product_categories", "id", ordered_ids, timestamp_col="updated_at")
 
 
 async def set_for_product(env, product_id: str, category_ids: list[str]) -> None:

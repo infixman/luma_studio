@@ -56,7 +56,7 @@ class TestAppearanceIsChosenNotTyped:
             "footerText": "light",
             **{field: value},
         }
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_settings(body)
 
     def test_a_valid_combination_is_accepted(self, site_chrome):
@@ -113,7 +113,7 @@ class TestFooterBlurb:
         assert fields["footer_blurb"] == ""
 
     def test_a_blurb_longer_than_the_limit_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_settings(
                 {
                     "headerBackground": "solid",
@@ -164,7 +164,7 @@ class TestFooterStructure:
         assert columns[0]["links"][0]["label"] == "服務條款"
 
     def test_an_unknown_social_platform_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_footer_socials([{"platform": "myspace", "url": "https://example.com"}])
 
     def test_a_javascript_url_is_refused(self, site_chrome):
@@ -174,7 +174,7 @@ class TestFooterStructure:
             )
 
     def test_too_many_columns_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_footer_columns([{"title": "x", "links": []}] * 5)
 
     def test_stored_json_that_no_longer_fits_reads_as_empty(self, site_chrome):
@@ -218,14 +218,14 @@ class TestMenuDepth:
         assert site_chrome.depth_of(items, "c") == 4
 
     def test_a_missing_parent_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.depth_of([], "ghost")
 
     def test_a_cycle_is_refused_rather_than_counted_forever(self, site_chrome):
         """Not reachable through the API, but a hand-edited row could do it."""
 
         items = [item("a", parent="b"), item("b", parent="a")]
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.depth_of(items, "a")
 
 
@@ -242,11 +242,11 @@ class TestMenuTargets:
             site_chrome.validate_menu_fields({"label": "x", "targetKind": "url", "target": "javascript:alert(1)"})
 
     def test_an_empty_target_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_menu_fields({"label": "x", "targetKind": "page", "target": ""})
 
     def test_an_unknown_kind_is_refused(self, site_chrome):
-        with pytest.raises(site_chrome.SiteError):
+        with pytest.raises(site_chrome.ChromeError):
             site_chrome.validate_menu_fields({"label": "x", "targetKind": "magic", "target": "y"})
 
 

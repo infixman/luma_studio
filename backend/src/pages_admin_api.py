@@ -11,13 +11,6 @@ import pages
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _detail(ctx: Ctx, page: dict) -> dict:
     # Hydrated the same way the storefront is, because the editor previews
     # with the storefront's own components — a preview fed different data is
@@ -90,7 +83,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/pages" and method == "POST":
         try:
-            fields = _page_fields(await _read_json(ctx))
+            fields = _page_fields(await ctx.json_body())
         except pages.PageError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):
@@ -103,7 +96,7 @@ async def handle(ctx: Ctx):
     # Before the {id} routes, or "order" would be read as a page id.
     if path == "/api/pages/order" and method == "PUT":
         try:
-            raw = (await _read_json(ctx)).get("ids")
+            raw = (await ctx.json_body()).get("ids")
             if not isinstance(raw, list):
                 raise ValueError("Expected an array of page ids")
             ordered = [pages.validate_id(str(value)) for value in raw]
@@ -131,7 +124,7 @@ async def handle(ctx: Ctx):
 
         if not tail and method == "PUT":
             try:
-                body = await _read_json(ctx)
+                body = await ctx.json_body()
                 fields = {**_page_fields(body, page), **_chrome_fields(body), **await _share_fields(ctx, body, page)}
             except pages.PageError as error:
                 return ctx.error(str(error), 400)
@@ -193,7 +186,7 @@ async def handle(ctx: Ctx):
 
         if tail == "blocks" and method == "POST":
             try:
-                body = await _read_json(ctx)
+                body = await ctx.json_body()
                 block_type, config = pages.validate_block(str(body.get("type") or ""), body.get("config") or {})
             except pages.PageError as error:
                 return ctx.error(str(error), 400)
@@ -206,7 +199,7 @@ async def handle(ctx: Ctx):
 
         if tail == "blocks/order" and method == "PUT":
             try:
-                raw = (await _read_json(ctx)).get("ids")
+                raw = (await ctx.json_body()).get("ids")
                 if not isinstance(raw, list):
                     raise ValueError("Expected an array of block ids")
                 ordered = [pages.validate_id(str(value)) for value in raw]
@@ -235,7 +228,7 @@ async def handle(ctx: Ctx):
             await pages.delete_block(env, block_id)
         else:
             try:
-                body = await _read_json(ctx)
+                body = await ctx.json_body()
                 _, config = pages.validate_block(block["type"], body.get("config") or {})
             except pages.PageError as error:
                 return ctx.error(str(error), 400)

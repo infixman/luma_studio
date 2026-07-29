@@ -12,13 +12,6 @@ import site_chrome
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _menu_state(ctx: Ctx) -> dict:
     """The menu, plus what an item may point at, so the editor needs one call."""
 
@@ -43,8 +36,8 @@ async def handle(ctx: Ctx):
 
     if path == "/api/site" and method == "PUT":
         try:
-            fields = site_chrome.validate_settings(await _read_json(ctx))
-        except site_chrome.SiteError as error:
+            fields = site_chrome.validate_settings(await ctx.json_body())
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):
             return ctx.error("Invalid settings", 400)
@@ -56,12 +49,12 @@ async def handle(ctx: Ctx):
             form = await ctx.request.form_data()
             uploaded = form.get("file")
             if uploaded is None:
-                raise site_chrome.SiteError("缺少檔案")
+                raise site_chrome.ChromeError("缺少檔案")
             suffix = site_chrome.validate_image_suffix(str(uploaded.name))
             content = await uploaded.bytes()
             if not content or len(content) > site_chrome.MAX_IMAGE_BYTES:
-                raise site_chrome.SiteError("背景圖必須介於 1 byte 與 3 MB 之間")
-        except site_chrome.SiteError as error:
+                raise site_chrome.ChromeError("背景圖必須介於 1 byte 與 3 MB 之間")
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):
             return ctx.error("Invalid upload", 400)
@@ -88,14 +81,14 @@ async def handle(ctx: Ctx):
 
     if path == "/api/menu" and method == "POST":
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             fields = site_chrome.validate_menu_fields(body)
             raw_parent = body.get("parentId")
             parent_id = site_chrome.validate_menu_id(str(raw_parent)) if raw_parent else None
             depth = site_chrome.depth_of(await site_chrome.list_menu(env), parent_id)
             if depth > site_chrome.MAX_MENU_DEPTH:
-                raise site_chrome.SiteError(f"選單最多 {site_chrome.MAX_MENU_DEPTH} 層")
-        except site_chrome.SiteError as error:
+                raise site_chrome.ChromeError(f"選單最多 {site_chrome.MAX_MENU_DEPTH} 層")
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):
             return ctx.error("Invalid menu item", 400)
@@ -107,7 +100,7 @@ async def handle(ctx: Ctx):
     # Before the {id} route, or "order" would be read as a menu item id.
     if path == "/api/menu/order" and method == "PUT":
         try:
-            raw = (await _read_json(ctx)).get("items")
+            raw = (await ctx.json_body()).get("items")
             if not isinstance(raw, list):
                 raise ValueError("Expected an array of menu items")
             ordered = [
@@ -123,8 +116,8 @@ async def handle(ctx: Ctx):
             proposed = [{**entry, "id": entry["id"]} for entry in ordered]
             for entry in proposed:
                 if site_chrome.depth_of(proposed, entry["parentId"]) > site_chrome.MAX_MENU_DEPTH:
-                    raise site_chrome.SiteError(f"選單最多 {site_chrome.MAX_MENU_DEPTH} 層")
-        except site_chrome.SiteError as error:
+                    raise site_chrome.ChromeError(f"選單最多 {site_chrome.MAX_MENU_DEPTH} 層")
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError, KeyError):
             return ctx.error("Invalid ordering", 400)
@@ -134,7 +127,7 @@ async def handle(ctx: Ctx):
     if path.startswith("/api/menu/") and method in {"PUT", "DELETE"}:
         try:
             menu_id = site_chrome.validate_menu_id(path.removeprefix("/api/menu/"))
-        except site_chrome.SiteError as error:
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         if await site_chrome.get_menu_item(env, menu_id) is None:
             return ctx.error("Menu item not found", 404)
@@ -144,8 +137,8 @@ async def handle(ctx: Ctx):
             return ctx.json(await _menu_state(ctx))
 
         try:
-            fields = site_chrome.validate_menu_fields(await _read_json(ctx))
-        except site_chrome.SiteError as error:
+            fields = site_chrome.validate_menu_fields(await ctx.json_body())
+        except site_chrome.ChromeError as error:
             return ctx.error(str(error), 400)
         except (ValueError, AttributeError):
             return ctx.error("Invalid menu item", 400)

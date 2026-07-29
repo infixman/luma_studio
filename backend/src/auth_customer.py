@@ -23,7 +23,7 @@ CLIENT_ID, CLIENT_SECRET, REDIRECT_URI = "GOOGLE_CUSTOMER_CLIENT_ID", "GOOGLE_CU
 
 # Longer than the admin's twelve hours. Being signed out mid-purchase costs a
 # sale; being signed out of the back office costs one sign-in.
-SESSION_TTL = 30 * 24 * 60 * 60
+SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
 
 MAX_NAME = 60
 MAX_PHONE = 20
@@ -124,10 +124,10 @@ async def complete_google_login(ctx: Ctx):
     await env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at <= ?1").bind(now).run()
     await env.DB.prepare(
         "INSERT INTO customer_sessions (session_id, customer_id, expires_at) VALUES (?1, ?2, ?3)"
-    ).bind(session_id, customer_id, now + SESSION_TTL).run()
+    ).bind(session_id, customer_id, now + SESSION_TTL_SECONDS).run()
     return ctx.redirect(
         auth_core.safe_return_url(ctx, next_url, DEFAULT_PATH),
-        {"set-cookie": auth_core.session_cookie(SESSION_COOKIE_NAME, session_id, SESSION_TTL)},
+        {"set-cookie": auth_core.session_cookie(SESSION_COOKIE_NAME, session_id, SESSION_TTL_SECONDS)},
     )
 
 

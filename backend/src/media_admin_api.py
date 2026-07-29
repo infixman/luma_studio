@@ -16,13 +16,6 @@ import paging
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _form_text(form, name: str) -> str:
     """Read a text field that Workers Python may have wrapped in a File."""
     raw = form.get(name)
@@ -103,7 +96,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/media/delete" and method == "POST":
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             wanted = media.validate_ids(body.get("ids"))
         except media.MediaError as error:
             return ctx.error(str(error), 400)
@@ -213,7 +206,7 @@ async def handle(ctx: Ctx):
 
         if method == "PUT":
             try:
-                body = await _read_json(ctx)
+                body = await ctx.json_body()
                 title = media.validate_title(body.get("title"))
                 alt = media.validate_alt(body.get("alt"))
                 tags = media.validate_tags(body.get("tags"))

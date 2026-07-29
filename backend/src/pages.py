@@ -15,7 +15,7 @@ import re
 
 import media
 from bio_link import validate_url
-from common import d1_rows, urlsafe_token, utc_timestamp
+from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp, validate_choice, validate_text
 from sanitize import sanitize_html
 
 
@@ -139,10 +139,7 @@ def validate_status(raw: str) -> str:
 
 
 def _text(raw, limit: int, label: str) -> str:
-    value = str(raw or "").strip()
-    if len(value) > limit:
-        raise PageError(f"{label}請控制在 {limit} 個字以內")
-    return value
+    return validate_text(raw, limit, label, required=False, error_cls=PageError)
 
 
 def validate_share_description(raw) -> str:
@@ -156,9 +153,7 @@ def validate_share_description(raw) -> str:
 
 
 def _choice(raw, allowed, label: str):
-    if raw not in allowed:
-        raise PageError(f"{label}必須是 {'、'.join(str(value) for value in allowed)} 其中之一")
-    return raw
+    return validate_choice(raw, allowed, label, error_cls=PageError)
 
 
 def _media_id(raw) -> str:
@@ -563,8 +558,7 @@ async def page_id_of_block(env, block_id: str) -> str | None:
 
 
 async def create_page(env, *, path: str, title: str, status: str) -> str:
-    rows = await d1_rows(env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM pages"))
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "pages")
     page_id, now = urlsafe_token(18), utc_timestamp()
     await env.DB.prepare(
         "INSERT INTO pages (id, path, title, status, is_home, position, created_at, updated_at)"
@@ -635,11 +629,7 @@ async def delete_page(env, page_id: str) -> bool:
 
 
 async def reorder_pages(env, ordered_ids: list[str]) -> None:
-    now = utc_timestamp()
-    for index, page_id in enumerate(ordered_ids):
-        await env.DB.prepare("UPDATE pages SET position = ?2, updated_at = ?3 WHERE id = ?1").bind(
-            page_id, index, now
-        ).run()
+    await reorder_rows(env, "pages", "id", ordered_ids, timestamp_col="updated_at")
 
 
 async def touch_page(env, page_id: str) -> None:
@@ -649,10 +639,7 @@ async def touch_page(env, page_id: str) -> None:
 
 
 async def add_block(env, page_id: str, block_type: str, config: dict) -> str:
-    rows = await d1_rows(
-        env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM page_blocks WHERE page_id = ?1").bind(page_id)
-    )
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "page_blocks", "page_id = ?1", (page_id,))
     block_id = urlsafe_token(18)
     await env.DB.prepare(
         "INSERT INTO page_blocks (id, page_id, type, config, position) VALUES (?1, ?2, ?3, ?4, ?5)"
@@ -703,236 +690,4 @@ async def reorder_blocks(env, page_id: str, ordered_ids: list[str]) -> bool:
     return True
 
 
-# --- published versions --------------------------------------------------
-
-# Drafts, published versions, and the history of them.
-#
-# `pages` and `page_blocks` are the draft. Publishing serialises that draft
-# into one row of `page_versions`, and a customer only ever reads the row
-# marked `is_current`. Editing a published page therefore stops being
-# something customers watch happen live.
-#
-# There is no version history of the *draft*. "What did this page look like to
-# the public last month" is a question somebody asks; "what was my 37th
-# intermediate edit" is not. Nothing is saved automatically either — the owner
-# asked for that explicitly, and a save every keystroke buries yesterday's
-# version under three hundred of today's.
-
-# Twenty is not a policy about how much history is worth keeping — it is a
-# ceiling so the table cannot grow without bound, since every publish writes a
-# whole page as JSON. It is in the README too: without saying so, somebody
-# eventually assumes their three-year-old version is still there.
-MAX_VERSIONS = 20
-
-
-def snapshot_of(blocks: list[dict]) -> str:
-    """The draft's blocks as one JSON string.
-
-    Type and config in order, and nothing else. Not the hydrated response —
-    that carries the prices and stock levels of the moment, and a version
-    records a layout, not what the shop happened to be selling that day. Not
-    block ids either: a restored version is new blocks, and reusing the old
-    ids would tie a restore to whether those rows still exist.
-    """
-
-    return json.dumps(
-        [{"type": block["type"], "config": block["config"]} for block in blocks],
-        ensure_ascii=False,
-        # Sorted so two snapshots of the same content compare equal as
-        # strings. That comparison is the whole of "has this been published
-        # yet", and dict ordering must not be able to answer it wrongly.
-        sort_keys=True,
-    )
-
-
-def blocks_of_snapshot(payload: str) -> list[dict]:
-    """A stored snapshot back as blocks, in the shape the rest of the code
-    expects — the same one `block_row` produces.
-
-    Every entry goes through the same validators a fresh block does. A stored
-    version is old by definition, and a block that was valid when it was
-    published may not be now.
-    """
-
-    try:
-        entries = json.loads(payload)
-    except (TypeError, ValueError):
-        return []
-    if not isinstance(entries, list):
-        return []
-
-    blocks = []
-    for position, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            continue
-        try:
-            block_type, config = validate_block(entry.get("type"), entry.get("config"))
-        except (PageError, ValueError):
-            # One stale block does not take the page down with it — the same
-            # rule `block_row` follows.
-            continue
-        blocks.append({"id": f"v{position}", "type": block_type, "config": config, "position": position})
-    return blocks
-
-
-async def current_version(env, page_id: str) -> dict | None:
-    """What the public is being served for this page, if anything."""
-
-    rows = await d1_rows(
-        env.DB.prepare("SELECT * FROM page_versions WHERE page_id = ?1 AND is_current = 1").bind(page_id)
-    )
-    return dict(rows[0]) if rows else None
-
-
-async def list_versions(env, page_id: str) -> list[dict]:
-    """The published history, newest first, without the payloads.
-
-    Twenty whole pages is a large response for a sidebar that only shows
-    dates. The payload is read when one is actually restored.
-    """
-
-    rows = await d1_rows(
-        env.DB.prepare(
-            """SELECT id, published_at, published_by, is_current
-                 FROM page_versions WHERE page_id = ?1 ORDER BY published_at DESC, id DESC"""
-        ).bind(page_id)
-    )
-    return [
-        {
-            "id": row["id"],
-            "publishedAt": int(row["published_at"]),
-            "publishedBy": row["published_by"],
-            "isCurrent": bool(row["is_current"]),
-        }
-        for row in rows
-    ]
-
-
-async def version_payload(env, page_id: str, version_id: str) -> str | None:
-    """One stored version's blocks, still as JSON.
-
-    Scoped to the page as well as the id, so a version id from another page
-    cannot be restored onto this one.
-    """
-
-    rows = await d1_rows(
-        env.DB.prepare("SELECT payload FROM page_versions WHERE id = ?1 AND page_id = ?2").bind(version_id, page_id)
-    )
-    return rows[0]["payload"] if rows else None
-
-
-async def publish(env, page_id: str, actor: str) -> dict:
-    """Make the draft the version customers see.
-
-    The old current row is demoted before the new one is written, so there is
-    never a moment with two current versions. The reverse order would leave a
-    moment with none, which is a page that 404s.
-    """
-
-    blocks = await list_blocks(env, page_id)
-    payload = snapshot_of(blocks)
-    now = utc_timestamp()
-    version_id = urlsafe_token(18)
-
-    await env.DB.prepare("UPDATE page_versions SET is_current = 0 WHERE page_id = ?1 AND is_current = 1").bind(
-        page_id
-    ).run()
-    await env.DB.prepare(
-        """INSERT INTO page_versions (id, page_id, payload, published_at, published_by, is_current)
-             VALUES (?1, ?2, ?3, ?4, ?5, 1)"""
-    ).bind(version_id, page_id, payload, now, actor).run()
-    # Publishing also makes the page public: somebody pressing 發布 on a draft
-    # means both things, and a second button for the second half is a button
-    # they have to discover.
-    await env.DB.prepare("UPDATE pages SET status = 'published', updated_at = ?2 WHERE id = ?1").bind(
-        page_id, now
-    ).run()
-    await _trim_versions(env, page_id)
-    return {"id": version_id, "publishedAt": now, "publishedBy": actor, "isCurrent": True}
-
-
-async def _trim_versions(env, page_id: str) -> None:
-    """Drop everything past the newest MAX_VERSIONS.
-
-    The current one is excluded from the delete whatever its age, because
-    losing it leaves the page with nothing to serve.
-    """
-
-    await env.DB.prepare(
-        """DELETE FROM page_versions
-             WHERE page_id = ?1 AND is_current = 0
-               AND id NOT IN (
-                 SELECT id FROM page_versions WHERE page_id = ?1
-                  ORDER BY published_at DESC, id DESC LIMIT ?2)"""
-    ).bind(page_id, MAX_VERSIONS).run()
-
-
-async def unpublish(env, page_id: str) -> bool:
-    """Take the page off the site, keeping its history.
-
-    The versions stay. Taking a page down is not the same as deciding it never
-    existed, and whoever puts it back usually wants what was there.
-    """
-
-    await env.DB.prepare("UPDATE page_versions SET is_current = 0 WHERE page_id = ?1").bind(page_id).run()
-    result = await (
-        env.DB.prepare("UPDATE pages SET status = 'draft', updated_at = ?2 WHERE id = ?1")
-        .bind(page_id, utc_timestamp())
-        .run()
-    )
-    try:
-        return int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        return False
-
-
-async def restore(env, page_id: str, version_id: str) -> bool:
-    """Put an old version back — into the draft, not onto the site.
-
-    Two reasons it stops at the draft. You will want to look at it first; and
-    a second route to going live is a second place for going live to go wrong.
-    The 發布 button that already exists is what finishes the job.
-    """
-
-    payload = await version_payload(env, page_id, version_id)
-    if payload is None:
-        return False
-
-    blocks = blocks_of_snapshot(payload)
-    await env.DB.prepare("DELETE FROM page_blocks WHERE page_id = ?1").bind(page_id).run()
-    for position, block in enumerate(blocks):
-        await env.DB.prepare(
-            "INSERT INTO page_blocks (id, page_id, type, config, position) VALUES (?1, ?2, ?3, ?4, ?5)"
-        ).bind(
-            urlsafe_token(18), page_id, block["type"], json.dumps(block["config"], ensure_ascii=False), position
-        ).run()
-    await touch_page(env, page_id)
-    return True
-
-
-async def publish_state(env, page_id: str, blocks: list[dict] | None = None) -> str:
-    """One of three: `draft`, `published`, `modified`.
-
-    The third is the one that was invisible before any of this existed: edited
-    since it was last published, with nothing anywhere saying so. It is also
-    what makes the editor's 草稿 / 已發布 tabs worth having — until now they
-    would have shown the same thing twice.
-
-    Both sides are put through `snapshot_of` rather than comparing the stored
-    string directly. Two encodings of the same page are not the same string:
-    migration 0021 built its payloads with SQLite's `json_object`, which
-    writes keys in the order given and no spaces, while `json.dumps` here
-    sorts them and spaces them. Comparing raw would have told every page that
-    already existed it had unpublished changes, on the first request after
-    deploying, forever.
-
-    `blocks` is accepted so a caller that has already read them — the editor's
-    detail response has — does not read them twice.
-    """
-
-    current = await current_version(env, page_id)
-    if current is None:
-        return "draft"
-    stored = snapshot_of(blocks_of_snapshot(current["payload"]))
-    draft = snapshot_of(await list_blocks(env, page_id) if blocks is None else blocks)
-    return "published" if stored == draft else "modified"
+from page_versions import blocks_of_snapshot, current_version, list_versions, version_payload, publish, unpublish, restore, publish_state, snapshot_of, MAX_VERSIONS

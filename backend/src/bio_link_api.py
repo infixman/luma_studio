@@ -9,13 +9,6 @@ import bio_link
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _state(ctx: Ctx) -> dict:
     settings = await bio_link.get_settings(ctx.env)
     # avatarKey is the storage detail behind avatarPath; the editor never
@@ -110,7 +103,7 @@ async def handle(ctx: Ctx):
         # One save for the whole page. Validate all of it before writing any
         # of it, so a rejected link cannot leave the settings half-changed.
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             settings = _settings_from(body, await bio_link.get_settings(env))
             items = _items_from(body) if "items" in body else None
         except (ValueError, AttributeError) as error:
@@ -124,7 +117,7 @@ async def handle(ctx: Ctx):
         # The owner cannot tell a wrong address from an empty calendar, so
         # say which it is instead of leaving the section silently blank.
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             url = bio_link.validate_calendar_url(str(body.get("calendarUrl") or ""))
         except (ValueError, AttributeError) as error:
             return ctx.error(str(error) or "Invalid calendar address", 400)
@@ -173,7 +166,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/bio-link/items" and method == "POST":
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             kind = bio_link.validate_kind(str(body.get("kind") or "link"))
             title = bio_link.validate_text(str(body.get("title") or ""), bio_link.MAX_TITLE, "Title")
             url = bio_link.validate_url(str(body.get("url") or ""))
@@ -187,7 +180,7 @@ async def handle(ctx: Ctx):
 
     if path == "/api/bio-link/items/order" and method == "PUT":
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             raw_ids = body.get("ids")
             if not isinstance(raw_ids, list):
                 raise ValueError("Expected an array of link ids")
@@ -209,7 +202,7 @@ async def handle(ctx: Ctx):
             return ctx.json(await _state(ctx))
 
         try:
-            body = await _read_json(ctx)
+            body = await ctx.json_body()
             title = bio_link.validate_text(str(body.get("title") or ""), bio_link.MAX_TITLE, "Title")
             url = bio_link.validate_url(str(body.get("url") or ""))
         except (ValueError, AttributeError) as error:

@@ -16,8 +16,7 @@ import base64
 import hashlib
 from urllib.parse import urlencode
 
-from common import OAUTH_STATE_TTL_SECONDS, OAuthError, d1_rows, urlsafe_token, utc_timestamp
-from ibon import fetch_json
+from common import OAUTH_STATE_TTL_SECONDS, OAuthError, d1_rows, fetch_json, urlsafe_token, utc_timestamp
 from responses import Ctx, frontend_origin
 
 

@@ -12,7 +12,7 @@ stays, with `anonymized_at` recording when.
 """
 
 import paging
-from common import d1_rows, utc_timestamp
+from common import d1_changed, d1_rows, escape_like, utc_timestamp
 
 
 MAX_SEARCH = 60
@@ -23,12 +23,14 @@ MAX_SEARCH = 60
 ERASED = "（已刪除）"
 
 
-def customer_id_ok(customer_id: str) -> bool:
+def validate_customer_id(customer_id: str) -> str:
     raw = str(customer_id)
-    return 6 <= len(raw) <= 60 and all(character.isalnum() or character in "_-" for character in raw)
+    if not 6 <= len(raw) <= 60 or not all(character.isalnum() or character in "_-" for character in raw):
+        raise ValueError("Invalid customer id")
+    return raw
 
 
-def admin_row(row: dict) -> dict:
+def customer_admin_row(row: dict) -> dict:
     """One customer as the shop sees them, including the counts beside them."""
 
     return {
@@ -68,7 +70,7 @@ async def list_all(
     if search:
         # LIKE's own wildcards, made literal: searching for `a_b` must not
         # also answer with `axb`.
-        term = search[:MAX_SEARCH].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        term = escape_like(search[:MAX_SEARCH])
         bindings.append(f"%{term}%")
         where = (
             r" WHERE c.email LIKE ?1 ESCAPE '\' OR c.display_name LIKE ?1 ESCAPE '\'"
@@ -86,14 +88,14 @@ async def list_all(
         f" LIMIT ?{len(bindings) - 1} OFFSET ?{len(bindings)}"
     )
     rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
-    return [admin_row(row) for row in rows], total
+    return [customer_admin_row(row) for row in rows], total
 
 
 async def get(env, customer_id: str) -> dict | None:
     rows = await d1_rows(
         env.DB.prepare(f"{_LIST_QUERY} WHERE c.id = ?1 GROUP BY c.id").bind(customer_id)
     )
-    return admin_row(rows[0]) if rows else None
+    return customer_admin_row(rows[0]) if rows else None
 
 
 async def set_blocked(env, customer_id: str, blocked: bool) -> bool:
@@ -109,10 +111,7 @@ async def set_blocked(env, customer_id: str, blocked: bool) -> bool:
         .bind(customer_id, 1 if blocked else 0, utc_timestamp())
         .run()
     )
-    try:
-        return int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        return False
+    return d1_changed(result)
 
 
 MAX_NOTES = 2000
@@ -125,10 +124,7 @@ async def set_notes(env, customer_id: str, notes: str) -> bool:
         .bind(customer_id, text, utc_timestamp())
         .run()
     )
-    try:
-        return int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        return False
+    return d1_changed(result)
 
 
 async def anonymise(env, customer_id: str) -> bool:
@@ -158,10 +154,7 @@ async def anonymise(env, customer_id: str) -> bool:
         .bind(customer_id, f"erased+{customer_id}@invalid", ERASED, f"erased:{customer_id}", now)
         .run()
     )
-    try:
-        changed = int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        changed = False
+    changed = d1_changed(result)
     if changed:
         await env.DB.prepare("DELETE FROM customer_sessions WHERE customer_id = ?1").bind(customer_id).run()
     return changed

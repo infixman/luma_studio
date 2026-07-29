@@ -13,13 +13,6 @@ import paging
 from responses import Ctx
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 async def _detail(ctx: Ctx, customer_id: str) -> dict:
     customer = await customers.get(ctx.env, customer_id)
     if customer is None:
@@ -43,7 +36,9 @@ async def handle(ctx: Ctx):
 
     rest = path.removeprefix("/api/customers/")
     customer_id, _, action = rest.partition("/")
-    if not customers.customer_id_ok(customer_id):
+    try:
+        customer_id = customers.validate_customer_id(customer_id)
+    except ValueError:
         return ctx.error("Invalid customer id", 400)
 
     if not action and method == "GET":
@@ -55,7 +50,7 @@ async def handle(ctx: Ctx):
 
     if action == "blocked":
         try:
-            blocked = bool((await _read_json(ctx)).get("blocked"))
+            blocked = bool((await ctx.json_body()).get("blocked"))
         except (ValueError, AttributeError):
             return ctx.error("Invalid request", 400)
         if not await customers.set_blocked(env, customer_id, blocked):
@@ -64,7 +59,7 @@ async def handle(ctx: Ctx):
 
     if action == "notes":
         try:
-            notes = str((await _read_json(ctx)).get("notes") or "")
+            notes = str((await ctx.json_body()).get("notes") or "")
         except (ValueError, AttributeError):
             return ctx.error("Invalid request", 400)
         if not await customers.set_notes(env, customer_id, notes):

@@ -7,7 +7,7 @@ import re
 
 import qrcode
 import qrcode.image.svg
-from js import Uint8Array, fetch as js_fetch
+from js import Uint8Array
 
 from common import (
     CACHE_TTL_SECONDS,
@@ -19,6 +19,7 @@ from common import (
     IbonError,
     b64_text,
     d1_rows,
+    fetch_json,
     js_options,
     random_alpha_numeric,
     secure_bytes,
@@ -86,35 +87,6 @@ def ibon_headers(env, authorization: str | None = None, key: str | None = None) 
         headers["Key"] = key
         headers["FV"] = env.IBON_CLIENT_VERSION
     return headers
-
-
-def ibon_error_detail(response, body: str) -> dict:
-    """Keep useful ibon diagnostics without returning tokens or raw bodies."""
-
-    detail = {"httpStatus": int(response.status)}
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return detail
-    for key in ("code", "msg", "Status", "Message"):
-        if key in payload and isinstance(payload[key], (str, int, float, bool)):
-            detail[key] = payload[key]
-    return detail
-
-
-async def fetch_json(url: str, options: dict, error_type=IbonError, stage: str = "upstream") -> dict:
-    response = await js_fetch(url, js_options(options))
-    body = await response.text()
-    if not response.ok:
-        if error_type is IbonError:
-            raise IbonError(stage, ibon_error_detail(response, body))
-        raise error_type(f"upstream returned HTTP {response.status}")
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError as error:
-        if error_type is IbonError:
-            raise IbonError(stage, {"httpStatus": int(response.status), "reason": "nonJsonResponse"}) from error
-        raise error_type("upstream returned a non-JSON response") from error
 
 
 async def create_web_entry(env) -> tuple[str, str]:

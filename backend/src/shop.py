@@ -12,7 +12,7 @@ by hand, must not be able to reach a page.
 
 import re
 
-from common import d1_rows, urlsafe_token, utc_timestamp
+from common import d1_rows, next_position, random_object_key, reorder_rows, storage_key_to_url, urlsafe_token, utc_timestamp, validate_image_suffix as _validate_image_suffix, validate_text
 
 
 PRODUCT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
@@ -49,12 +49,6 @@ PRODUCT_STATUSES = ("draft", "active", "archived")
 IMAGE_PREFIX = "_shop"
 IMAGE_URL_PREFIX = "/shop-assets"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-IMAGE_CONTENT_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 
 # Below this, a customer sees the number; above it, only "in stock". "2 left"
@@ -70,15 +64,6 @@ def validate_product_id(product_id: str) -> str:
     if not PRODUCT_ID_PATTERN.fullmatch(product_id):
         raise ValueError("Invalid product id")
     return product_id
-
-
-def validate_text(value: str, limit: int, label: str, required: bool = True) -> str:
-    value = value.strip()
-    if required and not value:
-        raise ValueError(f"{label} is required")
-    if len(value) > limit:
-        raise ValueError(f"{label} must be {limit} characters or fewer")
-    return value
 
 
 def validate_slug(slug: str) -> str:
@@ -122,7 +107,7 @@ def validate_stock(value) -> int:
 
 
 def image_key(suffix: str) -> str:
-    return f"{IMAGE_PREFIX}/{urlsafe_token(12)}{suffix}"
+    return random_object_key(IMAGE_PREFIX, suffix)
 
 
 def image_path(key: str) -> str | None:
@@ -132,16 +117,11 @@ def image_path(key: str) -> str | None:
     being reassembled by every caller.
     """
 
-    if not key or not key.startswith(f"{IMAGE_PREFIX}/"):
-        return None
-    return f"{IMAGE_URL_PREFIX}/{key.removeprefix(f'{IMAGE_PREFIX}/')}"
+    return storage_key_to_url(key, IMAGE_PREFIX, IMAGE_URL_PREFIX)
 
 
 def validate_image_suffix(file_name: str) -> str:
-    suffix = file_name[file_name.rfind(".") :].lower()
-    if "/" in file_name or ".." in file_name or suffix not in IMAGE_SUFFIXES:
-        raise ValueError("A product photo must be a jpg, png or webp image")
-    return suffix
+    return _validate_image_suffix(file_name, IMAGE_SUFFIXES, "A product photo must be a jpg, png or webp image")
 
 
 # --- row mapping ---------------------------------------------------------
@@ -264,8 +244,7 @@ async def slug_taken(env, slug: str, *, excluding: str | None = None) -> bool:
 
 
 async def create_product(env, *, slug: str, title: str, description: str, status: str) -> str:
-    rows = await d1_rows(env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM products"))
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "products")
     product_id, now = urlsafe_token(18), utc_timestamp()
     await env.DB.prepare(
         "INSERT INTO products (id, slug, title, description, status, position, created_at, updated_at)"
@@ -313,11 +292,7 @@ async def reorder_products(env, ordered_ids: list[str]) -> None:
     path that writes the catalogue is not worth that.
     """
 
-    now = utc_timestamp()
-    for index, product_id in enumerate(ordered_ids):
-        await env.DB.prepare("UPDATE products SET position = ?2, updated_at = ?3 WHERE id = ?1").bind(
-            product_id, index, now
-        ).run()
+    await reorder_rows(env, "products", "id", ordered_ids, timestamp_col="updated_at")
 
 
 # --- variants ------------------------------------------------------------
@@ -344,12 +319,7 @@ async def count_variants(env, product_id: str) -> int:
 
 
 async def create_variant(env, product_id: str, *, title: str, sku: str, price: int, stock: int) -> str:
-    rows = await d1_rows(
-        env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM product_variants WHERE product_id = ?1").bind(
-            product_id
-        )
-    )
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "product_variants", "product_id = ?1", (product_id,))
     variant_id = urlsafe_token(18)
     await env.DB.prepare(
         "INSERT INTO product_variants (id, product_id, title, sku, price, stock, position, enabled)"
@@ -394,12 +364,7 @@ async def count_images(env, product_id: str) -> int:
 
 
 async def add_image(env, product_id: str, key: str, alt: str) -> str:
-    rows = await d1_rows(
-        env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM product_images WHERE product_id = ?1").bind(
-            product_id
-        )
-    )
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "product_images", "product_id = ?1", (product_id,))
     image_id = urlsafe_token(18)
     await env.DB.prepare(
         "INSERT INTO product_images (id, product_id, r2_key, alt, position) VALUES (?1, ?2, ?3, ?4, ?5)"

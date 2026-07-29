@@ -49,13 +49,6 @@ def _seconds(ctx: Ctx, name: str) -> int | None:
     return value if MIN_TIME <= value <= MAX_TIME else None
 
 
-async def _read_json(ctx: Ctx) -> dict:
-    body = await ctx.request.json()
-    if not isinstance(body, dict):
-        raise ValueError("Expected a JSON object")
-    return body
-
-
 def _actor(ctx: Ctx) -> str:
     """Who is doing this. Falls back to the deployment, never to nobody."""
 
@@ -135,7 +128,7 @@ async def handle(ctx: Ctx):
         # reference goes in the audit detail, because "marked paid by hand" is
         # only useful next to what it was matched against.
         try:
-            detail = str((await _read_json(ctx)).get("detail") or "").strip()[:MAX_NOTE]
+            detail = str((await ctx.json_body()).get("detail") or "").strip()[:MAX_NOTE]
         except (ValueError, AttributeError):
             detail = ""
         if not await orders.mark_paid(env, order_id, _actor(ctx), detail=detail or "manually marked paid"):
@@ -144,7 +137,7 @@ async def handle(ctx: Ctx):
 
     if action in ("shipped", "completed"):
         try:
-            note = str((await _read_json(ctx)).get("detail") or "").strip()[:MAX_NOTE]
+            note = str((await ctx.json_body()).get("detail") or "").strip()[:MAX_NOTE]
         except (ValueError, AttributeError):
             note = ""
         if await orders.advance(env, order_id, action, _actor(ctx), detail=note) is None:
@@ -153,7 +146,7 @@ async def handle(ctx: Ctx):
 
     if action == "cancel":
         try:
-            reason = str((await _read_json(ctx)).get("reason") or "").strip()[:MAX_REASON]
+            reason = str((await ctx.json_body()).get("reason") or "").strip()[:MAX_REASON]
         except (ValueError, AttributeError):
             reason = ""
         # Cancelling puts the stock back, including for an order already
@@ -164,7 +157,7 @@ async def handle(ctx: Ctx):
 
     if action == "note":
         try:
-            note = str((await _read_json(ctx)).get("note") or "").strip()[:MAX_NOTE]
+            note = str((await ctx.json_body()).get("note") or "").strip()[:MAX_NOTE]
         except (ValueError, AttributeError):
             return ctx.error("Invalid note", 400)
         if not await orders.set_note(env, order_id, note, _actor(ctx)):

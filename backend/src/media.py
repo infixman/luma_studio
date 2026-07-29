@@ -23,7 +23,7 @@ only thing it enforces is that both are within reason.
 import json
 
 import paging
-from common import d1_rows, urlsafe_token, utc_timestamp
+from common import BASE_IMAGE_CONTENT_TYPES, d1_rows, escape_like, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_image_suffix as _validate_image_suffix
 
 
 MEDIA_ID_PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
@@ -60,12 +60,6 @@ OBJECT_PREFIX = "_media"
 IMAGE_URL_PREFIX = "/media-assets"
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-IMAGE_CONTENT_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 # The three widths the browser renders, named rather than numbered so that
@@ -122,11 +116,10 @@ def validate_ids(raw) -> list[str]:
 
 
 def validate_image_suffix(file_name: str) -> str:
-    name = str(file_name)
-    suffix = name[name.rfind(".") :].lower()
-    if "/" in name or ".." in name or suffix not in IMAGE_SUFFIXES:
-        raise MediaError("圖片必須是 jpg、png 或 webp")
-    return suffix
+    try:
+        return _validate_image_suffix(str(file_name), IMAGE_SUFFIXES, "圖片必須是 jpg、png 或 webp")
+    except ValueError as error:
+        raise MediaError(str(error)) from error
 
 
 def validate_alt(raw) -> str:
@@ -234,7 +227,7 @@ def clean_file_name(raw) -> str:
 
 
 def object_key(suffix: str) -> str:
-    return f"{OBJECT_PREFIX}/{urlsafe_token(12)}{suffix}"
+    return random_object_key(OBJECT_PREFIX, suffix)
 
 
 def variant_key(label: str) -> str:
@@ -246,18 +239,16 @@ def variant_key(label: str) -> str:
     tokens make every stored object independent of every other.
     """
 
-    return f"{OBJECT_PREFIX}/{urlsafe_token(12)}-{label}{VARIANT_SUFFIX}"
+    return f"{random_object_key(OBJECT_PREFIX, '', 12)}-{label}{VARIANT_SUFFIX}"
 
 
 def image_path(key: str) -> str | None:
-    if not key or not key.startswith(f"{OBJECT_PREFIX}/"):
-        return None
-    return f"{IMAGE_URL_PREFIX}/{key.removeprefix(f'{OBJECT_PREFIX}/')}"
+    return storage_key_to_url(key, OBJECT_PREFIX, IMAGE_URL_PREFIX)
 
 
 def content_type_for(file_name: str) -> str | None:
     suffix = file_name[file_name.rfind(".") :].lower()
-    return IMAGE_CONTENT_TYPES.get(suffix)
+    return BASE_IMAGE_CONTENT_TYPES.get(suffix)
 
 
 # --- row mapping ---------------------------------------------------------
@@ -385,7 +376,7 @@ def _search_clause(search: str) -> tuple[str, list]:
     term = str(search or "").strip()[:MAX_SEARCH]
     if not term:
         return "", []
-    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    escaped = escape_like(term)
     return (
         r""" WHERE (media.title LIKE ?1 ESCAPE '\' OR media.file_name LIKE ?1 ESCAPE '\')
               OR EXISTS (SELECT 1 FROM media_tags WHERE media_id = media.id AND tag = ?2)""",

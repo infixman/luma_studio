@@ -18,7 +18,7 @@ import paging
 import shipping
 import shop
 import mail
-from common import d1_rows, random_alpha_numeric, utc_timestamp
+from common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
 
 
 ORDER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,25}$")
@@ -175,10 +175,7 @@ async def take_stock(env, variant_id: str, quantity: int) -> bool:
     )
     # D1 reports this as meta.changes; a driver that does not is treated as a
     # failure rather than assumed to have worked.
-    try:
-        return int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        return False
+    return d1_changed(result)
 
 
 async def give_back_stock(env, variant_id: str, quantity: int) -> None:
@@ -350,10 +347,7 @@ async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool
         .bind(order_id, now)
         .run()
     )
-    try:
-        changed = int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        changed = False
+    changed = d1_changed(result)
     if changed:
         await audit(env, order_id, actor, "paid", before="pending", after="paid", detail=detail)
         await _tell_customer(env, order_id, "paid")
@@ -409,10 +403,7 @@ async def advance(env, order_id: str, to_status: str, actor: str, *, detail: str
         .bind(order_id, to_status, utc_timestamp(), before)
         .run()
     )
-    try:
-        changed = int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        changed = False
+    changed = d1_changed(result)
     if not changed:
         return None
 
@@ -433,10 +424,7 @@ async def set_note(env, order_id: str, note: str, actor: str) -> bool:
         .bind(order_id, note, utc_timestamp())
         .run()
     )
-    try:
-        changed = int(result.meta.changes) == 1
-    except (AttributeError, TypeError, ValueError):
-        changed = False
+    changed = d1_changed(result)
     if changed:
         await audit(env, order_id, actor, "note", detail=note)
     return changed
@@ -542,10 +530,7 @@ async def cancel(env, order_id: str, actor: str, *, reason: str = "") -> bool:
         "UPDATE orders SET status = 'cancelled', cancelled_at = ?2, reserved_until = NULL, updated_at = ?2"
         f" WHERE id = ?1 AND status IN ({placeholders})"
     ).bind(order_id, now, *HOLDING_STOCK).run()
-    try:
-        if int(result.meta.changes) != 1:
-            return False
-    except (AttributeError, TypeError, ValueError):
+    if not d1_changed(result):
         return False
     await release_stock(env, order_id)
     await audit(env, order_id, actor, "cancelled", before=order["status"], after="cancelled", detail=reason)
@@ -574,10 +559,7 @@ async def expire_unpaid(env) -> int:
             .bind(row["id"], now)
             .run()
         )
-        try:
-            if int(result.meta.changes) != 1:
-                continue
-        except (AttributeError, TypeError, ValueError):
+        if not d1_changed(result):
             continue
         await release_stock(env, row["id"])
         await audit(env, row["id"], "system", "expired", before="pending", after="expired")

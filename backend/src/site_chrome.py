@@ -18,7 +18,7 @@ import json
 import re
 
 from bio_link import SOCIAL_PLATFORMS, validate_url
-from common import d1_rows, urlsafe_token, utc_timestamp
+from common import BASE_IMAGE_CONTENT_TYPES, d1_rows, next_position, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_choice, validate_image_suffix as _validate_image_suffix, validate_text
 
 
 MENU_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
@@ -49,55 +49,40 @@ MAX_MENU_DEPTH = 3
 IMAGE_PREFIX = "_site"
 IMAGE_URL_PREFIX = "/site-assets"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-IMAGE_CONTENT_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 
 
-class SiteError(Exception):
+class ChromeError(Exception):
     """The settings or menu item as submitted cannot be stored."""
 
 
 def choice(value, allowed: tuple[str, ...], label: str) -> str:
-    if value not in allowed:
-        raise SiteError(f"{label} 必須是：{'、'.join(allowed)}")
-    return str(value)
+    return str(validate_choice(value, allowed, label, error_cls=ChromeError))
 
 
 def text(value, limit: int, label: str, *, required: bool = False) -> str:
-    value = str(value or "").strip()
-    if required and not value:
-        raise SiteError(f"{label}是必填")
-    if len(value) > limit:
-        raise SiteError(f"{label}請控制在 {limit} 個字以內")
-    return value
+    return validate_text(value, limit, label, required=required, error_cls=ChromeError)
 
 
 def validate_menu_id(menu_id: str) -> str:
     if not MENU_ID_PATTERN.fullmatch(menu_id):
-        raise SiteError("Invalid menu item id")
+        raise ChromeError("Invalid menu item id")
     return menu_id
 
 
 def image_key(suffix: str) -> str:
-    return f"{IMAGE_PREFIX}/{urlsafe_token(12)}{suffix}"
+    return random_object_key(IMAGE_PREFIX, suffix)
 
 
 def image_path(key: str | None) -> str | None:
-    if not key or not key.startswith(f"{IMAGE_PREFIX}/"):
-        return None
-    return f"{IMAGE_URL_PREFIX}/{key.removeprefix(f'{IMAGE_PREFIX}/')}"
+    return storage_key_to_url(key, IMAGE_PREFIX, IMAGE_URL_PREFIX)
 
 
 def validate_image_suffix(file_name: str) -> str:
-    suffix = file_name[file_name.rfind(".") :].lower()
-    if "/" in file_name or ".." in file_name or suffix not in IMAGE_SUFFIXES:
-        raise SiteError("背景圖必須是 jpg、png 或 webp")
-    return suffix
+    try:
+        return _validate_image_suffix(file_name, IMAGE_SUFFIXES, "背景圖必須是 jpg、png 或 webp")
+    except ValueError as error:
+        raise ChromeError(str(error)) from error
 
 
 # --- footer structure ----------------------------------------------------
@@ -112,19 +97,19 @@ def validate_footer_columns(raw) -> list[dict]:
     """
 
     if not isinstance(raw, list):
-        raise SiteError("頁尾欄位必須是列表")
+        raise ChromeError("頁尾欄位必須是列表")
     if len(raw) > MAX_FOOTER_COLUMNS:
-        raise SiteError(f"頁尾最多 {MAX_FOOTER_COLUMNS} 欄")
+        raise ChromeError(f"頁尾最多 {MAX_FOOTER_COLUMNS} 欄")
 
     columns = []
     for entry in raw:
         if not isinstance(entry, dict):
-            raise SiteError("頁尾欄位格式不正確")
+            raise ChromeError("頁尾欄位格式不正確")
         links = entry.get("links")
         if not isinstance(links, list):
-            raise SiteError("頁尾欄位的連結必須是列表")
+            raise ChromeError("頁尾欄位的連結必須是列表")
         if len(links) > MAX_FOOTER_LINKS:
-            raise SiteError(f"每欄最多 {MAX_FOOTER_LINKS} 個連結")
+            raise ChromeError(f"每欄最多 {MAX_FOOTER_LINKS} 個連結")
         columns.append(
             {
                 "title": text(entry.get("title"), MAX_LABEL, "欄位標題"),
@@ -143,17 +128,17 @@ def validate_footer_columns(raw) -> list[dict]:
 
 def validate_footer_socials(raw) -> list[dict]:
     if not isinstance(raw, list):
-        raise SiteError("社群連結必須是列表")
+        raise ChromeError("社群連結必須是列表")
     if len(raw) > MAX_FOOTER_SOCIALS:
-        raise SiteError(f"最多 {MAX_FOOTER_SOCIALS} 個社群連結")
+        raise ChromeError(f"最多 {MAX_FOOTER_SOCIALS} 個社群連結")
 
     socials = []
     for entry in raw:
         if not isinstance(entry, dict):
-            raise SiteError("社群連結格式不正確")
+            raise ChromeError("社群連結格式不正確")
         platform = str(entry.get("platform") or "")
         if platform not in SOCIAL_PLATFORMS:
-            raise SiteError(f"未知的社群平台：{platform}")
+            raise ChromeError(f"未知的社群平台：{platform}")
         socials.append({"platform": platform, "url": validate_url(str(entry.get("url") or ""))})
     return socials
 
@@ -167,7 +152,7 @@ def _read_json_list(raw: str, validator) -> list[dict]:
 
     try:
         return validator(json.loads(raw))
-    except (SiteError, ValueError, TypeError):
+    except (ChromeError, ValueError, TypeError):
         return []
 
 
@@ -324,11 +309,11 @@ def depth_of(items: list[dict], parent_id: str | None) -> int:
         # A cycle cannot be created through the API, but a hand-edited row
         # could; counting forever is a worse outcome than refusing the move.
         if parent_id in seen:
-            raise SiteError("選單結構有循環")
+            raise ChromeError("選單結構有循環")
         seen.add(parent_id)
         parent = by_id.get(parent_id)
         if parent is None:
-            raise SiteError("找不到上層項目")
+            raise ChromeError("找不到上層項目")
         depth += 1
         parent_id = parent["parentId"]
     return depth
@@ -338,7 +323,7 @@ def validate_menu_fields(body: dict) -> dict:
     kind = choice(body.get("targetKind"), TARGET_KINDS, "連結類型")
     target = str(body.get("target") or "").strip()
     if not target:
-        raise SiteError("請選擇這個項目要連到哪裡")
+        raise ChromeError("請選擇這個項目要連到哪裡")
     if kind == "url":
         target = validate_url(target)
     return {
@@ -349,12 +334,7 @@ def validate_menu_fields(body: dict) -> dict:
 
 
 async def create_menu_item(env, *, parent_id: str | None, label: str, target_kind: str, target: str) -> str:
-    rows = await d1_rows(
-        env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS last FROM menu_items WHERE parent_id IS ?1").bind(
-            parent_id
-        )
-    )
-    position = (int(rows[0]["last"]) if rows else -1) + 1
+    position = await next_position(env, "menu_items", "parent_id IS ?1", (parent_id,))
     menu_id = urlsafe_token(18)
     await env.DB.prepare(
         "INSERT INTO menu_items (id, parent_id, label, target_kind, target, position) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
@@ -402,6 +382,9 @@ async def reorder_menu(env, ordered: list[dict]) -> None:
     the editor, so they are one request — two would let a drag land half done.
     """
 
+    # `reorder_rows` deliberately handles a single id/position update. Menu
+    # drags also change `parent_id`; keep those two columns in the same write
+    # so an item can never be left reordered under its former parent.
     for index, entry in enumerate(ordered):
         await env.DB.prepare("UPDATE menu_items SET parent_id = ?2, position = ?3 WHERE id = ?1").bind(
             entry["id"], entry["parentId"], index

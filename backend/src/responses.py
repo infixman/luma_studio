@@ -4,7 +4,8 @@ import json
 
 from workers import Response
 
-from common import env_var
+from common import CACHE_1H, env_var
+from js import Uint8Array
 
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -68,6 +69,12 @@ class Ctx:
             return True
         return self.request.headers.get(APP_HEADER) == "1" and self.origin_allowed()
 
+    async def json_body(self) -> dict:
+        body = await self.request.json()
+        if not isinstance(body, dict):
+            raise ValueError("Expected a JSON object")
+        return body
+
     def _headers(self, headers: dict, extra: dict | None) -> dict:
         merged = dict(self.cors)
         merged.update(headers)
@@ -110,3 +117,21 @@ class Ctx:
             None,
         )
         return Response("", status=204, headers=headers)
+
+
+async def serve_r2_image(ctx: Ctx, bucket, key: str, content_types: dict, cache: str = CACHE_1H):
+    """Read an object and produce the standard public image response."""
+
+    obj = await bucket.get(key)
+    if obj is None:
+        return ctx.error("Image not found", 404)
+    suffix = key[key.rfind(".") :].lower()
+    body = bytes(Uint8Array.new(await obj.arrayBuffer()).to_py())
+    return ctx.binary(
+        body,
+        {
+            "content-type": content_types.get(suffix, "application/octet-stream"),
+            "cache-control": cache,
+            "x-content-type-options": "nosniff",
+        },
+    )
