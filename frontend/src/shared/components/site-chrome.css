@@ -4,13 +4,21 @@
    Every value here comes from a fixed set the API validated, so the settings
    arrive as class names. Nothing the owner typed reaches CSS. */
 
+:root {
+  --site-surface-cream: #faf7f2;
+  --site-surface-sand: #ece2d2;
+  --site-surface-clay: #c9a79a;
+  --site-surface-forest: #2f5d4a;
+  --site-surface-ink: #2b2622;
+}
+
 .site-header,
 .site-footer {
-  --surface-cream: #faf7f2;
-  --surface-sand: #ece2d2;
-  --surface-clay: #c9a79a;
-  --surface-forest: #2f5d4a;
-  --surface-ink: #2b2622;
+  --surface-cream: var(--site-surface-cream);
+  --surface-sand: var(--site-surface-sand);
+  --surface-clay: var(--site-surface-clay);
+  --surface-forest: var(--site-surface-forest);
+  --surface-ink: var(--site-surface-ink);
 }
 
 /* --- header --- */

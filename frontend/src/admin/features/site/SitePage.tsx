@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useId, useState } from 'preact/hooks'
 
 import { AdminShell } from '../../components/AdminShell'
 import { MenuEditor } from '../../components/MenuEditor'
 import { useStatus } from '../../components/StatusBar'
-import { Button, Modal, Panel, RadioGroup, Spinner, TextField, useConfirm } from '../../components/ui'
+import { Button, Modal, Panel, Spinner, TextField, useConfirm } from '../../components/ui'
 import { SiteFooter, SiteHeader } from '../../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../../shared/components/SocialIcon'
 import { api, apiJson, apiUrl, uploadHeaderImage } from '../../../shared/api'
@@ -12,12 +12,12 @@ import { FOOTER_COLUMN_MAX, FOOTER_LINK_MAX } from './constraints'
 import '../../styles/pages-admin.css'
 import '../../styles/site-admin.css'
 
-const COLOURS: { value: SiteSettings['headerColour']; label: string }[] = [
-  { value: 'cream', label: '米白' },
-  { value: 'sand', label: '沙' },
-  { value: 'clay', label: '陶土' },
-  { value: 'forest', label: '森綠' },
-  { value: 'ink', label: '墨' },
+const COLOURS: { value: SiteSettings['headerColour']; label: string; swatch: string }[] = [
+  { value: 'cream', label: '米白', swatch: 'cream' },
+  { value: 'sand', label: '沙', swatch: 'sand' },
+  { value: 'clay', label: '陶土', swatch: 'clay' },
+  { value: 'forest', label: '森綠', swatch: 'forest' },
+  { value: 'ink', label: '墨', swatch: 'ink' },
 ]
 const SIZES: { value: SiteSettings['headerHeight']; label: string }[] = [
   { value: 'small', label: '小' },
@@ -26,7 +26,8 @@ const SIZES: { value: SiteSettings['headerHeight']; label: string }[] = [
 ]
 const EMPTY_ITEM = { label: '', targetKind: 'page' as MenuItem['targetKind'], target: '', parentId: '' }
 
-/** Fixed sets, so these render as radio groups rather than as free fields. */
+/** Fixed choices use a compact segmented control; the native radios remain
+ * underneath for keyboard navigation and form semantics. */
 function Choice<T extends string>({
   legend,
   value,
@@ -35,10 +36,36 @@ function Choice<T extends string>({
 }: {
   legend: string
   value: T
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; swatch?: string }[]
   onPick: (next: T) => void
 }) {
-  return <RadioGroup legend={legend} value={value} options={options} onChange={onPick} inline />
+  const name = useId()
+  return (
+    <fieldset class="site-choice">
+      <legend class="ui-label">{legend}</legend>
+      <div class="site-choice-options">
+        {options.map((option) => {
+          const id = `${name}-${option.value}`
+          return (
+            <span class="site-choice-option" key={option.value}>
+              <input
+                id={id}
+                class="site-choice-input"
+                type="radio"
+                name={name}
+                checked={option.value === value}
+                onChange={() => onPick(option.value)}
+              />
+              <label class="site-choice-label" for={id}>
+                {option.swatch && <span class={`site-colour-swatch is-${option.swatch}`} aria-hidden="true" />}
+                {option.label}
+              </label>
+            </span>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
 }
 
 export function SitePage() {
@@ -376,7 +403,7 @@ export function SitePage() {
             </Button>
           }
         >
-          <form id="site-header-settings" class="product-form" onSubmit={saveSettings}>
+          <form id="site-header-settings" class="site-settings-form" onSubmit={saveSettings}>
             <Choice
               legend="背景"
               value={settings.headerBackground}
@@ -479,7 +506,7 @@ export function SitePage() {
             </Button>
           }
         >
-          <form id="site-footer-settings" class="product-form" onSubmit={saveSettings}>
+          <form id="site-footer-settings" class="site-settings-form" onSubmit={saveSettings}>
             <Choice legend="底色" value={settings.footerColour} options={COLOURS} onPick={(footerColour) => edit({ footerColour })} />
             <Choice
               legend="文字色"

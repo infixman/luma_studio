@@ -105,7 +105,7 @@ body.admin .ui-table tbody tr.product-archived td {
 
 /* --- editor --- */
 
-body.admin .product-form {
+body.admin .product-editor-form {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.7fr);
   align-items: start;
@@ -240,7 +240,7 @@ body.admin .photo-grid .ui-icon-button {
 /* Narrow desktop and tablet: two working columns survive, but names and
    URLs become a vertical sequence so their notes never compete for width. */
 @media (min-width: 48rem) and (max-width: 79.99rem) {
-  body.admin .product-form {
+  body.admin .product-editor-form {
     grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.7fr);
     gap: var(--space-5);
     max-width: none;
@@ -268,14 +268,14 @@ body.admin .photo-grid .ui-icon-button {
 /* Phone: one editing flow, full-width controls and no decorative side rail.
    The layout is touch-first rather than a squeezed desktop grid. */
 @media (max-width: 47.99rem) {
-  body.admin .product-form,
+  body.admin .product-editor-form,
   body.admin .product-identity,
   body.admin .product-form-side,
   body.admin .product-variant-create {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  body.admin .product-form {
+  body.admin .product-editor-form {
     gap: var(--space-5);
   }
 

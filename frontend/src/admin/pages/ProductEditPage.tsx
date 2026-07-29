@@ -197,7 +197,7 @@ export function ProductEditPage({ id }: { id: string }) {
           </Button>
         }
       >
-        <form class="product-form" onSubmit={saveProduct}>
+        <form class="product-editor-form" onSubmit={saveProduct}>
           <div class="product-form-main">
             <div class="product-identity">
               <TextField
