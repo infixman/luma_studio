@@ -4,6 +4,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { ApiError, loginUrl, probeSession } from '../../shared/api'
 import '../styles/admin.css'
 import '../styles/admin-gate.css'
+import { rememberSignedIn } from '../lib/session'
 
 /**
  * Nothing about the back office is shown until we know who is asking.
@@ -25,7 +26,11 @@ export function AdminGate({ children }: { children: ComponentChildren }) {
 
   useEffect(() => {
     probeSession<{ email: string }>('/api/session')
-      .then((session) => setState(session ? { kind: 'in' } : { kind: 'anonymous' }))
+      .then((session) => {
+        // Kept so the sidebar can name the account without asking again.
+        if (session) rememberSignedIn(session.email)
+        setState(session ? { kind: 'in' } : { kind: 'anonymous' })
+      })
       .catch((error) =>
         // A network failure is not the same as being turned away, and saying
         // "sign in" to someone whose connection is down sends them in circles.

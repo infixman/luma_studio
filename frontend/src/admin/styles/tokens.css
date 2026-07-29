@@ -26,8 +26,10 @@
   --surface: #fff;
   --raised: #fff;
   --sunken: #f6f6f9;
+  /* Named for the icon rail that used to wear them. The navigation is one
+     column on --surface now; what still reads these is the toast, which
+     wants a surface of its own and an ink that reads on it. */
   --rail: #fff;
-  --rail-text: #666687;
   --rail-text-strong: #32324d;
 
   /* --- text --- */
@@ -103,8 +105,8 @@
      storefront/styles/surface.css — the two bundles cannot share a variable. */
   --storefront-page: #f3ede4;
 
-  --rail-width: 56px;
-  --sidebar-width: 232px;
+  /* One navigation column now, not a 56px rail plus a 232px list. */
+  --sidebar-width: 248px;
   --topbar-height: 60px;
   --control-height: 38px;
 
@@ -122,7 +124,6 @@
     --raised: #212134;
     --sunken: #181826;
     --rail: #212134;
-    --rail-text: #a5a5ba;
     --rail-text-strong: #fff;
 
     --text: #fff;
@@ -173,7 +174,6 @@
   --raised: #212134;
   --sunken: #181826;
   --rail: #212134;
-  --rail-text: #a5a5ba;
   --rail-text-strong: #fff;
 
   --text: #fff;

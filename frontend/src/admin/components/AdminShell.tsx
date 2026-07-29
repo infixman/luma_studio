@@ -1,9 +1,10 @@
 import type { ComponentChildren } from 'preact'
 
-import { AreaPages, AreaRail, areaOf, labelOf } from './AdminNav'
+import { AdminSidebar, labelOf } from './AdminNav'
 import { ThemeToggle } from './ThemeToggle'
 import { StatusBar, type StatusKind } from './StatusBar'
 import { api, clearLoginAttempt } from '../../shared/api'
+import { signedInEmail } from '../lib/session'
 
 /**
  * The frame every back-office page sits in: the area rail, the page list, a
@@ -45,8 +46,6 @@ export function AdminShell({
   confirmLeave?: () => boolean | Promise<boolean>
   children: ComponentChildren
 }) {
-  const area = areaOf(current)
-
   async function logout() {
     if (confirmLeave && !(await confirmLeave())) return
     try {
@@ -61,26 +60,30 @@ export function AdminShell({
 
   return (
     <div class="admin-layout">
-      <AreaRail current={area}>
+      <AdminSidebar current={current}>
         <ThemeToggle />
-        <button type="button" class="rail-button" onClick={logout} aria-label="登出" title="登出">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.7"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M14 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h8" />
-            <path d="M17 15l3-3-3-3M20 12H10" />
-          </svg>
-          <span class="rail-tip">登出</span>
-        </button>
-      </AreaRail>
-
-      <AreaPages area={area} current={current} />
+        {/* The account, then the way out of it. Which account is signed in is
+            worth saying on a machine that might be shared with a class. */}
+        <div class="sidebar-account">
+          <span class="account-email" title={signedInEmail()}>
+            {signedInEmail() || '已登入'}
+          </span>
+          <button type="button" class="account-logout" onClick={logout} aria-label="登出" title="登出">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M14 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h8" />
+              <path d="M17 15l3-3-3-3M20 12H10" />
+            </svg>
+          </button>
+        </div>
+      </AdminSidebar>
 
       <main class="admin-main">
         <header class="admin-topbar">
