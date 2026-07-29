@@ -10,7 +10,7 @@ import { ShippingPage } from './pages/ShippingPage'
 import { MediaPage } from './pages/MediaPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { OrdersAdminPage } from './pages/OrdersAdminPage'
-import { SitePage } from './pages/SitePage'
+import { SitePage } from './features/site/SitePage'
 import { routeForPath, routeParam } from './routes'
 
 /**
