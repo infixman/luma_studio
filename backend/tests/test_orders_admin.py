@@ -215,9 +215,32 @@ class TestPaging:
         assert body["page"] == 1 and body["perPage"] == 100
 
 
+# An order that has something to post. Since phase 3 the shipping moves are
+# refused for an order whose fulfilments are all digital, so a test about
+# moving one along has to say there is a parcel.
+PHYSICAL_FULFILMENT = {
+    "SELECT * FROM order_fulfillments": [
+        {
+            "id": "ff-1",
+            "order_id": "LS20260728abcdefg",
+            "order_item_id": "item-1",
+            "fulfillment_type": "inventory",
+            "target_id": "kit-1",
+            "target_title": "材料包",
+            "sku": "KIT-1",
+            "quantity": 1,
+            "access_days": None,
+            "status": "pending",
+        }
+    ]
+}
+
+
 class TestMovingAnOrderAlong:
     def test_paid_becomes_shipped(self, orders):
-        database = FakeDatabase({"FROM orders": [order(status="paid")]}, {"UPDATE orders": 1})
+        database = FakeDatabase(
+            {"FROM orders": [order(status="paid")], **PHYSICAL_FULFILMENT}, {"UPDATE orders": 1}
+        )
         assert asyncio.run(orders.advance(make_env(database), "LS20260728abcdefg", "shipped", "me")) == "paid"
         update = [write for write in database.writes if "UPDATE orders" in write[0]][0]
         assert update[1][1] == "shipped"
@@ -248,7 +271,9 @@ class TestMovingAnOrderAlong:
     def test_the_move_names_who_made_it(self, orders):
         """"Who marked this paid" needs a name in it the day it is disputed."""
 
-        database = FakeDatabase({"FROM orders": [order(status="paid")]}, {"UPDATE orders": 1})
+        database = FakeDatabase(
+            {"FROM orders": [order(status="paid")], **PHYSICAL_FULFILMENT}, {"UPDATE orders": 1}
+        )
         asyncio.run(orders.advance(make_env(database), "LS20260728abcdefg", "shipped", "owner@example.com"))
         entry = [write for write in database.writes if "INSERT INTO order_audit_log" in write[0]][0]
         assert entry[1][1] == "owner@example.com"

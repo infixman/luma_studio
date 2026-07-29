@@ -95,6 +95,11 @@ export function OrderPage({ id }: { id: string }) {
   )
 
   const { order, items } = detail
+  // An older response has no fulfilments. Reading them as none keeps a page
+  // saved or cached before this shipped from throwing.
+  const fulfillments = detail.fulfillments ?? []
+  const courses = fulfillments.filter((entry) => entry.type === 'course')
+  const kits = fulfillments.filter((entry) => entry.type === 'inventory')
   const remaining = order.status === 'pending' ? minutesLeft(order.reservedUntil) : null
   const closed = order.status === 'cancelled' || order.status === 'expired'
 
@@ -138,6 +143,9 @@ export function OrderPage({ id }: { id: string }) {
         )}
       </section>
 
+      {/* An order with nothing to post has no recipient details worth showing.
+          A card of empty fields reads as data that went missing. */}
+      {fulfillments.some((entry) => entry.type === 'inventory') && (
       <section class="panel delivery-detail">
         <h2>收件資料</h2>
         <div class="recipient">
@@ -153,6 +161,45 @@ export function OrderPage({ id }: { id: string }) {
           )}
         </div>
       </section>
+      )}
+
+      {courses.length > 0 && (
+        <section class="panel order-digital">
+          <h2>數位內容</h2>
+          <ul class="order-fulfillments">
+            {courses.map((entry) => (
+              <li key={entry.id}>
+                <span class="what">
+                  <span class="title">{entry.targetTitle}</span>
+                  <small>
+                    {entry.accessDays === null ? '永久觀看' : `觀看後 ${entry.accessDays} 天內有效`}
+                  </small>
+                </span>
+                {/* "Ready" rather than "sent": a course is available the
+                    moment payment lands, and saying "shipped" would have
+                    somebody waiting by the door. */}
+                <span class="state">{entry.status === 'fulfilled' ? '已開通' : '處理中'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {kits.length > 0 && (
+        <section class="panel order-physical">
+          <h2>待出貨內容</h2>
+          <ul class="order-fulfillments">
+            {kits.map((entry) => (
+              <li key={entry.id}>
+                <span class="what">
+                  <span class="title">{entry.targetTitle}</span>
+                  <small>×{entry.quantity}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section class="panel">
         <ul class="order-items">
@@ -173,7 +220,7 @@ export function OrderPage({ id }: { id: string }) {
                 ) : (
                   <span class="title">{item.productTitle}</span>
                 )}
-                <small>規格：{item.variantTitle}</small>
+                {item.variantTitle !== '' && <small>規格：{item.variantTitle}</small>}
                 <small>×{item.quantity}</small>
               </span>
               <span class="money">NT${item.subtotal}</span>
@@ -186,10 +233,12 @@ export function OrderPage({ id }: { id: string }) {
             <dt>商品小計</dt>
             <dd>NT${order.subtotal}</dd>
           </div>
-          <div>
-            <dt>運費</dt>
-            <dd>{order.shippingFee === 0 ? '免運' : `NT$${order.shippingFee}`}</dd>
-          </div>
+          {kits.length > 0 && (
+            <div>
+              <dt>運費</dt>
+              <dd>{order.shippingFee === 0 ? '免運' : `NT$${order.shippingFee}`}</dd>
+            </div>
+          )}
           <div class="grand">
             <dt>訂單金額</dt>
             <dd>NT${order.total}</dd>

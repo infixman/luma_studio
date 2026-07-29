@@ -157,9 +157,28 @@ export interface OrderCardItem extends OrderItem {
   coverPath: string | null
 }
 
+/**
+ * One thing an order promised, as it was at the time.
+ *
+ * A snapshot, not a reference: the offer can be edited tomorrow, and what an
+ * order was for must not change with it.
+ */
+export interface OrderFulfillment {
+  id: string
+  type: 'course' | 'inventory'
+  targetId: string
+  targetTitle: string
+  sku: string | null
+  quantity: number
+  /** Days from first viewing. Null is permanent, and only ever set on a course. */
+  accessDays: number | null
+  status: 'pending' | 'ready' | 'fulfilled' | 'cancelled' | 'revoked'
+}
+
 export interface OrderDetail {
   order: Order
   items: OrderCardItem[]
+  fulfillments: OrderFulfillment[]
 }
 
 /** One row of the customer's order list: the order, and what was in it. */
@@ -204,6 +223,9 @@ export interface OrderEmail {
 }
 
 export interface AdminOrderDetail {
+  fulfillments: OrderFulfillment[]
+  /** Whether anything here goes in a box. The shipping actions depend on it. */
+  hasPhysical: boolean
   order: AdminOrder
   items: OrderItem[]
   attempts: PaymentAttempt[]

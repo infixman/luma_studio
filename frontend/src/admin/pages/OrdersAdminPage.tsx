@@ -117,6 +117,16 @@ export function OrdersAdminPage() {
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null)
   const [note, setNote] = useState('')
   const noteDirty = detail !== null && note !== detail.order.adminNote
+
+  // An order response from before fulfilments existed has none; reading that
+  // as an empty list keeps an older cached page from throwing.
+  const fulfillments = detail?.fulfillments ?? []
+  const digital = fulfillments.filter((entry) => entry.type === 'course')
+  const physical = fulfillments.filter((entry) => entry.type === 'inventory')
+  const availableMoves = shippableMoves(
+    detail === null ? [] : MOVES[detail.order.status] ?? [],
+    detail?.hasPhysical,
+  )
   /** The order and the move waiting on the dialog that collects its reason. */
   const [pending, setPending] = useState<{ order: AdminOrder; move: Move } | null>(null)
   const [answer, setAnswer] = useState('')
@@ -482,9 +492,9 @@ export function OrdersAdminPage() {
           actions={
             <>
               <Badge tone={ORDER_STATUS_TONES[detail.order.status]}>{ORDER_STATUS_LABELS[detail.order.status]}</Badge>
-              {(MOVES[detail.order.status] ?? []).length > 0 ? (
+              {availableMoves.length > 0 ? (
                 <Menu label="這筆訂單的動作" variant="button" trigger="動作">
-                  {(MOVES[detail.order.status] ?? []).map((move) => (
+                  {availableMoves.map((move) => (
                     <MenuItem
                       key={move.action}
                       tone={move.danger ? 'danger' : 'neutral'}
@@ -507,6 +517,48 @@ export function OrdersAdminPage() {
             </>
           }
         >
+          {digital.length > 0 && (
+            <>
+              <h3>數位內容</h3>
+              <TableWrap>
+                <tbody>
+                  {digital.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{entry.targetTitle}</td>
+                      <td>
+                        {entry.accessDays === null ? '永久觀看' : `觀看後 ${entry.accessDays} 天`}
+                      </td>
+                      <td class="numeric">
+                        {/* Not "shipped": a grant is available the moment
+                            payment lands, and nothing is in the post. */}
+                        {entry.status === 'fulfilled' ? '已開通' : '待開通'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrap>
+            </>
+          )}
+
+          {physical.length > 0 && (
+            <>
+              <h3>待出貨內容</h3>
+              <TableWrap>
+                <tbody>
+                  {physical.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>
+                        {entry.targetTitle}
+                        {entry.sku && <small> {entry.sku}</small>}
+                      </td>
+                      <td class="numeric">×{entry.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrap>
+            </>
+          )}
+
           <h3>品項</h3>
           <TableWrap>
             <tbody>
@@ -625,4 +677,24 @@ export function OrdersAdminPage() {
       )}
     </AdminShell>
   )
+}
+
+/**
+ * The moves worth offering for an order.
+ *
+ * Nothing was ever going in a box, so offering "mark as shipped" would let
+ * somebody tell a customer a parcel is on its way when none exists. The
+ * server refuses it too; this is so the button is not there to press.
+ *
+ * When `hasPhysical` is undefined the action stays. That only happens if the
+ * back office is newer than the API it is talking to — a rollback, given the
+ * admin-first deploy order — and hiding the button there would leave real
+ * parcels unshippable, whereas showing it costs at most the 409 the server
+ * already returns.
+ */
+export function shippableMoves<T extends { action: string }>(
+  moves: readonly T[],
+  hasPhysical: boolean | undefined,
+): T[] {
+  return moves.filter((move) => move.action !== 'shipped' || hasPhysical !== false)
 }

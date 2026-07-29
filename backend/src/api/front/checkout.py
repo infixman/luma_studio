@@ -121,7 +121,10 @@ async def checkout_response(ctx: Ctx, customer: dict):
         await mail.queue_owner_alert(ctx.env, order, items)
     except Exception:
         traceback.print_exc()
-    return ctx.json({"order": order, "items": items}, 201)
+    return ctx.json(
+        {"order": order, "items": items, "fulfillments": await orders.list_fulfillments(ctx.env, order["id"])},
+        201,
+    )
 
 
 async def order_response(ctx: Ctx, customer: dict, order_id: str):
@@ -133,7 +136,15 @@ async def order_response(ctx: Ctx, customer: dict, order_id: str):
     if not rows:
         return ctx.error("Order not found", 404)
     order = orders.order_row(rows[0])
-    return ctx.json({"order": order, "items": await orders.list_card_items(ctx.env, order_id)})
+    return ctx.json(
+        {
+            "order": order,
+            "items": await orders.list_card_items(ctx.env, order_id),
+            # What was promised, so the page can say "already available" for a
+            # course instead of leaving it looking like something still in the post.
+            "fulfillments": await orders.list_fulfillments(ctx.env, order_id),
+        }
+    )
 
 
 async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):

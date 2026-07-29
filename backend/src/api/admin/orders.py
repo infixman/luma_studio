@@ -60,9 +60,14 @@ async def _detail(ctx: Ctx, order_id: str) -> dict:
     order = await orders.get_order_for_admin(ctx.env, order_id)
     if order is None:
         return {}
+    fulfillments = await orders.list_fulfillments(ctx.env, order_id)
     return {
         "order": order,
         "items": await orders.list_items(ctx.env, order_id),
+        "fulfillments": fulfillments,
+        # A digital-only order has no parcel, so the shipping actions are not
+        # merely unhelpful there — using one would claim something was sent.
+        "hasPhysical": orders.has_physical(fulfillments),
         "attempts": await orders.list_attempts(ctx.env, order_id),
         "audit": await orders.list_audit(ctx.env, order_id),
         "emails": await mail.list_for_order(ctx.env, order_id),

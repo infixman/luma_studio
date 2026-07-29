@@ -830,3 +830,95 @@ class TestProvisioningAfterPayment:
         run(orders.provision_paid_order(make_env(database), "LS1"))
 
         assert not any("INSERT INTO course_entitlements" in statement for statement, _ in database.writes)
+
+
+class TestWhatAnOrderShows:
+    """An order says what is being sent and what is already available."""
+
+    def _database(self, rows: list[dict]) -> FakeDatabase:
+        return FakeDatabase({"SELECT * FROM order_fulfillments": rows})
+
+    def _row(self, kind="course", status="pending", title="水彩花卉入門"):
+        return {
+            "id": f"ff-{kind}", "order_id": "LS1", "order_item_id": "item-1",
+            "fulfillment_type": kind, "target_id": "t-1", "target_title": title,
+            "sku": "KIT-1" if kind == "inventory" else None, "quantity": 1,
+            "access_days": None, "status": status,
+        }
+
+    def test_digital_and_physical_are_separated(self, orders):
+        """They move at different speeds. A course is ready the moment payment
+        lands; a kit is not, and mixing them reads as one thing being late."""
+
+        listed = run(
+            orders.list_fulfillments(
+                make_env(self._database([self._row("course"), self._row("inventory", title="材料包")]))
+            , "LS1")
+        )
+
+        assert [entry["type"] for entry in listed] == ["course", "inventory"]
+
+    def test_a_course_grant_is_reported_as_available_rather_than_shipped(self, orders):
+        listed = run(orders.list_fulfillments(make_env(self._database([self._row(status="fulfilled")])), "LS1"))
+
+        assert listed[0]["status"] == "fulfilled"
+        assert listed[0]["targetTitle"] == "水彩花卉入門"
+
+    def test_an_order_that_only_grants_has_nothing_to_post(self, orders):
+        listed = run(orders.list_fulfillments(make_env(self._database([self._row("course")])), "LS1"))
+
+        assert orders.has_physical(listed) is False
+
+    def test_an_order_with_a_kit_does(self, orders):
+        listed = run(orders.list_fulfillments(make_env(self._database([self._row("inventory")])), "LS1"))
+
+        assert orders.has_physical(listed) is True
+
+
+class TestShippingSomethingThatWasNeverPosted:
+    """A digital order has no parcel. Marking it shipped claims one exists."""
+
+    def test_an_order_with_nothing_to_post_cannot_be_marked_shipped(self, orders):
+        """A paid order in every other respect, so the refusal can only be
+        about there being no parcel."""
+
+        database = FakeDatabase(
+            {
+                "SELECT * FROM order_fulfillments": [{
+                    "id": "ff-1", "order_id": "LS1", "order_item_id": "item-1",
+                    "fulfillment_type": "course", "target_id": "c-1", "target_title": "水彩",
+                    "sku": None, "quantity": 1, "access_days": None, "status": "fulfilled",
+                }],
+                "SELECT * FROM orders WHERE id": [{
+                    "id": "LS1", "customer_id": "c1", "status": "paid", "subtotal": 3980,
+                    "shipping_fee": 0, "total": 3980, "shipping_method": "none",
+                    "recipient_name": "王", "recipient_phone": "", "recipient_email": "a@b.c",
+                    "shipping_address": "", "store_name": None, "store_addr": None,
+                    "reserved_until": None, "paid_at": 1, "created_at": 0,
+                }],
+            },
+            changes={"UPDATE orders SET status": 1},
+        )
+
+        assert run(orders.advance(make_env(database), "LS1", "shipped", "owner@example.com")) is None
+
+    def test_an_order_with_a_kit_still_ships(self, orders):
+        database = FakeDatabase(
+            {
+                "SELECT * FROM order_fulfillments": [{
+                    "id": "ff-1", "order_id": "LS1", "order_item_id": "item-1",
+                    "fulfillment_type": "inventory", "target_id": "kit-1", "target_title": "材料包",
+                    "sku": "KIT-1", "quantity": 1, "access_days": None, "status": "pending",
+                }],
+                "SELECT * FROM orders WHERE id": [{
+                    "id": "LS1", "customer_id": "c1", "status": "paid", "subtotal": 300,
+                    "shipping_fee": 60, "total": 360, "shipping_method": "home",
+                    "recipient_name": "王", "recipient_phone": "0912345678", "recipient_email": "a@b.c",
+                    "shipping_address": "地址", "store_name": None, "store_addr": None,
+                    "reserved_until": None, "paid_at": 1, "created_at": 0,
+                }],
+            },
+            changes={"UPDATE orders SET status": 1},
+        )
+
+        assert run(orders.advance(make_env(database), "LS1", "shipped", "owner@example.com")) is not None

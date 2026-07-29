@@ -323,6 +323,48 @@ async def get_order_for_admin(env, order_id: str) -> dict | None:
     return admin_row(rows[0]) if rows else None
 
 
+def fulfillment_row(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "type": row["fulfillment_type"],
+        "targetId": row["target_id"],
+        "targetTitle": row["target_title"],
+        "sku": row["sku"],
+        "quantity": int(row["quantity"]),
+        "accessDays": None if row["access_days"] is None else int(row["access_days"]),
+        "status": row["status"],
+    }
+
+
+async def list_fulfillments(env, order_id: str) -> list[dict]:
+    """What this order promised, in the order it was promised.
+
+    Read from the snapshots rather than from the offer: an offer edited since
+    would describe a different purchase, and one deleted would describe none.
+    """
+
+    return [
+        fulfillment_row(row)
+        for row in await d1_rows(
+            env.DB.prepare(
+                "SELECT * FROM order_fulfillments WHERE order_id = ?1 ORDER BY fulfillment_type, id"
+            ).bind(order_id)
+        )
+    ]
+
+
+def has_physical(fulfillments: list[dict]) -> bool:
+    """Whether anything here has to be put in a box.
+
+    Digital and physical parts of one order move at different speeds — a
+    course is ready the moment payment lands, a kit is not — so the pages
+    show them apart, and only an order with something to post offers the
+    shipping actions.
+    """
+
+    return any(entry["type"] == "inventory" for entry in fulfillments)
+
+
 async def list_items(env, order_id: str) -> list[dict]:
     return [
         item_row(row)
@@ -552,6 +594,11 @@ async def advance(env, order_id: str, to_status: str, actor: str, *, detail: str
         return None
     order = await get_order(env, order_id)
     if order is None or order["status"] not in allowed:
+        return None
+
+    if to_status == "shipped" and not has_physical(await list_fulfillments(env, order_id)):
+        # Nothing was ever going in a box. Marking it shipped would tell the
+        # customer a parcel is on its way, and send them an email saying so.
         return None
 
     before = order["status"]
