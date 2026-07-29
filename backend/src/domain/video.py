@@ -24,6 +24,8 @@ one that works.
 
 import re
 
+from shared.common import d1_changed, d1_rows, utc_timestamp
+
 
 MIB = 1024 * 1024
 
@@ -167,3 +169,105 @@ def ladder_for(*, height: int) -> list[str]:
         raise ValueError("來源影片高度無法辨識")
     fitting = [name for name, rung in RENDITIONS if rung <= height]
     return fitting or [RENDITION_NAMES[-1]]
+
+
+def asset_row(row: dict) -> dict:
+    """What the back office is allowed to know about an asset.
+
+    No object keys. These rows travel over the network to a browser, and a key
+    is a thing to go looking for — the bucket is private, but publishing the
+    map is still a favour nobody asked for. The player gets its URLs from the
+    playback gateway in phase 6, signed and short-lived.
+    """
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "originalFilename": row["original_filename"],
+        "status": row["status"],
+        "byteSize": int(row["byte_size"]),
+        "durationSeconds": None if row["duration_seconds"] is None else int(row["duration_seconds"]),
+        "width": None if row["width"] is None else int(row["width"]),
+        "height": None if row["height"] is None else int(row["height"]),
+        "encodeVersion": None if row["active_encode_version"] is None else int(row["active_encode_version"]),
+        "hasPoster": row["poster_key"] is not None,
+        "errorCode": row["error_code"],
+        "errorDetail": row["error_detail"],
+        "createdAt": int(row["created_at"]),
+        "updatedAt": int(row["updated_at"]),
+    }
+
+
+async def get_asset(env, asset_id: str) -> dict | None:
+    rows = await d1_rows(env.DB.prepare("SELECT * FROM video_assets WHERE id = ?1").bind(asset_id))
+    return asset_row(rows[0]) if rows else None
+
+
+async def list_assets(env, *, status: str | None = None) -> list[dict]:
+    query = "SELECT * FROM video_assets"
+    bindings: list = []
+    if status is not None:
+        query += " WHERE status = ?1"
+        bindings.append(status)
+    query += " ORDER BY created_at DESC LIMIT 200"
+    return [asset_row(row) for row in await d1_rows(env.DB.prepare(query).bind(*bindings))]
+
+
+async def change_status(
+    env,
+    asset_id: str,
+    to_status: str,
+    *,
+    error_code: str | None = None,
+    error_detail: str | None = None,
+) -> bool:
+    """Move an asset one step, if the move is legal and the row has not moved.
+
+    Two checks, and both are needed. `can_change` answers "is this a move the
+    pipeline makes at all", which is a question about the code. The status in
+    the WHERE clause answers "is the row still where it was read", which is a
+    question about the other request that arrived while this one was thinking.
+
+    Reaching `ready` clears any recorded error: a retry that worked must not
+    leave last week's failure on the screen.
+    """
+
+    rows = await d1_rows(env.DB.prepare("SELECT * FROM video_assets WHERE id = ?1").bind(asset_id))
+    if not rows:
+        return False
+    before = rows[0]["status"]
+    if not can_change(before, to_status):
+        return False
+
+    now = utc_timestamp()
+    if to_status == "ready":
+        statement = (
+            "UPDATE video_assets SET status = ?2, error_code = NULL, error_detail = NULL, updated_at = ?3"
+            " WHERE id = ?1 AND status = ?4"
+        )
+        result = await env.DB.prepare(statement).bind(asset_id, to_status, now, before).run()
+    else:
+        statement = (
+            "UPDATE video_assets SET status = ?2, error_code = ?5, error_detail = ?6, updated_at = ?3"
+            " WHERE id = ?1 AND status = ?4"
+        )
+        result = await env.DB.prepare(statement).bind(
+            asset_id, to_status, now, before, error_code, error_detail
+        ).run()
+    return d1_changed(result)
+
+
+async def publish_encode(env, asset_id: str, *, encode_version: int, master: str, poster: str | None) -> bool:
+    """Make a finished encode the one members get.
+
+    Called only after every object in the version has been verified. Doing it
+    earlier means a player can select a ladder that is still being written,
+    and the failure looks like a corrupt video rather than a missing one.
+    """
+
+    result = await env.DB.prepare(
+        "UPDATE video_assets SET active_encode_version = ?2, master_key = ?3, poster_key = ?4,"
+        " status = 'ready', error_code = NULL, error_detail = NULL, updated_at = ?5"
+        " WHERE id = ?1 AND status = 'processing'"
+    ).bind(asset_id, _version(encode_version), master, poster, utc_timestamp()).run()
+    return d1_changed(result)

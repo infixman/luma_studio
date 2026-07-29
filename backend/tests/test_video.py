@@ -157,3 +157,85 @@ class TestRenditionLadder:
     def test_a_source_of_unknown_height_is_refused_rather_than_guessed(self, video):
         with pytest.raises(ValueError):
             video.ladder_for(height=0)
+
+
+class TestAssetLifecycle:
+    """Reading and moving an asset, with the race the pipeline actually has."""
+
+    def _database(self, assets=None, **extra):
+        from conftest import FakeDatabase
+
+        return FakeDatabase({"SELECT * FROM video_assets": assets or [], **extra})
+
+    def _asset(self, status="uploading", **extra):
+        return {
+            "id": "asset-1", "title": "第一課", "original_filename": "lesson-01.mp4",
+            "source_key": "sources/asset-1/1/source.mp4", "status": status,
+            "byte_size": 2_000_000, "duration_seconds": None, "width": None, "height": None,
+            "active_encode_version": None, "master_key": None, "poster_key": None,
+            "error_code": None, "error_detail": None, "created_at": 0, "updated_at": 0,
+            **extra,
+        }
+
+    def test_a_public_row_never_carries_an_object_key(self, video):
+        """These reach the back office over the network. An object key is a
+        thing to go looking for; the browser has no use for one."""
+
+        row = video.asset_row(self._asset(status="ready", master_key="videos/asset-1/1/master.m3u8"))
+
+        assert "sourceKey" not in row
+        assert "masterKey" not in row
+        assert row["status"] == "ready"
+
+    def test_a_move_the_pipeline_does_not_make_is_refused_before_any_write(self, video):
+        import asyncio
+        from conftest import make_env
+
+        database = self._database([self._asset(status="uploading")])
+
+        assert asyncio.run(video.change_status(make_env(database), "asset-1", "ready")) is False
+        assert database.writes == []
+
+    def test_the_row_has_to_still_be_where_it_was_read(self, video):
+        """Two callbacks for one asset arrive at once; the WHERE clause is
+        what makes the second do nothing."""
+
+        import asyncio
+        from conftest import make_env
+
+        database = self._database([self._asset(status="queued")])
+
+        asyncio.run(video.change_status(make_env(database), "asset-1", "processing"))
+
+        statement, bindings = database.writes[0]
+        assert "AND status = ?" in statement
+        assert "queued" in bindings
+
+    def test_failing_records_why_so_an_admin_can_act_on_it(self, video):
+        import asyncio
+        from conftest import make_env
+
+        database = self._database([self._asset(status="processing")])
+
+        asyncio.run(
+            video.change_status(
+                make_env(database), "asset-1", "failed", error_code="unsupported_codec", error_detail="av1"
+            )
+        )
+
+        statement, bindings = database.writes[0]
+        assert "error_code" in statement
+        assert "unsupported_codec" in bindings
+
+    def test_becoming_ready_clears_a_previous_failure(self, video):
+        """A retry that succeeded must not leave last week's error on screen."""
+
+        import asyncio
+        from conftest import make_env
+
+        database = self._database([self._asset(status="processing", error_code="timeout")])
+
+        asyncio.run(video.change_status(make_env(database), "asset-1", "ready"))
+
+        statement, _ = database.writes[0]
+        assert "error_code = NULL" in statement
