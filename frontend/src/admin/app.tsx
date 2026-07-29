@@ -11,9 +11,7 @@ import { MediaPage } from './pages/MediaPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { OrdersAdminPage } from './pages/OrdersAdminPage'
 import { SitePage } from './pages/SitePage'
-
-const PRODUCT_PATH = /^\/products\/([^/]+)$/
-const PAGE_PATH = /^\/pages\/([^/]+)$/
+import { routeForPath, routeParam } from './routes'
 
 /**
  * The back office is its own deployment, so its paths carry no /admin
@@ -26,22 +24,25 @@ function markBody(page: string): void {
 function Routed() {
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
-  if (path === '/') return <DashboardPage />
-  if (path === '/ibon') return <AdminPage />
-  if (path === '/card') return <BioLinkAdminPage />
-  if (path === '/products') return <ProductsPage />
-  if (path === '/shipping') return <ShippingPage />
-  if (path === '/pages') return <PagesPage />
-  if (path === '/site') return <SitePage />
-  if (path === '/media') return <MediaPage />
-  if (path === '/orders') return <OrdersAdminPage />
-  if (path === '/customers') return <CustomersPage />
-
-  const page = PAGE_PATH.exec(path)
-  if (page) return <PageEditPage id={decodeURIComponent(page[1]!)} />
-
-  const product = PRODUCT_PATH.exec(path)
-  if (product) return <ProductEditPage id={decodeURIComponent(product[1]!)} />
+  const route = routeForPath(path)
+  switch (route?.id) {
+    case 'dashboard': return <DashboardPage />
+    case 'ibon': return <AdminPage />
+    case 'card': return <BioLinkAdminPage />
+    case 'products': {
+      const id = routeParam(path, 'products')
+      return id ? <ProductEditPage id={id} /> : <ProductsPage />
+    }
+    case 'shipping': return <ShippingPage />
+    case 'pages': {
+      const id = routeParam(path, 'pages')
+      return id ? <PageEditPage id={id} /> : <PagesPage />
+    }
+    case 'site': return <SitePage />
+    case 'media': return <MediaPage />
+    case 'orders': return <OrdersAdminPage />
+    case 'customers': return <CustomersPage />
+  }
 
   // Anything else lands on the dashboard rather than a dead end. The old
   // /admin and /admin/bio-link URLs arrive here through the storefront's

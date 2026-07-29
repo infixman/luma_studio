@@ -6,6 +6,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { StatusBar, type StatusKind } from './StatusBar'
 import { api } from '../../shared/api'
 import { signedInEmail } from '../lib/session'
+import { routeForPath } from '../routes'
 
 /**
  * The frame every back-office page sits in: the area rail, the page list, a
@@ -21,7 +22,7 @@ import { signedInEmail } from '../lib/session'
  * page's own name disappear while somebody is halfway down it.
  */
 export function AdminShell({
-  current,
+  current = routeForPath(location.pathname)?.path ?? '/',
   title,
   actions,
   message,
@@ -30,7 +31,7 @@ export function AdminShell({
   children,
 }: {
   /** Which page is the current one. Must match an href in AdminNav. */
-  current: string
+  current?: string
   /** Overrides the name from the navigation — for a page about one record. */
   title?: string
   /** The page's own buttons, in the title bar. */

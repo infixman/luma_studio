@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import type { ComponentChildren, JSX } from 'preact'
 
 import { read, write } from '../lib/storage'
+import { routeById, routeForPath } from '../routes'
 import '../styles/admin-nav.css'
 
 /**
@@ -149,9 +150,9 @@ export const groups: NavGroup[] = [
     label: '官網',
     icon: icons.globe,
     items: [
-      { href: '/pages', label: '頁面', icon: icons.page },
-      { href: '/site', label: '頁首/頁尾', icon: icons.chrome },
-      { href: '/media', label: '媒體庫', icon: icons.image },
+      { href: routeById('pages').path, label: routeById('pages').label, icon: icons.page },
+      { href: routeById('site').path, label: routeById('site').label, icon: icons.chrome },
+      { href: routeById('media').path, label: routeById('media').label, icon: icons.image },
     ],
   },
   {
@@ -159,19 +160,19 @@ export const groups: NavGroup[] = [
     label: '商城',
     icon: icons.cart,
     items: [
-      { href: '/orders', label: '訂單', icon: icons.receipt },
-      { href: '/products', label: '商品', icon: icons.tag },
-      { href: '/shipping', label: '運費', icon: icons.truck },
+      { href: routeById('orders').path, label: routeById('orders').label, icon: icons.receipt },
+      { href: routeById('products').path, label: routeById('products').label, icon: icons.tag },
+      { href: routeById('shipping').path, label: routeById('shipping').label, icon: icons.truck },
     ],
   },
-  { id: 'customers', label: '會員', icon: icons.people, href: '/customers' },
+  { id: 'customers', label: routeById('customers').label, icon: icons.people, href: routeById('customers').path },
   {
     id: 'tools',
     label: '工具',
     icon: icons.wrench,
     items: [
-      { href: '/ibon', label: 'ibon', icon: icons.printer },
-      { href: '/card', label: '名片', icon: icons.link },
+      { href: routeById('ibon').path, label: routeById('ibon').label, icon: icons.printer },
+      { href: routeById('card').path, label: routeById('card').label, icon: icons.link },
     ],
   },
 ]
@@ -179,7 +180,7 @@ export const groups: NavGroup[] = [
 /* The dashboard is not in a group. It is what the mark at the top leads back
    to, and putting it in a list would make it look like one page among several
    rather than the place you start. */
-export const HOME = '/'
+export const HOME = routeById('dashboard').path
 
 /** Which group a page belongs to, or null for the dashboard. */
 export function groupOf(href: string): NavGroup | null {
@@ -187,7 +188,8 @@ export function groupOf(href: string): NavGroup | null {
 }
 
 export function labelOf(href: string): string {
-  if (href === HOME) return '總覽'
+  const route = routeForPath(href)
+  if (route) return route.label
   for (const group of groups) {
     if (group.href === href) return group.label
     const item = group.items?.find((entry) => entry.href === href)
