@@ -7,7 +7,7 @@ import re
 
 import qrcode
 import qrcode.image.svg
-from js import Uint8Array
+from js import Uint8Array, fetch as js_fetch
 
 from shared.common import (
     CACHE_TTL_SECONDS,
@@ -24,6 +24,7 @@ from shared.common import (
     random_alpha_numeric,
     secure_bytes,
     taipei_upload_time,
+    upstream_error_detail,
     utc_timestamp,
 )
 
@@ -124,7 +125,7 @@ async def get_chunk_size(env) -> int:
     response = await js_fetch(f"{env.IBON_UPLOAD_API_BASE_URL}/GetChunksize")
     body = await response.text()
     if not response.ok:
-        raise IbonError("GetChunksize", ibon_error_detail(response, body))
+        raise IbonError("GetChunksize", upstream_error_detail(response, body))
     try:
         value = int(json.loads(body).get("ChunkSize"))
         if value <= 0:

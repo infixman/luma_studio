@@ -1,5 +1,6 @@
 """The ibon print-specification model and the folder/file name rules."""
 
+import asyncio
 import pytest
 
 
@@ -21,6 +22,45 @@ class TestPrintSpec:
 
         assert ibon.print_spec("FNOMAL") == "未預選規格"
         assert ibon.print_spec("") == "未預選規格"
+
+
+class TestUploadBootstrap:
+    def test_reads_chunk_size_with_the_worker_fetch_binding(self, ibon, monkeypatch):
+        class Response:
+            ok = True
+            status = 200
+
+            async def text(self):
+                return '{"ChunkSize": 1048576}'
+
+        async def fetch(url):
+            assert url == "https://upload.example/GetChunksize"
+            return Response()
+
+        monkeypatch.setattr(ibon, "js_fetch", fetch)
+        env = type("Env", (), {"IBON_UPLOAD_API_BASE_URL": "https://upload.example"})()
+
+        assert asyncio.run(ibon.get_chunk_size(env)) == 1048576
+
+    def test_reports_an_upstream_chunk_size_failure(self, ibon, monkeypatch):
+        class Response:
+            ok = False
+            status = 503
+
+            async def text(self):
+                return '{"Message": "temporarily unavailable"}'
+
+        async def fetch(_url):
+            return Response()
+
+        monkeypatch.setattr(ibon, "js_fetch", fetch)
+        env = type("Env", (), {"IBON_UPLOAD_API_BASE_URL": "https://upload.example"})()
+
+        with pytest.raises(ibon.IbonError) as error:
+            asyncio.run(ibon.get_chunk_size(env))
+
+        assert error.value.stage == "GetChunksize"
+        assert error.value.detail == {"httpStatus": 503, "Message": "temporarily unavailable"}
 
 
 class TestValidateSelectType:

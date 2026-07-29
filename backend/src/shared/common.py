@@ -181,7 +181,7 @@ async def next_position(env, table: str, where: str = "", bindings: tuple = ()) 
     return (int(rows[0]["last"]) if rows else -1) + 1
 
 
-def _upstream_error_detail(response, body: str) -> dict:
+def upstream_error_detail(response, body: str) -> dict:
     detail = {"httpStatus": int(response.status)}
     try:
         payload = json.loads(body)
@@ -200,7 +200,7 @@ async def fetch_json(url: str, options: dict, error_type=IbonError, stage: str =
     body = await response.text()
     if not response.ok:
         if error_type is IbonError:
-            raise IbonError(stage, _upstream_error_detail(response, body))
+            raise IbonError(stage, upstream_error_detail(response, body))
         raise error_type(f"upstream returned HTTP {response.status}")
     try:
         return json.loads(body)
