@@ -311,8 +311,7 @@ export function SitePage() {
       </Modal>
 
       <section class="stack shop">
-        <div class="card">
-          <h2>預覽</h2>
+        <Panel title="預覽">
           <p class="muted">前台渲染外框的同一份程式，所以看到的就是網站上的樣子。</p>
           <div class="chrome-preview">
             <SiteHeader
@@ -327,7 +326,7 @@ export function SitePage() {
             />
             <SiteFooter settings={settings} />
           </div>
-        </div>
+        </Panel>
 
         <Panel
           title="選單"
