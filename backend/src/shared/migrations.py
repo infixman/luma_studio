@@ -779,6 +779,103 @@ MIGRATIONS = [
                    FROM product_variants v""",
         ],
     },
+    {
+        # Phase 3: what an order promised, and what a member is owed for it.
+        #
+        # Fulfilments are snapshots. An offer can change what it grants
+        # tomorrow, and re-reading it to find out what an old order was for
+        # would rewrite history — including the delivery address it was
+        # priced against.
+        "name": "0029_create_order_fulfilments",
+        "add_columns": [
+            ("order_items", "product_id", "TEXT NOT NULL DEFAULT ''"),
+            ("order_items", "offer_id", "TEXT NOT NULL DEFAULT ''"),
+            ("order_items", "requires_shipping", "INTEGER NOT NULL DEFAULT 1"),
+            ("order_items", "contains_course", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "statements": [
+            # `variant_id` stays. Existing orders are the only record of what
+            # was bought, and a snapshot that loses its own key is not one.
+            "UPDATE order_items SET offer_id = variant_id WHERE offer_id = ''",
+            """CREATE TABLE IF NOT EXISTS order_fulfillments (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 order_id TEXT NOT NULL,
+                 order_item_id TEXT NOT NULL,
+                 fulfillment_type TEXT NOT NULL,
+                 target_id TEXT NOT NULL,
+                 target_title TEXT NOT NULL,
+                 sku TEXT,
+                 quantity INTEGER NOT NULL DEFAULT 1,
+                 access_days INTEGER,
+                 status TEXT NOT NULL DEFAULT 'pending',
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_order_fulfillments_order"
+            " ON order_fulfillments (order_id, fulfillment_type, status)",
+            "CREATE INDEX IF NOT EXISTS idx_order_fulfillments_target"
+            " ON order_fulfillments (target_id, fulfillment_type)",
+            # One row per member per course. Buying the same course twice
+            # grants access once; both purchases are recorded as sources.
+            # `access_days` is copied from the fulfilment and the clock does
+            # not start here — `first_viewed_at` is written by the first
+            # successful playback, so a member who has not watched yet has
+            # not spent any of their window.
+            """CREATE TABLE IF NOT EXISTS course_entitlements (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 customer_id TEXT NOT NULL,
+                 course_id TEXT NOT NULL,
+                 granted_at INTEGER NOT NULL,
+                 access_days INTEGER,
+                 first_viewed_at INTEGER,
+                 expires_at INTEGER,
+                 revoked_at INTEGER,
+                 revoke_reason TEXT,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_course_entitlements_member"
+            " ON course_entitlements (customer_id, course_id)",
+            "CREATE INDEX IF NOT EXISTS idx_course_entitlements_live"
+            " ON course_entitlements (customer_id, revoked_at, expires_at)",
+            # Why a member has access. The unique key below is the provision
+            # key for a payment: a resent callback runs the same INSERT OR
+            # IGNORE and changes nothing. It is partial because a gift has no
+            # fulfilment to name, and two NULLs must not collide.
+            """CREATE TABLE IF NOT EXISTS course_entitlement_sources (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 entitlement_id TEXT NOT NULL,
+                 source_kind TEXT NOT NULL,
+                 source_order_fulfillment_id TEXT,
+                 actor TEXT,
+                 reason TEXT,
+                 revoked_at INTEGER,
+                 revoked_by TEXT,
+                 revoke_reason TEXT,
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_course_entitlement_sources_provision"
+            " ON course_entitlement_sources (source_kind, source_order_fulfillment_id)"
+            " WHERE source_order_fulfillment_id IS NOT NULL",
+            "CREATE INDEX IF NOT EXISTS idx_course_entitlement_sources_entitlement"
+            " ON course_entitlement_sources (entitlement_id, revoked_at)",
+            # Stops a member paying twice for one grant. Held from checkout,
+            # released when the order is cancelled or expires, and kept while
+            # the entitlement it produced is still live.
+            """CREATE TABLE IF NOT EXISTS course_offer_purchase_locks (
+                 customer_id TEXT NOT NULL,
+                 offer_id TEXT NOT NULL,
+                 order_id TEXT NOT NULL,
+                 state TEXT NOT NULL,
+                 expires_at INTEGER,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL,
+                 PRIMARY KEY (customer_id, offer_id)
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_course_offer_purchase_locks_order"
+            " ON course_offer_purchase_locks (order_id)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

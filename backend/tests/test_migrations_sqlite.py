@@ -242,6 +242,127 @@ class TestInventoryBackfill:
             connection.close()
 
 
+class TestFulfilmentAndEntitlementSchema:
+    """What an order promised, and what a member is owed because of it."""
+
+    def _entitlement(self, database, customer: str = "cust-1", course: str = "course-1", **extra):
+        columns = {
+            "id": f"ent-{customer}-{course}",
+            "customer_id": customer,
+            "course_id": course,
+            "granted_at": 0,
+            "access_days": None,
+            "first_viewed_at": None,
+            "expires_at": None,
+            "revoked_at": None,
+            "revoke_reason": None,
+            "created_at": 0,
+            "updated_at": 0,
+            **extra,
+        }
+        names = ", ".join(columns)
+        placeholders = ", ".join("?" for _ in columns)
+        database.execute(
+            f"INSERT INTO course_entitlements ({names}) VALUES ({placeholders})", tuple(columns.values())
+        )
+
+    def test_a_member_holds_one_entitlement_per_course(self, database):
+        """Buying the same course twice grants access once. The purchases are
+        both recorded, but as sources, not as a second grant."""
+
+        self._entitlement(database)
+
+        with pytest.raises(sqlite3.IntegrityError):
+            self._entitlement(database)
+
+    def test_a_member_may_hold_several_different_courses(self, database):
+        self._entitlement(database, course="course-1")
+        self._entitlement(database, course="course-2")
+
+        assert database.execute("SELECT COUNT(*) FROM course_entitlements").fetchone()[0] == 2
+
+    def test_one_payment_event_cannot_grant_the_same_thing_twice(self, database):
+        """The unique key is the provision key: a resent payment callback runs
+        the same INSERT and is ignored rather than doubling anything."""
+
+        self._entitlement(database)
+        database.execute(
+            "INSERT INTO course_entitlement_sources"
+            " (id, entitlement_id, source_kind, source_order_fulfillment_id, created_at)"
+            " VALUES ('s1', 'ent-cust-1-course-1', 'purchase', 'ff-1', 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO course_entitlement_sources"
+                " (id, entitlement_id, source_kind, source_order_fulfillment_id, created_at)"
+                " VALUES ('s2', 'ent-cust-1-course-1', 'purchase', 'ff-1', 0)"
+            )
+
+    def test_gifts_are_not_forced_to_invent_a_fulfilment_to_point_at(self, database):
+        """A gift has no order behind it, so the fulfilment id is null — and
+        two nulls must not collide the way two equal ids would."""
+
+        self._entitlement(database)
+        for source_id in ("s1", "s2"):
+            database.execute(
+                "INSERT INTO course_entitlement_sources"
+                " (id, entitlement_id, source_kind, source_order_fulfillment_id, actor, reason, created_at)"
+                " VALUES (?, 'ent-cust-1-course-1', 'gift', NULL, 'owner@example.com', '補償', 0)",
+                (source_id,),
+            )
+
+        assert database.execute("SELECT COUNT(*) FROM course_entitlement_sources").fetchone()[0] == 2
+
+    def test_a_member_can_only_have_one_live_purchase_of_an_offer(self, database):
+        """Two pending orders for the same course offer would take payment
+        twice for one grant."""
+
+        database.execute(
+            "INSERT INTO course_offer_purchase_locks"
+            " (customer_id, offer_id, order_id, state, expires_at, created_at, updated_at)"
+            " VALUES ('cust-1', 'off-1', 'order-1', 'pending', 900, 0, 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO course_offer_purchase_locks"
+                " (customer_id, offer_id, order_id, state, expires_at, created_at, updated_at)"
+                " VALUES ('cust-1', 'off-1', 'order-2', 'pending', 900, 0, 0)"
+            )
+
+    def test_an_order_line_records_what_it_promised_to_deliver(self, database):
+        database.execute(
+            "INSERT INTO orders (id, customer_id, status, subtotal, shipping_fee, total, shipping_method,"
+            " recipient_name, recipient_phone, recipient_email, created_at, updated_at)"
+            " VALUES ('order-1', 'cust-1', 'pending', 300, 0, 300, 'none', '甲', '', 'a@b.c', 0, 0)"
+        )
+        database.execute(
+            "INSERT INTO order_items (id, order_id, variant_id, product_title, variant_title,"
+            " unit_price, quantity, subtotal, product_id, offer_id, requires_shipping, contains_course)"
+            " VALUES ('item-1', 'order-1', 'off-1', '水彩套組', '', 300, 1, 300, 'prod-1', 'off-1', 1, 1)"
+        )
+        database.execute(
+            "INSERT INTO order_fulfillments (id, order_id, order_item_id, fulfillment_type, target_id,"
+            " target_title, sku, quantity, access_days, status, created_at, updated_at)"
+            " VALUES ('ff-1', 'order-1', 'item-1', 'course', 'course-1', '水彩入門', NULL, 1, 30,"
+            " 'pending', 0, 0)"
+        )
+
+        promised = database.execute(
+            "SELECT target_title, access_days FROM order_fulfillments WHERE order_id = 'order-1'"
+        ).fetchone()
+        # Snapshots: the offer can change what it grants tomorrow without
+        # rewriting what this order was.
+        assert promised == ("水彩入門", 30)
+
+    def test_the_old_variant_column_is_still_there_for_existing_orders(self, database):
+        columns = {row[1] for row in database.execute("PRAGMA table_info(order_items)")}
+
+        assert "variant_id" in columns
+        assert {"product_id", "offer_id", "requires_shipping", "contains_course"} <= columns
+
+
 class TestDefaultOfferBackfill:
     """0027 marks a product's only offer and refuses to guess for the rest."""
 
