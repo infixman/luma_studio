@@ -21,6 +21,16 @@ function children(menu: ResolvedMenuItem[], parentId: string | null): ResolvedMe
   return menu.filter((item) => item.parentId === parentId)
 }
 
+function contrastingText(hex: string): string {
+  const channel = (start: number) => {
+    const raw = hex.slice(start, start + 2)
+    const value = Number.parseInt(raw, 16) / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+  return luminance > 0.45 ? '#2b2622' : '#faf7f2'
+}
+
 function MenuTree({ menu, parentId, depth }: { menu: ResolvedMenuItem[]; parentId: string | null; depth: number }) {
   const [expanded, setExpanded] = useState<string[]>([])
   const items = children(menu, parentId)
@@ -129,7 +139,15 @@ export function SiteHeader({
     ...(settings.headerBackground === 'solid' && settings.headerColour === 'custom'
       ? { backgroundColor: settings.headerCustomColour }
       : {}),
+    ...(settings.headerText === 'custom' ? { color: settings.headerCustomText } : {}),
   }
+  const customBadgeStyle: JSX.CSSProperties | undefined =
+    settings.headerText === 'custom'
+      ? {
+          backgroundColor: settings.headerCustomText,
+          color: contrastingText(settings.headerCustomText),
+        }
+      : undefined
 
   return (
     <header class={classes} style={customStyle}>
@@ -177,7 +195,7 @@ export function SiteHeader({
             >
               <CartGlyph />
               {cartCount ? (
-                <span key={cartCount} class="count" aria-hidden="true">
+                <span key={cartCount} class="count" style={customBadgeStyle} aria-hidden="true">
                   {cartCount}
                 </span>
               ) : null}

@@ -641,6 +641,15 @@ MIGRATIONS = [
         ],
         "statements": [],
     },
+    {
+        # Kept separate from the curated dark/light choices so the value can
+        # be validated as colour data instead of becoming part of a class name.
+        "name": "0025_add_header_custom_text",
+        "add_columns": [
+            ("site_settings", "header_custom_text", "TEXT NOT NULL DEFAULT '#2b2622'"),
+        ],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

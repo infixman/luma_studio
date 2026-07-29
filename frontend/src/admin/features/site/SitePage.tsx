@@ -268,6 +268,7 @@ export function SitePage() {
     settings.headerCustomColour !== savedSettings.headerCustomColour ||
     settings.headerHeight !== savedSettings.headerHeight ||
     settings.headerText !== savedSettings.headerText ||
+    settings.headerCustomText !== savedSettings.headerCustomText ||
     settings.headerLogoSize !== savedSettings.headerLogoSize ||
     settings.headerSticky !== savedSettings.headerSticky ||
     settings.headerShowCart !== savedSettings.headerShowCart ||
@@ -509,11 +510,25 @@ export function SitePage() {
               legend="文字色"
               value={settings.headerText}
               options={[
-                { value: 'dark', label: '深' },
-                { value: 'light', label: '淺' },
+                { value: 'dark', label: '深', colour: '#2b2622' },
+                { value: 'light', label: '淺', colour: '#f3efe9' },
+                { value: 'custom', label: '自訂', colour: settings.headerCustomText },
               ]}
               onPick={(headerText) => edit({ headerText })}
             />
+            {settings.headerText === 'custom' && (
+              <label class="site-custom-colour">
+                <span>自訂文字色</span>
+                <input
+                  type="color"
+                  value={settings.headerCustomText}
+                  onInput={(event) =>
+                    edit({ headerCustomText: (event.currentTarget as HTMLInputElement).value })
+                  }
+                />
+                <code>{settings.headerCustomText.toUpperCase()}</code>
+              </label>
+            )}
             <Choice
               legend="logo 大小"
               value={settings.headerLogoSize}

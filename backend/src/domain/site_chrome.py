@@ -30,6 +30,7 @@ BACKGROUNDS = ("transparent", "solid", "image")
 COLOURS = ("cream", "sand", "clay", "forest", "ink")
 TEXT_TONES = ("dark", "light")
 HEADER_COLOURS = (*COLOURS, "custom")
+HEADER_TEXT_TONES = (*TEXT_TONES, "custom")
 FOOTER_COLOURS = (*COLOURS, "custom")
 FOOTER_TEXT_TONES = (*TEXT_TONES, "custom")
 SIZES = ("small", "medium", "large")
@@ -54,6 +55,7 @@ IMAGE_URL_PREFIX = "/site-assets"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 DEFAULT_HEADER_CUSTOM_COLOUR = "#faf7f2"
+DEFAULT_HEADER_CUSTOM_TEXT = "#2b2622"
 DEFAULT_FOOTER_CUSTOM_COLOUR = "#ece2d2"
 DEFAULT_FOOTER_CUSTOM_TEXT = "#2b2622"
 
@@ -179,6 +181,7 @@ DEFAULTS = {
     "headerImagePath": None,
     "headerHeight": "medium",
     "headerText": "dark",
+    "headerCustomText": DEFAULT_HEADER_CUSTOM_TEXT,
     "headerLogoSize": "medium",
     "headerSticky": True,
     "headerShowCart": True,
@@ -206,6 +209,9 @@ def settings_row(row: dict) -> dict:
         "headerImagePath": image_path(row["header_image_key"]),
         "headerHeight": row["header_height"],
         "headerText": row["header_text"],
+        "headerCustomText": (
+            row["header_custom_text"] if "header_custom_text" in row else DEFAULT_HEADER_CUSTOM_TEXT
+        ),
         "headerLogoSize": row["header_logo_size"],
         "headerSticky": bool(row["header_sticky"]),
         "headerShowCart": bool(row["header_show_cart"]),
@@ -252,7 +258,10 @@ def validate_settings(body: dict) -> dict:
             body.get("headerCustomColour"), "頁首自訂底色", DEFAULT_HEADER_CUSTOM_COLOUR
         ),
         "header_height": choice(body.get("headerHeight"), SIZES, "頁首高度"),
-        "header_text": choice(body.get("headerText"), TEXT_TONES, "頁首文字色"),
+        "header_text": choice(body.get("headerText"), HEADER_TEXT_TONES, "頁首文字色"),
+        "header_custom_text": hex_colour(
+            body.get("headerCustomText"), "頁首自訂文字色", DEFAULT_HEADER_CUSTOM_TEXT
+        ),
         "header_logo_size": choice(body.get("headerLogoSize"), SIZES, "logo 大小"),
         "header_sticky": 1 if body.get("headerSticky", True) else 0,
         "header_show_cart": 1 if body.get("headerShowCart", True) else 0,
@@ -276,6 +285,7 @@ def validate_settings(body: dict) -> dict:
 
 _SETTINGS_COLUMNS = frozenset({
     "header_background", "header_colour", "header_custom_colour", "header_height", "header_text",
+    "header_custom_text",
     "header_logo_size", "header_sticky", "header_show_cart", "header_show_login",
     "header_cta_label", "header_cta_url",
     "footer_colour", "footer_text", "footer_custom_colour", "footer_custom_text",

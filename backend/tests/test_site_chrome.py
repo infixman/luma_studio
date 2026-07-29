@@ -112,9 +112,30 @@ class TestAppearanceValidation:
         assert fields["header_colour"] == "custom"
         assert fields["header_custom_colour"] == "#f0a03c"
 
+    def test_custom_header_text_is_validated_and_normalised(self, site_chrome):
+        fields = site_chrome.validate_settings(
+            {
+                "headerBackground": "solid",
+                "headerColour": "cream",
+                "headerHeight": "medium",
+                "headerText": "custom",
+                "headerCustomText": "#1A72B8",
+                "headerLogoSize": "medium",
+                "footerColour": "ink",
+                "footerText": "light",
+            }
+        )
+        assert fields["header_text"] == "custom"
+        assert fields["header_custom_text"] == "#1a72b8"
+
     @pytest.mark.parametrize(
         "field,value",
-        [("headerCustomColour", "linear-gradient(red, blue)"), ("footerCustomColour", "red"), ("footerCustomText", "#12345g")],
+        [
+            ("headerCustomColour", "linear-gradient(red, blue)"),
+            ("headerCustomText", "currentColor"),
+            ("footerCustomColour", "red"),
+            ("footerCustomText", "#12345g"),
+        ],
     )
     def test_custom_colours_refuse_arbitrary_css(self, site_chrome, field, value):
         with pytest.raises(site_chrome.ChromeError):
@@ -209,6 +230,7 @@ class TestFooterBlurb:
         settings = site_chrome.settings_row(row)
         assert settings["footerBlurb"] == ""
         assert settings["headerCustomColour"] == site_chrome.DEFAULT_HEADER_CUSTOM_COLOUR
+        assert settings["headerCustomText"] == site_chrome.DEFAULT_HEADER_CUSTOM_TEXT
         assert settings["footerCustomColour"] == site_chrome.DEFAULT_FOOTER_CUSTOM_COLOUR
         assert settings["footerCustomText"] == site_chrome.DEFAULT_FOOTER_CUSTOM_TEXT
 
