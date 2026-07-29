@@ -190,7 +190,6 @@ body.admin .variant {
   border-radius: var(--radius);
 }
 
-/* Disabled variants stay visible: they still hold stock counts worth seeing. */
 body.admin .variant.off {
   opacity: 0.6;
 }
@@ -208,6 +207,7 @@ body.admin .variant-title {
 body.admin .variant .ui-field {
   width: 7rem;
   flex: none;
+  margin-bottom: 0;
 }
 
 body.admin .variant .ui-toggle-row {

@@ -1101,11 +1101,20 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
+  padding-bottom: var(--space-4);
 }
 
 .ui-inline-form .ui-field {
   flex: 1;
   min-width: 10rem;
+  margin-bottom: 0;
+  position: relative;
+}
+
+.ui-inline-form .ui-note {
+  position: absolute;
+  bottom: calc(-1 * var(--space-1) - 1.1em);
+  left: 0;
 }
 
 /* What a bulk confirmation is naming. `confirm()` could only ever describe a
