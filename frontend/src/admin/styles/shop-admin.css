@@ -385,26 +385,86 @@ body.admin .photo-grid .ui-icon-button {
 
 /* --- categories --- */
 
+body.admin .category-manager-panel {
+  width: 100%;
+  max-width: 76rem;
+}
+
+body.admin .category-manager-panel .ui-panel-body {
+  padding: clamp(var(--space-5), 3vw, var(--space-7));
+}
+
+body.admin .category-manager {
+  display: grid;
+  gap: var(--space-7);
+}
+
+body.admin .category-create-section {
+  padding-bottom: var(--space-7);
+  border-bottom: 1px solid var(--border);
+}
+
+body.admin .category-section-head {
+  margin-bottom: var(--space-4);
+}
+
+body.admin .category-section-head.is-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+body.admin .category-section-head h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-lg);
+}
+
+body.admin .category-section-head p {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+body.admin .category-total {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+body.admin .category-create-form {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1fr) minmax(15rem, 1fr) max-content;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+body.admin .category-create-form .ui-field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 body.admin .category-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-2);
 }
 
 body.admin .category-list li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(18rem, 0.85fr) max-content;
   gap: var(--space-3);
   align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
 }
 
-/* Every row would otherwise carry the same word above the same box. The label
-   stays for a screen reader, which reads one row at a time and does need it. */
 body.admin .category-list .ui-label {
   position: absolute;
   width: 1px;
@@ -417,11 +477,79 @@ body.admin .category-list .ui-label {
 }
 
 body.admin .category-list .ui-field {
-  flex: 1;
-  min-width: 9rem;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+body.admin .category-route {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+body.admin .category-route code {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 body.admin .category-list .count {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: var(--font-sm);
+}
+
+body.admin .category-list .ui-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 64rem) {
+  body.admin .category-create-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.admin .category-create-form .ui-button {
+    justify-self: start;
+  }
+
+  body.admin .category-list li {
+    grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 0.8fr) max-content;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  body.admin .category-manager-panel .ui-panel-body {
+    padding: var(--space-4);
+  }
+
+  body.admin .category-manager {
+    gap: var(--space-5);
+  }
+
+  body.admin .category-create-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin .category-section-head.is-row {
+    align-items: center;
+  }
+
+  body.admin .category-list li {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  body.admin .category-route {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  body.admin .category-list .ui-icon-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
