@@ -12,7 +12,7 @@ by hand, must not be able to reach a page.
 
 import re
 
-from shared.common import d1_rows, next_position, random_object_key, reorder_rows, storage_key_to_url, utc_timestamp, validate_image_suffix as _validate_image_suffix, validate_text
+from shared.common import d1_rows, next_position, random_object_key, reorder_rows, storage_key_to_url, urlsafe_token, utc_timestamp, validate_image_suffix as _validate_image_suffix, validate_text
 
 
 PRODUCT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")

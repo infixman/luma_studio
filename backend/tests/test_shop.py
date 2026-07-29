@@ -62,6 +62,20 @@ class TestMoneyAndStock:
             shop.validate_stock(-1)
 
 
+class TestProductCreation:
+    def test_creating_a_product_allocates_an_id_and_writes_the_row(self, shop):
+        database = FakeDatabase({"SELECT COALESCE(MAX(position)": [{"last": 3}]})
+        product_id = asyncio.run(
+            shop.create_product(
+                make_env(database), slug="canvas-bag", title="Canvas bag", description="", status="draft"
+            )
+        )
+
+        assert shop.validate_product_id(product_id) == product_id
+        insert, values = next((write for write in database.writes if "INSERT INTO products" in write[0]))
+        assert values[:6] == (product_id, "canvas-bag", "Canvas bag", "", "draft", 4)
+
+
 class TestWhatACustomerLearnsAboutStock:
     def test_a_low_count_is_shown(self, shop):
         variant = {"id": "v1", "title": "M", "price": 300, "stock": 2}
