@@ -7,7 +7,7 @@ module can re-export this public API without a circular import.
 
 import json
 
-from common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
+from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
 
 
 # Twenty is a storage ceiling, not a promise that every historical version is

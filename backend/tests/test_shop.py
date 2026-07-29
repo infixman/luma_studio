@@ -108,7 +108,7 @@ def call():
     """Run one request through the admin Worker's entry point."""
 
     import admin_main
-    import migrations
+    from shared import migrations
 
     def run(request, answers=None):
         migrations._applied_names = None

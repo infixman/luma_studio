@@ -9,8 +9,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit, urlunsplit
 
-import ics
-from common import IMAGE_CONTENT_TYPES, d1_rows, env_var, js_options, next_position, random_object_key, reorder_rows, secure_bytes, storage_key_to_url, taipei_day, urlsafe_token, utc_timestamp, validate_choice, validate_text
+from shared import ics
+from shared.common import IMAGE_CONTENT_TYPES, d1_rows, env_var, js_options, next_position, random_object_key, reorder_rows, secure_bytes, storage_key_to_url, taipei_day, urlsafe_token, utc_timestamp, validate_choice, validate_text
 from js import fetch as js_fetch
 
 

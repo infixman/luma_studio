@@ -46,7 +46,7 @@ class AdminRequest(FakeRequest):
 
 def call(request, database=None):
     import customers_admin_api
-    from responses import Ctx
+    from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 
     parts = urlsplit(request.url)

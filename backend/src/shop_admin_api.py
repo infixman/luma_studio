@@ -7,8 +7,8 @@ the amount charged to a card.
 """
 
 from domain import categories, shipping, shop
-import sanitize
-from responses import Ctx
+from shared import sanitize
+from shared.responses import Ctx
 
 
 async def _detail(ctx: Ctx, product: dict) -> dict:

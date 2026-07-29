@@ -9,7 +9,7 @@ import qrcode
 import qrcode.image.svg
 from js import Uint8Array
 
-from common import (
+from shared.common import (
     CACHE_TTL_SECONDS,
     DEFAULT_PRINT_SELECT_TYPE,
     IMAGE_SUFFIXES,

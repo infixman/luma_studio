@@ -11,8 +11,8 @@ to be forgotten in June. So the personal fields are overwritten and the row
 stays, with `anonymized_at` recording when.
 """
 
-import paging
-from common import d1_changed, d1_rows, escape_like, utc_timestamp
+from shared import paging
+from shared.common import d1_changed, d1_rows, escape_like, utc_timestamp
 
 
 MAX_SEARCH = 60

@@ -6,7 +6,7 @@ amounts, and one threshold for both forces the number up to whatever the
 dearest option needs.
 """
 
-from common import d1_rows, utc_timestamp
+from shared.common import d1_rows, utc_timestamp
 
 
 METHODS = ("cvs_c2c", "home")

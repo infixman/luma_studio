@@ -6,7 +6,7 @@ are never sent to the other.
 """
 
 from domain import bio_link
-from responses import Ctx
+from shared.responses import Ctx
 
 
 async def _state(ctx: Ctx) -> dict:

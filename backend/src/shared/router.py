@@ -13,9 +13,9 @@ drifts is the one nobody was looking at.
 import traceback
 from urllib.parse import parse_qs
 
-from common import MigrationError
-from migrations import apply_migrations
-from responses import Ctx
+from shared.common import MigrationError
+from shared.migrations import apply_migrations
+from shared.responses import Ctx
 
 
 def path_and_query(request) -> tuple[str, dict]:

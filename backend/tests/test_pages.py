@@ -150,7 +150,7 @@ class TestSharePreview:
 @pytest.fixture
 def call():
     import main
-    import migrations
+    from shared import migrations
 
     def run(request, database=None):
         migrations._applied_names = None
@@ -254,7 +254,7 @@ class TestAdminPages:
     @pytest.fixture
     def admin_call(self):
         import admin_main
-        import migrations
+        from shared import migrations
 
         def run(request, answers=None):
             migrations._applied_names = None
@@ -310,7 +310,7 @@ def edit(body, database=None):
     """One page edit straight into the handler, returning what it wrote."""
 
     import pages_admin_api
-    from responses import Ctx
+    from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 
     request = JsonRequest("/api/pages/" + "a" * 18, body)
@@ -451,7 +451,7 @@ class TestReorderingBlocks:
     @staticmethod
     def _call(ids, rows):
         import pages_admin_api
-        from responses import Ctx
+        from shared.responses import Ctx
         from urllib.parse import parse_qs, urlsplit
 
         page_id = "a" * 18

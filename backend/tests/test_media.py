@@ -549,7 +549,7 @@ def call(request, database=None, bucket=None):
     """
 
     import media_admin_api
-    from responses import Ctx
+    from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 
     parts = urlsplit(request.url)

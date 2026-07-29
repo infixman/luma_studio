@@ -31,7 +31,7 @@ def call():
     """Run one request through the admin Worker's entry point."""
 
     import admin_main
-    import migrations
+    from shared import migrations
 
     def run(request, env=None):
         # Each test starts from a database that has not been migrated yet.
@@ -115,8 +115,8 @@ class TestSchemaOwnership:
         assert "0005_create_bio_link" in body["migrations"]
 
     def test_a_broken_migration_stops_the_request(self, call, monkeypatch):
-        import router
-        from common import MigrationError
+        from shared import router
+        from shared.common import MigrationError
 
         async def explode(_env):
             raise MigrationError("0005_create_bio_link")

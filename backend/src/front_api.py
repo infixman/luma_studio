@@ -14,7 +14,7 @@ import workers
 import auth_customer
 from domain import bio_link, block_data, cart, categories, media, orders, pages, shipping, shop, site_chrome
 import mail
-from common import (
+from shared.common import (
     CACHE_1D,
     CACHE_1H,
     IMAGE_CONTENT_TYPES,
@@ -27,7 +27,7 @@ from common import (
     validate_folder,
 )
 from ibon import resolve_print_result
-from responses import Ctx, frontend_origin, serve_r2_image
+from shared.responses import Ctx, frontend_origin, serve_r2_image
 
 
 def wants_json(ctx: Ctx) -> bool:

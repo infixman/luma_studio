@@ -24,7 +24,7 @@ allowed through. A rate limiter that can take the site down is worse than the
 abuse it prevents.
 """
 
-from common import js_options
+from shared.common import js_options
 
 
 LOGIN = "LOGIN_LIMITER"

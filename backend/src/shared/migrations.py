@@ -9,7 +9,7 @@ was migrated by hand before this module existed must converge without error.
 import asyncio
 import re
 
-from common import MigrationError, d1_rows, utc_timestamp
+from shared.common import MigrationError, d1_rows, utc_timestamp
 
 
 MIGRATIONS = [

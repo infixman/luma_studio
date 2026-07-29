@@ -12,8 +12,8 @@ plausible and to store all of it under one image.
 """
 
 from domain import media
-import paging
-from responses import Ctx
+from shared import paging
+from shared.responses import Ctx
 
 
 async def _form_text(form, name: str) -> str:

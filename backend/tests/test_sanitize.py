@@ -2,7 +2,7 @@ import sys, pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
-from sanitize import sanitize_html
+from shared.sanitize import sanitize_html
 
 
 def test_allows_safe_tags():

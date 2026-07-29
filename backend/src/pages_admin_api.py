@@ -7,7 +7,7 @@ door rather than discovered by a visitor.
 """
 
 from domain import block_data, pages
-from responses import Ctx
+from shared.responses import Ctx
 
 
 async def _detail(ctx: Ctx, page: dict) -> dict:

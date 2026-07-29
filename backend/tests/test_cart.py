@@ -177,7 +177,7 @@ class TestDeliveryFees:
 @pytest.fixture
 def call():
     import main
-    import migrations
+    from shared import migrations
 
     def run_request(request, database=None):
         migrations._applied_names = None

@@ -10,7 +10,7 @@ assembled by reading rows into Python and adding them up: the page is opened
 often and it must not get slower as the shop gets busier.
 """
 
-from common import d1_rows, utc_timestamp
+from shared.common import d1_rows, utc_timestamp
 
 
 # Below this many left, a variant is worth being told about. Not zero, because

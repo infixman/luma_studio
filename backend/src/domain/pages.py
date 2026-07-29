@@ -15,8 +15,8 @@ import re
 
 from domain import media
 from domain.bio_link import validate_url
-from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp, validate_choice, validate_text
-from sanitize import sanitize_html
+from shared.common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp, validate_choice, validate_text
+from shared.sanitize import sanitize_html
 
 
 PAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")

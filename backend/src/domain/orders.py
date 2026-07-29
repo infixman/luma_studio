@@ -14,10 +14,10 @@ written once, here.
 
 import re
 
-import paging
+from shared import paging
 from domain import shipping, shop
 import mail
-from common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
+from shared.common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
 
 
 ORDER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,25}$")

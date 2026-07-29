@@ -25,7 +25,7 @@ def call():
     """Run one request through the public Worker's entry point."""
 
     import main
-    import migrations
+    from shared import migrations
 
     def run(request, env=None):
         migrations._applied_names = None

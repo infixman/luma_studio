@@ -15,7 +15,7 @@ NOW = datetime(2026, 8, 1, 9, 0, tzinfo=TAIPEI)
 
 @pytest.fixture
 def ics():
-    import ics as module
+    from shared import ics as module
 
     return module
 

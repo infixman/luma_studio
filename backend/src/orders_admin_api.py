@@ -12,8 +12,8 @@ not here — this file is the door, not the policy.
 
 import mail
 from domain import orders
-import paging
-from responses import Ctx
+from shared import paging
+from shared.responses import Ctx
 
 
 MAX_NOTE = 500

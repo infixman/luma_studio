@@ -235,6 +235,6 @@ def ibon():
 
 @pytest.fixture
 def common():
-    import common as module
+    from shared import common as module
 
     return module

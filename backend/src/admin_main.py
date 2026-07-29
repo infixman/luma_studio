@@ -22,13 +22,12 @@ from domain import dashboard
 import media_admin_api
 import orders_admin_api
 import pages_admin_api
-import rate_limit
-import router
+from shared import rate_limit, router
 import shop_admin_api
 import site_admin_api
-from common import OAuthError
-from migrations import apply_migrations
-from responses import Ctx
+from shared.common import OAuthError
+from shared.migrations import apply_migrations
+from shared.responses import Ctx
 
 
 async def dispatch(ctx: Ctx):

@@ -16,8 +16,8 @@ import base64
 import hashlib
 from urllib.parse import urlencode
 
-from common import OAUTH_STATE_TTL_SECONDS, OAuthError, d1_rows, fetch_json, urlsafe_token, utc_timestamp
-from responses import Ctx, frontend_origin
+from shared.common import OAUTH_STATE_TTL_SECONDS, OAuthError, d1_rows, fetch_json, urlsafe_token, utc_timestamp
+from shared.responses import Ctx, frontend_origin
 
 
 def missing_settings(settings: dict) -> list[str]:

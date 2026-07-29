@@ -7,7 +7,7 @@ everything.
 """
 
 from domain import categories, pages, site_chrome
-from responses import Ctx
+from shared.responses import Ctx
 
 
 async def _menu_state(ctx: Ctx) -> dict:

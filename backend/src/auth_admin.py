@@ -7,8 +7,8 @@ holding the other.
 """
 
 import auth_core
-from common import env_var, ALLOWED_ADMIN_EMAILS, SESSION_ID_PATTERN, SESSION_TTL_SECONDS, d1_rows, urlsafe_token, utc_timestamp
-from responses import Ctx
+from shared.common import env_var, ALLOWED_ADMIN_EMAILS, SESSION_ID_PATTERN, SESSION_TTL_SECONDS, d1_rows, urlsafe_token, utc_timestamp
+from shared.responses import Ctx
 
 
 SESSION_COOKIE_NAME = "luma_admin_session"

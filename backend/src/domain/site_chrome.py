@@ -18,7 +18,7 @@ import json
 import re
 
 from domain.bio_link import SOCIAL_PLATFORMS, validate_url
-from common import BASE_IMAGE_CONTENT_TYPES, d1_rows, next_position, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_choice, validate_image_suffix as _validate_image_suffix, validate_text
+from shared.common import BASE_IMAGE_CONTENT_TYPES, d1_rows, next_position, random_object_key, storage_key_to_url, utc_timestamp, validate_choice, validate_image_suffix as _validate_image_suffix, validate_text
 
 
 MENU_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")

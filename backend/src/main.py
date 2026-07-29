@@ -10,11 +10,10 @@ import auth_customer
 from domain import bio_link, media, orders, pages, shipping, shop, site_chrome
 import front_api
 import mail
-import rate_limit
-import router
-from common import IDENTIFIER_PATTERN, OAuthError
-from migrations import applied_migration_names
-from responses import Ctx
+from shared import rate_limit, router
+from shared.common import IDENTIFIER_PATTERN, OAuthError
+from shared.migrations import applied_migration_names
+from shared.responses import Ctx
 from workers import WorkerEntrypoint
 
 

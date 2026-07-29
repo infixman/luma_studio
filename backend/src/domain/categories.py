@@ -11,7 +11,7 @@ mixed — see `parse_filter`.
 """
 
 from domain import shop
-from common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp
+from shared.common import d1_rows, next_position, reorder_rows, urlsafe_token, utc_timestamp
 
 
 MAX_TITLE = 40

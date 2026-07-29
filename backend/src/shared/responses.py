@@ -4,7 +4,7 @@ import json
 
 from workers import Response
 
-from common import CACHE_1H, env_var
+from shared.common import CACHE_1H, env_var
 from js import Uint8Array
 
 

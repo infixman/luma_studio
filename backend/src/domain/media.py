@@ -22,8 +22,8 @@ only thing it enforces is that both are within reason.
 
 import json
 
-import paging
-from common import BASE_IMAGE_CONTENT_TYPES, d1_rows, escape_like, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_image_suffix as _validate_image_suffix
+from shared import paging
+from shared.common import BASE_IMAGE_CONTENT_TYPES, d1_rows, escape_like, random_object_key, storage_key_to_url, urlsafe_token, utc_timestamp, validate_image_suffix as _validate_image_suffix
 
 
 MEDIA_ID_PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"

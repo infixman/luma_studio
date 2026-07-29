@@ -20,7 +20,7 @@ in April.
 
 import json
 
-from common import d1_rows, env_var, js_options, urlsafe_token, utc_timestamp
+from shared.common import d1_rows, env_var, js_options, urlsafe_token, utc_timestamp
 from js import fetch as js_fetch
 
 

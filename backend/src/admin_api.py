@@ -5,7 +5,7 @@ admin-api.luma-studio.tw is administration; `admin_main.dispatch` has already
 established that the caller is signed in before anything here runs.
 """
 
-from common import (
+from shared.common import (
     DEFAULT_PRINT_SELECT_TYPE,
     IDENTIFIER_PATTERN,
     IMAGE_SUFFIXES,
@@ -17,7 +17,7 @@ from common import (
     validate_folder,
 )
 from ibon import get_folder_select_type, invalidate_print_cache, print_spec, validate_select_type
-from responses import Ctx
+from shared.responses import Ctx
 
 
 async def handle(ctx: Ctx):

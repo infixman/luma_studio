@@ -11,8 +11,8 @@ address may have an account; what they may do with it is decided per request.
 """
 
 import auth_core
-from common import env_var, SESSION_ID_PATTERN, d1_rows, urlsafe_token, utc_timestamp
-from responses import Ctx
+from shared.common import env_var, SESSION_ID_PATTERN, d1_rows, urlsafe_token, utc_timestamp
+from shared.responses import Ctx
 
 
 SESSION_COOKIE_NAME = "luma_customer_session"

@@ -8,8 +8,8 @@ office never has to guess whether the click landed.
 """
 
 from domain import customers, orders
-import paging
-from responses import Ctx
+from shared import paging
+from shared.responses import Ctx
 
 
 async def _detail(ctx: Ctx, customer_id: str) -> dict:

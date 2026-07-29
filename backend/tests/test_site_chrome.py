@@ -253,7 +253,7 @@ class TestMenuTargets:
 @pytest.fixture
 def call():
     import main
-    import migrations
+    from shared import migrations
 
     def run(request, database=None):
         migrations._applied_names = None
@@ -329,7 +329,7 @@ class TestAdminSite:
     @pytest.fixture
     def admin_call(self):
         import admin_main
-        import migrations
+        from shared import migrations
 
         def run(request):
             migrations._applied_names = None

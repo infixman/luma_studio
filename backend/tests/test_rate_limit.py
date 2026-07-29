@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture
 def rate_limit():
-    import rate_limit as module
+    from shared import rate_limit as module
 
     return module
 
