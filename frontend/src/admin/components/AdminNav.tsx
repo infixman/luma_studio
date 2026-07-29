@@ -39,6 +39,11 @@ const stroke = {
    is inside them is left doing the telling-apart at 18px. */
 
 const icons = {
+  overview: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
+    </svg>
+  ),
   globe: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <circle cx="12" cy="12" r="9" />
@@ -84,6 +89,12 @@ const icons = {
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="M11.5 3H20a1 1 0 0 1 1 1v8.5a1 1 0 0 1-.3.7l-8 8a1 1 0 0 1-1.4 0l-8-8a1 1 0 0 1 0-1.4l8-8a1 1 0 0 1 .7-.3Z" />
       <circle cx="16.4" cy="7.6" r="1.4" />
+    </svg>
+  ),
+  box: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="m4 7 8-4 8 4v10l-8 4-8-4Z" />
+      <path d="m4 7 8 4 8-4M12 11v10" />
     </svg>
   ),
   truck: (
@@ -146,6 +157,12 @@ export interface NavGroup {
 
 export const groups: NavGroup[] = [
   {
+    id: 'dashboard',
+    label: routeById('dashboard').label,
+    icon: icons.overview,
+    href: routeById('dashboard').path,
+  },
+  {
     id: 'site',
     label: '官網',
     icon: icons.globe,
@@ -161,7 +178,8 @@ export const groups: NavGroup[] = [
     icon: icons.cart,
     items: [
       { href: routeById('orders').path, label: routeById('orders').label, icon: icons.receipt },
-      { href: routeById('products').path, label: routeById('products').label, icon: icons.tag },
+      { href: routeById('products').path, label: routeById('products').label, icon: icons.box },
+      { href: routeById('categories').path, label: routeById('categories').label, icon: icons.tag },
       { href: routeById('shipping').path, label: routeById('shipping').label, icon: icons.truck },
     ],
   },
@@ -177,12 +195,7 @@ export const groups: NavGroup[] = [
   },
 ]
 
-/* The dashboard is not in a group. It is what the mark at the top leads back
-   to, and putting it in a list would make it look like one page among several
-   rather than the place you start. */
-export const HOME = routeById('dashboard').path
-
-/** Which group a page belongs to, or null for the dashboard. */
+/** Which navigation row or group owns a page. */
 export function groupOf(href: string): NavGroup | null {
   return groups.find((group) => group.href === href || group.items?.some((item) => item.href === href)) ?? null
 }
@@ -227,9 +240,9 @@ export function AdminSidebar({
 
   return (
     <nav class="admin-sidebar" aria-label="管理選單">
-      <a class="sidebar-home" href={HOME} aria-current={current === HOME ? 'page' : undefined}>
+      <div class="sidebar-brand">
         <img class="sidebar-mark" src="/assets/luma-studio-logo.png" alt="Luma Studio 苒光繪誌" />
-      </a>
+      </div>
 
       <ul class="nav-groups">
         {groups.map((group) =>

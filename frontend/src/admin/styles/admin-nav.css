@@ -39,16 +39,10 @@ body.admin .admin-sidebar {
   overflow-y: auto;
 }
 
-body.admin .sidebar-home {
+body.admin .sidebar-brand {
   display: block;
   padding: 0 var(--space-2);
   margin-bottom: var(--space-5);
-  border-radius: var(--radius);
-}
-
-body.admin .sidebar-home:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 body.admin .sidebar-mark {
@@ -435,7 +429,7 @@ body.admin .admin-back-link:focus-visible {
     background: var(--scrim);
   }
 
-  body.admin .sidebar-home {
+  body.admin .sidebar-brand {
     margin-bottom: var(--space-3);
   }
 

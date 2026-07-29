@@ -78,7 +78,9 @@ export function ProductFormFields({
         <fieldset class="ui-checkbox-set">
           <legend class="ui-label">分類</legend>
           {categories.length === 0 ? (
-            <p class="muted">還沒有分類。回到商品清單建立第一個分類。</p>
+            <p class="muted">
+              還沒有分類。前往 <a href="/categories">商品分類</a> 建立第一個。
+            </p>
           ) : (
             categories.map((category) => (
               <Checkbox
