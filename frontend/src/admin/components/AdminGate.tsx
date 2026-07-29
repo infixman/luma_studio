@@ -2,7 +2,6 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 
 import { ApiError, loginUrl, probeSession } from '../../shared/api'
-import '../styles/admin.css'
 import '../styles/admin-gate.css'
 import { rememberSignedIn } from '../lib/session'
 

@@ -17,7 +17,6 @@ import {
   type PrintChoice,
 } from '../lib/printSpec'
 import type { FolderListing, ObjectListing, PrintSettingsResponse, StoredObject } from '../../shared/types'
-import '../styles/admin.css'
 
 const MAX_FILE_COUNT = 8
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024

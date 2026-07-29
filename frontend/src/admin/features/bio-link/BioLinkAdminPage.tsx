@@ -9,7 +9,6 @@ import { useStatus } from '../../components/StatusBar'
 import { EmptyState, Spinner, useConfirm } from '../../components/ui'
 import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../../shared/types'
-import '../../styles/admin.css'
 import '../../styles/bio-link-admin.css'
 
 // Mirrors the bio-link domain contract; backend validation remains authoritative.

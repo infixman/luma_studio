@@ -5,7 +5,6 @@ import { useStatus } from '../components/StatusBar'
 import { Button, Panel, Spinner, TextField, Toggle } from '../components/ui'
 import { api, apiJson } from '../../shared/api'
 import type { ShippingMethod } from '../../shared/types'
-import '../styles/admin.css'
 import '../styles/shop-admin.css'
 
 /**

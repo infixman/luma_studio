@@ -26,7 +26,6 @@ import { api, apiJson, apiUrl } from '../../shared/api'
 import { slugifyAscii } from '../lib/slug'
 import { CATEGORY_SLUG_MAX, CATEGORY_TITLE_MAX, PRODUCT_SLUG_MAX, PRODUCT_TITLE_MAX } from '../features/catalogue/constraints'
 import type { Category, Product, ProductListing, ProductStatus } from '../../shared/types'
-import '../styles/admin.css'
 import '../styles/shop-admin.css'
 
 const STATUS_LABELS: Record<ProductStatus, string> = {

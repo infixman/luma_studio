@@ -5,7 +5,6 @@ import { useStatus } from '../components/StatusBar'
 import { Badge, EmptyState, Panel, Spinner, TableWrap } from '../components/ui'
 import { STOREFRONT_ORIGIN, api } from '../../shared/api'
 import type { DashboardSummary } from '../../shared/types'
-import '../styles/admin.css'
 import '../styles/dashboard.css'
 
 /**

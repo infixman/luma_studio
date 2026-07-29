@@ -49,7 +49,6 @@ import type {
   TextBlockConfig,
 } from '../../../shared/types'
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
-import '../../styles/admin.css'
 import '../../styles/shop-admin.css'
 import '../../styles/pages-admin.css'
 import '../../styles/media-admin.css'

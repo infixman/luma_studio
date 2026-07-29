@@ -28,7 +28,6 @@ import {
   PRODUCT_VARIANT_STOCK_MAX,
 } from '../features/catalogue/constraints'
 import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
-import '../styles/admin.css'
 import '../styles/shop-admin.css'
 
 const STATUSES: { value: ProductStatus; label: string; hint: string }[] = [

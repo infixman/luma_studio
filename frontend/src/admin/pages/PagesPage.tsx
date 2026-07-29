@@ -9,7 +9,6 @@ import { nextPath, suggestPath } from '../lib/slug'
 import { STOREFRONT_ORIGIN, api, apiJson } from '../../shared/api'
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from '../features/pages/constraints'
 import type { Page } from '../../shared/types'
-import '../styles/admin.css'
 import '../styles/shop-admin.css'
 import '../styles/pages-admin.css'
 
