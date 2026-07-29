@@ -55,8 +55,11 @@ class TestSellability:
 
 
 class TestRowMapping:
-    def test_a_row_becomes_the_shape_the_picker_reads(self, courses):
-        assert courses.course_row(
+    def test_a_row_written_before_the_display_fields_existed_still_reads(self, courses):
+        """The picker lists courses long before anybody fills these in, and a
+        row from before migration 0031 has none of the columns at all."""
+
+        mapped = courses.course_row(
             {
                 "id": "c1",
                 "slug": "watercolour",
@@ -65,14 +68,13 @@ class TestRowMapping:
                 "created_at": 1,
                 "updated_at": 2,
             }
-        ) == {
-            "id": "c1",
-            "slug": "watercolour",
-            "title": "水彩入門",
-            "status": "draft",
-            "createdAt": 1,
-            "updatedAt": 2,
-        }
+        )
+
+        assert mapped["id"] == "c1"
+        assert mapped["summary"] == ""
+        assert mapped["coverMediaId"] is None
+        assert mapped["level"] == "all"
+        assert mapped["language"] == "zh-Hant"
 
 
 class TestSlugUniqueness:

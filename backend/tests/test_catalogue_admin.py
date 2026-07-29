@@ -333,3 +333,48 @@ class TestOfferComponents:
         )
 
         assert response.status == 404
+
+
+class TestCourseOutlineRoutes:
+    def _course_exists(self, extra: dict | None = None) -> dict:
+        return {
+            "SELECT * FROM courses WHERE id": [{
+                "id": "a" * 18, "slug": "watercolour", "title": "水彩入門", "status": "draft",
+                "created_at": 0, "updated_at": 0, "summary": "兩小時學會", "description_html": "",
+                "cover_media_id": "media-1", "instructor_name": "王老師", "instructor_bio_html": "",
+                "level": "beginner", "language": "zh-Hant", "audience_html": "", "outcomes_html": "",
+                "prerequisites_html": "", "materials_html": "", "published_at": None,
+            }],
+            **(extra or {}),
+        }
+
+    def test_an_outline_can_be_read(self, call):
+        response = call(signed_in(f"/api/courses/{'a' * 18}/outline"), self._course_exists())
+
+        assert response.status == 200
+        assert response.json()["sections"] == []
+
+    def test_a_malformed_outline_is_refused_before_anything_is_deleted(self, call):
+        """The write replaces the tree. A bad request must not cost the old one."""
+
+        response = call(
+            signed_in_json(f"/api/courses/{'a' * 18}/outline", "PUT", {"sections": [{"title": ""}]}),
+            self._course_exists(),
+        )
+
+        assert response.status == 400
+
+    def test_publishing_reports_every_problem_at_once(self, call):
+        response = call(
+            signed_in_json(f"/api/courses/{'a' * 18}/publish", "POST", {}),
+            self._course_exists(),
+        )
+
+        assert response.status == 409
+        # No cover was set and there is no outline, so both come back.
+        assert len(response.json()["problems"]) >= 1
+
+    def test_an_outline_for_a_course_that_is_not_there_is_not_written(self, call):
+        response = call(signed_in_json(f"/api/courses/{'b' * 18}/outline", "PUT", {"sections": []}))
+
+        assert response.status == 404

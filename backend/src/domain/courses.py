@@ -54,11 +54,29 @@ def is_sellable(course: dict) -> bool:
 
 
 def course_row(row: dict) -> dict:
+    """The display fields default rather than raising when absent.
+
+    A row read before migration 0031 has none of them, and the video library
+    and offer pickers list courses long before anybody fills the fields in.
+    """
+
     return {
         "id": row["id"],
         "slug": row["slug"],
         "title": row["title"],
         "status": row["status"],
+        "summary": row.get("summary") or "",
+        "descriptionHtml": row.get("description_html") or "",
+        "coverMediaId": row.get("cover_media_id"),
+        "instructorName": row.get("instructor_name") or "",
+        "instructorBioHtml": row.get("instructor_bio_html") or "",
+        "level": row.get("level") or "all",
+        "language": row.get("language") or "zh-Hant",
+        "audienceHtml": row.get("audience_html") or "",
+        "outcomesHtml": row.get("outcomes_html") or "",
+        "prerequisitesHtml": row.get("prerequisites_html") or "",
+        "materialsHtml": row.get("materials_html") or "",
+        "publishedAt": row.get("published_at"),
         "createdAt": int(row["created_at"]),
         "updatedAt": int(row["updated_at"]),
     }
@@ -265,3 +283,134 @@ def public_course(course: dict, outline: list[dict]) -> dict:
         "lessonCount": total_lessons(outline),
         "sections": public_outline(outline),
     }
+
+
+def section_row(row: dict) -> dict:
+    return {"id": row["id"], "title": row["title"], "position": int(row["position"]), "lessons": []}
+
+
+def lesson_row(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "contentHtml": row["content_html"],
+        "videoAssetId": row["video_asset_id"],
+        "isPreview": bool(row["is_preview"]),
+        "position": int(row["position"]),
+    }
+
+
+async def get_outline(env, course_id: str) -> list[dict]:
+    """The whole tree in two queries rather than one per chapter.
+
+    A course with twenty chapters would otherwise be twenty-one round trips
+    for a page that is read on every edit.
+    """
+
+    sections = [
+        section_row(row)
+        for row in await d1_rows(
+            env.DB.prepare("SELECT * FROM course_sections WHERE course_id = ?1 ORDER BY position").bind(course_id)
+        )
+    ]
+    if not sections:
+        return []
+
+    placeholders = ", ".join(f"?{index + 1}" for index in range(len(sections)))
+    lessons = await d1_rows(
+        env.DB.prepare(
+            f"SELECT * FROM course_lessons WHERE section_id IN ({placeholders}) ORDER BY position"
+        ).bind(*[section["id"] for section in sections])
+    )
+    by_section: dict[str, list[dict]] = {}
+    for row in lessons:
+        by_section.setdefault(row["section_id"], []).append(lesson_row(row))
+    for section in sections:
+        section["lessons"] = by_section.get(section["id"], [])
+    return sections
+
+
+async def replace_outline(env, course_id: str, sections: list[dict]) -> None:
+    """Swap the whole tree.
+
+    Already validated, so the gap between the delete and the inserts holds a
+    tree that was correct a moment ago rather than one that was never correct.
+    Ids are regenerated: an author who reorders and renames everything is not
+    obliged to keep the client's temporary ids straight.
+    """
+
+    now = utc_timestamp()
+    existing = await d1_rows(
+        env.DB.prepare("SELECT id FROM course_sections WHERE course_id = ?1").bind(course_id)
+    )
+    for row in existing:
+        await env.DB.prepare("DELETE FROM course_lessons WHERE section_id = ?1").bind(row["id"]).run()
+    await env.DB.prepare("DELETE FROM course_sections WHERE course_id = ?1").bind(course_id).run()
+
+    for section in sections:
+        section_id = urlsafe_token(18)
+        await env.DB.prepare(
+            "INSERT INTO course_sections (id, course_id, title, position, created_at, updated_at)"
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?5)"
+        ).bind(section_id, course_id, section["title"], section["position"], now).run()
+        for lesson in section["lessons"]:
+            await env.DB.prepare(
+                "INSERT INTO course_lessons (id, section_id, title, content_html, video_asset_id,"
+                " is_preview, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)"
+            ).bind(
+                urlsafe_token(18),
+                section_id,
+                lesson["title"],
+                lesson["contentHtml"],
+                lesson["videoAssetId"],
+                1 if lesson["isPreview"] else 0,
+                lesson["position"],
+                now,
+            ).run()
+
+
+async def ready_video_asset_ids(env, outline: list[dict]) -> set[str]:
+    """Which of this outline's videos are actually playable.
+
+    Asked as one question rather than per lesson, and only about the assets
+    this course names — the video library as a whole is not this page's
+    business.
+    """
+
+    wanted = sorted({
+        lesson["videoAssetId"]
+        for section in outline
+        for lesson in section.get("lessons", ())
+        if lesson.get("videoAssetId")
+    })
+    if not wanted:
+        return set()
+    placeholders = ", ".join(f"?{index + 1}" for index in range(len(wanted)))
+    rows = await d1_rows(
+        env.DB.prepare(
+            f"SELECT id FROM video_assets WHERE status = 'ready' AND id IN ({placeholders})"
+        ).bind(*wanted)
+    )
+    return {row["id"] for row in rows}
+
+
+async def update_status(env, course_id: str, status: str) -> bool:
+    result = await env.DB.prepare(
+        "UPDATE courses SET status = ?2, updated_at = ?3 WHERE id = ?1"
+    ).bind(course_id, status, utc_timestamp()).run()
+    return d1_changed(result)
+
+
+async def publish(env, course_id: str) -> bool:
+    """`published_at` records the first time only.
+
+    Re-publishing after an edit is not a new course, and overwriting the date
+    would lose when it actually went on sale.
+    """
+
+    now = utc_timestamp()
+    result = await env.DB.prepare(
+        "UPDATE courses SET status = 'published', published_at = COALESCE(published_at, ?2), updated_at = ?2"
+        " WHERE id = ?1"
+    ).bind(course_id, now).run()
+    return d1_changed(result)

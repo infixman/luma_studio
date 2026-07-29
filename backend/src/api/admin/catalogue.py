@@ -147,10 +147,43 @@ async def handle(ctx: Ctx):
         return ctx.json({"course": await courses.get_course(env, course_id)}, 201)
 
     if path.startswith("/api/courses/"):
-        course_id = path[len("/api/courses/") :]
+        tail = path[len("/api/courses/") :]
+        course_id, _, action = tail.partition("/")
         course = await courses.get_course(env, course_id)
         if course is None:
             return ctx.error("Course not found", 404)
+
+        if action == "outline" and method == "GET":
+            return ctx.json({"sections": await courses.get_outline(env, course_id)})
+
+        if action == "outline" and method == "PUT":
+            try:
+                # The whole tree, checked before anything is deleted. A bad
+                # request must not cost the author the outline they had.
+                sections = courses.validate_outline((await ctx.json_body()).get("sections"))
+            except (ValueError, AttributeError) as error:
+                return ctx.error(str(error) or "Invalid outline", 400)
+            await courses.replace_outline(env, course_id, sections)
+            return ctx.json({"sections": await courses.get_outline(env, course_id)})
+
+        if action == "publish" and method == "POST":
+            outline = await courses.get_outline(env, course_id)
+            ready = await courses.ready_video_asset_ids(env, outline)
+            problems = courses.publish_problems(course, outline, ready_asset_ids=ready)
+            if problems:
+                # Everything at once: fixing one per attempt is a bad afternoon.
+                return ctx.json({"error": "課程尚未符合發布條件", "problems": problems}, 409)
+            await courses.publish(env, course_id)
+            return ctx.json({"course": await courses.get_course(env, course_id)})
+
+        if action == "archive" and method == "POST":
+            # Archiving stops new sales and new grants. It deliberately does
+            # not touch anybody's existing access.
+            await courses.update_status(env, course_id, "archived")
+            return ctx.json({"course": await courses.get_course(env, course_id)})
+
+        if action:
+            return ctx.error("Not found", 404)
 
         if method == "GET":
             return ctx.json({"course": course})
