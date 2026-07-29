@@ -73,6 +73,46 @@ main.checkout .crumb {
   font-size: 0.9rem;
 }
 
+/* A quiet navigation control, not the browser's default underlined link.
+   It leads away from the buying decision, so it belongs above the product
+   panel and should not compete with the add-to-cart button inside it. */
+main.product .product-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.72rem 0.42rem 0.58rem;
+  border: 1px solid rgb(168 83 44 / 0.16);
+  border-radius: 999px;
+  background: rgb(168 83 44 / 0.07);
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+main.product .product-back svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+main.product .product-back a:hover {
+  border-color: rgb(168 83 44 / 0.38);
+  background: rgb(168 83 44 / 0.13);
+  transform: translateX(-2px);
+}
+
+main.product .product-back a:focus-visible {
+  outline: 3px solid rgb(168 83 44 / 0.35);
+  outline-offset: 3px;
+}
+
 /* --- index --- */
 
 .product-grid {

@@ -38,7 +38,7 @@ export function productReturnTarget(search: string): { href: string; label: stri
     return { href: '/shop', label: '商品列表' }
   }
 
-  return { href: from, label: '原本的頁面' }
+  return { href: from, label: '上一頁' }
 }
 
 export function ProductPage({ slug }: { slug: string }) {
@@ -120,8 +120,13 @@ export function ProductPage({ slug }: { slug: string }) {
 
   return (
     <main class="product">
-      <p class="crumb">
-        <a href={back.href}>← 返回{back.label}</a>
+      <p class="crumb product-back">
+        <a href={back.href} aria-label={`返回${back.label}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19 12H5M11 6l-6 6 6 6" />
+          </svg>
+          <span>{back.label}</span>
+        </a>
       </p>
 
       <div class="layout">

@@ -6,7 +6,7 @@ describe('productReturnTarget', () => {
   it('returns to the page that embedded the shop row', () => {
     expect(productReturnTarget('?from=%2Fphysical-courses')).toEqual({
       href: '/physical-courses',
-      label: '原本的頁面',
+      label: '上一頁',
     })
   })
 
