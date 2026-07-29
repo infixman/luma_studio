@@ -119,16 +119,28 @@ class TestWhatTheShopSees:
         assert query.count("status != ") == 2
         assert bindings[:2] == ("cancelled", "expired")
 
-    def test_two_is_rules_return_nothing_rather_than_the_last_one(self, orders):
-        """狀態是已付款 and 狀態是已出貨 stacked describes an order that cannot
-        exist. Keeping the last rule answered a filter nobody wrote, while
-        both rows were still on screen with 而且 between them."""
-
+    def test_selected_statuses_are_one_or_group(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})
-        body = body_of(call(AdminRequest("/api/orders?status=paid&status=shipped"), database))
-        assert body["orders"] == []
-        # And it did not go and ask the database for the last one.
-        assert not any("FROM orders WHERE" in statement for statement in database.statements)
+        call(AdminRequest("/api/orders?status=paid&status=shipped"), database)
+        query, bindings = [read for read in database.reads if "FROM orders WHERE" in read[0]][0]
+        assert "status IN (?1, ?2)" in query
+        assert bindings[:2] == ("paid", "shipped")
+
+    def test_status_date_and_search_groups_stack_with_and(self, orders):
+        database = FakeDatabase({"FROM orders": [order()]})
+        call(
+            AdminRequest(
+                "/api/orders?status=paid&status=shipped"
+                "&createdFrom=1700000000&createdTo=1700086399&q=%E7%8E%8B"
+            ),
+            database,
+        )
+        query, bindings = [read for read in database.reads if "FROM orders WHERE" in read[0]][0]
+        assert "status IN (?1, ?2) AND created_at >= ?3 AND created_at <= ?4 AND (" in query
+        assert "id LIKE ?5" in query
+        assert "OR recipient_name LIKE ?5" in query
+        assert "OR recipient_email LIKE ?5" in query
+        assert bindings[:5] == ("paid", "shipped", 1700000000, 1700086399, "%王%")
 
     def test_one_is_rule_still_filters(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})

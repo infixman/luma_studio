@@ -334,7 +334,10 @@ export function OrdersAdminPage() {
       <Panel class="orders-list-panel">
         <div class="order-filter-bar" aria-label="訂單篩選">
           <section class="order-status-filter" aria-labelledby="order-status-filter-label">
-            <h2 id="order-status-filter-label">訂單狀態</h2>
+            <div class="order-filter-heading">
+              <h2 id="order-status-filter-label">訂單狀態</h2>
+              <span>可複選，符合任一狀態（OR）</span>
+            </div>
             <div class="order-status-checks">
               {STATUSES.map((status) => (
                 <label key={status} class={selectedStatuses.includes(status) ? 'checked' : ''}>
@@ -387,6 +390,7 @@ export function OrdersAdminPage() {
               <ColumnChooser columns={columns} hidden={hidden} onChange={chooseColumns} />
             </div>
           </div>
+          <p class="order-filter-logic">狀態、成立日期與搜尋會同時套用（AND）。</p>
         </div>
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>

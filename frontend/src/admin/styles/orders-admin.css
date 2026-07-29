@@ -22,6 +22,14 @@ body.admin .order-date-filter {
   min-width: 0;
 }
 
+body.admin .order-filter-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
 body.admin .order-status-filter h2,
 body.admin .order-date-filter h2 {
   display: block;
@@ -29,6 +37,16 @@ body.admin .order-date-filter h2 {
   color: var(--text);
   font-size: var(--font-sm);
   font-weight: 650;
+}
+
+body.admin .order-filter-heading h2 {
+  margin-bottom: 0;
+}
+
+body.admin .order-filter-heading span,
+body.admin .order-filter-logic {
+  color: var(--muted);
+  font-size: var(--font-xs);
 }
 
 body.admin .order-status-checks {
@@ -106,6 +124,10 @@ body.admin .order-date-fields .ui-field {
 body.admin .order-list-settings {
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+body.admin .order-filter-logic {
+  margin: calc(var(--space-2) * -1) 0 0;
 }
 
 @media (max-width: 64rem) {

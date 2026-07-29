@@ -73,12 +73,9 @@ async def handle(ctx: Ctx):
     path, method, env = ctx.path, ctx.method, ctx.env
 
     if path == "/api/orders" and method == "GET":
-        # Both are repeatable. "不是已取消" and "不是已逾期" is a pair anybody
-        # might stack; two "是" cannot both hold, and that is exactly why they
-        # are read rather than collapsed. Silently keeping the last one would
-        # drop a rule the filter bar is still showing with 而且 beside it —
-        # the answer to an impossible filter is no rows, not a different
-        # filter's rows.
+        # Both are repeatable. Positive statuses form one choice set: an order
+        # may match any selected status. Exclusions, search and date bounds are
+        # separate constraints and list_all combines those groups with AND.
         wanted = tuple(dict.fromkeys(value.strip() for value in ctx.query.get("status", []) if value.strip()))
         excluded = tuple(value.strip() for value in ctx.query.get("statusNot", []) if value.strip())
         for value in (*wanted, *excluded):
@@ -86,15 +83,6 @@ async def handle(ctx: Ctx):
                 return ctx.error(f"狀態必須是 {'、'.join(orders.STATUSES)} 其中之一", 400)
         search = _first(ctx, "q")[:60]
         page, per_page = paging.clamp(_first(ctx, "page"), _first(ctx, "perPage"))
-        if len(wanted) > 1:
-            rows = []
-            return ctx.json(
-                {
-                    "orders": rows,
-                    "counts": await orders.counts_by_status(env),
-                    **paging.envelope(rows, 0, page, per_page),
-                }
-            )
         rows, total = await orders.list_all(
             env,
             statuses=wanted,
