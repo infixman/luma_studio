@@ -352,20 +352,46 @@ body.admin .admin-sidebar .account-logout:focus-visible {
 
 /* --- narrow --- */
 
+/* --- hamburger button (hidden on desktop) --- */
+
+:where(body.admin) .topbar-burger {
+  display: none;
+}
+
 @media (max-width: 900px) {
-  /* The menu goes above the content: on a phone a fixed column is most of the
-     screen, and it is not what anybody came for. It stays an accordion, so
-     everything closed is one row per group. */
   .admin-layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
+  /* Off-screen by default; slides in when .menu-open is on the layout. */
   body.admin .admin-sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    padding: var(--space-3);
-    max-height: 45vh;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 200;
+    width: min(300px, 85vw);
+    max-height: none;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    padding: var(--space-4) var(--space-3) var(--space-3);
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+  }
+
+  body.admin .admin-layout.menu-open .admin-sidebar {
+    transform: translateX(0);
+  }
+
+  .sidebar-scrim {
+    display: none;
+  }
+
+  .admin-layout.menu-open .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: var(--scrim);
   }
 
   body.admin .sidebar-home {
@@ -376,11 +402,40 @@ body.admin .admin-sidebar .account-logout:focus-visible {
     max-width: 110px;
   }
 
+  :where(body.admin) .topbar-burger {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  :where(body.admin) .topbar-burger svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  :where(body.admin) .topbar-burger:hover {
+    background: var(--sunken);
+  }
+
   .admin-content {
     padding: var(--space-4);
   }
 
   .admin-topbar {
     padding: var(--space-2) var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.admin .admin-sidebar {
+    transition: none;
   }
 }

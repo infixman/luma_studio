@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useState, useEffect } from 'preact/hooks'
 
 import { AdminSidebar, labelOf } from './AdminNav'
 import { ThemeToggle } from './ThemeToggle'
@@ -58,12 +59,22 @@ export function AdminShell({
     location.assign('/')
   }
 
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [menuOpen])
+
   return (
-    <div class="admin-layout">
+    <div class={`admin-layout${menuOpen ? ' menu-open' : ''}`}>
+      {menuOpen && <div class="sidebar-scrim" onClick={() => setMenuOpen(false)} />}
       <AdminSidebar current={current}>
         <ThemeToggle />
-        {/* The account, then the way out of it. Which account is signed in is
-            worth saying on a machine that might be shared with a class. */}
         <div class="sidebar-account">
           <span class="account-email" title={signedInEmail()}>
             {signedInEmail() || '已登入'}
@@ -87,6 +98,19 @@ export function AdminShell({
 
       <main class="admin-main">
         <header class="admin-topbar">
+          <button
+            type="button"
+            class="topbar-burger"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? '關閉選單' : '開啟選單'}
+            aria-expanded={menuOpen}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+              {menuOpen
+                ? <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>
+                : <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>}
+            </svg>
+          </button>
           <h1 class="admin-title">{title ?? labelOf(current)}</h1>
           {actions && <div class="admin-topbar-actions">{actions}</div>}
         </header>
