@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
+import { OpenButton } from '../components/IconButtons'
 import { SlugLock } from '../components/SlugLock'
 import { useStatus } from '../components/StatusBar'
 import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../components/ui'
@@ -173,15 +174,14 @@ export function PagesPage() {
                   <p class="meta">
                     <code>{page.isHome ? '/' : page.path}</code>
                     {page.isHome && <Badge tone="primary">首頁</Badge>}
+                    {/* The same control the ibon page and the dashboard use.
+                        It was a bare <a> here, which meant the browser's own
+                        underlined blue link sitting between two badges. */}
                     {page.status === 'published' && (
-                      <a
-                        class="visit"
-                        href={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        開啟
-                      </a>
+                      <OpenButton
+                        url={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
+                        label={page.title}
+                      />
                     )}
                     {/* Three states, because the third one is the one nobody
                         can see otherwise: edited since it was published. */}

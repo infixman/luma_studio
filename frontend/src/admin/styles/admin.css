@@ -29,13 +29,28 @@ body.admin p {
   line-height: 1.6;
 }
 
-body.admin a {
+:where(body.admin a) {
   color: var(--primary-text);
 }
 
-/* --- controls not yet moved onto the component set --- */
+/* --- the default a bare control gets ---
 
-body.admin button {
+   Wrapped in `:where()`, which contributes nothing to specificity. That is
+   the whole point of this section.
+
+   Written plainly, `body.admin button` is (0,1,2), and anything that styles
+   itself with one class is (0,1,0) — so this rule beat `.ui-icon-button`,
+   `.picker-tile`, `.nav-group` and every other component in the back office.
+   Every ghost icon button rendered as a solid filled square: the drag grip,
+   the ⋯ menu, the slug lock, copy, open. Raising each component's
+   specificity in turn is a move that has now been made twice and would be
+   needed again the next time a blanket rule lands.
+
+   At (0,0,0) the order reverses for good: a component that says what it
+   looks like always wins, and a bare `<button>` with nothing on it still
+   gets something sensible. */
+
+:where(body.admin button) {
   border: 1px solid var(--primary);
   border-radius: var(--radius);
   padding: 0.5rem 0.8rem;
@@ -47,34 +62,34 @@ body.admin button {
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-body.admin button:hover:not(:disabled) {
+:where(body.admin button):hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
 
-body.admin button:disabled {
+:where(body.admin button):disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-body.admin button.danger {
+:where(body.admin button.danger) {
   background: var(--danger);
   border-color: var(--danger);
   color: var(--on-danger);
 }
 
-body.admin button.danger:hover:not(:disabled) {
+:where(body.admin button.danger):hover:not(:disabled) {
   background: var(--danger-hover);
   border-color: var(--danger-hover);
 }
 
-body.admin button.ghost {
+:where(body.admin button.ghost) {
   background: var(--surface);
   color: var(--text-soft);
   border-color: var(--border-strong);
 }
 
-body.admin button.ghost:hover:not(:disabled) {
+:where(body.admin button.ghost):hover:not(:disabled) {
   background: var(--sunken);
   border-color: var(--border-strong);
   color: var(--text);

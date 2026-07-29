@@ -1,10 +1,16 @@
 /* Every colour, spacing step and shadow the back office draws from.
 
-   The scale is Strapi's, measured off a running instance rather than guessed:
-   page #181826, surfaces #212134, borders #32324d, one indigo accent, and a
-   4px radius on everything. Their admin is the reference this back office is
-   being rebuilt against, and matching the numbers is the point — a layout
-   copied at 8px radius and a different indigo reads as an imitation.
+   The spacing, the radius and the layout are Strapi's, measured off a running
+   instance. The colours are not, and were: page #181826, surfaces #212134,
+   one indigo accent. Wearing another product's indigo made this look like
+   every generated admin panel there is, and it looked nothing like the studio
+   it belongs to.
+
+   So: warm greys off the storefront's own ink, and a near-black accent
+   instead of a coloured one. Filled buttons, the current page and selection
+   are ink on paper. That leaves danger, warning, success and info as the only
+   saturated things on screen, which is what makes a red badge mean something
+   — it is not competing with a blue sidebar and a purple button.
 
    Names say what a token is used for, not what it looks like: --surface
    survives a change of palette, --grey-100 has to be found and renamed
@@ -22,67 +28,67 @@
 
 :root {
   /* --- surfaces, back to front --- */
-  --page: #f6f6f9;
+  --page: #faf7f3;
   --surface: #fff;
   --raised: #fff;
-  --sunken: #f6f6f9;
+  --sunken: #f4f0ea;
   /* Named for the icon rail that used to wear them. The navigation is one
      column on --surface now; what still reads these is the toast, which
      wants a surface of its own and an ink that reads on it. */
   --rail: #fff;
-  --rail-text-strong: #32324d;
+  --rail-text-strong: #2b2622;
 
   /* --- text --- */
-  --text: #32324d;
-  --text-soft: #4a4a6a;
-  --muted: #666687;
+  --text: #2b2622;
+  --text-soft: #4a423b;
+  --muted: #6b625a;
   --on-primary: #fff;
 
   /* --- lines --- */
-  --border: #dcdce4;
-  --border-strong: #c0c0cf;
+  --border: #e7e0d7;
+  --border-strong: #cbc1b5;
 
-  /* --- the one accent, and the states that borrow it --- */
-  --primary: #4945ff;
-  --primary-hover: #3733e0;
-  --primary-soft: #f0f0ff;
-  --primary-line: #d9d8ff;
-  /* The accent as *text*. Same as the fill in the light theme; in the dark one
-     the fill is an indigo that reads 2.99:1 on the tint behind it, so text
-     takes the lighter step instead. */
-  --primary-text: #4945ff;
-  --focus-ring: rgb(73 69 255 / 0.2);
+  /* --- the one accent, and the states that borrow it ---
+
+     A near-black warm ink, not a colour. Filled buttons, the current page,
+     selection: all of them are ink on paper, which leaves the four status
+     colours below as the only saturated things on screen — so a red badge
+     means something because nothing near it is competing. */
+  --primary: #33302c;
+  --primary-hover: #1f1d1a;
+  --primary-soft: #f0ebe4;
+  --primary-line: #ddd4c8;
+  /* The accent as *text*. The same ink here; the dark theme needs its own,
+     see the note there. */
+  --primary-text: #33302c;
+  --focus-ring: rgb(51 48 44 / 0.25);
 
   /* --- meaning --- */
-  --danger: #d02b20;
-  --danger-hover: #b72b1a;
-  /* What reads on a filled danger button. White clears 5.19:1 here, but the
-     dark theme's danger is a much lighter red — see the note there. */
+  --danger: #b3261e;
+  --danger-hover: #8f1e17;
+  /* What reads on a filled danger button. */
   --on-danger: #fff;
-  --danger-soft: #fcecea;
-  --danger-line: #f5c0b8;
-  /* Darker than Strapi's #be5d01, which reads 4.03:1 on its own tint — these
-     badges are 12px, so that is under AA. This one is 5.15:1. */
-  --warning: #a54f00;
+  --danger-soft: #fdece9;
+  --danger-line: #f3c9c2;
+  --warning: #96551a;
   --on-warning: #fff;
-  --warning-soft: #fdf4dc;
-  --warning-line: #faca8c;
-  --success: #328048;
+  --warning-soft: #fdf1de;
+  --warning-line: #edd3ab;
+  --success: #2f6b46;
   --on-success: #fff;
-  --success-soft: #eafbe7;
-  --success-line: #c6f0c2;
-  --info: #0c75af;
-  --info-soft: #eaf5ff;
-  --info-line: #b8e1ff;
+  --success-soft: #e7f4ec;
+  --success-line: #bcdfc9;
+  --info: #1e5f86;
+  --info-soft: #e6f2f9;
+  --info-line: #b6d9ec;
 
   /* --- depth --- */
   /* Behind a modal. The same in both themes: a scrim is there to push the
      page back, and it does that by being dark whatever is under it. */
-  --scrim: rgb(10 10 20 / 0.55);
-
-  --shadow-1: 0 1px 4px rgb(33 33 52 / 0.1);
-  --shadow-2: 0 2px 15px rgb(33 33 52 / 0.1);
-  --shadow-3: 0 16px 40px rgb(33 33 52 / 0.22);
+  --scrim: rgb(20 17 15 / 0.55);
+  --shadow-1: 0 1px 4px rgb(43 38 34 / 0.09);
+  --shadow-2: 0 2px 15px rgb(43 38 34 / 0.1);
+  --shadow-3: 0 16px 40px rgb(43 38 34 / 0.22);
 
   /* --- shape and rhythm --- */
   /* 4px on everything, the way Strapi does it. A pill is still a pill. */
@@ -119,100 +125,114 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --page: #181826;
-    --surface: #212134;
-    --raised: #212134;
-    --sunken: #181826;
-    --rail: #212134;
-    --rail-text-strong: #fff;
+    --page: #1a1817;
+    --surface: #232120;
+    --raised: #232120;
+    --sunken: #1a1817;
+    --rail: #232120;
+    --rail-text-strong: #f4f0ea;
 
-    --text: #fff;
-    --text-soft: #eaeaef;
-    --muted: #a5a5ba;
-    --on-primary: #fff;
+    --text: #f4f0ea;
+    --text-soft: #ddd6cd;
+    --muted: #a79e94;
+    /* The fill is near-white here, so what reads on it is the dark ink. */
+    --on-primary: #221f1d;
 
-    --border: #32324d;
-    --border-strong: #4a4a6a;
+    --border: #38332f;
+    --border-strong: #4c4540;
 
-    --primary: #4945ff;
-    --primary-hover: #7b79ff;
-    --primary-soft: #181826;
-    --primary-line: #4a4a6a;
-    --primary-text: #7b79ff;
-    --focus-ring: rgb(123 121 255 / 0.35);
+    /* Inverted, not lightened: the light theme's primary is ink on paper, so
+       the dark one is paper on ink. A filled button stays the strongest thing
+       on screen without being the only coloured thing on screen. */
+    --primary: #e9e3da;
+    --primary-hover: #fffaf2;
+    --primary-soft: #2b2725;
+    --primary-line: #4c4540;
+    /* Not the fill: a near-white "link" is indistinguishable from body text.
+       This is the one place the studio's own terracotta shows through, warmed
+       up until it reads at 10:1 on the surface. */
+    --primary-text: #e9c9a8;
+    --focus-ring: rgb(233 227 218 / 0.35);
 
-    --danger: #ee5e52;
-    --danger-hover: #d02b20;
-    /* Not white: #fff on #ee5e52 is 3.30:1, and these buttons are 14px, so
-       that fails AA. A dark ink on the same red is 5.67:1. */
-    --on-danger: #1f0d0c;
-    --danger-soft: #181826;
-    --danger-line: #4a4a6a;
-    --warning: #f29d41;
-    --on-warning: #2a1602;
-    --warning-soft: #181826;
-    --warning-line: #4a4a6a;
-    --success: #5cb176;
-    --on-success: #06210f;
-    --success-soft: #181826;
-    --success-line: #4a4a6a;
-    --info: #66b7f1;
-    --info-soft: #181826;
-    --info-line: #4a4a6a;
+    --danger: #f08a80;
+    --danger-hover: #f5a49c;
+    /* Not white: these reds are light enough that white fails on them, and
+       the buttons are 14px. A dark ink on the same red clears AA. */
+    --on-danger: #2a1210;
+    --danger-soft: #2a201e;
+    --danger-line: #4c3a36;
+    --warning: #e3a463;
+    --on-warning: #2a1c0a;
+    --warning-soft: #2a2320;
+    --warning-line: #4c4034;
+    --success: #79c295;
+    --on-success: #0d2417;
+    --success-soft: #1e2a23;
+    --success-line: #3a4c41;
+    --info: #7cc0e8;
+    --info-soft: #1c2530;
+    --info-line: #364857;
 
-    --shadow-1: 0 1px 4px rgb(3 3 5 / 0.2);
-    --shadow-2: 1px 1px 10px rgb(3 3 5 / 0.25);
-    --shadow-3: 0 16px 40px rgb(3 3 5 / 0.5);
+    --shadow-1: 0 1px 4px rgb(0 0 0 / 0.3);
+    --shadow-2: 0 2px 15px rgb(0 0 0 / 0.35);
+    --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
   }
 }
 
 /* The chosen theme, which must beat the system rule above — hence the
    duplication rather than a shared block. */
 :root[data-theme='dark'] {
-  --page: #181826;
-  --surface: #212134;
-  --raised: #212134;
-  --sunken: #181826;
-  --rail: #212134;
-  --rail-text-strong: #fff;
+  --page: #1a1817;
+  --surface: #232120;
+  --raised: #232120;
+  --sunken: #1a1817;
+  --rail: #232120;
+  --rail-text-strong: #f4f0ea;
 
-  --text: #fff;
-  --text-soft: #eaeaef;
-  --muted: #a5a5ba;
-  --on-primary: #fff;
+  --text: #f4f0ea;
+  --text-soft: #ddd6cd;
+  --muted: #a79e94;
+  /* The fill is near-white here, so what reads on it is the dark ink. */
+  --on-primary: #221f1d;
 
-  --border: #32324d;
-  --border-strong: #4a4a6a;
+  --border: #38332f;
+  --border-strong: #4c4540;
 
-  --primary: #4945ff;
-  --primary-hover: #7b79ff;
-  --primary-soft: #181826;
-  --primary-line: #4a4a6a;
-  --primary-text: #7b79ff;
-  --focus-ring: rgb(123 121 255 / 0.35);
+  /* Inverted, not lightened: the light theme's primary is ink on paper, so
+     the dark one is paper on ink. A filled button stays the strongest thing
+     on screen without being the only coloured thing on screen. */
+  --primary: #e9e3da;
+  --primary-hover: #fffaf2;
+  --primary-soft: #2b2725;
+  --primary-line: #4c4540;
+  /* Not the fill: a near-white "link" is indistinguishable from body text.
+     This is the one place the studio's own terracotta shows through, warmed
+     up until it reads at 10:1 on the surface. */
+  --primary-text: #e9c9a8;
+  --focus-ring: rgb(233 227 218 / 0.35);
 
-  --danger: #ee5e52;
-  --danger-hover: #d02b20;
-  /* Not white: #fff on #ee5e52 is 3.30:1, and these buttons are 14px, so
-     that fails AA. A dark ink on the same red is 5.67:1. */
-  --on-danger: #1f0d0c;
-  --danger-soft: #181826;
-  --danger-line: #4a4a6a;
-  --warning: #f29d41;
-  --on-warning: #2a1602;
-  --warning-soft: #181826;
-  --warning-line: #4a4a6a;
-  --success: #5cb176;
-  --on-success: #06210f;
-  --success-soft: #181826;
-  --success-line: #4a4a6a;
-  --info: #66b7f1;
-  --info-soft: #181826;
-  --info-line: #4a4a6a;
+  --danger: #f08a80;
+  --danger-hover: #f5a49c;
+  /* Not white: these reds are light enough that white fails on them, and
+     the buttons are 14px. A dark ink on the same red clears AA. */
+  --on-danger: #2a1210;
+  --danger-soft: #2a201e;
+  --danger-line: #4c3a36;
+  --warning: #e3a463;
+  --on-warning: #2a1c0a;
+  --warning-soft: #2a2320;
+  --warning-line: #4c4034;
+  --success: #79c295;
+  --on-success: #0d2417;
+  --success-soft: #1e2a23;
+  --success-line: #3a4c41;
+  --info: #7cc0e8;
+  --info-soft: #1c2530;
+  --info-line: #364857;
 
-  --shadow-1: 0 1px 4px rgb(3 3 5 / 0.2);
-  --shadow-2: 1px 1px 10px rgb(3 3 5 / 0.25);
-  --shadow-3: 0 16px 40px rgb(3 3 5 / 0.5);
+  --shadow-1: 0 1px 4px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 15px rgb(0 0 0 / 0.35);
+  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
 }
 
 /* Light is the value set on :root, so choosing it only has to say "stop
