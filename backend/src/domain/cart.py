@@ -234,10 +234,11 @@ async def price_lines(env, lines: list[dict]) -> dict:
                 "lineTotal": line_total,
                 "containsCourse": resolved["containsCourse"],
                 "requiresShipping": resolved["requiresShipping"],
-                "components": [
-                    {"type": component["type"], "title": component["targetTitle"]}
-                    for component in resolved["components"]
-                ],
+                # The resolved components in full. The order writes its
+                # snapshots from these, so both come from one read of the
+                # offer rather than two that could differ. `public_quote`
+                # trims them before any of this reaches a browser.
+                "components": resolved["components"],
                 "stockLeft": lowest if lowest is not None and lowest <= shop.LOW_STOCK_THRESHOLD else None,
             }
         )
@@ -251,4 +252,28 @@ async def price_lines(env, lines: list[dict]) -> dict:
         "shippingSubtotal": shipping_subtotal,
         "requiresShipping": any(line["requiresShipping"] for line in priced),
         "containsCourse": any(line["containsCourse"] for line in priced),
+    }
+
+
+def public_quote(priced: dict) -> dict:
+    """The same quote with the parts a browser has no business seeing.
+
+    A resolved component carries the target's id and how many are on the
+    shelf. The page needs neither: it says what the plan includes, and
+    "only 3 left" is already on the line. Object ids and stock figures are
+    the shop's, not the visitor's.
+    """
+
+    return {
+        **priced,
+        "lines": [
+            {
+                **line,
+                "components": [
+                    {"type": component["type"], "title": component["targetTitle"]}
+                    for component in line["components"]
+                ],
+            }
+            for line in priced["lines"]
+        ],
     }

@@ -30,7 +30,14 @@ def checkout(monkeypatch):
     from api.front import checkout as module
 
     async def price_lines(_env, _lines):
-        return {"lines": [{"variantId": "v1", "quantity": 1}], "problems": [], "subtotal": 100}
+        return {
+            "lines": [{"variantId": "v1", "offerId": "v1", "quantity": 1, "requiresShipping": True}],
+            "problems": [],
+            "subtotal": 100,
+            "shippingSubtotal": 100,
+            "requiresShipping": True,
+            "containsCourse": False,
+        }
 
     async def get_method(_env, _method):
         return {"method": "cvs_c2c", "enabled": True}

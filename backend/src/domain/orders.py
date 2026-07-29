@@ -15,7 +15,7 @@ written once, here.
 import re
 
 from shared import paging
-from domain import inventory, shipping, shop
+from domain import entitlements, inventory, shipping, shop
 import mail
 from shared.common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
 
@@ -428,7 +428,87 @@ async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool
     if changed:
         await audit(env, order_id, actor, "paid", before="pending", after="paid", detail=detail)
         await _tell_customer(env, order_id, "paid")
+    # Outside the `changed` branch on purpose. If the transition landed but
+    # granting failed, the next callback finds the order already paid and
+    # would skip provisioning forever — which is the one way a member pays
+    # and never gets their course.
+    await provision_paid_order(env, order_id)
     return changed
+
+
+async def provision_paid_order(env, order_id: str) -> None:
+    """Give the member what this order promised. Safe to run again.
+
+    Called by `mark_paid`, by the admin's manual mark, and by
+    reconciliation — none of which is the single chance to get this right.
+    Payment succeeding and provisioning failing has to be recoverable without
+    anyone re-taking money.
+
+    Each course fulfilment is granted and then marked done, so a job looking
+    for stragglers can find exactly the ones that did not make it.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM order_fulfillments"
+            " WHERE order_id = ?1 AND fulfillment_type = 'course' AND status != 'fulfilled'"
+        ).bind(order_id)
+    )
+    order_rows = await d1_rows(env.DB.prepare("SELECT * FROM orders WHERE id = ?1").bind(order_id))
+    if not order_rows:
+        return
+    customer_id = order_rows[0]["customer_id"]
+
+    granted = 0
+    for row in rows:
+        await entitlements.grant_from_fulfillment(
+            env,
+            customer_id=customer_id,
+            course_id=row["target_id"],
+            fulfillment_id=row["id"],
+            access_days=None if row["access_days"] is None else int(row["access_days"]),
+        )
+        await env.DB.prepare(
+            "UPDATE order_fulfillments SET status = 'fulfilled', updated_at = ?2 WHERE id = ?1"
+        ).bind(row["id"], utc_timestamp()).run()
+        granted += 1
+
+    if granted:
+        await audit(env, order_id, "system", "course_granted", detail=f"{granted} course(s)")
+
+    await _complete_if_nothing_to_post(env, order_id)
+
+
+async def _complete_if_nothing_to_post(env, order_id: str) -> None:
+    """A digital order has no parcel, so nothing will ever move it along.
+
+    Only once every course fulfilment has landed. Completing an order whose
+    grants failed would hide the failure behind a green tick.
+    """
+
+    physical = await d1_rows(
+        env.DB.prepare(
+            "SELECT COUNT(*) AS physical FROM order_fulfillments"
+            " WHERE order_id = ?1 AND fulfillment_type = 'inventory'"
+        ).bind(order_id)
+    )
+    if physical and int(physical[0]["physical"]) > 0:
+        return
+
+    pending = await d1_rows(
+        env.DB.prepare(
+            "SELECT COUNT(*) AS pending FROM order_fulfillments"
+            " WHERE order_id = ?1 AND status != 'fulfilled'"
+        ).bind(order_id)
+    )
+    if pending and int(pending[0]["pending"]) > 0:
+        return
+
+    result = await env.DB.prepare(
+        "UPDATE orders SET status = 'completed', updated_at = ?2 WHERE id = ?1 AND status = 'paid'"
+    ).bind(order_id, utc_timestamp()).run()
+    if d1_changed(result):
+        await audit(env, order_id, "system", "completed", before="paid", after="completed")
 
 
 # What the shop is allowed to do to an order, and from where. Written as a

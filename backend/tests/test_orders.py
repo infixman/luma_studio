@@ -621,3 +621,212 @@ class TestWhatTheOrderPromised:
 
         _, bindings = next(w for w in database.writes if "INSERT INTO orders" in w[0])
         assert "none" in bindings
+
+
+class JsonStorefrontRequest(FakeRequest):
+    def __init__(self, path: str, body: dict, **headers):
+        base = {"Origin": STOREFRONT_ORIGIN, "x-luma-app": "1"}
+        base.update(headers)
+        super().__init__(path, "POST", base)
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+SESSION_COOKIE = {"Cookie": "luma_customer_session=" + "a" * 40}
+
+SIGNED_IN_CUSTOMER = {
+    "FROM customer_sessions": [
+        {
+            "id": "c1",
+            "email": "buyer@example.com",
+            "display_name": "",
+            "default_recipient_name": "",
+            "default_recipient_phone": "",
+            "default_address": "",
+            "blocked": 0,
+        }
+    ]
+}
+
+
+def digital_catalogue() -> dict:
+    """One product sold as one course, and nothing else."""
+
+    return {
+        **SIGNED_IN_CUSTOMER,
+        "FROM product_variants v JOIN products p": [{
+            "id": "off-1", "product_id": "prod-1", "title": "", "price": 3980, "enabled": 1,
+            "product_status": "active", "product_title": "水彩入門",
+        }],
+        "SELECT * FROM offer_components": [{
+            "id": "oc-1", "offer_id": "off-1", "component_type": "course",
+            "component_id": "course-1", "quantity": 1, "access_days": 30, "position": 0,
+        }],
+        "SELECT * FROM courses": [{"id": "course-1", "title": "水彩花卉入門", "status": "published"}],
+        "SELECT * FROM products WHERE id": [{
+            "id": "prod-1", "slug": "watercolour", "title": "水彩入門", "description": "",
+            "status": "active", "position": 0, "created_at": 0, "updated_at": 0,
+        }],
+        # create_order reads the order back before returning it.
+        "SELECT * FROM orders WHERE id": [{
+            "id": "LS202607281234567", "customer_id": "c1", "status": "pending",
+            "subtotal": 3980, "shipping_fee": 0, "total": 3980, "shipping_method": "none",
+            "recipient_name": "王小明", "recipient_phone": "", "recipient_email": "buyer@example.com",
+            "shipping_address": "", "store_name": None, "store_addr": None,
+            "reserved_until": 900, "paid_at": None, "created_at": 0,
+        }],
+    }
+
+
+class TestCheckingOutSomethingWithNothingToPost:
+    """A course has no address. Asking for one is asking for nothing."""
+
+    def _checkout(self, call, body: dict, answers: dict | None = None):
+        return call(
+            JsonStorefrontRequest("/api/checkout", body, **SESSION_COOKIE),
+            FakeDatabase(answers or digital_catalogue()),
+        )
+
+    def test_a_course_can_be_bought_without_a_delivery_method(self, call):
+        response = self._checkout(
+            call,
+            {
+                "lines": [{"offerId": "off-1", "quantity": 1}],
+                "recipientName": "王小明",
+                "recipientEmail": "buyer@example.com",
+            },
+        )
+
+        assert response.status == 201
+
+    def test_no_phone_number_is_demanded_for_something_nobody_will_deliver(self, call):
+        response = self._checkout(
+            call,
+            {
+                "lines": [{"offerId": "off-1", "quantity": 1}],
+                "recipientName": "王小明",
+                "recipientEmail": "buyer@example.com",
+            },
+        )
+
+        assert response.status == 201
+
+    def test_a_name_is_still_required(self, call):
+        """It goes on the receipt and the notification email."""
+
+        response = self._checkout(
+            call,
+            {"lines": [{"offerId": "off-1", "quantity": 1}], "recipientEmail": "buyer@example.com"},
+        )
+
+        assert response.status == 400
+
+    def test_a_cart_that_ships_still_needs_a_delivery_method(self, call):
+        answers = digital_catalogue()
+        answers["SELECT * FROM offer_components"] = [{
+            "id": "oc-1", "offer_id": "off-1", "component_type": "inventory",
+            "component_id": "kit-1", "quantity": 1, "access_days": None, "position": 0,
+        }]
+        answers["SELECT * FROM inventory_items"] = [{
+            "id": "kit-1", "title": "材料包", "sku": "KIT-1", "stock": 5, "enabled": 1, "archived_at": None,
+        }]
+
+        response = self._checkout(
+            call,
+            {
+                "lines": [{"offerId": "off-1", "quantity": 1}],
+                "recipientName": "王小明",
+                "recipientPhone": "0912345678",
+                "recipientEmail": "buyer@example.com",
+            },
+            answers,
+        )
+
+        assert response.status == 400
+
+
+class TestProvisioningAfterPayment:
+    """Granting what was paid for, however many times the callback arrives."""
+
+    def _database(self, fulfillments: list[dict], *, physical: bool = False) -> FakeDatabase:
+        return FakeDatabase(
+            {
+                "SELECT * FROM order_fulfillments": fulfillments,
+                "SELECT * FROM course_entitlements": [],
+                "SELECT COUNT(*) AS physical FROM order_fulfillments": [{"physical": 1 if physical else 0}],
+                "SELECT * FROM orders WHERE id": [{
+                    "id": "LS1", "customer_id": "c1", "status": "paid", "subtotal": 3980,
+                    "shipping_fee": 0, "total": 3980, "shipping_method": "none",
+                    "recipient_name": "王小明", "recipient_phone": "", "recipient_email": "b@c.d",
+                    "shipping_address": "", "store_name": None, "store_addr": None,
+                    "reserved_until": None, "paid_at": 1, "created_at": 0,
+                }],
+            }
+        )
+
+    def _fulfillment(self, fulfillment_id="ff-1", access_days=None, status="pending"):
+        return {
+            "id": fulfillment_id, "order_id": "LS1", "order_item_id": "item-1",
+            "fulfillment_type": "course", "target_id": "course-1", "target_title": "水彩花卉入門",
+            "sku": None, "quantity": 1, "access_days": access_days, "status": status,
+        }
+
+    def test_a_paid_course_becomes_a_grant(self, orders):
+        database = self._database([self._fulfillment(access_days=30)])
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert any("INSERT INTO course_entitlements" in statement for statement, _ in database.writes)
+
+    def test_the_fulfilment_is_marked_done_so_reconciliation_can_find_the_rest(self, orders):
+        database = self._database([self._fulfillment()])
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert any(
+            "UPDATE order_fulfillments SET status = 'fulfilled'" in statement
+            for statement, _ in database.writes
+        )
+
+    def test_a_fulfilment_already_done_is_left_alone(self, orders):
+        """A resent callback must not grant a second time or re-audit.
+
+        The query asks only for rows that are not fulfilled, so an order whose
+        grants all landed hands back nothing to do.
+        """
+
+        database = self._database([])
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert not any("INSERT INTO course_entitlements" in statement for statement, _ in database.writes)
+
+    def test_a_digital_order_completes_itself(self, orders):
+        """There is no parcel to wait for, so 'paid' is not a state anybody
+        is going to move it out of by hand."""
+
+        database = self._database([self._fulfillment()])
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert any(
+            "UPDATE orders SET status = 'completed'" in statement for statement, _ in database.writes
+        )
+
+    def test_an_order_with_something_to_post_stays_paid(self, orders):
+        database = self._database([self._fulfillment()], physical=True)
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert not any(
+            "UPDATE orders SET status = 'completed'" in statement for statement, _ in database.writes
+        )
+
+    def test_an_order_with_nothing_digital_grants_nothing(self, orders):
+        database = self._database([])
+
+        run(orders.provision_paid_order(make_env(database), "LS1"))
+
+        assert not any("INSERT INTO course_entitlements" in statement for statement, _ in database.writes)

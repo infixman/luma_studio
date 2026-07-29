@@ -23,14 +23,15 @@ async def cart_validate_response(ctx: Ctx):
     except (ValueError, AttributeError):
         return ctx.error("Invalid cart", 400)
     priced = await cart.price_lines(ctx.env, lines)
+    public = cart.public_quote(priced)
     if not priced["requiresShipping"]:
         # Nothing in this cart is posted. Offering delivery options would ask
         # the customer to pick between ways of sending them nothing.
-        return ctx.json({**priced, "shipping": []})
+        return ctx.json({**public, "shipping": []})
     methods = await shipping.list_methods(ctx.env, only_enabled=True)
     # Quoted against what actually ships, so a course in the cart cannot push
     # the order over a free-delivery threshold it did not pay towards.
-    return ctx.json({**priced, "shipping": shipping.quote(methods, priced["shippingSubtotal"])})
+    return ctx.json({**public, "shipping": shipping.quote(methods, priced["shippingSubtotal"])})
 
 
 async def profile_response(ctx: Ctx, customer: dict):
@@ -61,25 +62,43 @@ async def checkout_response(ctx: Ctx, customer: dict):
         if not isinstance(body, dict):
             raise ValueError
         lines = cart.parse_lines(body.get("lines"))
-        method_name = str(body.get("shippingMethod") or "")
-        recipient = {"name": orders.validate_recipient_name(body.get("recipientName") or ""), "phone": orders.validate_phone(body.get("recipientPhone") or ""), "email": orders.validate_email(body.get("recipientEmail") or customer["email"]), "address": ""}
     except cart.CartError as error:
-        return ctx.error(str(error), 400)
-    except orders.OrderError as error:
         return ctx.error(str(error), 400)
     except (ValueError, AttributeError):
         return ctx.error("Invalid checkout", 400)
-    method = await shipping.get_method(ctx.env, method_name)
-    if method is None or not method["enabled"]:
-        return ctx.error("請選擇一個可用的配送方式", 400)
-    if method["method"] == "home":
-        try:
-            recipient["address"] = orders.validate_address(body.get("address") or "", required=True)
-        except orders.OrderError as error:
-            return ctx.error(str(error), 400)
+
+    # Price first. What the cart turns out to hold decides which fields this
+    # request even needs — asking a course buyer for a delivery address is
+    # asking them for something nobody will ever read.
     priced = await cart.price_lines(ctx.env, lines)
     if priced["problems"]:
         return ctx.json({"error": "購物車內容已經變動，請回到購物車確認後再結帳", "problems": priced["problems"]}, 409)
+    if not priced["lines"]:
+        return ctx.error("購物車是空的", 400)
+
+    requires_shipping = priced["requiresShipping"]
+
+    try:
+        recipient = {
+            # Needed either way: it goes on the receipt and the notification.
+            "name": orders.validate_recipient_name(body.get("recipientName") or ""),
+            "phone": orders.validate_phone(body.get("recipientPhone") or "") if requires_shipping else "",
+            "email": orders.validate_email(body.get("recipientEmail") or customer["email"]),
+            "address": "",
+        }
+    except orders.OrderError as error:
+        return ctx.error(str(error), 400)
+
+    method = None
+    if requires_shipping:
+        method = await shipping.get_method(ctx.env, str(body.get("shippingMethod") or ""))
+        if method is None or not method["enabled"]:
+            return ctx.error("請選擇一個可用的配送方式", 400)
+        if method["method"] == "home":
+            try:
+                recipient["address"] = orders.validate_address(body.get("address") or "", required=True)
+            except orders.OrderError as error:
+                return ctx.error(str(error), 400)
     try:
         order = await orders.create_order(ctx.env, customer, priced=priced, method=method, recipient=recipient, day=taipei_day().replace("-", ""))
     except orders.OrderError as error:

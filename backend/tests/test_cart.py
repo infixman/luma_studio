@@ -174,7 +174,19 @@ class TestRepricing:
                 "lineTotal": 1050,
                 "containsCourse": False,
                 "requiresShipping": True,
-                "components": [{"type": "inventory", "title": "蘇打托特包"}],
+                "components": [
+                    {
+                        "type": "inventory",
+                        "targetId": "v1",
+                        "targetTitle": "蘇打托特包",
+                        "sku": "",
+                        "quantity": 1,
+                        # Resolved against what was asked for, before stock
+                        # cut the line down to what is actually there.
+                        "requiredQuantity": 9,
+                        "availableStock": 3,
+                    }
+                ],
                 "stockLeft": 0,
             }
         ]
