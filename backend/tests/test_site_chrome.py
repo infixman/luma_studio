@@ -325,6 +325,24 @@ class TestFooterStructure:
         assert settings["footerSocials"] == []
 
 
+class TestMenuWrites:
+    def test_create_menu_item_generates_an_id_and_inserts_it(self, site_chrome):
+        database = FakeDatabase()
+        menu_id = asyncio.run(
+            site_chrome.create_menu_item(
+                make_env(database=database),
+                parent_id=None,
+                label="課程",
+                target_kind="parent",
+                target="",
+            )
+        )
+
+        assert site_chrome.validate_menu_id(menu_id) == menu_id
+        insert = next(write for write in database.writes if "INSERT INTO menu_items" in write[0])
+        assert insert[1][:5] == (menu_id, None, "課程", "parent", "")
+
+
 class TestMenuDepth:
     def test_the_top_level_is_depth_one(self, site_chrome):
         assert site_chrome.depth_of([], None) == 1
