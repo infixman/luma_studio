@@ -72,7 +72,7 @@ class TestBlocks:
     def test_a_text_block_keeps_only_its_body(self, pages):
         block_type, config = pages.validate_block("text", {"body": "# 標題", "somethingElse": 1})
         assert block_type == "text"
-        assert config == {"body": "# 標題"}
+        assert config == {"body": "# 標題", "format": "markdown"}
 
     def test_an_unknown_type_is_refused(self, pages):
         """A block the frontend cannot render looks like data loss to whoever
@@ -93,7 +93,7 @@ class TestBlocks:
 class TestReadingStoredBlocks:
     def test_a_stored_block_round_trips(self, pages):
         row = {"id": "b1", "type": "text", "config": json.dumps({"body": "hi"}), "position": 0}
-        assert pages.block_row(row)["config"] == {"body": "hi"}
+        assert pages.block_row(row)["config"] == {"body": "hi", "format": "markdown"}
 
     @pytest.mark.parametrize(
         "row",

@@ -35,12 +35,15 @@ export function Blocks({ blocks }: { blocks: PageBlock[] }) {
 function Block({ block }: { block: PageBlock }) {
   switch (block.type) {
     case 'text':
-      // The HTML is produced by renderMarkdown, which escapes its input before
-      // applying any rule — the only tags here are ones that file wrote.
       return (
         <section
           class="block block-text"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(block.config.body ?? '') }}
+          dangerouslySetInnerHTML={{
+            __html:
+              block.config.format === 'html'
+                ? (block.config.body ?? '')
+                : renderMarkdown(block.config.body ?? ''),
+          }}
         />
       )
 

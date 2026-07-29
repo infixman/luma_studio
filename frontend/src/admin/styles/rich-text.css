@@ -1,0 +1,128 @@
+.rte-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.rte-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--sunken);
+  flex-wrap: wrap;
+}
+
+.rte-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+:where(body.admin) .rte-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+:where(body.admin) .rte-btn:hover {
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+:where(body.admin) .rte-btn.is-active {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.rte-content {
+  min-height: 200px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: var(--space-3);
+  font-size: var(--font-base);
+  line-height: 1.7;
+  color: var(--text);
+  outline: none;
+}
+
+.rte-content:focus {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* Content styling inside the editor — mirrors the storefront's block-text. */
+.rte-content p {
+  margin: 0 0 0.75em;
+}
+
+.rte-content h2 {
+  font-size: 1.4em;
+  font-weight: 650;
+  margin: 1em 0 0.5em;
+  color: var(--text);
+}
+
+.rte-content h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  color: var(--text);
+}
+
+.rte-content h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+  color: var(--text);
+}
+
+.rte-content ul,
+.rte-content ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.5em;
+}
+
+.rte-content li {
+  margin-bottom: 0.25em;
+}
+
+.rte-content a {
+  color: var(--primary-text);
+  text-decoration: underline;
+}
+
+.rte-content blockquote {
+  margin: 0 0 0.75em;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-soft);
+}
+
+.rte-content strong {
+  font-weight: 650;
+}
+
+.rte-content em {
+  font-style: italic;
+}
+
+.rte-content:empty::before {
+  content: "開始輸入內容…";
+  color: var(--muted);
+  pointer-events: none;
+}

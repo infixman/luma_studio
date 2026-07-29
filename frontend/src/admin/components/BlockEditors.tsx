@@ -91,7 +91,7 @@ export function BlockIcon({ type }: { type: PageBlock['type'] }) {
 }
 
 export const BLOCK_KINDS: { type: PageBlock['type']; label: string; hint: string }[] = [
-  { type: 'text', label: '純文字', hint: '條款、說明，支援 Markdown' },
+  { type: 'text', label: '文字', hint: '標題、段落、清單，所見即所得編輯' },
   { type: 'carousel', label: '輪播圖', hint: '一次一張，可以放圖說與連結' },
   { type: 'album', label: '相簿', hint: '格狀排列的作品照片' },
   { type: 'shop', label: '商城', hint: '指定商品，或整個分類' },
@@ -121,8 +121,12 @@ export const CONTACT_KINDS: { value: ContactKind; label: string }[] = [
 export function blockSummary(type: PageBlock['type'], config: BlockConfig): string {
   switch (type) {
     case 'text': {
-      const body = (config as TextBlockConfig).body.replace(/[#*_>`\-]/g, '').trim()
-      return body ? clip(body.split('\n')[0] ?? '', 60) : '（還沒有內容）'
+      const tc = config as TextBlockConfig
+      const plain =
+        tc.format === 'html'
+          ? tc.body.replace(/<[^>]*>/g, '').trim()
+          : tc.body.replace(/[#*_>`\-]/g, '').trim()
+      return plain ? clip(plain.split('\n')[0] ?? '', 60) : '（還沒有內容）'
     }
     case 'carousel': {
       const slides = (config as CarouselConfig).slides
@@ -193,7 +197,7 @@ export function emptyConfig(type: PageBlock['type']): BlockConfig {
         detailsSide: 'left',
       } satisfies ContactConfig
     default:
-      return { body: '' } satisfies TextBlockConfig
+      return { body: '', format: 'html' } satisfies TextBlockConfig
   }
 }
 
@@ -236,17 +240,7 @@ function Choices<T extends string | number>({
   )
 }
 
-export function TextEditor({ config, onChange }: { config: TextBlockConfig; onChange: (next: TextBlockConfig) => void }) {
-  return (
-    <textarea
-      rows={10}
-      maxLength={20000}
-      value={config.body}
-      placeholder={'# 標題\n\n一段文字。\n\n- 清單項目\n- 另一項\n\n**粗體**、[連結](https://example.com)'}
-      onInput={(event) => onChange({ body: (event.target as HTMLTextAreaElement).value })}
-    />
-  )
-}
+export { RichTextEditor as TextEditor } from './RichTextEditor'
 
 export function CarouselEditor({
   config,

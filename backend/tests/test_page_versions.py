@@ -16,7 +16,7 @@ def pages():
 
 
 def text_block(body="哈囉", position=0):
-    return {"id": f"b{position}", "type": "text", "config": json.dumps({"body": body}), "position": position}
+    return {"id": f"b{position}", "type": "text", "config": json.dumps({"body": body, "format": "markdown"}), "position": position}
 
 
 def run(coroutine):
@@ -207,9 +207,9 @@ class TestTheThreeStates:
     def test_the_blocks_can_be_handed_in_rather_than_read_twice(self, pages):
         """The editor's detail response has already read them."""
 
-        published = pages.snapshot_of([{"type": "text", "config": {"body": "哈囉"}, "position": 0}])
+        published = pages.snapshot_of([{"type": "text", "config": {"body": "哈囉", "format": "markdown"}, "position": 0}])
         database = FakeDatabase({"FROM page_versions": [{"payload": published, "is_current": 1}]})
-        blocks = [{"id": "b0", "type": "text", "config": {"body": "哈囉"}, "position": 0}]
+        blocks = [{"id": "b0", "type": "text", "config": {"body": "哈囉", "format": "markdown"}, "position": 0}]
         assert run(pages.publish_state(make_env(database), "p1", blocks)) == "published"
         assert not any("FROM page_blocks" in statement for statement in database.statements)
 

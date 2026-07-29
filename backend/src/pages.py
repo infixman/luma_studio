@@ -16,6 +16,7 @@ import re
 import media
 from bio_link import validate_url
 from common import d1_rows, urlsafe_token, utc_timestamp
+from sanitize import sanitize_html
 
 
 PAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,60}$")
@@ -201,7 +202,12 @@ def _validate_text_block(config: dict) -> dict:
     body = str(config.get("body") or "")
     if len(body) > MAX_TEXT:
         raise PageError(f"文字區塊請控制在 {MAX_TEXT} 個字以內")
-    return {"body": body}
+    fmt = str(config.get("format") or "markdown")
+    if fmt not in ("markdown", "html"):
+        fmt = "markdown"
+    if fmt == "html":
+        body = sanitize_html(body)
+    return {"body": body, "format": fmt}
 
 
 def _validate_carousel(config: dict) -> dict:

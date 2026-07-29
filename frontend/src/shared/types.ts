@@ -467,6 +467,7 @@ export interface MediaRef {
 
 export interface TextBlockConfig {
   body: string
+  format?: 'markdown' | 'html'
 }
 
 export interface CarouselSlide {
