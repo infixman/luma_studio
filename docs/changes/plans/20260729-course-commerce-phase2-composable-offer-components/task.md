@@ -2,24 +2,27 @@
 
 ## 1. Migration
 
-- [ ] 建立 `inventory_items`。
-- [ ] 建立 `courses` 最小骨架。
-- [ ] 建立 `offer_components` 與索引。
-- [ ] 撰寫既有 variant 到 InventoryItem 的可重跑 backfill。
-- [ ] 為每筆既有 Offer 建立 inventory component。
-- [ ] 加入 migration 後資料數量與 stock 對照檢查。
-- [ ] 保留舊 `sku`、`stock` 欄位供回滾，不立即刪除。
+- [x] 建立 `inventory_items`。（`0028_create_offer_components`；非空 SKU partial unique、`(enabled, title)` picker）
+- [x] 建立 `courses` 最小骨架。（slug unique）
+- [x] 建立 `offer_components` 與索引。（unique `(offer_id, component_type, component_id)`、`(offer_id, position)`、`(component_type, component_id)`）
+- [x] 撰寫既有 variant 到 InventoryItem 的可重跑 backfill。（`INSERT OR IGNORE`，item id 沿用 offer id，不需 mapping 表；已調整的 stock 不被覆寫）
+- [x] 為每筆既有 Offer 建立 inventory component。（id 為 `'oc0-' || offer_id`，quantity=1）
+- [ ] 加入 migration 後資料數量與 stock 對照檢查。blocker：需 staging/production D1；本機已用真 SQLite 覆蓋重跑與不覆寫（`backend/tests/test_migrations_sqlite.py`）。
+- [x] 保留舊 `sku`、`stock` 欄位供回滾，不立即刪除。
 
 ## 2. Domain
 
-- [ ] 建立 InventoryItem row mapper、驗證與 CRUD。
-- [ ] 建立 Course skeleton row mapper、驗證與 CRUD。
-- [ ] 建立 OfferComponent row mapper 與完整集合更新。
-- [ ] 實作 `resolve_offer`，集中推導能力與 component 數量。
-- [ ] 實作 `requiresShipping`、`containsCourse`、`digitalOnly`、`isBundle`。
-- [ ] 實作 target 引用查詢與封存保護。
-- [ ] 確保程式不接受 component 指向 Offer。
-- [ ] 將庫存調整集中到 Inventory domain，停止新增 variant.stock 寫入。
+- [x] 建立 InventoryItem row mapper、驗證與 CRUD。（`backend/src/domain/inventory.py`；含條件 `take_stock` 與無條件 `give_back_stock`）
+- [x] 建立 Course skeleton row mapper、驗證與 CRUD。（`backend/src/domain/courses.py`；`is_sellable` 只認 published）
+- [x] 建立 OfferComponent row mapper 與完整集合更新。（`backend/src/domain/offers.py`：`validate_components` 先驗全體再 `replace_components`）
+- [x] 實作 `resolve_offer`，集中推導能力與 component 數量。（`requiredQuantity = component.quantity × purchase_quantity`；course 不帶 requiredQuantity）
+- [x] 實作 `requiresShipping`、`containsCourse`、`digitalOnly`、`isBundle`。
+- [x] 建立 target 引用查詢。（`offers.references_of`，以 type + id 查詢；backfill 讓 item id 等於 offer id，只比對 id 會跨型別誤判）
+- [x] 確保程式不接受 component 指向 Offer。（`COMPONENT_TYPES` 只有 course／inventory，其餘型別回 ValueError）
+- [x] 寫入前驗證 component target 存在且可用。（`offers.validate_targets`：target 必須存在且未封存；draft Course **允許**加入，改由 `offers.sale_blockers` 擋住啟用，讓管理員能自由決定先建課還是先建商品）
+- [x] 將庫存調整集中到 Inventory domain。（`inventory.adjust_stock` 回傳 before/after 供 audit；`offers.set_simple_offer_stock` 是商品編輯頁唯一入口，共用或多實體內容一律拒絕並導向庫存品管理）
+- [x] 新建 Offer 一併建立 InventoryItem 與 component。（`shop.create_variant`；否則 migration 之後建立的商品是唯一沒有庫存來源的）
+- [ ] 停止 `variant.stock` 寫入。目前仍由 `offers.set_simple_offer_stock` 單點鏡像寫入：orders 的扣庫存要到 Phase 3 才搬到 InventoryItem，先拿掉會讓商城賣出不存在的庫存。Phase 7 清理清單已列此項。
 
 ## 3. 管理 API
 

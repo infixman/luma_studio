@@ -689,6 +689,96 @@ MIGRATIONS = [
             " GROUP BY product_id HAVING COUNT(*) = 1)",
         ],
     },
+    {
+        # Phase 2 separates what is sold from what is delivered. An Offer
+        # keeps the price; an InventoryItem owns the stock and can be shared
+        # by several Offers; a Course is granted rather than shipped. Nothing
+        # here records whether a product is physical or digital: that is read
+        # off the components, so it cannot drift from what is actually sent.
+        #
+        # `product_variants.sku` and `.stock` stay for now. They are the
+        # rollback path until the read switch in phase 3 is proven, and a
+        # dropped column cannot be un-dropped.
+        "name": "0028_create_offer_components",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS inventory_items (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 sku TEXT NOT NULL DEFAULT '',
+                 title TEXT NOT NULL,
+                 stock INTEGER NOT NULL DEFAULT 0,
+                 enabled INTEGER NOT NULL DEFAULT 1,
+                 archived_at INTEGER,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            # Blank SKUs are still allowed and still common, so the index is
+            # partial. Making it total would refuse the second item nobody
+            # has given a code to yet.
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_items_sku"
+            " ON inventory_items (sku) WHERE sku != ''",
+            "CREATE INDEX IF NOT EXISTS idx_inventory_items_picker ON inventory_items (enabled, title)",
+            """CREATE TABLE IF NOT EXISTS courses (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 slug TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 status TEXT NOT NULL DEFAULT 'draft',
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_courses_slug ON courses (slug)",
+            # component_id points at either table, so no foreign key can hold
+            # this together. The domain service validates the target before
+            # every write; the index below is only about not adding the same
+            # one twice.
+            """CREATE TABLE IF NOT EXISTS offer_components (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 offer_id TEXT NOT NULL,
+                 component_type TEXT NOT NULL,
+                 component_id TEXT NOT NULL,
+                 quantity INTEGER NOT NULL DEFAULT 1,
+                 access_days INTEGER,
+                 position INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL DEFAULT 0,
+                 updated_at INTEGER NOT NULL DEFAULT 0
+               )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_offer_components_target"
+            " ON offer_components (offer_id, component_type, component_id)",
+            "CREATE INDEX IF NOT EXISTS idx_offer_components_order ON offer_components (offer_id, position)",
+            "CREATE INDEX IF NOT EXISTS idx_offer_components_reference"
+            " ON offer_components (component_type, component_id)",
+            # The backfill reuses the offer's id for the item and derives the
+            # component's, so re-running it is a no-op rather than a second
+            # copy: there is no mapping table to keep in step, and a row in
+            # inventory_items named after an offer is the row that offer used
+            # to hold the stock for. Both statements are INSERT OR IGNORE, so
+            # a stock figure an admin has since corrected stays corrected.
+            """INSERT OR IGNORE INTO inventory_items
+                 (id, sku, title, stock, enabled, archived_at, created_at, updated_at)
+                 SELECT v.id,
+                        v.sku,
+                        CASE WHEN v.title = '' THEN p.title ELSE p.title || ' ' || v.title END,
+                        v.stock,
+                        v.enabled,
+                        NULL,
+                        CAST(strftime('%s', 'now') AS INTEGER),
+                        CAST(strftime('%s', 'now') AS INTEGER)
+                   FROM product_variants v
+                   JOIN products p ON p.id = v.product_id""",
+            """INSERT OR IGNORE INTO offer_components
+                 (id, offer_id, component_type, component_id, quantity, access_days, position,
+                  created_at, updated_at)
+                 SELECT 'oc0-' || v.id,
+                        v.id,
+                        'inventory',
+                        v.id,
+                        1,
+                        NULL,
+                        0,
+                        CAST(strftime('%s', 'now') AS INTEGER),
+                        CAST(strftime('%s', 'now') AS INTEGER)
+                   FROM product_variants v""",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

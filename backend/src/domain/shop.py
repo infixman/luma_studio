@@ -404,6 +404,22 @@ async def create_variant(
         "INSERT INTO product_variants (id, product_id, title, sku, price, stock, position, enabled, is_default)"
         " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
     ).bind(variant_id, product_id, title, sku, price, stock, position, 1 if enabled else 0, 1 if is_default else 0).run()
+
+    # Migration 0028 gave every Offer that already existed an InventoryItem.
+    # One created now needs the same, or it would be the only kind with
+    # nowhere to keep its stock — and phase 3 reads stock from the item.
+    from domain import offers
+
+    product = await get_product(env, product_id)
+    product_title = product["title"] if product else ""
+    await offers.provision_simple_inventory(
+        env,
+        variant_id,
+        title=f"{product_title} {title}".strip() if title else product_title,
+        sku=sku,
+        stock=stock,
+        enabled=enabled,
+    )
     return variant_id
 
 

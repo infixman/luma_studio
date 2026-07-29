@@ -112,6 +112,136 @@ class TestOneDefaultOfferPerProduct:
         assert database.execute("SELECT COUNT(*) FROM product_variants WHERE is_default = 1").fetchone()[0] == 2
 
 
+class TestComposableOfferSchema:
+    """Phase 2 splits what is sold from what is delivered."""
+
+    def test_a_course_slug_cannot_be_reused(self, database):
+        database.execute(
+            "INSERT INTO courses (id, slug, title, status, created_at, updated_at)"
+            " VALUES ('c1', 'watercolour', 'A', 'draft', 0, 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO courses (id, slug, title, status, created_at, updated_at)"
+                " VALUES ('c2', 'watercolour', 'B', 'draft', 0, 0)"
+            )
+
+    def test_the_same_target_cannot_be_added_to_one_offer_twice(self, database):
+        """Wanting two of something is a quantity, not a second component."""
+
+        database.execute(
+            "INSERT INTO offer_components"
+            " (id, offer_id, component_type, component_id, quantity, access_days, position)"
+            " VALUES ('k1', 'offer-1', 'inventory', 'kit-1', 1, NULL, 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO offer_components"
+                " (id, offer_id, component_type, component_id, quantity, access_days, position)"
+                " VALUES ('k2', 'offer-1', 'inventory', 'kit-1', 1, NULL, 1)"
+            )
+
+    def test_two_offers_may_share_one_inventory_item(self, database):
+        for index, offer_id in enumerate(("offer-1", "offer-2")):
+            database.execute(
+                "INSERT INTO offer_components"
+                " (id, offer_id, component_type, component_id, quantity, access_days, position)"
+                " VALUES (?, ?, 'inventory', 'kit-1', 1, NULL, 0)",
+                (f"c{index}", offer_id),
+            )
+
+        shared = database.execute(
+            "SELECT COUNT(*) FROM offer_components WHERE component_id = 'kit-1'"
+        ).fetchone()[0]
+        assert shared == 2
+
+
+class TestInventoryBackfill:
+    """Every existing variant becomes one InventoryItem it alone points at."""
+
+    def _seed_before_0028(self, migrations, connection) -> None:
+        apply_all(connection, migrations, up_to="0027_add_default_product_offers")
+        connection.execute(
+            "INSERT INTO products (id, slug, title, description, status, position, created_at, updated_at)"
+            " VALUES ('prod-1', 'shirt', 'T-shirt', '', 'active', 0, 0, 0)"
+        )
+        connection.execute(
+            "INSERT INTO product_variants"
+            " (id, product_id, title, sku, price, stock, position, enabled, is_default)"
+            " VALUES ('off-1', 'prod-1', 'M', 'SHIRT-M', 300, 7, 0, 1, 0)"
+        )
+        connection.execute(
+            "INSERT INTO products (id, slug, title, description, status, position, created_at, updated_at)"
+            " VALUES ('prod-2', 'brush', '畫筆', '', 'active', 1, 0, 0)"
+        )
+        connection.execute(
+            "INSERT INTO product_variants"
+            " (id, product_id, title, sku, price, stock, position, enabled, is_default)"
+            " VALUES ('off-2', 'prod-2', '', 'BRUSH-01', 680, 20, 0, 1, 1)"
+        )
+
+    def _apply_0028(self, migrations, connection) -> None:
+        migration = next(item for item in migrations.MIGRATIONS if item["name"].startswith("0028"))
+        for table, column, definition in migration.get("add_columns", ()):
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        for statement in migration["statements"]:
+            connection.execute(statement)
+
+    def test_each_variant_gains_an_item_carrying_its_sku_and_stock(self, migrations):
+        connection = sqlite3.connect(":memory:")
+        try:
+            self._seed_before_0028(migrations, connection)
+            self._apply_0028(migrations, connection)
+
+            rows = dict(
+                (row[0], row[1:])
+                for row in connection.execute("SELECT id, sku, stock, title FROM inventory_items")
+            )
+            assert rows["off-1"][:2] == ("SHIRT-M", 7)
+            assert rows["off-2"][:2] == ("BRUSH-01", 20)
+            # A named offer says which one it is; a default offer has no name
+            # to add, and "畫筆 " with a dangling space helps nobody.
+            assert rows["off-1"][2] == "T-shirt M"
+            assert rows["off-2"][2] == "畫筆"
+        finally:
+            connection.close()
+
+    def test_each_offer_gains_one_inventory_component(self, migrations):
+        connection = sqlite3.connect(":memory:")
+        try:
+            self._seed_before_0028(migrations, connection)
+            self._apply_0028(migrations, connection)
+
+            rows = connection.execute(
+                "SELECT offer_id, component_type, component_id, quantity, access_days"
+                " FROM offer_components ORDER BY offer_id"
+            ).fetchall()
+            assert rows == [
+                ("off-1", "inventory", "off-1", 1, None),
+                ("off-2", "inventory", "off-2", 1, None),
+            ]
+        finally:
+            connection.close()
+
+    def test_re_running_it_neither_duplicates_rows_nor_undoes_a_stock_edit(self, migrations):
+        connection = sqlite3.connect(":memory:")
+        try:
+            self._seed_before_0028(migrations, connection)
+            self._apply_0028(migrations, connection)
+            connection.execute("UPDATE inventory_items SET stock = 99 WHERE id = 'off-1'")
+
+            self._apply_0028(migrations, connection)
+
+            assert connection.execute("SELECT COUNT(*) FROM inventory_items").fetchone()[0] == 2
+            assert connection.execute("SELECT COUNT(*) FROM offer_components").fetchone()[0] == 2
+            adjusted = connection.execute("SELECT stock FROM inventory_items WHERE id = 'off-1'").fetchone()[0]
+            assert adjusted == 99
+        finally:
+            connection.close()
+
+
 class TestDefaultOfferBackfill:
     """0027 marks a product's only offer and refuses to guess for the rest."""
 

@@ -188,6 +188,57 @@ class TestOfferLifecycle:
         ) is True
 
 
+class TestNewOffersGetSomewhereToKeepStock:
+    """Migration 0028 gave every existing Offer an InventoryItem.
+
+    An Offer created afterwards has to be given one the same way, or it is the
+    only kind with nowhere to keep its stock — and phase 3, which reads stock
+    from the item, would find nothing for exactly the newest products.
+    """
+
+    def test_creating_an_offer_also_creates_its_item_and_component(self, shop):
+        database = FakeDatabase()
+
+        asyncio.run(
+            shop.create_variant(
+                make_env(database), "p" * 18, title="M", sku="SHIRT-M", price=300, stock=7, enabled=True
+            )
+        )
+
+        statements = [statement for statement, _ in database.writes]
+        assert any("INSERT INTO inventory_items" in statement for statement in statements)
+        assert any("INSERT INTO offer_components" in statement for statement in statements)
+
+    def test_the_item_is_named_after_the_product_and_the_option(self, shop):
+        """Matching the backfill, so a stockroom list reads the same either way."""
+
+        database = FakeDatabase(
+            {
+                "SELECT * FROM products WHERE id": [
+                    {
+                        "id": "p" * 18,
+                        "slug": "shirt",
+                        "title": "T-shirt",
+                        "description": "",
+                        "status": "active",
+                        "position": 0,
+                        "created_at": 0,
+                        "updated_at": 0,
+                    }
+                ]
+            }
+        )
+
+        asyncio.run(
+            shop.create_variant(
+                make_env(database), "p" * 18, title="M", sku="SHIRT-M", price=300, stock=7, enabled=True
+            )
+        )
+
+        _, bindings = next(w for w in database.writes if "INSERT INTO inventory_items" in w[0])
+        assert bindings[2] == "T-shirt M"
+
+
 class TestUnsellableActiveProducts:
     """Migration 0027 only marked products that already had exactly one offer.
 
