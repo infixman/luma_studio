@@ -31,8 +31,9 @@ async def _read_variants(form) -> list[dict]:
 
     None at all is normal, not a failure: an image already narrower than the
     smallest target has nothing to scale down to, and a browser that could not
-    decode the file still uploads the original. Both cases end with a library
-    entry that simply has no variants.
+    decode the file still uploads the original. A malformed generated copy is
+    handled the same way: it is an optional speed-up, never a reason to lose
+    the original image.
     """
 
     variants = []
@@ -42,10 +43,10 @@ async def _read_variants(form) -> list[dict]:
             continue
         width, height = media.validate_dimensions(await _form_text(form, f"size_{label}_dimensions"))
         if not width:
-            raise media.MediaError(f"{label} 尺寸格式不正確")
+            continue
         content = await blob.bytes()
         if not content or len(content) > media.MAX_VARIANT_BYTES:
-            raise media.MediaError(f"{label} 圖片必須介於 1 byte 與 5 MB 之間")
+            continue
         variants.append({"label": label, "content": content, "width": width, "height": height})
     return variants
 

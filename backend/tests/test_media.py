@@ -670,8 +670,8 @@ class TestUploadingTheWidthsWithIt:
         insert = [write for write in database.writes if "INSERT INTO media " in write[0]]
         assert insert[0][1][6:8] == (0, 0)
 
-    def test_a_width_that_cannot_state_its_own_size_is_refused(self, media):
-        """A srcset entry is the width; one without it is a pointless download."""
+    def test_a_width_that_cannot_state_its_own_size_is_skipped(self, media):
+        """A browser-generated copy must not prevent the original being kept."""
 
         bucket = FakeBucket()
         response = call(
@@ -685,10 +685,10 @@ class TestUploadingTheWidthsWithIt:
             ),
             bucket=bucket,
         )
-        assert response.status == 400
-        assert bucket.objects == {}
+        assert response.status == 201
+        assert len(bucket.objects) == 1
 
-    def test_an_oversized_width_never_reaches_the_bucket(self, media):
+    def test_an_oversized_width_is_skipped_without_losing_the_original(self, media):
         bucket = FakeBucket()
         response = call(
             UploadRequest(
@@ -701,8 +701,8 @@ class TestUploadingTheWidthsWithIt:
             ),
             bucket=bucket,
         )
-        assert response.status == 400
-        assert bucket.objects == {}
+        assert response.status == 201
+        assert len(bucket.objects) == 1
 
 
 class TestListEndpoint:
