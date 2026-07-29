@@ -1,3 +1,5 @@
+import type { MediaSize } from './contracts/media'
+
 export * from './contracts'
 
 // --- shop ---------------------------------------------------------------
@@ -536,41 +538,6 @@ export interface ResolvedMenuItem {
 export interface SiteChrome {
   settings: SiteSettings
   menu: ResolvedMenuItem[]
-}
-
-/** One image in the library. Blocks store the id; `url` is for drawing it. */
-export interface MediaItem {
-  id: string
-  path: string
-  fileName: string
-  /** The owner's own label, for finding it again. Empty falls back to the file name. */
-  title: string
-  /** Read out to somebody who cannot see the picture. Never the same field as the title. */
-  alt: string
-  tags: string[]
-  byteSize: number
-  /** The original's own pixels. Zero means nobody measured it — see MediaSize. */
-  width: number
-  height: number
-  /**
-   * The same picture stored again at narrower widths, narrowest first.
-   *
-   * Rendered by the browser that uploaded it, because a Python Worker has no
-   * image library and paying for it once beats paying for it on every page
-   * load. Empty is normal: an image already narrower than the smallest target
-   * has nothing to scale down to, and one the browser could not decode was
-   * kept as it arrived rather than refused.
-   */
-  sizes: MediaSize[]
-  createdAt: number
-}
-
-export interface MediaSize {
-  label: 'small' | 'medium' | 'large'
-  path: string
-  width: number
-  height: number
-  byteSize: number
 }
 
 // --- back-office dashboard ----------------------------------------------
