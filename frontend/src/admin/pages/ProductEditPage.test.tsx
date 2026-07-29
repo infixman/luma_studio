@@ -49,10 +49,21 @@ function detail(overrides: Partial<ProductDetail> = {}): ProductDetail {
 
 let response: ProductDetail = detail()
 
+/** What an offer delivers is its own panel, with its own calls. */
+const EMPTY_COMPONENTS = {
+  components: [],
+  capabilities: { containsCourse: false, requiresShipping: false, digitalOnly: false, isBundle: false },
+  blockers: [],
+}
+
 vi.mock('../../shared/api', () => ({
-  api: vi.fn(async (url: string) =>
-    url.startsWith('/api/categories') ? { categories: [] } : response,
-  ),
+  api: vi.fn(async (url: string) => {
+    if (url.startsWith('/api/categories')) return { categories: [] }
+    if (url.endsWith('/components')) return EMPTY_COMPONENTS
+    if (url.startsWith('/api/courses')) return { courses: [] }
+    if (url.startsWith('/api/inventory-items')) return { items: [] }
+    return response
+  }),
   apiJson: vi.fn(async () => response),
   apiUrl: (path: string) => path,
   uploadProductImage: vi.fn(),

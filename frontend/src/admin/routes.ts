@@ -3,6 +3,8 @@ export type AdminRouteId =
   | 'ibon'
   | 'card'
   | 'products'
+  | 'inventory'
+  | 'courses'
   | 'categories'
   | 'shipping'
   | 'pages'
@@ -24,6 +26,8 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
   { id: 'card', path: '/card', label: '名片', group: 'tools' },
   { id: 'products', path: '/products', label: '商品', group: 'shop' },
   { id: 'categories', path: '/categories', label: '商品分類', group: 'shop' },
+  { id: 'inventory', path: '/inventory', label: '庫存品', group: 'shop' },
+  { id: 'courses', path: '/courses', label: '線上課程', group: 'shop' },
   { id: 'shipping', path: '/shipping', label: '運費', group: 'shop' },
   { id: 'pages', path: '/pages', label: '頁面', group: 'site' },
   { id: 'site', path: '/site', label: '頁首/頁尾', group: 'site' },

@@ -456,3 +456,71 @@ export interface PageContent {
   shareImagePath: string | null
   blocks: PageBlock[]
 }
+
+/**
+ * Stock, owned by nothing that has a price.
+ *
+ * One item can be pointed at by several offers — a material kit sold on its
+ * own and included in two course bundles is one pile of stock, not three.
+ */
+export interface InventoryItem {
+  id: string
+  sku: string
+  title: string
+  stock: number
+  enabled: boolean
+  archived: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type CourseStatus = 'draft' | 'published' | 'archived'
+
+/** Phase 2 holds the identity only; sections and lessons arrive in phase 5. */
+export interface Course {
+  id: string
+  slug: string
+  title: string
+  status: CourseStatus
+  createdAt: number
+  updatedAt: number
+}
+
+export type OfferComponentType = 'course' | 'inventory'
+
+/** One thing an offer delivers. Points at a Course or an InventoryItem. */
+export interface OfferComponent {
+  id: string
+  offerId: string
+  type: OfferComponentType
+  componentId: string
+  quantity: number
+  /** Days from first viewing. Null is permanent, and only ever set on a course. */
+  accessDays: number | null
+  position: number
+}
+
+/**
+ * What the server makes of an offer's components.
+ *
+ * Never sent back up: these are derived, and a client that could state them
+ * could describe a course as needing postage.
+ */
+export interface OfferCapabilities {
+  containsCourse: boolean
+  requiresShipping: boolean
+  digitalOnly: boolean
+  isBundle: boolean
+}
+
+/** Why an offer may not go on sale, in words meant for the editor. */
+export interface OfferBlocker {
+  reason: 'component_unavailable' | 'no_components' | 'course_not_published'
+  message: string
+}
+
+export interface OfferComponentsView {
+  components: OfferComponent[]
+  capabilities: OfferCapabilities
+  blockers: OfferBlocker[]
+}

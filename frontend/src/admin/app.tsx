@@ -9,6 +9,8 @@ import { ProductCreatePage } from './pages/ProductCreatePage'
 import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
+import { InventoryPage } from './pages/InventoryPage'
+import { CoursesPage } from './pages/CoursesPage'
 import { ShippingPage } from './pages/ShippingPage'
 import { MediaPage } from './pages/MediaPage'
 import { CustomersPage } from './pages/CustomersPage'
@@ -39,6 +41,8 @@ function Routed() {
       return id ? <ProductEditPage id={id} /> : <ProductsPage />
     }
     case 'categories': return <CategoriesPage />
+    case 'inventory': return <InventoryPage />
+    case 'courses': return <CoursesPage />
     case 'shipping': return <ShippingPage />
     case 'pages': {
       const id = routeParam(path, 'pages')

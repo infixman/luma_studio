@@ -16,6 +16,7 @@ import {
   useConfirm,
 } from '../components/ui'
 import { Lightbox } from '../components/Lightbox'
+import { OfferComponentsPanel } from '../features/catalogue/OfferComponentsPanel'
 import { api, apiJson, apiUrl, uploadProductImage } from '../../shared/api'
 import {
   ProductFormFields,
@@ -378,6 +379,17 @@ export function ProductEditPage({ id }: { id: string }) {
           )}
         </Panel>
       </div>
+
+      {/* One panel per offer: "online only" and "with materials" deliver
+          different things, which is the whole point of having two offers. */}
+      {detail.variants.map((variant) => (
+        <div key={variant.id} class="offer-components-section">
+          {detail.salesMode === 'multi' && (
+            <p class="muted offer-components-for">方案：{variant.title}</p>
+          )}
+          <OfferComponentsPanel offerId={variant.id} />
+        </div>
+      ))}
 
       <Panel title="照片" class="product-photos-panel">
         <p class="muted">

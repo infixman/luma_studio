@@ -36,13 +36,15 @@
 
 ## 4. 管理前端
 
-- [ ] 新增庫存品列表與編輯頁。
-- [ ] Offer 編輯新增商品內容 Panel。
-- [ ] 新增 Course picker 與 InventoryItem picker。
-- [ ] 顯示 component quantity、觀看期限與引用摘要。
-- [ ] 顯示「純數位／需要配送／含課程」衍生摘要。
-- [ ] 防止同一 target 重複加入。
-- [ ] 被引用資料的刪除按鈕改為封存並說明原因。
+- [x] 新增庫存品列表與建立頁。（`frontend/src/admin/pages/InventoryPage.tsx`；搜尋以 generation 防止較慢的舊請求覆蓋新結果）
+- [x] 新增課程列表與建立頁。（`CoursesPage.tsx`；未填網址代稱時由名稱推導）
+- [x] Offer 編輯新增商品內容 Panel。（`features/catalogue/OfferComponentsPanel.tsx`，每個 Offer 各一個）
+- [x] 新增 Course picker 與 InventoryItem picker。
+- [x] 顯示 component quantity、觀看期限與引用摘要。（期限文案為「觀看後 N 天」，不是「購買後」）
+- [x] 顯示「純數位／需要配送／含課程」衍生摘要。（直接顯示後端回傳值，前端不重算）
+- [x] 防止同一 target 重複加入。（已在方案內的 target 不出現在 picker，而不是選了才報錯）
+- [x] 被引用資料的刪除按鈕改為封存並說明原因。（後端回 409 並附使用中的方案數）
+- [ ] 庫存品編輯／封存的前端操作。目前只有列表與新增；編輯與封存已有 API，UI 待補。
 
 ## 5. 相容層
 
