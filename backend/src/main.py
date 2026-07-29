@@ -8,7 +8,7 @@ route selection, authentication boundaries, and Worker lifecycle hooks.
 
 import auth_customer
 from domain import bio_link, media, orders, pages, shipping, shop, site_chrome
-import front_api
+from api.front import routes as front_api
 import mail
 from shared import rate_limit, router
 from shared.common import IDENTIFIER_PATTERN, OAuthError
