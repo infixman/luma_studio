@@ -161,7 +161,7 @@ export function ProductEditPage({ id }: { id: string }) {
 
   if (detail === null) {
     return (
-      <AdminShell current="/products" message={message} onError={showError}>
+      <AdminShell current="/products" back={{ href: '/products', label: '回到商品清單' }} message={message} onError={showError}>
         <Panel title="商品">
           <Spinner />
         </Panel>
@@ -172,18 +172,10 @@ export function ProductEditPage({ id }: { id: string }) {
   const sellable = detail.variants.some((variant) => variant.enabled)
 
   return (
-    <AdminShell current="/products" message={message} onError={showError}>
+    <AdminShell current="/products" back={{ href: '/products', label: '回到商品清單' }} message={message} onError={showError}>
       {dialog}
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
-      <p class="crumb">
-        <a href="/products">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          商品列表
-        </a>
-      </p>
       <h2 class="product-heading">{detail.product.title}</h2>
 
       {!sellable && detail.product.status === 'active' && (

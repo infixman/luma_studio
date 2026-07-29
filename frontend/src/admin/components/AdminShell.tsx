@@ -25,6 +25,7 @@ export function AdminShell({
   current = routeForPath(location.pathname)?.path ?? '/',
   title,
   actions,
+  back,
   message,
   onError,
   confirmLeave,
@@ -36,6 +37,8 @@ export function AdminShell({
   title?: string
   /** The page's own buttons, in the title bar. */
   actions?: ComponentChildren
+  /** List page this detail view returns to. Rendered directly below the title bar. */
+  back?: { href: string; label: string }
   message: { text: string; kind: StatusKind } | null
   onError: (error: unknown) => void
   /**
@@ -114,6 +117,16 @@ export function AdminShell({
           <h1 class="admin-title">{title ?? labelOf(current)}</h1>
           {actions && <div class="admin-topbar-actions">{actions}</div>}
         </header>
+        {back && (
+          <nav class="admin-backbar" aria-label="返回清單">
+            <a class="admin-back-link" href={back.href}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              {back.label}
+            </a>
+          </nav>
+        )}
         <StatusBar message={message} />
         <div class="admin-content">{children}</div>
       </main>

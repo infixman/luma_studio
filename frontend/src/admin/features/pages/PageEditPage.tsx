@@ -482,7 +482,7 @@ export function PageEditPage({ id }: { id: string }) {
 
   if (detail === null) {
     return (
-      <AdminShell current="/pages" message={message} onError={showError}>
+      <AdminShell current="/pages" back={{ href: '/pages', label: '回到頁面清單' }} message={message} onError={showError}>
         <Spinner />
       </AdminShell>
     )
@@ -535,13 +535,13 @@ export function PageEditPage({ id }: { id: string }) {
     <AdminShell
       current="/pages"
       title={detail.page.title}
+      back={{ href: '/pages', label: '回到頁面清單' }}
       message={message}
       onError={showError}
       confirmLeave={() => !unsaved || confirm('有未儲存的修改，離開後會遺失。要繼續嗎？')}
       actions={
         <>
           {unsaved && <span class="unsaved-mark">有未儲存的修改</span>}
-          <Button onClick={() => location.assign('/pages')}>回到頁面清單</Button>
           <Button tone="primary" busy={busy} disabled={!unsaved} onClick={saveAll}>
             儲存
           </Button>
