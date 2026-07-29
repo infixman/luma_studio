@@ -5,6 +5,64 @@
   overflow: hidden;
 }
 
+.rte-preview-page {
+  box-sizing: border-box;
+  width: min(1180px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 48px);
+  overflow-y: auto;
+}
+
+.rte-preview-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.rte-preview-eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+.rte-preview-head h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+
+.rte-preview-head > div > p:last-child {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+}
+
+:where(body.admin) .rte-preview-reset {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-preview-reset:hover,
+:where(body.admin) .rte-preview-reset:focus-visible {
+  border-color: var(--primary);
+  color: var(--text);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 .rte-wrap.is-fullscreen {
   position: fixed;
   inset: 0;
@@ -64,8 +122,8 @@
 .rte-toolbar {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: var(--space-2);
+  gap: 4px;
+  padding: 10px var(--space-2);
   border-bottom: 1px solid var(--border);
   background: var(--sunken);
   flex-wrap: wrap;
@@ -75,6 +133,129 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
+}
+
+.rte-colour-control {
+  position: relative;
+}
+
+.rte-colour-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 154px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.rte-colour-menu:not(.rte-highlight-menu) {
+  width: 246px;
+}
+
+.rte-colour-menu > span {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.rte-colour-menu > div {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+:where(body.admin) .rte-colour-menu button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--rte-colour), var(--text) 18%);
+  border-radius: 50%;
+  background: var(--rte-colour);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-colour-menu button:hover,
+:where(body.admin) .rte-colour-menu button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.rte-colour-custom {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.rte-colour-menu > .rte-colour-custom {
+  display: block;
+  grid-template-columns: none;
+  gap: 0;
+}
+
+.rte-colour-custom > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.rte-colour-custom > div {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+:where(body.admin) .rte-colour-custom input[type="color"] {
+  width: 30px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-colour-custom input:not([type="color"]) {
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-small);
+}
+
+:where(body.admin) .rte-colour-custom button {
+  width: auto;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-colour-custom button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+:where(body.admin) .rte-eyedropper {
+  width: 100%;
+  margin-top: var(--space-2);
 }
 
 .rte-sep {
@@ -125,16 +306,40 @@
   display: inline-flex;
 }
 
+/* Native select focus rings extend beyond the control. Keep the format,
+   font, and size controls far enough apart that one never covers another. */
+.rte-select-label + .rte-select-label {
+  margin-left: 6px;
+}
+
+/* The toolbar's accessible label must not claim layout space. This editor is
+   mounted outside the UI component stylesheet, so it cannot rely on a shared
+   sr-only helper being present. */
+.rte-select-label > .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 :where(body.admin) .rte-select {
   width: auto;
-  min-width: 86px;
+  min-width: 96px;
   height: 32px;
-  padding: 0 28px 0 9px;
+  padding: 0 30px 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background-color: var(--surface);
   color: var(--text);
+  line-height: 30px;
   font-size: var(--font-small);
+  text-align: center;
+  text-align-last: center;
 }
 
 :where(body.admin) .rte-select[aria-label="字體大小"] {
@@ -149,6 +354,140 @@
   border: 1px solid transparent;
   border-radius: var(--radius);
   color: var(--text-soft);
+}
+
+.rte-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--primary-soft);
+  overflow-x: auto;
+}
+
+.rte-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+:where(body.admin) .rte-search-bar input {
+  width: min(12rem, 26vw);
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-small);
+}
+
+:where(body.admin) .rte-search-bar input:focus {
+  border-color: var(--primary);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.rte-search-count {
+  min-width: 4.5rem;
+  color: var(--muted);
+  font-size: var(--font-small);
+  text-align: center;
+}
+
+.rte-search-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+:where(body.admin) .rte-search-actions button,
+:where(body.admin) .rte-search-close {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-search-actions button:hover:not(:disabled),
+:where(body.admin) .rte-search-close:hover,
+:where(body.admin) .rte-search-actions button:focus-visible,
+:where(body.admin) .rte-search-close:focus-visible {
+  border-color: var(--primary);
+  color: var(--text);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+:where(body.admin) .rte-search-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.rte-search-close {
+  margin-left: auto;
+  font-size: 1.2rem !important;
+  line-height: 1;
+}
+
+.rte-table-context {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: var(--font-small);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.rte-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: max-content;
+}
+
+:where(body.admin) .rte-table-action {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--font-small);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-table-action:hover:not(:disabled),
+:where(body.admin) .rte-table-action:focus-visible {
+  border-color: var(--primary-line);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+:where(body.admin) .rte-table-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.rte-table-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--primary-line);
 }
 
 .rte-table-control:hover {
@@ -225,6 +564,101 @@
   background: var(--sunken);
   color: var(--muted);
   font-size: var(--font-small);
+}
+
+.rte-table-properties {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rte-table-properties label {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.8fr) 1.2fr;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 3px 0;
+  color: var(--text-soft);
+  font-size: var(--font-base);
+}
+
+:where(body.admin) .rte-table-properties input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+:where(body.admin) .rte-table-properties select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  font: inherit;
+}
+
+:where(body.admin) .rte-table-properties input:focus {
+  border-color: var(--primary);
+  outline: 0;
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+:where(body.admin) .rte-table-properties select:focus {
+  border-color: var(--primary);
+  outline: 0;
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.rte-table-properties p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.55;
+}
+
+.rte-table-colour-field {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+:where(body.admin) .rte-table-colour-field input[type="color"] {
+  width: 34px;
+  min-height: 36px;
+  padding: 3px;
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-table-colour-field input:not([type="color"]) {
+  min-width: 0;
+}
+
+:where(body.admin) .rte-table-colour-field button {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+
+:where(body.admin) .rte-table-colour-field button:hover,
+:where(body.admin) .rte-table-colour-field button:focus-visible {
+  border-color: var(--primary);
+  color: var(--text);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .rte-content p {
@@ -313,8 +747,16 @@
   vertical-align: top;
 }
 
+/* A zero-width border is a valid exported table style, but leaving cells
+   invisible while editing makes row/column actions impossible to orient. */
+.rte-content th[style*="border-width: 0"],
+.rte-content td[style*="border-width: 0"] {
+  outline: 1px dashed var(--border-strong);
+  outline-offset: -1px;
+}
+
 .rte-content th {
-  background: var(--sunken);
+  background: var(--primary-soft);
   font-weight: 680;
 }
 
@@ -325,6 +767,11 @@
 }
 
 @media (max-width: 720px) {
+  .rte-preview-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .rte-toolbar {
     align-items: flex-start;
   }
@@ -340,6 +787,32 @@
 
   :where(body.admin) .rte-select {
     min-width: 78px;
+  }
+
+  .rte-table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .rte-search-bar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  :where(body.admin) .rte-search-bar input {
+    flex: 1 1 9rem;
+    width: auto;
+  }
+
+  .rte-search-count {
+    min-width: auto;
+  }
+
+  .rte-table-actions {
+    overflow-x: auto;
+    max-width: 100%;
   }
 
   .rte-content,

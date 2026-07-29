@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { renderMarkdown } from '../../shared/markdown'
 import type { TextBlockConfig } from '../../shared/types'
+import { Button } from './ui/Button'
+import { Modal } from './ui/Modal'
 import '../styles/rich-text.css'
 
 const stroke = {
@@ -105,6 +107,27 @@ const icons = {
       <path d="M3 9h18M9 4v16M15 4v16M3 15h18" />
     </svg>
   ),
+  search: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <circle cx="10.8" cy="10.8" r="6.8" />
+      <path d="m16 16 4.5 4.5" />
+    </svg>
+  ),
+  highlight: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="m14.8 4.2 5 5-9.2 9.2H5.8v-4.8z" />
+      <path d="m13 6 5 5M4 21h16" />
+    </svg>
+  ),
+  colour: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M12 3a9 9 0 1 0 0 18h1.5a1.5 1.5 0 0 0 0-3h-1a2 2 0 0 1 0-4h2a6.5 6.5 0 0 0 6.5-6.5C21 5 17 3 12 3Z" />
+      <circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="6.8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="6.8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="10" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  ),
   undo: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="m9 7-5 5 5 5M5 12h8a6 6 0 0 1 6 6" />
@@ -135,6 +158,43 @@ const icons = {
 
 const BLOCK_SELECTOR = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,div,td,th'
 const EMPTY_HTML = new Set(['<br>', '<div><br></div>', '<p><br></p>'])
+const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48]
+const TEXT_COLOURS = [
+  { label: '墨黑', value: '#2b2622' },
+  { label: '磚紅', value: '#b3261e' },
+  { label: '琥珀', value: '#96551a' },
+  { label: '森林綠', value: '#2f6b46' },
+  { label: '深藍', value: '#1e5f86' },
+  { label: '紫灰', value: '#66577a' },
+]
+const HIGHLIGHT_COLOURS = [
+  { label: '柔黃', value: '#ffe37a' },
+  { label: '薄荷綠', value: '#b8f0d0' },
+  { label: '湖水藍', value: '#9de8f2' },
+  { label: '櫻花粉', value: '#f3c2dc' },
+  { label: '杏橘', value: '#ffd5a3' },
+  { label: '淡紫', value: '#d7cef7' },
+]
+
+interface ToolbarState {
+  block: string
+  fontFamily: string
+  fontSize: string
+}
+
+interface TableContext {
+  table: HTMLTableElement
+  cell: HTMLTableCellElement
+}
+
+interface TableProperties {
+  title: string
+  width: string
+  borderColor: string
+  borderWidth: string
+}
+
+type LinkTarget = '_blank' | '_self' | 'luma-link-window'
 
 function htmlFromConfig(config: TextBlockConfig): string {
   return config.format === 'html' ? config.body : config.body ? renderMarkdown(config.body) : ''
@@ -205,6 +265,33 @@ function ToolbarSelect({
   )
 }
 
+function TableAction({
+  children,
+  label,
+  disabled,
+  onClick,
+}: {
+  children: string
+  label?: string
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      class="rte-table-action"
+      title={label ?? children}
+      disabled={disabled}
+      onMouseDown={(event) => {
+        event.preventDefault()
+        onClick()
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function RichTextEditor({
   config,
   onChange,
@@ -217,6 +304,66 @@ export function RichTextEditor({
   const [mode, setMode] = useState<'visual' | 'source'>('visual')
   const [sourceDraft, setSourceDraft] = useState(() => htmlFromConfig(config))
   const [fullscreen, setFullscreen] = useState(false)
+  const [toolbarState, setToolbarState] = useState<ToolbarState>({ block: '', fontFamily: '', fontSize: '' })
+  const [tableContext, setTableContext] = useState<TableContext | null>(null)
+  const tableContextRef = useRef<TableContext | null>(null)
+  const [tablePropertiesOpen, setTablePropertiesOpen] = useState(false)
+  const [tableProperties, setTableProperties] = useState<TableProperties>({
+    title: '', width: '100%', borderColor: '#cbc1b5', borderWidth: '1px',
+  })
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [replaceTerm, setReplaceTerm] = useState('')
+  const [searchResult, setSearchResult] = useState({ index: -1, total: 0 })
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [colourMenuOpen, setColourMenuOpen] = useState(false)
+  const [highlightMenuOpen, setHighlightMenuOpen] = useState(false)
+  const [customTextColour, setCustomTextColour] = useState('#2b2622')
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkDraft, setLinkDraft] = useState('https://')
+  const [linkTarget, setLinkTarget] = useState<LinkTarget>('_blank')
+
+  const findTableContext = useCallback((): TableContext | null => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection || selection.rangeCount === 0) return null
+    const cell = closestElement(selection.getRangeAt(0).startContainer)?.closest('td,th') as HTMLTableCellElement | null
+    const table = cell?.closest('table') as HTMLTableElement | null
+    return cell && table && editor.contains(table) ? { table, cell } : null
+  }, [])
+
+  const syncToolbarState = useCallback(() => {
+    const selection = window.getSelection()
+    const editor = editorRef.current
+    if (!selection || !editor || selection.rangeCount === 0) return
+    const anchor = closestElement(selection.getRangeAt(0).startContainer)
+    if (!anchor || !editor.contains(anchor)) return
+
+    const block = anchor.closest(BLOCK_SELECTOR) as HTMLElement | null
+    const style = window.getComputedStyle(anchor instanceof HTMLElement ? anchor : block ?? editor)
+    const fontSize = `${Math.round(Number.parseFloat(style.fontSize))}px`
+    const fontFamily = style.fontFamily.replaceAll('"', '')
+    setToolbarState((current) => {
+      const next = {
+        block: block?.tagName.toLowerCase() ?? '',
+        fontFamily: fontFamily.includes('Noto Sans TC') || fontFamily.includes('Microsoft JhengHei')
+          ? '"Noto Sans TC","Microsoft JhengHei",sans-serif'
+          : fontFamily.includes('Noto Serif TC') || fontFamily.includes('PMingLiU')
+            ? '"Noto Serif TC","PMingLiU",serif'
+            : fontFamily.includes('DFKai-SB') || fontFamily.includes('BiauKai')
+              ? '"DFKai-SB","BiauKai",cursive'
+              : fontFamily.includes('Consolas') ? 'Consolas,monospace' : '',
+        fontSize: FONT_SIZES.includes(Number.parseInt(fontSize, 10)) ? fontSize : '',
+      }
+      return current.block === next.block && current.fontFamily === next.fontFamily && current.fontSize === next.fontSize
+        ? current : next
+    })
+
+    const nextTableContext = findTableContext()
+    tableContextRef.current = nextTableContext
+    setTableContext((current) => current?.table === nextTableContext?.table && current?.cell === nextTableContext?.cell
+      ? current : nextTableContext)
+  }, [findTableContext])
 
   const saveSelection = useCallback(() => {
     const editor = editorRef.current
@@ -225,8 +372,9 @@ export function RichTextEditor({
     const range = selection.getRangeAt(0)
     if (editor.contains(range.commonAncestorContainer)) {
       savedRangeRef.current = range.cloneRange()
+      syncToolbarState()
     }
-  }, [])
+  }, [syncToolbarState])
 
   const restoreSelection = useCallback(() => {
     const editor = editorRef.current
@@ -272,6 +420,10 @@ export function RichTextEditor({
     document.addEventListener('keydown', listener)
     return () => document.removeEventListener('keydown', listener)
   }, [fullscreen])
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
 
   function exec(command: string, value?: string) {
     restoreSelection()
@@ -343,6 +495,65 @@ export function RichTextEditor({
     emitVisual()
   }
 
+  function highlightSelection(colour: string) {
+    restoreSelection()
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) {
+      alert('請先選取要標示的文字。')
+      return
+    }
+    document.execCommand('styleWithCSS', false, 'true')
+    document.execCommand('hiliteColor', false, colour)
+    setHighlightMenuOpen(false)
+    emitVisual()
+  }
+
+  function setTextColour(colour: string) {
+    restoreSelection()
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) {
+      alert('請先選取要變更顏色的文字。')
+      return
+    }
+    document.execCommand('styleWithCSS', false, 'true')
+    document.execCommand('foreColor', false, colour)
+    setColourMenuOpen(false)
+    emitVisual()
+  }
+
+  async function pickScreenColour() {
+    type EyeDropperResult = { sRGBHex: string }
+    type EyeDropperConstructor = new () => { open: () => Promise<EyeDropperResult> }
+    const EyeDropper = (window as Window & { EyeDropper?: EyeDropperConstructor }).EyeDropper
+    if (!EyeDropper) {
+      alert('此瀏覽器不支援螢幕取色，請改用調色盤或輸入色碼。')
+      return
+    }
+    try {
+      const result = await new EyeDropper().open()
+      setCustomTextColour(result.sRGBHex)
+      setTextColour(result.sRGBHex)
+    } catch {
+      // Closing the picker is an expected cancellation, not an editor error.
+    }
+  }
+
+  async function pickTableBorderColour() {
+    type EyeDropperResult = { sRGBHex: string }
+    type EyeDropperConstructor = new () => { open: () => Promise<EyeDropperResult> }
+    const EyeDropper = (window as Window & { EyeDropper?: EyeDropperConstructor }).EyeDropper
+    if (!EyeDropper) {
+      alert('此瀏覽器不支援螢幕取色，請改用調色盤或輸入色碼。')
+      return
+    }
+    try {
+      const result = await new EyeDropper().open()
+      setTableProperties((current) => ({ ...current, borderColor: result.sRGBHex }))
+    } catch {
+      // Closing the picker is an expected cancellation, not an editor error.
+    }
+  }
+
   function insertHtml(html: string) {
     restoreSelection()
     document.execCommand('insertHTML', false, html)
@@ -358,11 +569,38 @@ export function RichTextEditor({
     }
     saveSelection()
     const existing = findParentTag(selection.anchorNode, 'A') as HTMLAnchorElement | null
-    const href = prompt('連結網址', existing?.href ?? 'https://')
-    if (href === null) return
+    setLinkDraft(existing?.getAttribute('href') ?? 'https://')
+    setLinkTarget(safeLinkTarget(existing?.getAttribute('target')) ?? '_blank')
+    setLinkDialogOpen(true)
+  }
+
+  function applyLink() {
+    const value = linkDraft.trim()
+    if (!value) {
+      exec('unlink')
+      setLinkDialogOpen(false)
+      return
+    }
+    const href = safeUrl(value)
+    if (!href) {
+      alert('請輸入 https://、http://、mailto: 或本站相對路徑。')
+      return
+    }
     restoreSelection()
-    if (!href.trim()) exec('unlink')
-    else exec('createLink', href.trim())
+    document.execCommand('createLink', false, href)
+    const anchor = findParentTag(window.getSelection()?.anchorNode ?? null, 'A') as HTMLAnchorElement | null
+    if (anchor) {
+      anchor.target = linkTarget
+      if (linkTarget === '_blank') anchor.rel = 'noopener noreferrer'
+      else anchor.removeAttribute('rel')
+    }
+    emitVisual()
+    setLinkDialogOpen(false)
+  }
+
+  function closeLinkDialog() {
+    setLinkDialogOpen(false)
+    restoreSelection()
   }
 
   function insertImage() {
@@ -393,6 +631,169 @@ export function RichTextEditor({
     insertHtml(buildTable(rows, columns))
   }
 
+  function changeTable(mutator: (context: TableContext) => void) {
+    restoreSelection()
+    const context = findTableContext() ?? tableContextRef.current
+    if (!context) return
+    mutator(context)
+    emitVisual()
+    syncToolbarState()
+  }
+
+  function insertTableRow(position: 'above' | 'below') {
+    changeTable(({ cell }) => {
+      const row = cell.parentElement as HTMLTableRowElement | null
+      if (!row) return
+      const nextRow = document.createElement('tr')
+      for (const currentCell of Array.from(row.cells)) {
+        const nextCell = document.createElement(currentCell.tagName.toLowerCase())
+        nextCell.innerHTML = '<br>'
+        nextRow.appendChild(nextCell)
+      }
+      row.insertAdjacentElement(position === 'above' ? 'beforebegin' : 'afterend', nextRow)
+    })
+  }
+
+  function deleteTableRow() {
+    changeTable(({ table, cell }) => {
+      if (table.rows.length > 1) cell.parentElement?.remove()
+    })
+  }
+
+  function insertTableColumn(position: 'left' | 'right') {
+    changeTable(({ table, cell }) => {
+      const row = cell.parentElement as HTMLTableRowElement | null
+      if (!row) return
+      const column = Array.from(row.cells).indexOf(cell)
+      for (const currentRow of Array.from(table.rows)) {
+        const reference = currentRow.cells[column] ?? null
+        const nextCell = document.createElement((reference?.tagName ?? 'TD').toLowerCase())
+        nextCell.innerHTML = '<br>'
+        currentRow.insertBefore(nextCell, position === 'left' ? reference : reference?.nextSibling ?? null)
+      }
+    })
+  }
+
+  function deleteTableColumn() {
+    changeTable(({ table, cell }) => {
+      const row = cell.parentElement as HTMLTableRowElement | null
+      if (!row || row.cells.length <= 1) return
+      const column = Array.from(row.cells).indexOf(cell)
+      for (const currentRow of Array.from(table.rows)) currentRow.cells[column]?.remove()
+    })
+  }
+
+  function openTableProperties() {
+    restoreSelection()
+    const context = findTableContext() ?? tableContextRef.current
+    if (!context) return
+    const sampleCell = context.table.querySelector<HTMLTableCellElement>('th,td')
+    setTableProperties({
+      title: context.table.title,
+      width: context.table.style.width || '100%',
+      borderColor: sampleCell?.style.borderColor || '#cbc1b5',
+      borderWidth: sampleCell?.style.borderWidth || '1px',
+    })
+    setTablePropertiesOpen(true)
+  }
+
+  function applyTableProperties() {
+    const width = normalizeTableWidth(tableProperties.width)
+    const borderColor = normalizeColor(tableProperties.borderColor)
+    const borderWidth = normalizeBorderWidth(tableProperties.borderWidth)
+    if (!width || !borderColor || !borderWidth) return
+
+    changeTable(({ table }) => {
+      table.title = tableProperties.title.trim()
+      table.style.width = width
+      for (const cell of Array.from(table.querySelectorAll<HTMLTableCellElement>('th,td'))) {
+        cell.style.borderStyle = 'solid'
+        cell.style.borderColor = borderColor
+        cell.style.borderWidth = borderWidth
+      }
+    })
+    setTablePropertiesOpen(false)
+  }
+
+  function searchMatches(query: string): Range[] {
+    const editor = editorRef.current
+    if (!editor || !query) return []
+    const matches: Range[] = []
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+    let node: Text | null
+    while ((node = walker.nextNode() as Text | null)) {
+      const value = node.data
+      let from = 0
+      while (from <= value.length - query.length) {
+        const index = value.toLocaleLowerCase().indexOf(query.toLocaleLowerCase(), from)
+        if (index < 0) break
+        const range = document.createRange()
+        range.setStart(node, index)
+        range.setEnd(node, index + query.length)
+        matches.push(range)
+        from = index + Math.max(query.length, 1)
+      }
+    }
+    return matches
+  }
+
+  function selectSearchMatch(nextIndex: number) {
+    const query = searchTerm.trim()
+    const matches = searchMatches(query)
+    if (matches.length === 0) {
+      setSearchResult({ index: -1, total: 0 })
+      return
+    }
+    const index = ((nextIndex % matches.length) + matches.length) % matches.length
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(matches[index]!)
+    savedRangeRef.current = matches[index]!.cloneRange()
+    setSearchResult({ index, total: matches.length })
+    syncToolbarState()
+  }
+
+  function findNext(direction: 1 | -1 = 1) {
+    selectSearchMatch(searchResult.index + direction)
+  }
+
+  function replaceCurrent() {
+    const query = searchTerm.trim()
+    const matches = searchMatches(query)
+    if (matches.length === 0) return
+    const index = searchResult.index < 0 ? 0 : searchResult.index % matches.length
+    const range = matches[index]!
+    range.deleteContents()
+    const replacement = document.createTextNode(replaceTerm)
+    range.insertNode(replacement)
+    const selection = window.getSelection()
+    const nextRange = document.createRange()
+    nextRange.setStartAfter(replacement)
+    nextRange.collapse(true)
+    selection?.removeAllRanges()
+    selection?.addRange(nextRange)
+    savedRangeRef.current = nextRange.cloneRange()
+    emitVisual()
+    selectSearchMatch(index)
+  }
+
+  function replaceAll() {
+    const query = searchTerm.trim()
+    const matches = searchMatches(query)
+    if (matches.length === 0) return
+    for (const range of matches.reverse()) {
+      range.deleteContents()
+      range.insertNode(document.createTextNode(replaceTerm))
+    }
+    emitVisual()
+    selectSearchMatch(0)
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+    restoreSelection()
+  }
+
   function clearFormatting() {
     exec('removeFormat')
     for (const block of selectedBlocks()) {
@@ -408,7 +809,25 @@ export function RichTextEditor({
     insertHtml(html ? sanitizeEditorHtml(html) : escapeHtml(text).replace(/\n/g, '<br>'))
   }
 
+  function handleEditorClick(event: MouseEvent) {
+    saveSelection()
+    setColourMenuOpen(false)
+    setHighlightMenuOpen(false)
+    const editor = editorRef.current
+    const cell = closestElement(event.target as Node)?.closest('td,th') as HTMLTableCellElement | null
+    const table = cell?.closest('table') as HTMLTableElement | null
+    if (!editor || !cell || !table || !editor.contains(table)) return
+    const context = { table, cell }
+    tableContextRef.current = context
+    setTableContext(context)
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+      event.preventDefault()
+      setSearchOpen(true)
+      return
+    }
     if (event.key !== 'Enter' || event.shiftKey) return
     const block = document.queryCommandValue('formatBlock')
     if (block && /^h[1-6]$/i.test(block)) {
@@ -480,11 +899,11 @@ export function RichTextEditor({
           <div class="rte-tool-group">
             <ToolbarSelect
               label="段落格式"
-              value=""
+              value={toolbarState.block}
               onBeforeOpen={saveSelection}
               onChange={setBlock}
               options={[
-                { value: '', label: '段落' },
+                { value: '', label: '段落格式' },
                 { value: 'h1', label: '標題 1' },
                 { value: 'h2', label: '標題 2' },
                 { value: 'h3', label: '標題 3' },
@@ -496,7 +915,7 @@ export function RichTextEditor({
             />
             <ToolbarSelect
               label="字型"
-              value=""
+              value={toolbarState.fontFamily}
               onBeforeOpen={saveSelection}
               onChange={setFontFamily}
               options={[
@@ -509,12 +928,12 @@ export function RichTextEditor({
             />
             <ToolbarSelect
               label="字體大小"
-              value=""
+              value={toolbarState.fontSize}
               onBeforeOpen={saveSelection}
               onChange={setFontSize}
               options={[
                 { value: '', label: '字級' },
-                ...[12, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((size) => ({
+                ...FONT_SIZES.map((size) => ({
                   value: `${size}px`,
                   label: `${size}px`,
                 })),
@@ -527,6 +946,30 @@ export function RichTextEditor({
             <ToolButton icon={icons.italic} label="斜體 (Ctrl+I)" onClick={() => exec('italic')} />
             <ToolButton icon={icons.underline} label="底線 (Ctrl+U)" onClick={() => exec('underline')} />
             <ToolButton icon={icons.strike} label="刪除線" onClick={() => exec('strikeThrough')} />
+            <div class="rte-colour-control">
+              <ToolButton icon={icons.highlight} label="螢光筆" onClick={() => setHighlightMenuOpen((current) => !current)} />
+              {highlightMenuOpen && (
+                <div class="rte-colour-menu rte-highlight-menu" role="menu" aria-label="螢光筆顏色">
+                  <span>螢光筆顏色</span>
+                  <div>
+                    {HIGHLIGHT_COLOURS.map((colour) => (
+                      <button
+                        key={colour.value}
+                        type="button"
+                        role="menuitem"
+                        title={colour.label}
+                        aria-label={colour.label}
+                        style={{ '--rte-colour': colour.value }}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          highlightSelection(colour.value)
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <span class="rte-sep" />
           <div class="rte-tool-group">
@@ -542,11 +985,72 @@ export function RichTextEditor({
           </div>
           <span class="rte-sep" />
           <div class="rte-tool-group">
+            <div class="rte-colour-control">
+              <ToolButton icon={icons.colour} label="文字顏色" onClick={() => setColourMenuOpen((current) => !current)} />
+              {colourMenuOpen && (
+                <div class="rte-colour-menu" role="menu" aria-label="文字顏色">
+                  <span>文字顏色</span>
+                  <div>
+                    {TEXT_COLOURS.map((colour) => (
+                      <button
+                        key={colour.value}
+                        type="button"
+                        role="menuitem"
+                        title={colour.label}
+                        aria-label={colour.label}
+                        style={{ '--rte-colour': colour.value }}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          setTextColour(colour.value)
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div class="rte-colour-custom">
+                    <span>自訂色</span>
+                    <div>
+                      <input
+                        type="color"
+                        aria-label="從調色盤選擇文字顏色"
+                        value={normalizeColor(customTextColour) ?? '#2b2622'}
+                        onInput={(event) => {
+                          const colour = (event.currentTarget as HTMLInputElement).value
+                          setCustomTextColour(colour)
+                          setTextColour(colour)
+                        }}
+                      />
+                      <input
+                        aria-label="自訂文字顏色色碼"
+                        value={customTextColour}
+                        placeholder="#2b2622"
+                        onInput={(event) => setCustomTextColour((event.currentTarget as HTMLInputElement).value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && normalizeColor(customTextColour)) {
+                            event.preventDefault()
+                            setTextColour(customTextColour)
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={!normalizeColor(customTextColour)}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          setTextColour(customTextColour)
+                        }}
+                      >套用</button>
+                    </div>
+                    <button type="button" class="rte-eyedropper" onClick={pickScreenColour}>螢幕取色</button>
+                  </div>
+                </div>
+              )}
+            </div>
             <ToolButton icon={icons.link} label="插入連結" onClick={insertLink} />
             <ToolButton icon={icons.unlink} label="移除連結" onClick={() => exec('unlink')} />
             <ToolButton icon={icons.image} label="插入圖片" onClick={insertImage} />
             <ToolButton icon={icons.embed} label="嵌入 YouTube / IG / FB" onClick={insertEmbed} />
             <ToolButton icon={icons.hr} label="水平分隔線" onClick={() => insertHtml('<hr><p><br></p>')} />
+            <ToolButton icon={icons.search} label="搜尋與取代 (Ctrl+F)" onClick={() => setSearchOpen(true)} />
             <label class="rte-table-control" title="插入表格">
               <span class="rte-table-icon" aria-hidden="true">{icons.table}</span>
               <select
@@ -569,6 +1073,64 @@ export function RichTextEditor({
         </div>
       )}
 
+      {mode === 'visual' && tableContext && (
+        <div class="rte-table-toolbar" role="toolbar" aria-label="表格工具列">
+          <span class="rte-table-context">表格編輯</span>
+          <div class="rte-table-actions">
+            <TableAction onClick={() => insertTableRow('above')}>上方插入列</TableAction>
+            <TableAction onClick={() => insertTableRow('below')}>下方插入列</TableAction>
+            <TableAction disabled={tableContext.table.rows.length <= 1} onClick={deleteTableRow}>刪除列</TableAction>
+            <span class="rte-table-sep" />
+            <TableAction onClick={() => insertTableColumn('left')}>左方插入欄</TableAction>
+            <TableAction onClick={() => insertTableColumn('right')}>右方插入欄</TableAction>
+            <TableAction disabled={tableContext.cell.parentElement?.children.length === 1} onClick={deleteTableColumn}>刪除欄</TableAction>
+            <span class="rte-table-sep" />
+            <TableAction onClick={openTableProperties}>表格屬性</TableAction>
+          </div>
+        </div>
+      )}
+
+      {mode === 'visual' && searchOpen && (
+        <div class="rte-search-bar" role="search" aria-label="搜尋與取代">
+          <input
+            ref={searchInputRef}
+            aria-label="搜尋文字"
+            placeholder="搜尋"
+            value={searchTerm}
+            onInput={(event) => {
+              setSearchTerm((event.currentTarget as HTMLInputElement).value)
+              setSearchResult({ index: -1, total: 0 })
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                findNext(event.shiftKey ? -1 : 1)
+              }
+              if (event.key === 'Escape') closeSearch()
+            }}
+          />
+          <input
+            aria-label="取代為"
+            placeholder="取代為"
+            value={replaceTerm}
+            onInput={(event) => setReplaceTerm((event.currentTarget as HTMLInputElement).value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') closeSearch()
+            }}
+          />
+          <span class="rte-search-count" aria-live="polite">
+            {searchTerm.trim() ? (searchResult.total ? `${searchResult.index + 1} / ${searchResult.total}` : '找不到') : '輸入關鍵字'}
+          </span>
+          <div class="rte-search-actions">
+            <button type="button" onClick={() => findNext(-1)} disabled={!searchTerm.trim()} aria-label="上一筆">‹</button>
+            <button type="button" onClick={() => findNext(1)} disabled={!searchTerm.trim()} aria-label="下一筆">›</button>
+            <button type="button" onClick={replaceCurrent} disabled={searchResult.total === 0}>取代</button>
+            <button type="button" onClick={replaceAll} disabled={searchResult.total === 0}>全部取代</button>
+          </div>
+          <button type="button" class="rte-search-close" onClick={closeSearch} aria-label="關閉搜尋與取代">×</button>
+        </div>
+      )}
+
       <div
         ref={editorRef}
         class={`rte-content${mode === 'visual' ? '' : ' is-hidden'}`}
@@ -578,6 +1140,7 @@ export function RichTextEditor({
         aria-label="文字內容"
         onInput={emitVisual}
         onFocus={saveSelection}
+        onClick={handleEditorClick as any}
         onMouseUp={saveSelection}
         onKeyUp={saveSelection}
         onPaste={handlePaste as any}
@@ -597,8 +1160,85 @@ export function RichTextEditor({
       <div class="rte-status">
         {mode === 'source'
           ? '切回視覺編輯時會移除不安全的標籤與屬性。'
-          : '先選取文字再套用字型、字級或連結；對齊會套用到目前段落。'}
+          : tableContext
+            ? `目前在表格第 ${Array.from(tableContext.table.rows).indexOf(tableContext.cell.parentElement as HTMLTableRowElement) + 1} 列；可直接調整列、欄與邊框。`
+            : '游標所在位置會同步顯示段落、字型與字級；選取文字後可套用格式。'}
       </div>
+
+      <Modal
+        title="表格屬性"
+        open={tablePropertiesOpen}
+        onClose={() => setTablePropertiesOpen(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setTablePropertiesOpen(false)}>取消</Button>
+            <Button tone="primary" onClick={applyTableProperties}>套用</Button>
+          </>
+        }
+      >
+        <div class="rte-table-properties">
+          <label>標題
+            <input value={tableProperties.title} onInput={(event) => setTableProperties((current) => ({ ...current, title: (event.currentTarget as HTMLInputElement).value }))} />
+          </label>
+          <label>寬度
+            <input value={tableProperties.width} inputMode="decimal" placeholder="100% 或 720px" onInput={(event) => setTableProperties((current) => ({ ...current, width: (event.currentTarget as HTMLInputElement).value }))} />
+          </label>
+          <label>邊框顏色
+            <span class="rte-table-colour-field">
+              <input
+                type="color"
+                aria-label="從調色盤選擇邊框顏色"
+                value={normalizeColor(tableProperties.borderColor) ?? '#cbc1b5'}
+                onInput={(event) => setTableProperties((current) => ({ ...current, borderColor: (event.currentTarget as HTMLInputElement).value }))}
+              />
+              <input
+                aria-label="邊框顏色色碼"
+                value={tableProperties.borderColor}
+                placeholder="#cbc1b5"
+                onInput={(event) => setTableProperties((current) => ({ ...current, borderColor: (event.currentTarget as HTMLInputElement).value }))}
+              />
+              <button type="button" onClick={pickTableBorderColour}>螢幕取色</button>
+            </span>
+          </label>
+          <label>邊框寬度
+            <input value={tableProperties.borderWidth} inputMode="decimal" placeholder="1px" onInput={(event) => setTableProperties((current) => ({ ...current, borderWidth: (event.currentTarget as HTMLInputElement).value }))} />
+          </label>
+          <p>寬度支援百分比或 px；邊框顏色可從調色盤、螢幕取色或輸入 3／6 碼色碼。設為 0px 時，編輯器會顯示虛線輔助框。</p>
+        </div>
+      </Modal>
+
+      <Modal
+        title="插入連結"
+        open={linkDialogOpen}
+        onClose={closeLinkDialog}
+        footer={
+          <>
+            <Button tone="ghost" onClick={closeLinkDialog}>取消</Button>
+            <Button tone="primary" onClick={applyLink}>套用連結</Button>
+          </>
+        }
+      >
+        <div class="rte-table-properties rte-link-properties">
+          <label>連結網址
+            <input
+              value={linkDraft}
+              placeholder="https://example.com"
+              onInput={(event) => setLinkDraft((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyLink()
+              }}
+            />
+          </label>
+          <label>開啟方式
+            <select aria-label="連結開啟方式" value={linkTarget} onChange={(event) => setLinkTarget((event.currentTarget as HTMLSelectElement).value as LinkTarget)}>
+              <option value="_blank">新分頁（預設）</option>
+              <option value="luma-link-window">新視窗</option>
+              <option value="_self">原視窗</option>
+            </select>
+          </label>
+          <p>支援 https://、http://、mailto: 與本站相對路徑；留空並套用可移除連結。新視窗的實際呈現由使用者瀏覽器設定決定。</p>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -630,6 +1270,21 @@ function escapeHtml(value: string): string {
 
 function escapeAttribute(value: string): string {
   return escapeHtml(value)
+}
+
+function normalizeTableWidth(value: string): string | null {
+  const trimmed = value.trim()
+  return /^(?:\d{1,3}(?:\.\d{1,2})?%|\d{1,4}(?:\.\d{1,2})?px)$/.test(trimmed) ? trimmed : null
+}
+
+function normalizeColor(value: string): string | null {
+  const trimmed = value.trim()
+  return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(trimmed) ? trimmed : null
+}
+
+function normalizeBorderWidth(value: string): string | null {
+  const trimmed = value.trim()
+  return /^(?:0|[1-9]\d?(?:\.\d)?px)$/.test(trimmed) ? trimmed : null
 }
 
 function buildTable(rows: number, columns: number): string {
@@ -680,6 +1335,11 @@ function sanitizeEditorHtml(html: string): string {
       if (tag === 'A') {
         const href = safeUrl(element.getAttribute('href'))
         if (href) kept.setAttribute('href', href)
+        const target = safeLinkTarget(element.getAttribute('target'))
+        if (target) {
+          kept.setAttribute('target', target)
+          if (target === '_blank') kept.setAttribute('rel', 'noopener noreferrer')
+        }
       }
       if (tag === 'IMG') {
         const src = safeUrl(element.getAttribute('src'))
@@ -690,6 +1350,9 @@ function sanitizeEditorHtml(html: string): string {
         const src = safeEmbedUrl(element.getAttribute('src'))
         if (src) kept.setAttribute('src', src)
         if (element.hasAttribute('allowfullscreen')) kept.setAttribute('allowfullscreen', '')
+      }
+      if (tag === 'TABLE' && element.getAttribute('title')) {
+        kept.setAttribute('title', element.getAttribute('title') ?? '')
       }
       if (STYLE_TAGS.has(tag) && element.getAttribute('style')) {
         const safe = sanitizeInlineStyle(element.getAttribute('style') ?? '')
@@ -709,7 +1372,7 @@ function sanitizeEditorHtml(html: string): string {
 const SAFE_STYLE_PROPS = new Set([
   'text-align', 'position', 'width', 'height', 'padding-bottom', 'overflow',
   'top', 'left', 'border', 'border-collapse', 'font-family', 'font-size',
-  'text-decoration',
+  'text-decoration', 'color', 'background-color', 'border-color', 'border-width', 'border-style',
 ])
 
 function sanitizeInlineStyle(raw: string): string {
@@ -737,6 +1400,13 @@ function isSafeStyleValue(property: string, value: string): boolean {
     return /^(?:0|(?:\d{1,3}(?:\.\d{1,2})?)(?:px|rem|em|%))$/.test(value)
   }
   if (property === 'border') return value === '0'
+  if (property === 'color') return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/.test(value)
+    || /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/.test(value)
+  if (property === 'background-color') return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/.test(value)
+    || /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/.test(value)
+  if (property === 'border-color') return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/.test(value)
+  if (property === 'border-width') return /^(?:0|[1-9]\d?(?:\.\d)?px)$/.test(value)
+  if (property === 'border-style') return value === 'solid'
   if (property === 'border-collapse') return ['collapse', 'separate'].includes(value)
   if (property === 'font-family') return /^[\w\s"',-]+$/.test(value)
   if (property === 'text-decoration') return ['none', 'underline', 'line-through'].includes(value)
@@ -746,6 +1416,10 @@ function isSafeStyleValue(property: string, value: string): boolean {
 function safeUrl(raw: string | null): string {
   const value = raw?.trim() ?? ''
   return /^(https?:\/\/|mailto:|\/)/i.test(value) ? value : ''
+}
+
+function safeLinkTarget(raw: string | null): LinkTarget | null {
+  return raw === '_blank' || raw === '_self' || raw === 'luma-link-window' ? raw : null
 }
 
 function safeEmbedUrl(raw: string | null): string {

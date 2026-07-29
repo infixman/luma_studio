@@ -1,4 +1,5 @@
 import { AdminGate } from './components/AdminGate'
+import { RichTextEditorPreview } from './components/RichTextEditorPreview'
 import { AdminPage } from './pages/AdminPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { BioLinkAdminPage } from './features/bio-link/BioLinkAdminPage'
@@ -60,6 +61,13 @@ function Routed() {
 
 export function App() {
   markBody('admin')
+
+  // A local visual check must not require a real session. Vite replaces DEV
+  // with false in the production bundle, so this path can never bypass the
+  // deployed AdminGate.
+  if (import.meta.env.DEV && location.pathname === '/__preview/rich-text') {
+    return <RichTextEditorPreview />
+  }
 
   // The gate renders nothing of the back office until there is a session, so
   // the routing below never runs for a visitor who has not signed in.
