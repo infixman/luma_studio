@@ -498,14 +498,53 @@ export interface InventoryItem {
 
 export type CourseStatus = 'draft' | 'published' | 'archived'
 
-/** Phase 2 holds the identity only; sections and lessons arrive in phase 5. */
+export type CourseLevel = 'beginner' | 'intermediate' | 'advanced' | 'all'
+
 export interface Course {
   id: string
   slug: string
   title: string
   status: CourseStatus
+  /** What a product page leads with. Required before publishing. */
+  summary: string
+  descriptionHtml: string
+  coverMediaId: string | null
+  instructorName: string
+  instructorBioHtml: string
+  level: CourseLevel
+  language: string
+  audienceHtml: string
+  outcomesHtml: string
+  prerequisitesHtml: string
+  materialsHtml: string
+  /** When it first went on sale. Re-publishing after an edit does not move it. */
+  publishedAt: number | null
   createdAt: number
   updatedAt: number
+}
+
+export interface CourseLesson {
+  id: string | null
+  title: string
+  contentHtml: string
+  /** Null for a reading. A lesson is not obliged to be a video. */
+  videoAssetId: string | null
+  /** Watchable without buying. Still goes through the playback gateway. */
+  isPreview: boolean
+  position: number
+}
+
+export interface CourseSection {
+  id: string | null
+  title: string
+  position: number
+  lessons: CourseLesson[]
+}
+
+/** Why a course cannot go on sale yet. All of them, not the first one. */
+export interface CoursePublishProblem {
+  field: 'summary' | 'cover' | 'outline' | 'video'
+  message: string
 }
 
 export type OfferComponentType = 'course' | 'inventory'

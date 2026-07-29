@@ -13,17 +13,9 @@ import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import type { InventoryItem } from '../../shared/types'
+import { anInventoryItem } from '../../shared/testing/fixtures'
 
-const KIT: InventoryItem = {
-  id: 'kit-1',
-  sku: 'KIT-1',
-  title: '水彩材料包',
-  stock: 12,
-  enabled: true,
-  archived: false,
-  createdAt: 0,
-  updatedAt: 0,
-}
+const KIT: InventoryItem = anInventoryItem()
 
 let items: InventoryItem[] = []
 

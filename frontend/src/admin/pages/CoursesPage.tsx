@@ -75,7 +75,13 @@ export function CoursesPage() {
   }
 
   const columns: Column<Course>[] = [
-    { key: 'title', label: '課程名稱', render: (course) => course.title },
+    {
+      key: 'title',
+      label: '課程名稱',
+      render: (course) => (
+        <a href={`/courses/${encodeURIComponent(course.id)}`}>{course.title}</a>
+      ),
+    },
     { key: 'slug', label: '網址代稱', render: (course) => course.slug },
     {
       key: 'status',

@@ -40,6 +40,7 @@ const dynamic = [
   { id: 'products' as const, pattern: /^\/products\/([^/]+)$/ },
   { id: 'pages' as const, pattern: /^\/pages\/([^/]+)$/ },
   { id: 'customers' as const, pattern: /^\/customers\/([^/]+)$/ },
+  { id: 'courses' as const, pattern: /^\/courses\/([^/]+)$/ },
 ]
 
 export function routeById(id: AdminRouteId): AdminRoute {
@@ -54,7 +55,7 @@ export function routeForPath(value: string): AdminRoute | null {
   return matched ? routeById(matched.id) : null
 }
 
-export function routeParam(value: string, id: 'products' | 'pages' | 'customers'): string | null {
+export function routeParam(value: string, id: 'products' | 'pages' | 'customers' | 'courses'): string | null {
   const path = value.replace(/\/+$/, '') || '/'
   const match = dynamic.find((entry) => entry.id === id)?.pattern.exec(path)
   return match ? decodeURIComponent(match[1]!) : null

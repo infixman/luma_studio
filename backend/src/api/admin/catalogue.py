@@ -9,6 +9,7 @@ let the client keep believing it had been obeyed.
 """
 
 from domain import courses, inventory, offers, shop
+from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
 
 
@@ -27,10 +28,31 @@ def _item_fields(body: dict) -> dict:
 
 
 def _course_fields(body: dict) -> dict:
+    """The fields a course create or update may set.
+
+    `status` is here because creating a draft is the normal case; publishing
+    is its own route, because it has checks a plain save must not run.
+    """
+
     return {
         "slug": courses.validate_slug(body.get("slug")),
         "title": courses.validate_title(body.get("title")),
         "status": courses.validate_status(body.get("status") or "draft"),
+    }
+
+
+def _course_display_fields(body: dict) -> dict:
+    """The parts a product page reads. All optional while writing.
+
+    Publishing is where their absence becomes a problem, so an author can
+    save a half-written course without being nagged for the rest of it.
+    """
+
+    return {
+        "summary": validate_text(body.get("summary") or "", courses.MAX_SUMMARY, "課程簡介", required=False),
+        "instructorName": validate_text(body.get("instructorName") or "", 60, "講師", required=False),
+        "level": validate_choice(body.get("level") or "all", courses.LEVELS, "難度"),
+        "language": validate_text(body.get("language") or "zh-Hant", 20, "語言", required=False),
     }
 
 
@@ -195,7 +217,11 @@ async def handle(ctx: Ctx):
                 return ctx.error(str(error) or "Invalid course", 400)
             if await courses.slug_taken(env, fields["slug"], excluding=course_id):
                 return ctx.error("另一門課程已經使用這個網址代稱", 409)
-            if not await courses.update_course(env, course_id, **fields):
+            try:
+                display = _course_display_fields(await ctx.json_body())
+            except (ValueError, AttributeError) as error:
+                return ctx.error(str(error) or "Invalid course", 400)
+            if not await courses.update_course(env, course_id, **fields, **display):
                 return ctx.error("Course not found", 404)
             return ctx.json({"course": await courses.get_course(env, course_id)})
 

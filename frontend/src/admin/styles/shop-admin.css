@@ -778,3 +778,39 @@ body.admin .offer-component-blockers {
   padding-left: var(--space-4);
   color: var(--muted);
 }
+
+/* --- course editor --- */
+
+body.admin .course-publish-problems {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--muted);
+}
+
+body.admin .course-outline {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+body.admin .course-section-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+body.admin .course-lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+body.admin .course-lessons li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

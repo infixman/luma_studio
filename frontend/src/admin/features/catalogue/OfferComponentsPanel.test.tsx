@@ -13,26 +13,11 @@ import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import type { Course, InventoryItem, OfferComponentsView } from '../../../shared/types'
+import { aCourse, anInventoryItem } from '../../../shared/testing/fixtures'
 
-const COURSE: Course = {
-  id: 'course-1',
-  slug: 'watercolour',
-  title: '水彩花卉入門',
-  status: 'published',
-  createdAt: 0,
-  updatedAt: 0,
-}
+const COURSE: Course = aCourse()
 
-const KIT: InventoryItem = {
-  id: 'kit-1',
-  sku: 'KIT-1',
-  title: '水彩材料包',
-  stock: 12,
-  enabled: true,
-  archived: false,
-  createdAt: 0,
-  updatedAt: 0,
-}
+const KIT: InventoryItem = anInventoryItem()
 
 function view(overrides: Partial<OfferComponentsView> = {}): OfferComponentsView {
   return {

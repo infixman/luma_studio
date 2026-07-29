@@ -114,10 +114,24 @@ async def create_course(env, *, slug: str, title: str, status: str) -> str:
     return course_id
 
 
-async def update_course(env, course_id: str, *, slug: str, title: str, status: str) -> bool:
+async def update_course(
+    env,
+    course_id: str,
+    *,
+    slug: str,
+    title: str,
+    status: str,
+    summary: str = "",
+    instructorName: str = "",
+    level: str = "all",
+    language: str = "zh-Hant",
+) -> bool:
     result = await env.DB.prepare(
-        "UPDATE courses SET slug = ?2, title = ?3, status = ?4, updated_at = ?5 WHERE id = ?1"
-    ).bind(course_id, slug, title, status, utc_timestamp()).run()
+        "UPDATE courses SET slug = ?2, title = ?3, status = ?4, summary = ?5, instructor_name = ?6,"
+        " level = ?7, language = ?8, updated_at = ?9 WHERE id = ?1"
+    ).bind(
+        course_id, slug, title, status, summary, instructorName, level, language, utc_timestamp()
+    ).run()
     return d1_changed(result)
 
 

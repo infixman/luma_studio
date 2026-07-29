@@ -2,11 +2,21 @@ import { loginUrl } from './urls'
 
 export class ApiError extends Error {
   readonly status: number
+  /**
+   * The parsed response body, when there was one.
+   *
+   * A 409 often carries more than a sentence — which cart lines changed,
+   * which checks a course still fails — and the client already parsed it.
+   * Throwing that away meant every caller that needed the detail had to
+   * bypass the shared client to get it.
+   */
+  readonly body: Record<string, unknown>
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body: Record<string, unknown> = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 

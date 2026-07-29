@@ -24,7 +24,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const body = await readBody(response)
   if (response.status === 401) throw handleUnauthorized()
-  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : '操作失敗', response.status)
+  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : '操作失敗', response.status, body)
   clearLoginAttempt()
   return body as T
 }
@@ -38,7 +38,7 @@ export async function probeSession<T>(path: string): Promise<T | null> {
   }
   if (response.status === 401) return null
   const body = await readBody(response)
-  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : '操作失敗', response.status)
+  if (!response.ok) throw new ApiError(typeof body.error === 'string' ? body.error : '操作失敗', response.status, body)
   clearLoginAttempt()
   return body as T
 }

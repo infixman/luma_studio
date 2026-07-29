@@ -12,15 +12,9 @@ import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import type { Course } from '../../shared/types'
+import { aCourse } from '../../shared/testing/fixtures'
 
-const COURSE: Course = {
-  id: 'course-1',
-  slug: 'watercolour',
-  title: '水彩花卉入門',
-  status: 'draft',
-  createdAt: 0,
-  updatedAt: 0,
-}
+const COURSE: Course = aCourse({ status: 'draft' })
 
 let courses: Course[] = []
 
