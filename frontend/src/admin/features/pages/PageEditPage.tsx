@@ -28,7 +28,7 @@ import {
   Toggle,
   useConfirm,
 } from '../../components/ui'
-import { CLIPBOARD_KEY, readCopiedBlock, writeCopiedBlock } from '../../lib/blockClipboard'
+import { writeCopiedBlock } from '../../lib/blockClipboard'
 import type { CopiedBlock } from '../../lib/blockClipboard'
 import { followsTitle, nextPath } from '../../lib/slug'
 import { Blocks } from '../../../shared/components/Blocks'
@@ -50,6 +50,7 @@ import type {
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
 import { projectDraftBlocks } from './preview/projectDraftBlocks'
 import { useLivePagePreview } from './hooks/useLivePagePreview'
+import { useBlockClipboard } from './hooks/useBlockClipboard'
 import '../../styles/pages-admin.css'
 import '../../styles/media-admin.css'
 
@@ -115,8 +116,6 @@ export function PageEditPage({ id }: { id: string }) {
    */
   const [openIds, setOpenIds] = useState<string[]>([])
   const [multi, setMulti] = useState(false)
-  /** What is on the block clipboard right now, or null if it is empty or unusable. */
-  const [clipboard, setClipboard] = useState<CopiedBlock | null>(null)
   /** Shut while the path is the title's shadow; opened by the owner to type their own. */
   const [pathLocked, setPathLocked] = useState(false)
   /** Where the type picker is open, as an index in the block list; null when closed. */
@@ -126,6 +125,7 @@ export function PageEditPage({ id }: { id: string }) {
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { frame, framing, openLivePreview } = useLivePagePreview(id, showError)
+  const { clipboard, setClipboard } = useBlockClipboard(KNOWN_TYPES)
   const { ask, dialog } = useConfirm()
   const picker = useMediaPicker()
 
@@ -191,24 +191,6 @@ export function PageEditPage({ id }: { id: string }) {
     window.addEventListener('beforeunload', ask)
     return () => window.removeEventListener('beforeunload', ask)
   })
-
-  /* The clipboard is a place, not a message, so it is read rather than
-     received. Re-read on focus and on the storage event because the copy that
-     fills it usually happens in the other tab, or on the page you just came
-     from — and a menu offering 貼上區塊 has to know before it is opened. */
-  useEffect(() => {
-    const refresh = () => setClipboard(readCopiedBlock(KNOWN_TYPES))
-    refresh()
-    const moved = (event: StorageEvent) => {
-      if (event.key === null || event.key === CLIPBOARD_KEY) refresh()
-    }
-    window.addEventListener('focus', refresh)
-    window.addEventListener('storage', moved)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('storage', moved)
-    }
-  }, [])
 
   // The library and the catalogue are what the block editors offer to choose
   // from. Fetched once here rather than per block: five carousels on a page
