@@ -999,6 +999,28 @@ MIGRATIONS = [
             "CREATE INDEX IF NOT EXISTS idx_course_lessons_video ON course_lessons (video_asset_id)",
         ],
     },
+    {
+        # Phase 6: where a member got to.
+        #
+        # Keyed by member and lesson, because "where was I" has exactly one
+        # answer and two rows would make it a coin toss. `course_id` is
+        # denormalised so a course's progress is one query rather than a join
+        # through sections — this is read on every card of "my courses".
+        "name": "0032_create_lesson_progress",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS course_lesson_progress (
+                 customer_id TEXT NOT NULL,
+                 course_id TEXT NOT NULL,
+                 lesson_id TEXT NOT NULL,
+                 position_seconds INTEGER NOT NULL DEFAULT 0,
+                 completed_at INTEGER,
+                 updated_at INTEGER NOT NULL,
+                 PRIMARY KEY (customer_id, lesson_id)
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_course_lesson_progress_recent"
+            " ON course_lesson_progress (customer_id, course_id, updated_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

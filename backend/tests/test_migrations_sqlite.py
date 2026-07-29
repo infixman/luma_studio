@@ -512,6 +512,32 @@ class TestCourseOutlineSchema:
         ).fetchone()[0] == 2
 
 
+class TestProgressSchema:
+    def test_a_member_has_one_position_per_lesson(self, database):
+        """Two rows for one lesson would make "where was I" a coin toss."""
+
+        database.execute(
+            "INSERT INTO course_lesson_progress (customer_id, course_id, lesson_id, position_seconds,"
+            " completed_at, updated_at) VALUES ('cust-1', 'c1', 'l1', 60, NULL, 0)"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO course_lesson_progress (customer_id, course_id, lesson_id, position_seconds,"
+                " completed_at, updated_at) VALUES ('cust-1', 'c1', 'l1', 90, NULL, 0)"
+            )
+
+    def test_two_members_watch_the_same_lesson_independently(self, database):
+        for customer in ("cust-1", "cust-2"):
+            database.execute(
+                "INSERT INTO course_lesson_progress (customer_id, course_id, lesson_id, position_seconds,"
+                " completed_at, updated_at) VALUES (?, 'c1', 'l1', 60, NULL, 0)",
+                (customer,),
+            )
+
+        assert database.execute("SELECT COUNT(*) FROM course_lesson_progress").fetchone()[0] == 2
+
+
 class TestDefaultOfferBackfill:
     """0027 marks a product's only offer and refuses to guess for the rest."""
 
