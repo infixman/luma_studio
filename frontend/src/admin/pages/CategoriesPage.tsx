@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -16,6 +16,98 @@ interface CategoryListing {
 
 function suggestSlug(title: string): string {
   return slugifyAscii(title, CATEGORY_SLUG_MAX)
+}
+
+function CategoryNameEditor({
+  category,
+  onSave,
+}: {
+  category: Category
+  onSave: (title: string) => Promise<boolean>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(category.title)
+  const [saving, setSaving] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setValue(category.title)
+  }, [category.title])
+
+  useEffect(() => {
+    if (!editing) return
+    input.current?.focus()
+    input.current?.select()
+  }, [editing])
+
+  const changed = value.trim() !== '' && value.trim() !== category.title
+
+  async function save() {
+    if (!changed || saving) return
+    setSaving(true)
+    const saved = await onSave(value)
+    setSaving(false)
+    if (saved) setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <div class="category-name-display">
+        <span>{category.title}</span>
+        <IconButton
+          label={`編輯分類「${category.title}」`}
+          size="sm"
+          onClick={() => setEditing(true)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" />
+            <path d="m13.8 7.7 3 3" />
+          </svg>
+        </IconButton>
+      </div>
+    )
+  }
+
+  return (
+    <div class="category-name-editor">
+      <TextField
+        ref={input}
+        label={`${category.title}的分類名稱`}
+        value={value}
+        maxLength={CATEGORY_TITLE_MAX}
+        required
+        trailing={
+          <IconButton
+            label={`儲存分類「${category.title}」`}
+            size="sm"
+            class="category-save-button"
+            disabled={!changed || saving}
+            onClick={() => void save()}
+          >
+            {saving ? (
+              <span class="ui-spinner" aria-hidden="true" />
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 4h12l2 2v14H5V4Z" />
+                <path d="M8 4v6h8V4M8 20v-6h8v6" />
+              </svg>
+            )}
+          </IconButton>
+        }
+        onInput={(event) => setValue((event.currentTarget as HTMLInputElement).value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.isComposing) {
+            event.preventDefault()
+            void save()
+          }
+          if (event.key === 'Escape') {
+            setValue(category.title)
+            setEditing(false)
+          }
+        }}
+      />
+    </div>
+  )
 }
 
 export function CategoriesPage() {
@@ -57,9 +149,9 @@ export function CategoriesPage() {
     }
   }
 
-  async function renameCategory(category: Category, title: string) {
+  async function renameCategory(category: Category, title: string): Promise<boolean> {
     const next = title.trim()
-    if (!next || next === category.title) return
+    if (!next || next === category.title) return false
     try {
       await apiJson(`/api/categories/${encodeURIComponent(category.id)}`, 'PUT', {
         ...category,
@@ -67,8 +159,10 @@ export function CategoriesPage() {
       })
       show('分類名稱已更新。', 'ok')
       await load()
+      return true
     } catch (error) {
       showError(error)
+      return false
     }
   }
 
@@ -152,13 +246,9 @@ export function CategoriesPage() {
                 {listing.categories.map((category) => (
                   <li key={category.id}>
                     <div class="category-name">
-                      <TextField
-                        label={`${category.title}的分類名稱`}
-                        value={category.title}
-                        maxLength={CATEGORY_TITLE_MAX}
-                        onBlur={(event) =>
-                          void renameCategory(category, (event.currentTarget as HTMLInputElement).value)
-                        }
+                      <CategoryNameEditor
+                        category={category}
+                        onSave={(title) => renameCategory(category, title)}
                       />
                     </div>
                     <div class="category-route">
