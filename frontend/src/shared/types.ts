@@ -212,6 +212,8 @@ export interface AdminCustomer {
   recipientPhone: string
   address: string
   blocked: boolean
+  cartBlocked: boolean
+  accountBlocked: boolean
   notes: string
   anonymizedAt: number | null
   createdAt: number
@@ -222,6 +224,25 @@ export interface AdminCustomer {
 export interface AdminCustomerDetail {
   customer: AdminCustomer
   orders: Order[]
+  activity: CustomerActivity[]
+  stats: CustomerActivityStats
+}
+
+export interface CustomerActivity {
+  type: 'page_view' | 'product_view' | 'cart_add'
+  path: string
+  productSlug: string
+  productTitle: string
+  quantity: number | null
+  createdAt: number
+}
+
+export interface CustomerActivityStats {
+  periodDays: number
+  lastSeenAt: number | null
+  pageViews: number
+  productViews: number
+  cartAdds: number
 }
 
 /**

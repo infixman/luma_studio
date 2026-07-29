@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useContext, useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiUrl } from '../../shared/api'
 import { money, priceLabel } from '../../shared/money'
 import type { PublicProductDetail, PublicVariant } from '../../shared/types'
 import * as cart from '../lib/cart'
+import { track } from '../lib/activity'
+import { CustomerContext } from '../components/Chrome'
 import '../styles/shop.css'
 
 /** What the visitor is told about a variant's supply, if anything. */
@@ -42,6 +44,7 @@ export function productReturnTarget(search: string): { href: string; label: stri
 }
 
 export function ProductPage({ slug }: { slug: string }) {
+  const customer = useContext(CustomerContext)
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
   const [missing, setMissing] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -65,6 +68,17 @@ export function ProductPage({ slug }: { slug: string }) {
         else setFailed(true)
       })
   }, [slug])
+
+  useEffect(() => {
+    if (customer && product) {
+      track({
+        type: 'product_view',
+        path: location.pathname,
+        productSlug: product.slug,
+        productTitle: product.title,
+      })
+    }
+  }, [customer, product])
 
   if (missing) {
     return (
@@ -95,10 +109,23 @@ export function ProductPage({ slug }: { slug: string }) {
   )
 
   function addToCart() {
-    if (!chosen) return
+    if (!chosen || !product) return
+    if (customer?.cartBlocked) {
+      setAdded('這個帳號目前無法使用購物車，請與我們聯絡。')
+      return
+    }
     if (!cart.add(chosen, wanted)) {
       setAdded(`購物車最多放 ${cart.MAX_LINES} 種商品，先結帳或移除一些再加。`)
       return
+    }
+    if (customer) {
+      track({
+        type: 'cart_add',
+        path: location.pathname,
+        productSlug: product.slug,
+        productTitle: product.title,
+        quantity: wanted,
+      })
     }
     setAdded(`已加入 ${wanted} 件。`)
   }

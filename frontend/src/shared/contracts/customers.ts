@@ -6,4 +6,6 @@ export interface Customer {
   recipientPhone: string
   address: string
   blocked: boolean
+  cartBlocked: boolean
+  accountBlocked: boolean
 }

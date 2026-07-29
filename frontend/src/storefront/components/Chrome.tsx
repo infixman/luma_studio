@@ -5,7 +5,9 @@ import { useEffect, useState } from 'preact/hooks'
 import { SiteFooter, SiteHeader } from '../../shared/components/SiteChrome'
 import { api, loginUrl, probeSession } from '../../shared/api'
 import type { SiteChrome } from '../../shared/types'
+import type { Customer } from '../../shared/contracts/customers'
 import * as cart from '../lib/cart'
+import { track } from '../lib/activity'
 
 /**
  * Wraps a storefront page in the site's header and footer.
@@ -29,10 +31,11 @@ import * as cart from '../lib/cart'
 export type ChromeWanted = { header: boolean; footer: boolean }
 
 export const ChromeControl = createContext<(wanted: ChromeWanted) => void>(() => undefined)
+export const CustomerContext = createContext<Customer | null>(null)
 export function Chrome({ bare, children }: { bare?: boolean; children: ComponentChildren }) {
   const [chrome, setChrome] = useState<SiteChrome | null>(null)
   const [items, setItems] = useState(0)
-  const [signedIn, setSignedIn] = useState(false)
+  const [customer, setCustomer] = useState<Customer | null>(null)
   const [wanted, setWanted] = useState<ChromeWanted>({ header: true, footer: true })
 
   useEffect(() => {
@@ -42,10 +45,16 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
     api<SiteChrome>('/api/site')
       .then(setChrome)
       .catch(() => undefined)
-    probeSession<{ customer: unknown }>('/api/session')
-      .then((session) => setSignedIn(session !== null))
-      .catch(() => setSignedIn(false))
+    probeSession<{ customer: Customer }>('/api/session')
+      .then((session) => setCustomer(session?.customer ?? null))
+      .catch(() => setCustomer(null))
   }, [bare])
+
+  useEffect(() => {
+    if (customer && !bare) {
+      track({ type: 'page_view', path: location.pathname })
+    }
+  }, [bare, customer])
 
   useEffect(() => {
     const refresh = () => setItems(cart.count())
@@ -53,28 +62,36 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
     return cart.onChange(refresh)
   }, [])
 
-  if (bare || chrome === null) return <ChromeControl.Provider value={setWanted}>{children}</ChromeControl.Provider>
+  if (bare || chrome === null) {
+    return (
+      <CustomerContext.Provider value={customer}>
+        <ChromeControl.Provider value={setWanted}>{children}</ChromeControl.Provider>
+      </CustomerContext.Provider>
+    )
+  }
 
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' })
-    setSignedIn(false)
+    setCustomer(null)
     location.assign('/')
   }
 
   return (
-    <ChromeControl.Provider value={setWanted}>
+    <CustomerContext.Provider value={customer}>
+      <ChromeControl.Provider value={setWanted}>
       {wanted.header && (
         <SiteHeader
           settings={chrome.settings}
           menu={chrome.menu}
           cartCount={items}
-          signedIn={signedIn}
+          signedIn={customer !== null}
           loginHref={loginUrl(`${location.origin}/orders`)}
           onLogout={logout}
         />
       )}
       {children}
       {wanted.footer && <SiteFooter settings={chrome.settings} />}
-    </ChromeControl.Provider>
+      </ChromeControl.Provider>
+    </CustomerContext.Provider>
   )
 }

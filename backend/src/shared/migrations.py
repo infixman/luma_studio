@@ -650,6 +650,29 @@ MIGRATIONS = [
         ],
         "statements": [],
     },
+    {
+        # Account access and shopping access are different decisions. The
+        # original `blocked` column remains the cart/checkout switch so
+        # existing deployments keep their current policy.
+        "name": "0026_add_customer_access_and_activity",
+        "add_columns": [
+            ("customers", "account_blocked", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS customer_events (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 customer_id TEXT NOT NULL,
+                 event_type TEXT NOT NULL,
+                 path TEXT NOT NULL DEFAULT '',
+                 product_slug TEXT NOT NULL DEFAULT '',
+                 product_title TEXT NOT NULL DEFAULT '',
+                 quantity INTEGER,
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_customer_events_customer_time"
+            " ON customer_events (customer_id, created_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

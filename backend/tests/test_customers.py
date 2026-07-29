@@ -25,6 +25,7 @@ def row(customer_id="cust1aaaaaaaaaaaaaaaaa", email="a@example.com", blocked=0, 
         "default_recipient_phone": "0912345678",
         "default_address": "台北市",
         "blocked": blocked,
+        "account_blocked": 0,
         "anonymized_at": anonymized,
         "created_at": 1700000000,
         "updated_at": 1700000000,
@@ -103,6 +104,53 @@ class TestBlocking:
     def test_blocking_someone_who_is_gone_reports_it(self, customers):
         database = FakeDatabase(changes={"UPDATE customers": 0})
         assert call(AdminRequest("/api/customers/cust1aaaaaaaaaaaaaaaaa/blocked", "POST", {"blocked": True}), database).status == 404
+
+    def test_account_suspension_revokes_current_sessions(self, customers):
+        database = FakeDatabase(changes={"UPDATE customers": 1})
+        assert asyncio.run(
+            customers.set_account_blocked(make_env(database), "cust1aaaaaaaaaaaaaaaaa", True)
+        ) is True
+        assert any("account_blocked = ?2" in write[0] for write in database.writes)
+        assert any("DELETE FROM customer_sessions" in write[0] for write in database.writes)
+
+    def test_restoring_an_account_does_not_invent_a_session(self, customers):
+        database = FakeDatabase(changes={"UPDATE customers": 1})
+        asyncio.run(customers.set_account_blocked(make_env(database), "cust1aaaaaaaaaaaaaaaaa", False))
+        assert not any("DELETE FROM customer_sessions" in write[0] for write in database.writes)
+
+
+class TestEditing:
+    def test_profile_fields_are_updated_together(self, customers):
+        database = FakeDatabase(changes={"UPDATE customers": 1})
+        assert asyncio.run(
+            customers.update_profile(
+                make_env(database),
+                "cust1aaaaaaaaaaaaaaaaa",
+                display_name="新稱呼",
+                recipient_name="陳小美",
+                recipient_phone="0911222333",
+                address="桃園市",
+            )
+        ) is True
+        write = [entry for entry in database.writes if "default_recipient_name" in entry[0]][0]
+        assert write[1][1:5] == ("新稱呼", "陳小美", "0911222333", "桃園市")
+
+    def test_anonymised_profile_cannot_be_edited(self, customers):
+        database = FakeDatabase(changes={"UPDATE customers": 0})
+        response = call(
+            AdminRequest(
+                "/api/customers/cust1aaaaaaaaaaaaaaaaa/profile",
+                "POST",
+                {
+                    "displayName": "新稱呼",
+                    "recipientName": "",
+                    "recipientPhone": "",
+                    "address": "",
+                },
+            ),
+            database,
+        )
+        assert response.status == 404
 
 
 class TestErasing:

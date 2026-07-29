@@ -41,6 +41,8 @@ def customer_admin_row(row: dict) -> dict:
         "recipientPhone": row["default_recipient_phone"],
         "address": row["default_address"],
         "blocked": bool(row["blocked"]),
+        "cartBlocked": bool(row["blocked"]),
+        "accountBlocked": bool(row.get("account_blocked") or 0),
         "notes": row.get("notes") or "",
         "anonymizedAt": int(row["anonymized_at"]) if row["anonymized_at"] is not None else None,
         "createdAt": int(row["created_at"]),
@@ -99,7 +101,7 @@ async def get(env, customer_id: str) -> dict | None:
 
 
 async def set_blocked(env, customer_id: str, blocked: bool) -> bool:
-    """Stop or allow checkout for one account.
+    """Stop or allow cart validation and checkout for one account.
 
     Blocking does not sign anyone out. They can still read the orders they
     already placed, which is the difference between refusing a sale and
@@ -109,6 +111,55 @@ async def set_blocked(env, customer_id: str, blocked: bool) -> bool:
     result = await (
         env.DB.prepare("UPDATE customers SET blocked = ?2, updated_at = ?3 WHERE id = ?1")
         .bind(customer_id, 1 if blocked else 0, utc_timestamp())
+        .run()
+    )
+    return d1_changed(result)
+
+
+async def set_account_blocked(env, customer_id: str, blocked: bool) -> bool:
+    """Suspend sign-in separately from shopping access.
+
+    A suspension ends current sessions immediately. Restoring the account
+    allows the next Google sign-in; it does not fabricate a session.
+    """
+
+    result = await (
+        env.DB.prepare("UPDATE customers SET account_blocked = ?2, updated_at = ?3 WHERE id = ?1")
+        .bind(customer_id, 1 if blocked else 0, utc_timestamp())
+        .run()
+    )
+    changed = d1_changed(result)
+    if changed and blocked:
+        await env.DB.prepare("DELETE FROM customer_sessions WHERE customer_id = ?1").bind(customer_id).run()
+    return changed
+
+
+MAX_DISPLAY_NAME = 60
+
+
+async def update_profile(
+    env,
+    customer_id: str,
+    *,
+    display_name: str,
+    recipient_name: str,
+    recipient_phone: str,
+    address: str,
+) -> bool:
+    result = await (
+        env.DB.prepare(
+            "UPDATE customers SET display_name = ?2, default_recipient_name = ?3,"
+            " default_recipient_phone = ?4, default_address = ?5, updated_at = ?6"
+            " WHERE id = ?1 AND anonymized_at IS NULL"
+        )
+        .bind(
+            customer_id,
+            str(display_name).strip()[:MAX_DISPLAY_NAME],
+            recipient_name,
+            recipient_phone,
+            address,
+            utc_timestamp(),
+        )
         .run()
     )
     return d1_changed(result)

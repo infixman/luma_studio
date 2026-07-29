@@ -7,7 +7,7 @@ route selection, authentication boundaries, and Worker lifecycle hooks.
 """
 
 import auth_customer
-from domain import bio_link, media, orders, pages, shipping, shop, site_chrome
+from domain import bio_link, customer_activity, media, orders, pages, shipping, shop, site_chrome
 from api.front import routes as front_api
 import mail
 from shared import rate_limit, router
@@ -64,10 +64,18 @@ async def dispatch(ctx: Ctx):
         return await auth_customer.logout(ctx)
 
     # Everything below needs to know who is asking, if anyone is.
-    if path == "/api/session" or path == "/api/profile" or path == "/api/checkout" or path.startswith("/api/orders"):
+    if (
+        path == "/api/session"
+        or path == "/api/profile"
+        or path == "/api/checkout"
+        or path == "/api/customer-events"
+        or path.startswith("/api/orders")
+    ):
         customer = await auth_customer.current_customer(ctx.env, ctx.request)
         if customer is None:
             return ctx.error("Authentication required", 401)
+        if customer["accountBlocked"]:
+            return ctx.error("這個帳號目前已停權，請與我們聯絡。", 403)
 
         if path == "/api/session" and method == "GET":
             return ctx.json({"customer": customer})
@@ -81,6 +89,23 @@ async def dispatch(ctx: Ctx):
             if not await rate_limit.allows(ctx.env, rate_limit.CHECKOUT, ctx.request, "checkout"):
                 return ctx.too_many_requests()
             return await front_api.checkout_response(ctx, customer)
+        if path == "/api/customer-events" and method == "POST":
+            if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "activity"):
+                return ctx.too_many_requests()
+            try:
+                body = await ctx.json_body()
+                await customer_activity.record(
+                    ctx.env,
+                    customer["id"],
+                    event_type=str(body.get("type") or ""),
+                    path=str(body.get("path") or ""),
+                    product_slug=str(body.get("productSlug") or ""),
+                    product_title=str(body.get("productTitle") or ""),
+                    quantity=body.get("quantity"),
+                )
+            except (ValueError, AttributeError, TypeError):
+                return ctx.error("Invalid customer event", 400)
+            return ctx.json({"recorded": True}, 201)
         if path == "/api/orders" and method == "GET":
             return ctx.json({"orders": await orders.list_cards_for_customer(ctx.env, customer["id"])})
         if path.endswith("/fake-payment") and method == "POST":

@@ -35,6 +35,7 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
 const dynamic = [
   { id: 'products' as const, pattern: /^\/products\/([^/]+)$/ },
   { id: 'pages' as const, pattern: /^\/pages\/([^/]+)$/ },
+  { id: 'customers' as const, pattern: /^\/customers\/([^/]+)$/ },
 ]
 
 export function routeById(id: AdminRouteId): AdminRoute {
@@ -49,7 +50,7 @@ export function routeForPath(value: string): AdminRoute | null {
   return matched ? routeById(matched.id) : null
 }
 
-export function routeParam(value: string, id: 'products' | 'pages'): string | null {
+export function routeParam(value: string, id: 'products' | 'pages' | 'customers'): string | null {
   const path = value.replace(/\/+$/, '') || '/'
   const match = dynamic.find((entry) => entry.id === id)?.pattern.exec(path)
   return match ? decodeURIComponent(match[1]!) : null

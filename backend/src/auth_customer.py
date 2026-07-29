@@ -38,7 +38,11 @@ def customer_row(row: dict) -> dict:
         "recipientName": row["default_recipient_name"],
         "recipientPhone": row["default_recipient_phone"],
         "address": row["default_address"],
+        # `blocked` is retained in the public contract while clients migrate;
+        # its precise meaning is cart/checkout access, not account access.
         "blocked": bool(row["blocked"]),
+        "cartBlocked": bool(row["blocked"]),
+        "accountBlocked": bool(row.get("account_blocked") or 0),
     }
 
 
@@ -120,6 +124,11 @@ async def complete_google_login(ctx: Ctx):
         return ctx.error("Google did not return a usable profile", 502)
 
     customer_id = await upsert_customer(env, google_sub, email, str(profile.get("name") or "")[:MAX_NAME])
+    access = await d1_rows(
+        env.DB.prepare("SELECT account_blocked FROM customers WHERE id = ?1").bind(customer_id)
+    )
+    if access and bool(access[0].get("account_blocked") or 0):
+        return ctx.error("這個帳號目前已停權，請與我們聯絡。", 403)
     session_id, now = urlsafe_token(), utc_timestamp()
     await env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at <= ?1").bind(now).run()
     await env.DB.prepare(

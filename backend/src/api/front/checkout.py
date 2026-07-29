@@ -10,6 +10,9 @@ from shared.responses import Ctx
 
 
 async def cart_validate_response(ctx: Ctx):
+    customer = await auth_customer.current_customer(ctx.env, ctx.request)
+    if customer and customer.get("cartBlocked", customer.get("blocked", False)):
+        return ctx.error("這個帳號目前無法使用購物車，請與我們聯絡。", 403)
     try:
         body = await ctx.request.json()
         if not isinstance(body, dict):
@@ -45,7 +48,7 @@ async def update_profile_response(ctx: Ctx, customer: dict):
 
 
 async def checkout_response(ctx: Ctx, customer: dict):
-    if customer["blocked"]:
+    if customer.get("cartBlocked", customer.get("blocked", False)):
         return ctx.error("這個帳號目前無法下單，請與我們聯絡。", 403)
     try:
         body = await ctx.request.json()
@@ -75,6 +78,18 @@ async def checkout_response(ctx: Ctx, customer: dict):
         order = await orders.create_order(ctx.env, customer, priced=priced, method=method, recipient=recipient, day=taipei_day().replace("-", ""))
     except orders.OrderError as error:
         return ctx.error(str(error), 409)
+    # A successful checkout becomes the next checkout's defaults. A store
+    # pickup has no delivery address, so it must not erase a saved home one.
+    try:
+        await auth_customer.update_profile(
+            ctx.env,
+            customer["id"],
+            name=recipient["name"],
+            phone=recipient["phone"],
+            address=recipient["address"] or customer["address"],
+        )
+    except Exception:
+        traceback.print_exc()
     items = await orders.list_items(ctx.env, order["id"])
     try:
         await mail.queue_order_event(ctx.env, "created", order, items)

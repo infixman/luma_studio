@@ -7,7 +7,7 @@ erasing them. Both answer with the customer as they now are, so the back
 office never has to guess whether the click landed.
 """
 
-from domain import customers, orders
+from domain import customer_activity, customers, orders
 from shared import paging
 from shared.responses import Ctx
 
@@ -16,7 +16,12 @@ async def _detail(ctx: Ctx, customer_id: str) -> dict:
     customer = await customers.get(ctx.env, customer_id)
     if customer is None:
         return {}
-    return {"customer": customer, "orders": await orders.list_for_customer(ctx.env, customer_id)}
+    return {
+        "customer": customer,
+        "orders": await orders.list_for_customer(ctx.env, customer_id),
+        "activity": await customer_activity.recent(ctx.env, customer_id),
+        "stats": await customer_activity.summary(ctx.env, customer_id),
+    }
 
 
 async def handle(ctx: Ctx):
@@ -54,6 +59,39 @@ async def handle(ctx: Ctx):
             return ctx.error("Invalid request", 400)
         if not await customers.set_blocked(env, customer_id, blocked):
             return ctx.error("Customer not found", 404)
+        return ctx.json(await _detail(ctx, customer_id))
+
+    if action == "account-blocked":
+        try:
+            blocked = bool((await ctx.json_body()).get("blocked"))
+        except (ValueError, AttributeError):
+            return ctx.error("Invalid request", 400)
+        if not await customers.set_account_blocked(env, customer_id, blocked):
+            return ctx.error("Customer not found", 404)
+        return ctx.json(await _detail(ctx, customer_id))
+
+    if action == "profile":
+        try:
+            body = await ctx.json_body()
+            display_name = str(body.get("displayName") or "")
+            raw_name = str(body.get("recipientName") or "").strip()
+            raw_phone = str(body.get("recipientPhone") or "").strip()
+            recipient_name = orders.validate_recipient_name(raw_name) if raw_name else ""
+            recipient_phone = orders.validate_phone(raw_phone) if raw_phone else ""
+            address = orders.validate_address(body.get("address") or "", required=False)
+        except orders.OrderError as error:
+            return ctx.error(str(error), 400)
+        except (ValueError, AttributeError):
+            return ctx.error("Invalid profile", 400)
+        if not await customers.update_profile(
+            env,
+            customer_id,
+            display_name=display_name,
+            recipient_name=recipient_name,
+            recipient_phone=recipient_phone,
+            address=address,
+        ):
+            return ctx.error("Customer not found or already anonymised", 404)
         return ctx.json(await _detail(ctx, customer_id))
 
     if action == "notes":

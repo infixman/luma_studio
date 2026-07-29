@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
 import {
-  Badge,
   BulkBar,
   Button,
   ColumnChooser,
@@ -15,7 +14,6 @@ import {
   Pagination,
   Panel,
   Spinner,
-  TableWrap,
   TextField,
   Toolbar,
   activeCount,
@@ -26,11 +24,9 @@ import {
 } from '../components/ui'
 import type { Column, FilterField, FilterRule } from '../components/ui'
 import { api, apiJson } from '../../shared/api'
-import type { AdminCustomer, AdminCustomerDetail, Order, PageInfo } from '../../shared/types'
-import { ORDER_STATUS_LABELS } from '../../shared/presentation/order-status'
-import { ORDER_STATUS_TONES } from '../features/orders/presentation'
-import { ORDER_NOTE_MAX } from '../features/orders/constraints'
+import type { AdminCustomer, PageInfo } from '../../shared/types'
 import '../styles/orders-admin.css'
+import '../styles/customers-admin.css'
 import { dateOnly } from '../../shared/dates'
 import { useLatest } from '../lib/latest'
 
@@ -39,11 +35,11 @@ const COLUMN_PAGE = 'customers'
 const FIELDS: FilterField[] = [
   {
     name: 'blocked',
-    label: '結帳權限',
+    label: '購物車',
     type: 'enum',
     options: [
-      { value: 'no', label: '正常' },
-      { value: 'yes', label: '已封鎖' },
+      { value: 'no', label: '可使用' },
+      { value: 'yes', label: '已停用' },
     ],
   },
   {
@@ -70,11 +66,8 @@ export function CustomersPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [hidden, setHidden] = useState<string[]>(() => readHidden(COLUMN_PAGE) ?? [])
   const [selected, setSelected] = useState<string[]>([])
-  const [detail, setDetail] = useState<AdminCustomerDetail | null>(null)
-  const [note, setNote] = useState('')
   const { message, show, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
-  const noteDirty = detail !== null && note !== detail.customer.notes
   const latest = useLatest()
 
   // Search stays on the server: the browser only holds one page, so searching
@@ -126,38 +119,28 @@ export function CustomersPage() {
     setSelected([])
   }
 
-  async function open(customer: AdminCustomer) {
-    try {
-      const d = await api<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}`)
-      setDetail(d)
-      setNote(d.customer.notes)
-    } catch (error) {
-      showError(error)
-    }
+  function open(customer: AdminCustomer) {
+    location.assign(`/customers/${encodeURIComponent(customer.id)}`)
   }
 
   async function setBlocked(customer: AdminCustomer, blocked: boolean) {
     if (blocked) {
       const ok = await ask({
-        title: '封鎖結帳',
+        title: '停用購物車',
         body: (
           <>
-            <p>確定要封鎖 {customer.email} 嗎？</p>
+            <p>確定要停用 {customer.email} 的購物車嗎？</p>
             <p>他們仍然看得到自己已經下的訂單，也不會被登出，只是不能再結帳。</p>
           </>
         ),
-        confirmLabel: '封鎖',
+        confirmLabel: '停用購物車',
       })
       if (!ok) return
     }
     void run(async () => {
-      setDetail(
-        await apiJson<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}/blocked`, 'POST', {
-          blocked,
-        }),
-      )
+      await apiJson(`/api/customers/${encodeURIComponent(customer.id)}/blocked`, 'POST', { blocked })
       await load()
-    }, blocked ? '已封鎖。' : '已解除封鎖。')
+    }, blocked ? '購物車已停用。' : '購物車已恢復。')
   }
 
   /**
@@ -169,12 +152,12 @@ export function CustomersPage() {
   async function blockSelected(blocked: boolean) {
     const targets = shown.filter((customer) => selected.includes(customer.id) && customer.blocked !== blocked)
     if (targets.length === 0) {
-      show(blocked ? '選取的會員都已經是封鎖狀態。' : '選取的會員都沒有被封鎖。', 'error')
+      show(blocked ? '選取會員的購物車都已停用。' : '選取會員的購物車都可以使用。', 'error')
       return
     }
     if (blocked) {
       const ok = await ask({
-        title: `封鎖 ${targets.length} 位會員`,
+        title: `停用 ${targets.length} 位會員的購物車`,
         body: (
           <>
             <p>以下會員將無法再結帳。他們不會被登出，也仍然看得到自己已經下的訂單。</p>
@@ -185,7 +168,7 @@ export function CustomersPage() {
             </ul>
           </>
         ),
-        confirmLabel: '全部封鎖',
+        confirmLabel: '全部停用',
       })
       if (!ok) return
     }
@@ -195,7 +178,7 @@ export function CustomersPage() {
       }
       setSelected([])
       await load()
-    }, blocked ? `已封鎖 ${targets.length} 位。` : `已解除 ${targets.length} 位的封鎖。`)
+    }, blocked ? `已停用 ${targets.length} 位會員的購物車。` : `已恢復 ${targets.length} 位會員的購物車。`)
   }
 
   async function erase(customer: AdminCustomer) {
@@ -212,9 +195,7 @@ export function CustomersPage() {
     })
     if (!ok) return
     void run(async () => {
-      setDetail(
-        await apiJson<AdminCustomerDetail>(`/api/customers/${encodeURIComponent(customer.id)}/anonymise`, 'POST', {}),
-      )
+      await apiJson(`/api/customers/${encodeURIComponent(customer.id)}/anonymise`, 'POST', {})
       await load()
     }, '個人資料已清除。')
   }
@@ -255,11 +236,12 @@ export function CustomersPage() {
       // about them, so it cannot be the column that disappears.
       fixed: true,
       render: (customer) => (
-        <span class="customer-cell">
-          {customer.email}
-          {customer.blocked && <Badge tone="danger">已封鎖</Badge>}
-          {customer.anonymizedAt && <Badge>已清除</Badge>}
-        </span>
+        <a class="admin-data-link customer-account-link" href={`/customers/${encodeURIComponent(customer.id)}`}>
+          <span>{customer.email}</span>
+          {customer.accountBlocked && <span class="customer-state is-danger">帳號停權</span>}
+          {customer.cartBlocked && <span class="customer-state is-warning">購物車停用</span>}
+          {customer.anonymizedAt && <span class="customer-state">已清除</span>}
+        </a>
       ),
     },
     { key: 'displayName', label: '稱呼', render: (customer) => customer.displayName || '—' },
@@ -312,10 +294,10 @@ export function CustomersPage() {
 
         <BulkBar count={selected.length} onClear={() => setSelected([])}>
           <Button size="sm" tone="danger" busy={busy} onClick={() => void blockSelected(true)}>
-            封鎖結帳
+            停用購物車
           </Button>
           <Button size="sm" busy={busy} onClick={() => void blockSelected(false)}>
-            解除封鎖
+            恢復購物車
           </Button>
         </BulkBar>
 
@@ -329,15 +311,14 @@ export function CustomersPage() {
             rowKey={(customer) => customer.id}
             selected={selected}
             onSelectedChange={setSelected}
-            rowClass={(customer) => (detail?.customer.id === customer.id ? 'current' : '')}
             menu={(customer) => (
               <>
-                <MenuItem onClick={() => void open(customer)}>看明細</MenuItem>
+                <MenuItem onClick={() => open(customer)}>查看會員</MenuItem>
                 {customer.blocked ? (
-                  <MenuItem onClick={() => void setBlocked(customer, false)}>解除封鎖</MenuItem>
+                  <MenuItem onClick={() => void setBlocked(customer, false)}>恢復購物車</MenuItem>
                 ) : (
                   <MenuItem tone="danger" onClick={() => void setBlocked(customer, true)}>
-                    封鎖結帳
+                    停用購物車
                   </MenuItem>
                 )}
                 {!customer.anonymizedAt && (
@@ -388,112 +369,6 @@ export function CustomersPage() {
         />
       </Panel>
 
-      {detail && (
-        <Panel
-          title={detail.customer.email}
-          actions={
-            <>
-              {detail.customer.blocked ? (
-                <Button size="sm" busy={busy} onClick={() => void setBlocked(detail.customer, false)}>
-                  解除封鎖
-                </Button>
-              ) : (
-                <Button size="sm" tone="danger" busy={busy} onClick={() => void setBlocked(detail.customer, true)}>
-                  封鎖結帳
-                </Button>
-              )}
-              {!detail.customer.anonymizedAt && (
-                <Button size="sm" tone="danger" busy={busy} onClick={() => void erase(detail.customer)}>
-                  清除個人資料
-                </Button>
-              )}
-              <Button type="submit" form="customer-note" size="sm" tone="primary" busy={busy} disabled={!noteDirty}>
-                儲存備註
-              </Button>
-              <Button size="sm" tone="ghost" onClick={() => setDetail(null)}>
-                關閉
-              </Button>
-            </>
-          }
-        >
-          <dl class="facts">
-            <dt>顯示名稱</dt>
-            <dd>{detail.customer.displayName || '—'}</dd>
-            <dt>預設收件人</dt>
-            <dd>
-              {detail.customer.recipientName || '—'}
-              {detail.customer.recipientPhone ? `．${detail.customer.recipientPhone}` : ''}
-            </dd>
-            <dt>預設地址</dt>
-            <dd>{detail.customer.address || '—'}</dd>
-            <dt>加入時間</dt>
-            <dd>{dateOnly(detail.customer.createdAt)}</dd>
-            {detail.customer.anonymizedAt ? (
-              <>
-                <dt>清除時間</dt>
-                <dd>{dateOnly(detail.customer.anonymizedAt)}</dd>
-              </>
-            ) : null}
-          </dl>
-
-          {/* Said here, because "delete the member" is what people expect
-              those buttons to do, and it is not what they do. */}
-          <p class="muted">
-            封鎖只擋結帳，不會登出，也不會影響他們查看已成立的訂單。清除會覆蓋個人資料但保留訂單——那是店家的交易紀錄。
-          </p>
-
-          <form
-            id="customer-note"
-            class="ui-inline-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!detail) return
-              void run(async () => {
-                const d = await apiJson<AdminCustomerDetail>(
-                  `/api/customers/${encodeURIComponent(detail.customer.id)}/notes`,
-                  'POST',
-                  { notes: note },
-                )
-                setDetail(d)
-                setNote(d.customer.notes)
-                await load()
-              }, '備註已儲存。')
-            }}
-          >
-            <TextField
-              label="店家備註"
-              hint="只有你看得到，會員不會看到這段文字。"
-              value={note}
-              maxLength={ORDER_NOTE_MAX}
-              onInput={(event) => setNote((event.currentTarget as HTMLInputElement).value)}
-            />
-          </form>
-
-          <h3>訂單</h3>
-          {detail.orders.length === 0 ? (
-            <EmptyState title="還沒有下過單" body="這位會員登入過，但還沒有完成任何一筆結帳。" />
-          ) : (
-            <TableWrap>
-              <tbody>
-                {detail.orders.map((order: Order) => (
-                  <tr key={order.id}>
-                    <td>
-                      <a href={`/orders?q=${encodeURIComponent(order.id)}`}>
-                        <code>{order.id}</code>
-                      </a>
-                    </td>
-                    <td class="numeric">NT${order.total}</td>
-                    <td>
-                      <Badge tone={ORDER_STATUS_TONES[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
-                    </td>
-                    <td>{dateOnly(order.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
-      )}
     </AdminShell>
   )
 }
