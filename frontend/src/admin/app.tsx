@@ -4,6 +4,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { BioLinkAdminPage } from './features/bio-link/BioLinkAdminPage'
 import { PageEditPage } from './features/pages/PageEditPage'
 import { PagesPage } from './features/pages/PagesPage'
+import { ProductCreatePage } from './pages/ProductCreatePage'
 import { ProductEditPage } from './pages/ProductEditPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ShippingPage } from './pages/ShippingPage'
@@ -31,6 +32,7 @@ function Routed() {
     case 'card': return <BioLinkAdminPage />
     case 'products': {
       const id = routeParam(path, 'products')
+      if (id === 'new') return <ProductCreatePage />
       return id ? <ProductEditPage id={id} /> : <ProductsPage />
     }
     case 'shipping': return <ShippingPage />

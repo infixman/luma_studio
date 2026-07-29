@@ -24,7 +24,7 @@ import {
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
 import { api, apiJson, apiUrl } from '../../shared/api'
 import { slugifyAscii } from '../lib/slug'
-import { CATEGORY_SLUG_MAX, CATEGORY_TITLE_MAX, PRODUCT_SLUG_MAX, PRODUCT_TITLE_MAX } from '../features/catalogue/constraints'
+import { CATEGORY_SLUG_MAX, CATEGORY_TITLE_MAX, PRODUCT_SLUG_MAX } from '../features/catalogue/constraints'
 import type { Category, Product, ProductListing, ProductStatus } from '../../shared/types'
 import '../styles/shop-admin.css'
 
@@ -52,8 +52,6 @@ function suggestSlug(title: string): string {
 
 export function ProductsPage() {
   const [listing, setListing] = useState<ProductListing | null>(null)
-  const [title, setTitle] = useState('')
-  const [slug, setSlug] = useState('')
   const [busy, setBusy] = useState(false)
   const [newCategory, setNewCategory] = useState({ title: '', slug: '' })
   const [search, setSearch] = useState('')
@@ -79,30 +77,6 @@ export function ProductsPage() {
   function chooseColumns(next: string[]) {
     setHidden(next)
     writeHidden(COLUMN_PAGE, next)
-  }
-
-  async function create(event: Event) {
-    event.preventDefault()
-    if (busy) return
-    setBusy(true)
-    try {
-      // The slug field is optional in the form but not in the API: an empty
-      // one means "derive it from the title", which is what most will want.
-      await apiJson('/api/products', 'POST', {
-        title,
-        slug: slug.trim() || suggestSlug(title),
-        description: '',
-        status: 'draft',
-      })
-      setTitle('')
-      setSlug('')
-      show('商品已建立，現在是草稿狀態。', 'ok')
-      await load()
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
   }
 
   async function remove(product: Product) {
@@ -336,29 +310,14 @@ export function ProductsPage() {
     <AdminShell current="/products" message={message} onError={showError}>
       {dialog}
 
-      <Panel title="新增商品">
-        <form class="ui-inline-form" onSubmit={create}>
-          <TextField
-            label="商品名稱"
-            value={title}
-            maxLength={PRODUCT_TITLE_MAX}
-            required
-            onInput={(event) => setTitle((event.currentTarget as HTMLInputElement).value)}
-          />
-          <TextField
-            label="網址代稱"
-            value={slug}
-            maxLength={PRODUCT_SLUG_MAX}
-            placeholder={suggestSlug(title) || '留空自動產生'}
-            onInput={(event) => setSlug((event.currentTarget as HTMLInputElement).value)}
-          />
-          <Button type="submit" tone="primary" busy={busy} disabled={!title.trim()}>
+      <Panel
+        title="商品"
+        actions={
+          <Button tone="primary" onClick={() => location.assign('/products/new')}>
             新增商品
           </Button>
-        </form>
-      </Panel>
-
-      <Panel title="商品">
+        }
+      >
         <Toolbar>
           <TextField
             label="搜尋"
@@ -423,7 +382,15 @@ export function ProductsPage() {
                   }
                 />
               ) : (
-                <EmptyState title="還沒有商品" body="用上面的欄位新增第一個。它會是草稿，顧客還看不到。" />
+                <EmptyState
+                  title="還沒有商品"
+                  body="建立第一個商品，完成名稱、網址、說明、分類與狀態後再儲存。"
+                  action={
+                    <Button tone="primary" onClick={() => location.assign('/products/new')}>
+                      新增商品
+                    </Button>
+                  }
+                />
               )
             }
           />

@@ -5,36 +5,28 @@ import { useStatus } from '../components/StatusBar'
 import {
   Button,
   ButtonRow,
-  Checkbox,
   EmptyState,
   IconButton,
   MenuItem,
   Menu,
   Panel,
-  RadioGroup,
   Spinner,
   TextField,
   Toggle,
   useConfirm,
 } from '../components/ui'
-import { RichTextEditor } from '../components/RichTextEditor'
 import { Lightbox } from '../components/Lightbox'
 import { api, apiJson, apiUrl, uploadProductImage } from '../../shared/api'
-import { textToHtml } from '../lib/rich-text'
 import {
-  PRODUCT_SLUG_MAX,
-  PRODUCT_TITLE_MAX,
+  ProductFormFields,
+  type ProductFormValue,
+} from '../features/catalogue/ProductFormFields'
+import {
   PRODUCT_VARIANT_PRICE_MAX,
   PRODUCT_VARIANT_STOCK_MAX,
 } from '../features/catalogue/constraints'
-import type { Category, ProductDetail, ProductStatus, ProductVariant } from '../../shared/types'
+import type { Category, ProductDetail, ProductVariant } from '../../shared/types'
 import '../styles/shop-admin.css'
-
-const STATUSES: { value: ProductStatus; label: string; hint: string }[] = [
-  { value: 'draft', label: '草稿', hint: '只有你看得到' },
-  { value: 'active', label: '上架中', hint: '顧客可以看到並購買' },
-  { value: 'archived', label: '已下架', hint: '保留紀錄，但不再販售' },
-]
 
 const MAX_IMAGES = 8
 
@@ -43,7 +35,12 @@ const EMPTY_VARIANT = { title: '', sku: '', price: '', stock: '' }
 
 export function ProductEditPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null)
-  const [form, setForm] = useState({ title: '', slug: '', description: '', status: 'draft' as ProductStatus })
+  const [form, setForm] = useState<ProductFormValue>({
+    title: '',
+    slug: '',
+    description: '',
+    status: 'draft',
+  })
   const [draft, setDraft] = useState(EMPTY_VARIANT)
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [chosen, setChosen] = useState<string[]>([])
@@ -198,63 +195,14 @@ export function ProductEditPage({ id }: { id: string }) {
         }
       >
         <form class="product-editor-form" onSubmit={saveProduct}>
-          <div class="product-form-main">
-            <div class="product-identity">
-              <TextField
-                label="商品名稱"
-                value={form.title}
-                maxLength={PRODUCT_TITLE_MAX}
-                required
-                onInput={(event) => setForm({ ...form, title: (event.currentTarget as HTMLInputElement).value })}
-              />
-              <TextField
-                label="網址代稱"
-                hint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
-                value={form.slug}
-                maxLength={PRODUCT_SLUG_MAX}
-                required
-                onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })}
-              />
-            </div>
-
-            <div class="ui-field">
-              <label class="ui-label">商品說明</label>
-              <RichTextEditor
-                config={{ body: textToHtml(form.description), format: 'html' }}
-                onChange={(next) => setForm({ ...form, description: next.body })}
-              />
-            </div>
-          </div>
-
-          <aside class="product-form-side" aria-label="商品分類與狀態">
-            <fieldset class="ui-checkbox-set">
-              <legend class="ui-label">分類</legend>
-              {allCategories.length === 0 ? (
-                <p class="muted">還沒有分類。到商城頁的「分類」建立第一個。</p>
-              ) : (
-                allCategories.map((category) => (
-                  <Checkbox
-                    key={category.id}
-                    label={category.title}
-                    hint={`/shop/c/${category.slug}`}
-                    checked={chosen.includes(category.id)}
-                    onChange={(checked) =>
-                      setChosen((current) =>
-                        checked ? [...current, category.id] : current.filter((value) => value !== category.id),
-                      )
-                    }
-                  />
-                ))
-              )}
-            </fieldset>
-
-            <RadioGroup
-              legend="狀態"
-              value={form.status}
-              options={STATUSES}
-              onChange={(status) => setForm({ ...form, status })}
-            />
-          </aside>
+          <ProductFormFields
+            value={form}
+            categories={allCategories}
+            chosen={chosen}
+            onChange={setForm}
+            onChosenChange={setChosen}
+            slugHint={`顧客看到的網址是 /shop/${form.slug || '…'}，改動會讓舊連結失效。`}
+          />
         </form>
       </Panel>
 
