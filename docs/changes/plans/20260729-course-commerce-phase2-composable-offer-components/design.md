@@ -58,7 +58,7 @@ phase2 只建立課程骨架，讓 Offer 可以引用；章節、影片與完整
 | component type | target | quantity | 額外資料 |
 | --- | --- | --- | --- |
 | `inventory` | `inventory_items.id` | 大於 0 | 無 |
-| `course` | `courses.id` | 固定 1 | `access_days`，NULL 為永久 |
+| `course` | `courses.id` | 固定 1 | `access_days`，NULL 為永久；正整數為首次觀看後的天數 |
 
 ## 資料關係
 

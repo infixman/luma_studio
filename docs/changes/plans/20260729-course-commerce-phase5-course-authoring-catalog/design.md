@@ -175,8 +175,7 @@ Course 可以先發布作預覽，但只有 active Product + enabled Offer 才�
 - Course 被購買後仍可增加、調整或更換單元。
 - 已購買者預設取得 Course 的目前版本，不把每次課程內容複製到 entitlement。
 - 刪除被 Lesson 引用的 VideoAsset 必須拒絕；可先替換影片再封存。
-- 封存 Course 阻止新販售，但既有 entitlement 是否可繼續觀看由 phase7 的營運政策決定；
-  預設繼續。
+- 封存 Course 阻止新販售與新授權；既有有效 entitlement 可繼續觀看（2026-07-30 決策）。
 
 ## 本階段不做
 

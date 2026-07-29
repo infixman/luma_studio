@@ -17,16 +17,23 @@
 - [ ] 混合訂單允許課程已授權、實體仍待出貨。
 - [ ] 實作補寄流程，不重複 entitlement。
 - [ ] 實作退貨庫存回補的人工確認。
+- [ ] `refund-record` 帶明確 scope 與 `courseFulfillmentIds`，不由金額推測受影響課程。
+- [ ] 全額退款／已付款取消自動撤銷該訂單 course sources 並釋放 purchase lock。
 - [ ] 記錄退款結果與授權處置。
-- [ ] 定義 chargeback 標示與人工處理流程。
+- [ ] 確認 chargeback 走與全額退款相同的授權撤銷路徑，庫存維持人工。
+- [ ] 純數位訂單自動 completed 的顯示與 audit。
 
 ## 3. Entitlement 管理
 
 - [ ] 建立會員 entitlement 列表。
 - [ ] 建立人工補發、撤銷與恢復。
+- [ ] 撤銷以 source 為單位；顯示「是否連帶停權」的推導結果。
+- [ ] 建立 gift 授與（actor／recipient／course／reason），不建立零元 OrderItem。
 - [ ] 每次操作要求 reason 並寫 audit。
-- [ ] 顯示來源 OrderItem 與目前有效期限。
-- [ ] 防止重複補發造成意外延長。
+- [ ] 顯示每筆 source 的來源 order fulfillment、`source_kind` 與撤銷狀態。
+- [ ] 顯示 `access_days`／`first_viewed_at`／`expires_at` 三種期限狀態。
+- [ ] 防止重複補發或 restore 造成意外延長；延長須為獨立操作。
+- [ ] 建立 purchase lock 查詢與人工釋放（要求 reason）。
 - [ ] 建立過期與即將到期查詢，若產品沒有期限方案則保持隱藏。
 
 ## 4. 封存、引用與清理
@@ -41,8 +48,10 @@
 
 ## 5. Reconciliation
 
-- [ ] 建立 paid order entitlement reconciliation。
-- [ ] 建立逾期 reservation reconciliation。
+- [ ] 建立 paid order entitlement reconciliation（含純數位補完 completed）。
+- [ ] 建立逾期 reservation reconciliation，同時釋放 purchase lock。
+- [ ] 建立孤兒 purchase lock 檢查。
+- [ ] 建立 entitlement／source 撤銷一致性檢查（全撤未停權、期限欄位只寫一半）。
 - [ ] 建立 stuck transcode job reconciliation。
 - [ ] 建立 ready VideoAsset object integrity check。
 - [ ] 建立 CourseLesson/OfferComponent target integrity check。
@@ -66,6 +75,8 @@
 - [ ] 決定 R2 source 與 HLS 的第二份保存策略。
 - [ ] 實際演練從備份還原 Course、Entitlement 與 Video metadata。
 - [ ] 撰寫付款成功但未授權 runbook。
+- [ ] 撰寫誤撤銷 entitlement 的 restore runbook。
+- [ ] 撰寫 purchase lock 卡住導致無法購買的排除 runbook。
 - [ ] 撰寫影片轉檔卡住 runbook。
 - [ ] 撰寫誤封存 Course/Video rollback runbook。
 - [ ] 撰寫 R2 object 遺失的影響判斷與恢復流程。
@@ -91,6 +102,11 @@
 - [ ] 付款通知重送。
 - [ ] 庫存不足與 component 停用。
 - [ ] entitlement failure/reconciliation。
+- [ ] 重複購買被擋：已擁有、pending 進行中、併發結帳。
+- [ ] 期限型授權：付款後未啟動、首次播放啟動、再播放與 refresh 不延長。
+- [ ] 全額退款撤銷觀看權且保留進度；多來源時不誤撤。
+- [ ] 只退實體不影響課程；部分退款需點名 course fulfillment。
+- [ ] gift 授與與 restore。
 - [ ] Course、VideoAsset、Product 封存後既有會員行為。
 - [ ] 無權會員即使取得 m3u8 路徑仍無法播放。
 

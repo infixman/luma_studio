@@ -48,7 +48,9 @@ CartQuote 必須同時回傳顧客畫面與結帳所需的伺服器判斷：
 
 ### 數量規則
 
-- 純課程與包含課程的混合 Offer，第一版購買數量上限為 1。
+- 純課程與包含課程的混合 Offer，購買數量固定為 1。
+- 會員已對某個 course component 持有有效 entitlement 時，不得再次結帳該 Offer；同 Offer
+  也只能有一筆未過期的 pending 訂單。到期或所有來源撤銷後才能重買。
 - 純實體 Offer 可以依現有購物車規則購買多件。
 - Inventory component 的需求量為 component quantity × cart quantity。
 - 同一 InventoryItem 被多個 line 引用時，必須先彙總後再檢查庫存。
@@ -138,6 +140,22 @@ sequenceDiagram
 授權必須可重試。若訂單已標記 paid 但授權步驟失敗，背景 reconciliation 必須找出
 `paid + digital fulfillment pending` 並補做，不能只依賴一次付款 callback。
 
+### 期限不在付款時起算
+
+provision 只把 fulfillment 快照的 `access_days` 寫入 entitlement，`expires_at` 保持 NULL。
+期限型授權要到 phase6 第一次成功取得受保護播放權時，才以條件更新寫入
+`first_viewed_at` 與 `expires_at = first_viewed_at + access_days`。因此付款 callback 重送、
+reconciliation 重跑或會員反覆播放都不會改變到期日。永久授權 `access_days` 為 NULL，
+兩個時間欄位一直是 NULL。
+
+### 重複購買保護
+
+含 Course 的 Offer 在 cart 與 checkout 都要檢查會員是否已擁有。權威判斷發生在建立訂單時：
+先以 unique `(customer_id, offer_id)` 取得 `course_offer_purchase_locks` 的 pending lock，
+再查各 component Course 的 active entitlement。lock 讓兩個併發 checkout 只有一個成功，
+避免付款後才發現無法授權。pending 取消或逾期釋放 lock；paid 後 lock 保留到 entitlement
+到期或所有相關 source 被撤銷。
+
 ## 配送與地址
 
 | Cart 組成 | 配送 UI | 訂單欄位 |
@@ -164,25 +182,40 @@ sequenceDiagram
   水彩材料包 × 1  待出貨
 ```
 
-只有存在 physical fulfillment 的訂單才能進入 shipped。純數位訂單付款且授權成功後
-可直接 completed，或由系統自動完成；實際策略需在 phase0 決策中定案。
+只有存在 physical fulfillment 的訂單才能進入 shipped。純數位訂單在所有 digital
+fulfillment 與 entitlement provision 成功後**自動轉 completed**；任何 provision 失敗都
+保持 paid 等待重試。混合訂單不套用此轉移：課程在 paid 後立即開通，實體部分仍走
+`shipped -> completed`。
 
 ## 錯誤與補償
 
 | 失敗點 | 處理 |
 | --- | --- |
-| 一項庫存不足 | 回補先前已保留項目，訂單不建立成功 |
-| 寫 order_items 失敗 | 回補所有保留庫存 |
+| 一項庫存不足 | 回補先前已保留項目，釋放已取得的 purchase lock，訂單不建立成功 |
+| 已擁有該 Course | cart 回 `already_owned`，checkout 回 409，不建立訂單 |
+| 取不到 purchase lock | 回 `purchase_in_progress`／409，指向既有 pending 訂單 |
+| 寫 order_items 失敗 | 回補所有保留庫存並釋放 lock |
 | 寫 fulfillment 失敗 | 不得留下可付款的半成品訂單 |
-| 付款成功後授權失敗 | 訂單維持 paid，標記 pending 並重試 |
+| 付款成功後授權失敗 | 訂單維持 paid，標記 pending 並重試；不轉 completed |
 | 重複付款通知 | mark_paid 不重複轉移；provision 可安全重跑 |
-| pending 逾期 | 只回補 physical fulfillment |
-| entitlement 已存在 | 視為成功，不延長期限，除非方案明確定義累加 |
+| pending 逾期 | 回補 physical fulfillment 並釋放 purchase lock |
+| entitlement 已存在 | 視為成功，不延長期限，也不重設 `first_viewed_at` |
+| 全額退款／已付款取消／chargeback | 撤銷該訂單的 course sources；無其他有效 source 才撤銷 entitlement 並釋放 lock |
+| 只退實體 component | 不動任何 course source |
+
+## 退款與撤銷的邊界
+
+撤銷收回的是**觀看權**：Course、Lesson 的會員存取與 private VideoAsset 的播放授權都會被
+拒絕。不刪除 Course、Lesson、影片、觀看進度、訂單或 audit，讓後續恢復與稽核仍然可行。
+部分退款必須由呼叫端點名受影響的 course fulfillment，系統不從訂單金額推測。
+
+phase3 只提供撤銷與補發的 domain API 與 audit；管理 UI、restore 與 chargeback 流程在 phase7。
 
 ## 本階段不做
 
 - 不提供影片上傳或播放。
+- 不啟動觀看期限倒數；`first_viewed_at` 由 phase6 播放授權寫入。
 - 不公開完整課程頁。
-- 不支援贈送課程與多人席次。
+- 不支援多人席次；贈送只保留 `gift` source 的 domain 介面，UI 在 phase7。
 - 不做部分出貨、多包裹或拆單。
-- 不做自動退款；只定義授權與庫存的後續接口。
+- 不做自動退款；只定義授權撤銷與庫存的後續接口。

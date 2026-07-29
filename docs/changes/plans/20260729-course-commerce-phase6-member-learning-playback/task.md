@@ -4,7 +4,9 @@
 
 - [ ] 建立 `course_lesson_progress`。
 - [ ] 建立有效 entitlement 的集中查詢。
-- [ ] 確認永久、期限、撤銷與 blocked customer 規則。
+- [ ] 確認永久、期限未啟動、期限已啟動、撤銷與 blocked customer 規則。
+- [ ] 實作首次觀看啟動期限的條件 UPDATE（`access_days IS NOT NULL AND first_viewed_at IS NULL AND revoked_at IS NULL`）。
+- [ ] 啟動倒數寫 audit。
 - [ ] 建立 Course progress summary query，避免每張卡 N+1。
 - [ ] 建立 last viewed Lesson 與 completed count 計算。
 
@@ -24,6 +26,8 @@
 - [ ] 實作 current/previous key rotation。
 - [ ] 建立 playback-session endpoint。
 - [ ] 驗證 Course/Lesson/VideoAsset 引用與 active version。
+- [ ] 授權通過且 session 核發成功後才啟動期限倒數；preview scope 不啟動。
+- [ ] session refresh 不重設 `first_viewed_at`／`expires_at`。
 - [ ] 設定 Secure、HttpOnly、限定 Path 的短效 cookie。
 - [ ] 實作 session refresh。
 - [ ] log redaction 移除 cookie/token。
@@ -57,6 +61,7 @@
 - [ ] 整合 HLS player 並帶 credentials。
 - [ ] 處理 session refresh、401/403 與播放錯誤。
 - [ ] 顯示觀看進度與完成狀態。
+- [ ] 課程卡顯示永久／「觀看後 N 天內有效」／已啟動到期日三種期限狀態。
 - [ ] 建立上一單元／下一單元操作。
 - [ ] 從訂單付款成功頁連到「我的課程」。
 - [ ] 完成鍵盤、焦點與螢幕閱讀器基本驗證。
@@ -65,6 +70,9 @@
 
 - [ ] 未登入與未購買測試。
 - [ ] 過期、撤銷與 blocked customer 測試。
+- [ ] 首次播放啟動倒數、第二次不變更、併發只啟動一次測試。
+- [ ] 列表／detail／preview 不啟動倒數測試。
+- [ ] archived Course 的既有 entitlement 仍可播放測試。
 - [ ] 修改 token payload/signature 測試。
 - [ ] token 過期與 refresh 測試。
 - [ ] 分享 URL 無 cookie 測試。
@@ -79,7 +87,8 @@
 - [ ] 確認 entitlement 出現在我的課程。
 - [ ] 播放至少兩個不同 VideoAsset。
 - [ ] 重整、切換裝置後恢復進度。
-- [ ] 撤銷 entitlement，等待 token 到期後無法續播。
+- [ ] 撤銷 entitlement，等待 token 到期後無法續播，且觀看進度未被刪除。
+- [ ] 建立期限型測試授權，確認付款後 `expires_at` 為 NULL、首次播放後才寫入。
 - [ ] 確認 private R2 object 無法直接公開存取。
 - [ ] 記錄一般 HLS 可被授權會員保存的風險，不將本階段描述為 DRM。
 - [ ] 通過後才解除課程商品公開 feature flag。

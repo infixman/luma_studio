@@ -66,7 +66,8 @@ CREATE TABLE offer_components (
 - course quantity 必須為 1
 - inventory quantity 必須介於 1 與既定上限
 - inventory 的 `access_days` 必須為 NULL
-- course 的 `access_days` 為 NULL 或正整數
+- course 的 `access_days` 為 NULL 或正整數；NULL 為永久，正整數表示**首次觀看後**的天數，
+  不是購買後的天數。倒數由 phase6 的首次播放授權啟動，phase2 只保存設定值。
 
 ## Domain API
 

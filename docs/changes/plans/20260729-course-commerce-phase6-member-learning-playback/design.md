@@ -50,13 +50,14 @@ flowchart LR
 課程卡顯示：
 
 - 課程封面與名稱。
-- 授權期限或永久觀看。
+- 授權期限：永久／「觀看後 N 天內有效」／已啟動則顯示到期日。
 - 已完成單元數／總單元數。
 - 最近觀看單元。
 - 「繼續學習」。
 
 無課程時顯示商城課程入口；被撤銷或過期課程不列入有效清單，但會員可以在訂單頁
-看到原始購買紀錄。
+看到原始購買紀錄，觀看進度也不會被刪除。archived Course 若仍有有效 entitlement 則
+照常列出並可播放。
 
 ## 課程學習頁
 
@@ -96,6 +97,15 @@ Gateway 流程：
 6. HLS Player 使用 credentials 請求 manifest 與 segments。
 7. Gateway 每次驗證簽章、到期時間、asset id 與 encode version。
 8. 驗證成功後才從 private R2 或 Cache 取 object。
+
+### 期限在這裡才開始算
+
+phase3 付款時只把 `access_days` 寫進 entitlement，不算到期日。真正的倒數在 Gateway 前一步：
+會員第一次成功取得受保護 Lesson 的 playback session 時，以條件 UPDATE 寫入 `first_viewed_at`
+與 `expires_at`。條件包含 `first_viewed_at IS NULL`，所以併發請求與後續 refresh 都只會成功一次。
+
+只有受保護內容會啟動。逛商品頁、開「我的課程」、看課程目錄、播試看片段都不算開始觀看，
+避免會員還沒真的開始上課就被扣時間。
 
 ### 為什麼不每個 segment 查 D1
 
@@ -182,6 +192,7 @@ token 使用伺服器 secret HMAC 簽章；不可只 base64。預設有效期以
 
 - 建立 session 時不要求 entitlement，但必須確認 `is_preview = true`。
 - token 標記 preview scope，只允許指定 Lesson/VideoAsset。
+- preview session **不得**寫入 `first_viewed_at`，即使該會員已擁有這門課。
 - 不將 R2 路徑公開。
 - 可加上較嚴格 rate limit。
 

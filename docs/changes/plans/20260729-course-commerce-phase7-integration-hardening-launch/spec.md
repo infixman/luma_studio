@@ -40,6 +40,9 @@ POST /api/orders/{id}/reconcile-entitlements
 POST /api/entitlements/{id}/revoke
 POST /api/entitlements/{id}/restore
 POST /api/customers/{id}/entitlements/grant
+POST /api/customers/{id}/entitlements/gift
+GET  /api/customers/{id}/course-purchase-locks
+POST /api/customers/{id}/course-purchase-locks/{offerId}/release
 ```
 
 每個 mutation 必須：
@@ -48,6 +51,18 @@ POST /api/customers/{id}/entitlements/grant
 - 記錄 actor、before、after、timestamp。
 - 冪等。
 - 不直接改寫原始 OrderItem。
+
+額外規則：
+
+- entitlement detail 回傳 `access_days`、`first_viewed_at`、`expires_at` 與每筆 source 的
+  `source_kind`、來源 order fulfillment、撤銷狀態。
+- revoke 針對**單一 source**；只有當該 entitlement 已無未撤銷 source 時才連帶撤銷
+  entitlement 本身。UI 必須顯示這個推導結果，不讓操作者以為撤一筆就一定停權。
+- restore 反向操作並重新計算 entitlement 有效性；不重設 `first_viewed_at`／`expires_at`。
+- grant／gift 建立 `manual`／`gift` source，必填 actor、recipient、course、reason；
+  **不得**建立零元 OrderItem 或偽造 order fulfillment。
+- 補發不得延長已啟動的期限。若營運確實要延長，必須是獨立且寫 audit 的操作。
+- purchase lock 只在退款撤銷、pending 結束或人工釋放時解除；人工釋放要求 reason。
 
 ### Fulfillment
 
@@ -60,6 +75,23 @@ POST /api/orders/{id}/refund-record
 
 第一版退款可以是記錄外部金流結果，不一定自動呼叫退款 API；但授權與庫存處理必須
 清楚顯示是自動還是待人工。
+
+`refund-record` 必須明確帶入退款範圍：
+
+```json
+{
+  "scope": "full",
+  "reason": "...",
+  "courseFulfillmentIds": [],
+  "restockInventory": false
+}
+```
+
+- `scope = full`：撤銷該訂單全部 course sources。
+- `scope = partial`：只撤銷 `courseFulfillmentIds` 點名的 fulfillment；空陣列代表不動課程。
+- 系統不從退款金額推測受影響課程。
+- 實體回補一律由 `restockInventory` 或退貨流程明確指定，不自動假設已收到退貨。
+- 已確認 chargeback 走與 `scope = full` 相同的授權撤銷路徑，但庫存維持人工處理。
 
 ### References 與刪除
 
@@ -77,11 +109,20 @@ orders.status = paid
 AND course fulfillment status != fulfilled
 ```
 
-重跑 `provision_paid_order`，成功後寫 audit。永久失敗進管理告警。
+重跑 `provision_paid_order`，成功後寫 audit。永久失敗進管理告警。純數位訂單補做成功後
+一併完成 `paid -> completed` 轉移。
 
-### Inventory Reservation
+另查一致性異常：
 
-查找逾期 pending order，使用既有條件狀態轉移確保只有一個 worker 回補一次。
+- entitlement 所有 source 已撤銷但 entitlement 未撤銷。
+- entitlement 未撤銷但來源 order 已全額退款。
+- `expires_at` 與 `first_viewed_at` 只有其一為非 NULL。
+
+### Inventory Reservation 與 Purchase Lock
+
+查找逾期 pending order，使用既有條件狀態轉移確保只有一個 worker 回補一次；同一次處理
+釋放該訂單的 `course_offer_purchase_locks`。另查孤兒 lock：訂單不存在、已取消／逾期，
+或對應 entitlement 已過期／全部 source 已撤銷卻仍佔用 lock。
 
 ### Video
 
@@ -180,8 +221,13 @@ Dashboard：
 - 逾期。
 - 庫存不足。
 - entitlement 暫時失敗與重試。
-- Course/Video 封存。
-- 管理員補發／撤銷。
+- Course/Video 封存後既有會員仍可觀看。
+- 管理員補發／撤銷／restore／gift。
+- 重複購買被擋（已擁有、pending 進行中）。
+- 期限型授權：付款後未啟動、首次播放啟動、再播放不延長。
+- 全額退款撤銷觀看權；同課另有有效 source 時不撤銷。
+- 只退實體不影響課程；部分退款需點名 course fulfillment。
+- 純數位訂單自動 completed；provision 失敗時停在 paid。
 
 ## 效能與成本驗收
 

@@ -169,7 +169,8 @@ GET /api/courses/{slug}/public
 
 - ProductPage 根據 `containsCourse` 呈現課程資訊。
 - 多 Course bundle 逐門顯示摘要與大綱。
-- 方案卡清楚列出哪些含材料包、觀看期限與配送提示。
+- 方案卡清楚列出哪些含材料包、觀看期限與配送提示。期限型 Offer 必須寫「觀看後 N 天內有效」
+  而非「購買後 N 天」，`access_days` 為 NULL 時寫「永久觀看」。
 - 試看按鈕接 phase6 gateway；phase6 前隱藏或 feature flag。
 - 一般實體商品頁不載入或渲染課程區塊。
 

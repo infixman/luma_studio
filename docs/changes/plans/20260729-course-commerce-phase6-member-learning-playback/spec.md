@@ -45,7 +45,8 @@ POST /api/learning/courses/{courseId}/lessons/{lessonId}/complete
 - 使用 customer session，不接受 customer id request parameter。
 - 檢查 blocked customer。
 - 檢查有效 entitlement。
-- Course archived 時依 phase7 政策；預設既有 entitlement 可讀。
+- Course archived 不影響既有有效 entitlement：archive 只阻止新販售與新授權，會員的
+  learning 與播放維持可用（2026-07-30 決策）。
 
 ### 有效 Entitlement
 
@@ -56,7 +57,36 @@ expires_at IS NULL OR expires_at > now
 course_id matches
 ```
 
-不能只檢查是否存在歷史 order item。
+不能只檢查是否存在歷史 order item。`expires_at IS NULL` 有兩種意義：`access_days IS NULL`
+的永久授權，以及期限型但尚未啟動倒數的授權。兩者在有效性判斷上都算有效。
+
+退款、已付款取消或 chargeback 撤銷後，entitlement 的 `revoked_at` 會被寫入，Learning
+與 Playback 一律拒絕；但觀看進度、訂單與 audit 仍保留，不刪除。
+
+### 首次觀看啟動期限
+
+期限型授權（`access_days` 非 NULL 且 `first_viewed_at IS NULL`）在**第一次成功核發受保護
+Lesson／VideoAsset 的 playback session** 時啟動：
+
+```sql
+UPDATE course_entitlements
+SET first_viewed_at = ?now,
+    expires_at = ?now + access_days * 86400,
+    updated_at = ?now
+WHERE id = ?id
+  AND access_days IS NOT NULL
+  AND first_viewed_at IS NULL
+  AND revoked_at IS NULL;
+```
+
+規則：
+
+- 條件 UPDATE 只會成功一次；後續播放與 session refresh 不得重設或延長。
+- 啟動發生在授權檢查通過**之後**、回傳 session 之前。若 session 核發失敗則不啟動。
+- 只有受保護內容會啟動。`/api/learning/courses` 列表、Course detail、商品頁、公開課程頁
+  與 preview scope 的試看 session **一律不得**寫入 `first_viewed_at`。
+- 啟動要寫 audit，供客訴查詢「什麼時候開始算」。
+- 啟動與否不影響本次 session 的有效性；剛啟動的授權必然仍在期限內。
 
 ## Course Response
 
@@ -69,6 +99,8 @@ course_id matches
       "slug": "watercolor-flowers",
       "title": "水彩花卉入門",
       "coverPath": "...",
+      "accessDays": null,
+      "firstViewedAt": null,
       "expiresAt": null,
       "lessonCount": 12,
       "completedCount": 4,
@@ -79,6 +111,9 @@ course_id matches
 }
 ```
 
+`accessDays` 為 NULL 表示永久。`accessDays` 非 NULL 且 `firstViewedAt` 為 NULL 時，UI 顯示
+「觀看後 N 天內有效」，不顯示到期日；已啟動則顯示 `expiresAt`。列出課程清單不得啟動倒數。
+
 Course detail 可以回完整已授權 Lesson HTML，但不能回 R2 key、master key 或未簽章的
 媒體 URL。
 
@@ -87,10 +122,11 @@ Course detail 可以回完整已授權 Lesson HTML，但不能回 R2 key、maste
 ### 驗證
 
 1. customer session。
-2. entitlement。
+2. entitlement（含 revoked／expired 判斷）。
 3. Course、Section、Lesson 關係。
 4. Lesson 的 VideoAsset 為 ready。
 5. asset active encode version 存在。
+6. 全部通過後，對期限型且尚未啟動的 entitlement 執行一次條件 UPDATE 啟動倒數。
 
 ### Response
 
@@ -213,11 +249,17 @@ Request：
 - path traversal 與不允許副檔名。
 - preview token 嘗試播放非 preview Lesson。
 - Cache hit 仍需授權。
+- 期限型授權第一次播放才寫 `first_viewed_at`／`expires_at`；第二次播放與 session refresh 不變更。
+- 併發兩個 playback session 請求只啟動一次倒數。
+- 列出我的課程、開啟 Course detail、播放 preview 都不啟動倒數。
+- 已撤銷 entitlement 無法建立 session，但觀看進度仍在。
+- archived Course 的既有有效 entitlement 仍可播放。
 
 ## 驗收標準
 
 - 付款並取得 entitlement 的會員在「我的課程」看得到課程。
 - 未登入、未購買、過期與撤銷都無法建立播放 session。
+- 期限型授權的倒數只由第一次受保護播放啟動，且只啟動一次。
 - 只有 m3u8 URL、沒有 cookie 無法播放。
 - 每個 segment 不查 D1，但仍驗證短效簽章。
 - R2 bucket 保持 private，公開 API 不洩漏 object key。

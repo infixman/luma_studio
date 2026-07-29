@@ -59,7 +59,9 @@ flowchart TD
 - Physical fulfillment：pending / shipped / completed / returned。
 
 不要再嘗試用單一 `orders.status` 完整表達所有組合。`orders.status` 保留顧客可理解的
-整體狀態，細節由 fulfillment 顯示。
+整體狀態，細節由 fulfillment 顯示。純數位訂單在全部 digital fulfillment 與 entitlement
+provision 成功後自動轉 `completed`；混合訂單付款後立即開通課程，但整體狀態仍等實體
+`shipped -> completed`。
 
 ```mermaid
 stateDiagram-v2
@@ -67,25 +69,34 @@ stateDiagram-v2
     PendingPayment --> Paid: 付款成功
     PendingPayment --> Expired: 逾期
     Paid --> CourseGranted: 數位授權成功
+    CourseGranted --> Completed: 純數位訂單
     Paid --> AwaitingShipment: 有實體品
     AwaitingShipment --> Shipped
     Shipped --> Completed
     Paid --> Refunded
-    CourseGranted --> Revoked: 退款政策要求
+    CourseGranted --> Revoked: 全額退款或確認 chargeback
 ```
 
 ## 取消、退款與撤銷
 
 | 情境 | 實體庫存 | 課程授權 | 訂單／稽核 |
 | --- | --- | --- | --- |
-| pending 取消／逾期 | 立即回補 | 尚未建立 | cancelled/expired |
-| paid、尚未出貨，全額退款 | 依政策回補 | 預設撤銷 | 記錄退款與原因 |
-| paid、已出貨後退款 | 收到退貨後回補 | 依政策或人工決定 | 不自動假設退貨完成 |
+| pending 取消／逾期 | 立即回補 | 尚未建立；釋放 purchase lock | cancelled/expired |
+| paid、尚未出貨，全額退款 | 依政策回補 | 撤銷該訂單 course sources | 記錄退款與原因 |
+| paid、已出貨後退款 | 收到退貨後回補 | 撤銷該訂單 course sources | 不自動假設退貨完成 |
+| 只退實體 component | 依政策回補 | 不動 | 記錄僅實體退款 |
+| 部分退款 | 依指定項目 | 只撤銷被點名的 course fulfillment | 未點名即不撤銷 |
 | 只補寄材料 | 新增補寄 fulfillment，不重複課程授權 | 不變 | 記錄操作人 |
 | 授權漏發 | 不變 | 冪等補發 | 記錄來源與原因 |
-| chargeback | 不自動改庫存 | 暫停或撤銷 | 顯示需人工處理 |
+| chargeback（已確認） | 不自動改庫存 | 撤銷該訂單 course sources | 顯示需人工確認金流 |
 
-退款是否一定撤銷已觀看課程是商業政策；系統要支援決定與稽核，不在程式裡靜默猜測。
+依 2026-07-30 決策，全額退款、已付款取消與已確認 chargeback **自動撤銷**該訂單的
+course fulfillment sources。只有當該 entitlement 已無其他未撤銷 source 時，才寫入
+entitlement 的 `revoked_at`。撤銷收回 Course／Lesson 存取與影片播放授權，不刪除 Course、
+Lesson、影片、觀看進度、訂單或 audit，因此 restore 隨時可行。撤銷同時釋放
+`course_offer_purchase_locks`，會員可以重新購買。
+
+部分退款不從訂單金額推測，必須由操作者明確點名受影響的 course fulfillment。
 
 ## 封存與刪除規則
 
@@ -94,7 +105,7 @@ stateDiagram-v2
 | Product | 可封存；訂單快照保留 |
 | Offer | 停用；有 pending reservation 時不可硬刪 |
 | InventoryItem | 封存；訂單與 Offer reference 保留 |
-| Course | 封存；既有 entitlement 預設可繼續 |
+| Course | 封存；阻止新販售與新授權，既有有效 entitlement 可繼續觀看 |
 | VideoAsset | 有 Lesson reference 時不可刪；先替換 |
 | HLS encode version | 非 active 且超過 rollback 保留期才可刪 |
 | Source video | 依保留政策且已有可驗證 ready encode 才可刪 |
@@ -106,9 +117,18 @@ stateDiagram-v2
 - 純課程不收運費。
 - `shippingSubtotal` 只包含有實體 component 的 Offer line。
 - 混合 Offer 的整筆售價計入 shippingSubtotal，不嘗試虛構課程與材料的價格拆分。
-- 含課程的 Offer 第一版 quantity 固定 1。
+- 含課程的 Offer quantity 固定 1，且會員已持有該 Course 的有效 entitlement 時不得再次結帳。
 - 多份實體材料需求透過 component quantity 表達。
-- 若未來支援贈送課程，建立 recipient entitlement 流程，不解除 quantity 限制硬塞進同帳號。
+- 贈送課程建立 `gift` entitlement source 與 recipient，不建立零元 OrderItem，也不解除
+  quantity 限制硬塞進同帳號。
+
+## 觀看期限
+
+- 預設永久：`access_days IS NULL`。
+- 期限型：付款時只記 `access_days`，倒數由會員**第一次成功播放**受保護單元啟動，寫入
+  `first_viewed_at` 與 `expires_at`。
+- 管理端顯示三種狀態：永久、尚未啟動（顯示「觀看後 N 天」）、已啟動（顯示到期日）。
+- 補發不得意外延長已啟動的期限；需要延長時使用明確的營運操作並寫 audit。
 
 ## 管理工具
 
@@ -118,7 +138,10 @@ stateDiagram-v2
 
 - paid 但 course fulfillment pending。
 - pending 已逾期但庫存尚未回補。
+- pending 已結束但 purchase lock 未釋放，或 lock 指向不存在／已撤銷來源的訂單。
 - active entitlement 的來源 order 不存在或狀態異常。
+- entitlement 所有 source 都已撤銷但 entitlement 仍未撤銷。
+- 期限型 entitlement 有 `expires_at` 卻沒有 `first_viewed_at`（或反之）。
 - ready VideoAsset 缺少 master/segment。
 - processing job 超過合理時間。
 - CourseLesson 引用非 ready/不存在 asset。
@@ -130,7 +153,8 @@ stateDiagram-v2
 - 商品 component 變更。
 - 庫存人工調整。
 - 訂單狀態與補寄。
-- entitlement 補發、撤銷、恢復。
+- entitlement 補發、撤銷、恢復、gift 授與。
+- 期限倒數啟動（`first_viewed_at` 寫入）。
 - Course publish/archive。
 - Video retry/archive/delete。
 
