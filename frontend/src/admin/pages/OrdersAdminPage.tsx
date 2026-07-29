@@ -78,7 +78,7 @@ const CANCELLABLE: OrderStatus[] = ['pending', 'paid', 'shipped']
 const COLUMN_PAGE = 'orders'
 
 /**
- * Nine columns is more than fits comfortably, so four start switched off.
+ * Ten columns is more than fits comfortably, so four start switched off.
  * They are the ones you go looking for rather than scan — a phone number is
  * read when something has gone wrong, not on the way past.
  */
@@ -270,6 +270,7 @@ export function OrdersAdminPage() {
         </button>
       ),
     },
+    { key: 'customerEmail', label: '會員帳號', render: (order) => order.customerEmail || '—' },
     { key: 'recipientName', label: '收件人', render: (order) => order.recipientName },
     { key: 'total', label: '金額', numeric: true, render: (order) => `NT$${order.total}` },
     {
@@ -279,7 +280,7 @@ export function OrdersAdminPage() {
     },
     { key: 'createdAt', label: '成立時間', render: (order) => dateTime(order.createdAt) },
     { key: 'recipientPhone', label: '電話', render: (order) => order.recipientPhone || '—' },
-    { key: 'recipientEmail', label: 'Email', render: (order) => order.recipientEmail || '—' },
+    { key: 'recipientEmail', label: '收件 Email', render: (order) => order.recipientEmail || '—' },
     { key: 'shippingMethod', label: '配送', render: (order) => order.shippingMethod },
     { key: 'adminNote', label: '備註', render: (order) => order.adminNote || '—' },
   ]
@@ -383,7 +384,7 @@ export function OrdersAdminPage() {
             <TextField
               label="搜尋"
               type="search"
-              placeholder="訂單編號、收件人或 email"
+              placeholder="訂單編號、會員帳號、收件人或收件 Email"
               value={search}
               onInput={(event) => narrow(() => setSearch((event.currentTarget as HTMLInputElement).value))}
             />
@@ -534,13 +535,21 @@ export function OrdersAdminPage() {
             </tbody>
           </TableWrap>
 
+          <h3>會員</h3>
+          <dl class="facts">
+            <dt>會員帳號</dt>
+            <dd>{detail.order.customerEmail || '—'}</dd>
+            <dt>會員稱呼</dt>
+            <dd>{detail.order.customerDisplayName || '—'}</dd>
+          </dl>
+
           <h3>收件</h3>
           <dl class="facts">
             <dt>收件人</dt>
             <dd>
               {detail.order.recipientName}．{detail.order.recipientPhone}
             </dd>
-            <dt>Email</dt>
+            <dt>收件 Email</dt>
             <dd>{detail.order.recipientEmail}</dd>
             {detail.order.storeName ? (
               <>

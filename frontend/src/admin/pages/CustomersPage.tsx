@@ -263,7 +263,20 @@ export function CustomersPage() {
       ),
     },
     { key: 'displayName', label: '稱呼', render: (customer) => customer.displayName || '—' },
-    { key: 'orderCount', label: '訂單', numeric: true, render: (customer) => customer.orderCount },
+    {
+      key: 'orderCount',
+      label: '訂單',
+      numeric: true,
+      render: (customer) => (
+        <a
+          class="admin-data-link"
+          href={`/orders?q=${encodeURIComponent(customer.email)}`}
+          aria-label={`查看 ${customer.email} 的 ${customer.orderCount} 筆訂單`}
+        >
+          {customer.orderCount}
+        </a>
+      ),
+    },
     { key: 'paidTotal', label: '已付金額', numeric: true, render: (customer) => `NT$${customer.paidTotal}` },
     { key: 'createdAt', label: '加入', render: (customer) => dateOnly(customer.createdAt) },
   ]

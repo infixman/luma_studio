@@ -71,6 +71,17 @@ class TestWhatTheShopSees:
         assert "adminNote" not in orders.order_row(order(note="打過電話"))
         assert orders.admin_row(order(note="打過電話"))["adminNote"] == "打過電話"
 
+    def test_admin_order_keeps_account_separate_from_recipient(self, orders):
+        row = {
+            **order(),
+            "customer_email": "member@example.com",
+            "customer_display_name": "會員本人",
+        }
+        result = orders.admin_row(row)
+        assert result["customerEmail"] == "member@example.com"
+        assert result["customerDisplayName"] == "會員本人"
+        assert result["recipientEmail"] == "a@example.com"
+
     def test_listing_filters_by_status(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})
         call(AdminRequest("/api/orders?status=paid"), database)
@@ -85,11 +96,12 @@ class TestWhatTheShopSees:
         assert call(AdminRequest("/api/orders?status=lost"), database).status == 400
         assert not any("FROM orders WHERE" in statement for statement in database.statements)
 
-    def test_search_covers_the_three_things_someone_writes_in_with(self, orders):
+    def test_search_covers_order_recipient_and_member_account(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})
         call(AdminRequest("/api/orders?q=%E7%8E%8B"), database)
         query = [statement for statement in database.statements if "FROM orders WHERE" in statement][0]
         assert "id LIKE" in query and "recipient_name LIKE" in query and "recipient_email LIKE" in query
+        assert "customers.email LIKE" in query
 
     def test_a_date_range_narrows_the_query_rather_than_the_answer(self, orders):
         """The list stops at a limit, so a range applied after it came back
@@ -140,6 +152,7 @@ class TestWhatTheShopSees:
         assert "id LIKE ?5" in query
         assert "OR recipient_name LIKE ?5" in query
         assert "OR recipient_email LIKE ?5" in query
+        assert "customers.email LIKE ?5" in query
         assert bindings[:5] == ("paid", "shipped", 1700000000, 1700086399, "%王%")
 
     def test_one_is_rule_still_filters(self, orders):
@@ -169,7 +182,9 @@ class TestPaging:
     def test_the_page_asked_for_becomes_a_limit_and_an_offset(self, orders):
         database = FakeDatabase({"FROM orders": [order()]})
         call(AdminRequest("/api/orders?page=3&perPage=20"), database)
-        query, bindings = [read for read in database.reads if "SELECT * FROM orders" in read[0]][0]
+        query, bindings = [
+            read for read in database.reads if "FROM orders" in read[0] and " LIMIT " in read[0]
+        ][0]
         assert "LIMIT" in query and "OFFSET" in query
         assert bindings[-2:] == (20, 40)
 

@@ -33,6 +33,26 @@ body.admin p {
   color: var(--primary-text);
 }
 
+body.admin .admin-data-link {
+  display: inline-flex;
+  min-width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--primary-text);
+  font-weight: 650;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+body.admin .admin-data-link:hover {
+  background: var(--sunken);
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 /* Shared page layout and feedback. Feature styles may extend these, but do
    not need to import the catalogue stylesheet merely to get a stack or crumb. */
 body.admin .stack {

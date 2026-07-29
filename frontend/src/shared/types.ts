@@ -163,6 +163,8 @@ export interface OrderCard extends Order {
 /** The same order plus what only the shop may see. */
 export interface AdminOrder extends Order {
   customerId: string
+  customerEmail: string
+  customerDisplayName: string
   adminNote: string
 }
 

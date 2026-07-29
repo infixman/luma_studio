@@ -149,7 +149,24 @@ def admin_row(row: dict) -> dict:
     a private note published on someone's order page.
     """
 
-    return {**order_row(row), "customerId": row["customer_id"], "adminNote": row["admin_note"]}
+    return {
+        **order_row(row),
+        "customerId": row["customer_id"],
+        "customerEmail": row.get("customer_email") or "",
+        "customerDisplayName": row.get("customer_display_name") or "",
+        "adminNote": row["admin_note"],
+    }
+
+
+# The account belongs to the customer, while recipient_email belongs to this
+# delivery. Keep both on the admin row so the back office never has to infer
+# a member account from whoever happened to receive one order.
+_ADMIN_ORDER_SELECT = (
+    "SELECT orders.*,"
+    " (SELECT email FROM customers WHERE customers.id = orders.customer_id) AS customer_email,"
+    " (SELECT display_name FROM customers WHERE customers.id = orders.customer_id) AS customer_display_name"
+    " FROM orders"
+)
 
 
 async def audit(env, order_id: str, actor: str, action: str, *, before=None, after=None, detail: str = "") -> None:
@@ -252,7 +269,7 @@ async def get_order(env, order_id: str) -> dict | None:
 
 
 async def get_order_for_admin(env, order_id: str) -> dict | None:
-    rows = await d1_rows(env.DB.prepare("SELECT * FROM orders WHERE id = ?1").bind(order_id))
+    rows = await d1_rows(env.DB.prepare(f"{_ADMIN_ORDER_SELECT} WHERE id = ?1").bind(order_id))
     return admin_row(rows[0]) if rows else None
 
 
@@ -466,7 +483,10 @@ async def list_all(
         index = len(bindings)
         conditions.append(
             f"(id LIKE ?{index} ESCAPE '\\' OR recipient_name LIKE ?{index} ESCAPE '\\'"
-            f" OR recipient_email LIKE ?{index} ESCAPE '\\')"
+            f" OR recipient_email LIKE ?{index} ESCAPE '\\'"
+            " OR EXISTS (SELECT 1 FROM customers"
+            " WHERE customers.id = orders.customer_id"
+            f" AND customers.email LIKE ?{index} ESCAPE '\\'))"
         )
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -477,7 +497,7 @@ async def list_all(
     bindings.append(limit)
     bindings.append(offset)
     query = (
-        f"SELECT * FROM orders{where} ORDER BY created_at DESC, id"
+        f"{_ADMIN_ORDER_SELECT}{where} ORDER BY created_at DESC, id"
         f" LIMIT ?{len(bindings) - 1} OFFSET ?{len(bindings)}"
     )
     rows = await d1_rows(env.DB.prepare(query).bind(*bindings))
