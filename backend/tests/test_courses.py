@@ -89,3 +89,180 @@ class TestSlugUniqueness:
         query, bindings = database.reads[0]
         assert "id != ?2" in query
         assert bindings == ("watercolour", "c1")
+
+
+def section(title="第一章", lessons=None, section_id=None):
+    entry = {"title": title, "lessons": lessons if lessons is not None else [lesson()]}
+    if section_id is not None:
+        entry["id"] = section_id
+    return entry
+
+
+def lesson(title="工具介紹", **extra):
+    return {"title": title, "contentHtml": "<p>你好</p>", **extra}
+
+
+class TestOutlineValidation:
+    """The whole tree is checked before any of it is written.
+
+    Replacing an outline means deleting what is there. Finding out halfway
+    through that a lesson names a video that is still encoding would leave a
+    course with half its chapters gone and no way back.
+    """
+
+    def test_a_normal_outline_survives(self, courses):
+        validated = courses.validate_outline([section()])
+
+        assert validated[0]["title"] == "第一章"
+        assert validated[0]["lessons"][0]["title"] == "工具介紹"
+
+    def test_positions_come_from_the_order_sent(self, courses):
+        """A client can send whatever numbers it likes, including duplicates."""
+
+        validated = courses.validate_outline(
+            [section(title="第二章", lessons=[lesson("A"), lesson("B")]), section(title="第一章")]
+        )
+
+        assert [entry["position"] for entry in validated] == [0, 1]
+        assert [item["position"] for item in validated[0]["lessons"]] == [0, 1]
+
+    def test_a_section_needs_a_name(self, courses):
+        with pytest.raises(ValueError):
+            courses.validate_outline([section(title="  ")])
+
+    def test_a_lesson_needs_a_name(self, courses):
+        with pytest.raises(ValueError):
+            courses.validate_outline([section(lessons=[lesson("")])])
+
+    def test_a_section_with_no_lessons_is_allowed_while_writing(self, courses):
+        """An author adds the chapter before its contents. Publishing is where
+        that gets refused, not saving."""
+
+        assert courses.validate_outline([section(lessons=[])])[0]["lessons"] == []
+
+    def test_an_outline_beyond_what_one_request_should_carry_is_refused(self, courses):
+        with pytest.raises(ValueError):
+            courses.validate_outline([section() for _ in range(courses.MAX_SECTIONS + 1)])
+
+    def test_a_preview_flag_is_a_boolean_not_whatever_arrived(self, courses):
+        validated = courses.validate_outline([section(lessons=[lesson(isPreview="yes")])])
+
+        assert validated[0]["lessons"][0]["isPreview"] is True
+
+    def test_html_is_cleaned_before_it_is_stored(self, courses):
+        """The editor's own restrictions are a convenience, not a boundary."""
+
+        validated = courses.validate_outline(
+            [section(lessons=[{"title": "X", "contentHtml": "<p>好<script>alert(1)</script></p>"}])]
+        )
+
+        assert "script" not in validated[0]["lessons"][0]["contentHtml"]
+
+
+class TestPublishChecks:
+    """What must be true before anyone can be sold access to this."""
+
+    def _course(self, **extra):
+        return {
+            "id": "c1", "slug": "watercolour", "title": "水彩入門", "status": "draft",
+            "summary": "兩小時學會水彩", "coverMediaId": "media-1", **extra,
+        }
+
+    def _outline(self, lessons=None):
+        return [{"title": "第一章", "lessons": lessons if lessons is not None else [
+            {"title": "工具介紹", "videoAssetId": "asset-1", "isPreview": False},
+        ]}]
+
+    def test_a_complete_course_passes(self, courses):
+        assert courses.publish_problems(self._course(), self._outline(), ready_asset_ids={"asset-1"}) == []
+
+    def test_a_course_with_no_summary_is_not_ready_to_sell(self, courses):
+        """The summary is what a product page leads with."""
+
+        problems = courses.publish_problems(self._course(summary=""), self._outline(), ready_asset_ids={"asset-1"})
+
+        assert "summary" in [problem["field"] for problem in problems]
+
+    def test_a_course_with_no_lessons_is_refused(self, courses):
+        problems = courses.publish_problems(self._course(), [], ready_asset_ids=set())
+
+        assert [problem["field"] for problem in problems] == ["outline"]
+
+    def test_a_chapter_with_nothing_in_it_is_refused(self, courses):
+        problems = courses.publish_problems(self._course(), self._outline(lessons=[]), ready_asset_ids=set())
+
+        assert [problem["field"] for problem in problems] == ["outline"]
+
+    def test_a_lesson_whose_video_is_still_encoding_is_refused(self, courses):
+        """Publishing it would sell access to a spinner."""
+
+        problems = courses.publish_problems(self._course(), self._outline(), ready_asset_ids=set())
+
+        assert [problem["field"] for problem in problems] == ["video"]
+        assert "工具介紹" in problems[0]["message"]
+
+    def test_a_text_only_lesson_needs_no_video(self, courses):
+        outline = self._outline(lessons=[{"title": "課前準備", "videoAssetId": None, "isPreview": False}])
+
+        assert courses.publish_problems(self._course(), outline, ready_asset_ids=set()) == []
+
+    def test_every_problem_is_reported_at_once(self, courses):
+        """An author fixing one thing per save is a bad afternoon."""
+
+        problems = courses.publish_problems(
+            self._course(summary="", coverMediaId=None), self._outline(), ready_asset_ids=set()
+        )
+
+        assert len(problems) >= 3
+
+
+class TestWhatAVisitorSees:
+    """A product page describes a course without giving it away."""
+
+    def _outline(self):
+        return [
+            {
+                "title": "第一章",
+                "lessons": [
+                    {"id": "l1", "title": "工具介紹", "contentHtml": "<p>免費看</p>",
+                     "videoAssetId": "asset-1", "isPreview": True, "position": 0},
+                    {"id": "l2", "title": "調色練習", "contentHtml": "<p>付費內容</p>",
+                     "videoAssetId": "asset-2", "isPreview": False, "position": 1},
+                ],
+            }
+        ]
+
+    def _course(self):
+        return {
+            "id": "c1", "slug": "watercolour", "title": "水彩入門", "status": "published",
+            "summary": "兩小時學會", "coverMediaId": "media-1", "instructorName": "王老師",
+            "level": "beginner", "language": "zh-Hant",
+        }
+
+    def test_a_locked_lesson_is_named_but_not_given_away(self, courses):
+        public = courses.public_outline(self._outline())
+
+        locked = public[0]["lessons"][1]
+        assert locked["title"] == "調色練習"
+        assert "contentHtml" not in locked
+        assert locked["isPreview"] is False
+
+    def test_a_preview_lesson_shows_its_content(self, courses):
+        public = courses.public_outline(self._outline())
+
+        assert public[0]["lessons"][0]["contentHtml"] == "<p>免費看</p>"
+
+    def test_no_lesson_reveals_which_video_file_it_uses(self, courses):
+        """An asset id is a thing to go looking for. Playback is granted by
+        the gateway, never by knowing a name."""
+
+        public = courses.public_outline(self._outline())
+
+        for lesson in public[0]["lessons"]:
+            assert "videoAssetId" not in lesson
+
+    def test_the_page_can_say_how_much_there_is(self, courses):
+        summary = courses.public_course(self._course(), self._outline())
+
+        assert summary["lessonCount"] == 2
+        assert summary["sections"][0]["title"] == "第一章"

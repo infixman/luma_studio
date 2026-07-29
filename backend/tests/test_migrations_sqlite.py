@@ -442,6 +442,76 @@ class TestVideoSchema:
             )
 
 
+class TestCourseOutlineSchema:
+    """Sections and lessons, and what a lesson may point at."""
+
+    def _course(self, database, course_id="c1"):
+        database.execute(
+            "INSERT INTO courses (id, slug, title, status, created_at, updated_at)"
+            " VALUES (?, ?, '水彩入門', 'draft', 0, 0)",
+            (course_id, f"slug-{course_id}"),
+        )
+
+    def _section(self, database, section_id="s1", course_id="c1", position=0):
+        database.execute(
+            "INSERT INTO course_sections (id, course_id, title, position, created_at, updated_at)"
+            " VALUES (?, ?, '第一章', ?, 0, 0)",
+            (section_id, course_id, position),
+        )
+
+    def test_a_course_carries_the_fields_a_product_page_needs(self, database):
+        self._course(database)
+        database.execute(
+            "UPDATE courses SET summary = ?, instructor_name = ?, level = ? WHERE id = 'c1'",
+            ("兩小時學會水彩", "王老師", "beginner"),
+        )
+
+        stored = database.execute("SELECT summary, instructor_name, level FROM courses").fetchone()
+        assert stored == ("兩小時學會水彩", "王老師", "beginner")
+
+    def test_a_lesson_belongs_to_a_section_and_may_have_a_video(self, database):
+        self._course(database)
+        self._section(database)
+        database.execute(
+            "INSERT INTO course_lessons (id, section_id, title, content_html, video_asset_id,"
+            " is_preview, position, created_at, updated_at)"
+            " VALUES ('l1', 's1', '工具介紹', '<p>你好</p>', 'asset-1', 1, 0, 0, 0)"
+        )
+
+        stored = database.execute("SELECT video_asset_id, is_preview FROM course_lessons").fetchone()
+        assert stored == ("asset-1", 1)
+
+    def test_a_lesson_may_be_text_only(self, database):
+        """Not every lesson is a video. A reading with no asset is valid."""
+
+        self._course(database)
+        self._section(database)
+        database.execute(
+            "INSERT INTO course_lessons (id, section_id, title, content_html, video_asset_id,"
+            " is_preview, position, created_at, updated_at)"
+            " VALUES ('l1', 's1', '課前準備', '<p>請準備</p>', NULL, 0, 0, 0, 0)"
+        )
+
+        assert database.execute("SELECT video_asset_id FROM course_lessons").fetchone()[0] is None
+
+    def test_one_video_can_be_used_by_more_than_one_lesson(self, database):
+        """A shared intro clip should not need uploading twice."""
+
+        self._course(database)
+        self._section(database)
+        for lesson_id in ("l1", "l2"):
+            database.execute(
+                "INSERT INTO course_lessons (id, section_id, title, content_html, video_asset_id,"
+                " is_preview, position, created_at, updated_at)"
+                " VALUES (?, 's1', '片頭', '', 'asset-1', 0, 0, 0, 0)",
+                (lesson_id,),
+            )
+
+        assert database.execute(
+            "SELECT COUNT(*) FROM course_lessons WHERE video_asset_id = 'asset-1'"
+        ).fetchone()[0] == 2
+
+
 class TestDefaultOfferBackfill:
     """0027 marks a product's only offer and refuses to guess for the rest."""
 

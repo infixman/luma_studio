@@ -946,6 +946,59 @@ MIGRATIONS = [
             " ON video_transcode_jobs (status, started_at)",
         ],
     },
+    {
+        # Phase 5: a course grows from a name into something someone can read
+        # before buying and follow after.
+        #
+        # The display fields are added to `courses` rather than to a new table:
+        # they are one-to-one with the course and only ever read alongside it,
+        # and a second table would mean a join on every product page.
+        #
+        # Lesson duration is deliberately absent. It belongs to the video, and
+        # a copy here would be wrong the moment an asset is re-encoded.
+        "name": "0031_add_course_outline",
+        "add_columns": [
+            ("courses", "summary", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "description_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "cover_media_id", "TEXT"),
+            ("courses", "instructor_name", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "instructor_bio_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "level", "TEXT NOT NULL DEFAULT 'all'"),
+            ("courses", "language", "TEXT NOT NULL DEFAULT 'zh-Hant'"),
+            ("courses", "audience_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "outcomes_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "prerequisites_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "materials_html", "TEXT NOT NULL DEFAULT ''"),
+            ("courses", "published_at", "INTEGER"),
+        ],
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS course_sections (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 course_id TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 position INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_course_sections_course ON course_sections (course_id, position)",
+            """CREATE TABLE IF NOT EXISTS course_lessons (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 section_id TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 content_html TEXT NOT NULL DEFAULT '',
+                 video_asset_id TEXT,
+                 is_preview INTEGER NOT NULL DEFAULT 0,
+                 position INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_course_lessons_section ON course_lessons (section_id, position)",
+            # Which lessons use a video, so an asset cannot be deleted out from
+            # under one. Not unique: a shared intro clip should not need
+            # uploading once per lesson.
+            "CREATE INDEX IF NOT EXISTS idx_course_lessons_video ON course_lessons (video_asset_id)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()
