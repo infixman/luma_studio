@@ -3,11 +3,19 @@
    Two columns, full height, and only the middle of the second one scrolls:
    the menu stays where it is while a long form moves.
 
-   Nearly every rule here is prefixed `body.admin`, and it is load bearing.
-   admin.css styles bare elements — `body.admin button` is a filled indigo
-   button, `body.admin a` is indigo text — and those are (0,1,2). A bare class
-   is (0,1,0) and loses to them. Without the prefix the group headers render
-   as solid indigo buttons with a dark icon sitting on them at 1.44:1. */
+   The selectors here carry more weight than they look like they need, and it
+   is load bearing. admin.css styles bare elements, and the ones that matter
+   are these two:
+
+     body.admin button                    (0,1,2)
+     body.admin button:hover:not(:disabled)  (0,3,2)
+
+   `body.admin .nav-group` is (0,2,1) and beats the first. `body.admin
+   .nav-group:hover` is (0,3,1) and *loses* to the second — same class count,
+   one fewer element — so hovering a group header filled it solid indigo with
+   a dark icon left on top at 1.44:1, and it stayed filled while the pointer
+   was anywhere near it. Scoping the interactive rows under `.admin-sidebar`
+   adds the class that settles it. */
 
 .admin-layout {
   display: grid;
@@ -78,8 +86,8 @@ body.admin .nav-groups {
   gap: 2px;
 }
 
-body.admin .nav-group,
-body.admin .nav-item {
+body.admin .admin-sidebar .nav-group,
+body.admin .admin-sidebar .nav-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -97,19 +105,19 @@ body.admin .nav-item {
   cursor: pointer;
 }
 
-body.admin .nav-group {
+body.admin .admin-sidebar .nav-group {
   font-weight: 600;
   color: var(--text);
 }
 
-body.admin .nav-group:hover,
-body.admin .nav-item:hover {
+body.admin .admin-sidebar .nav-group:hover,
+body.admin .admin-sidebar .nav-item:hover {
   background: var(--sunken);
   color: var(--text);
 }
 
-body.admin .nav-group:focus-visible,
-body.admin .nav-item:focus-visible {
+body.admin .admin-sidebar .nav-group:focus-visible,
+body.admin .admin-sidebar .nav-item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
@@ -131,7 +139,7 @@ body.admin .nav-icon svg {
   height: 20px;
 }
 
-body.admin .nav-group .nav-icon {
+body.admin .admin-sidebar .nav-group .nav-icon {
   color: var(--text-soft);
 }
 
@@ -179,15 +187,15 @@ body.admin .nav-items {
   border-left: 1px solid var(--border);
 }
 
-body.admin .nav-item.current,
-body.admin .nav-group.is-link.current {
+body.admin .admin-sidebar .nav-item.current,
+body.admin .admin-sidebar .nav-group.is-link.current {
   background: var(--primary-soft);
   color: var(--primary-text);
   font-weight: 650;
 }
 
-body.admin .nav-item.current .nav-icon,
-body.admin .nav-group.is-link.current .nav-icon {
+body.admin .admin-sidebar .nav-item.current .nav-icon,
+body.admin .admin-sidebar .nav-group.is-link.current .nav-icon {
   color: var(--primary-text);
 }
 
@@ -271,7 +279,7 @@ body.admin .account-email {
   color: var(--muted);
 }
 
-body.admin .account-logout {
+body.admin .admin-sidebar .account-logout {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -284,17 +292,17 @@ body.admin .account-logout {
   cursor: pointer;
 }
 
-body.admin .account-logout svg {
+body.admin .admin-sidebar .account-logout svg {
   width: 18px;
   height: 18px;
 }
 
-body.admin .account-logout:hover {
+body.admin .admin-sidebar .account-logout:hover {
   background: var(--danger-soft);
   color: var(--danger);
 }
 
-body.admin .account-logout:focus-visible {
+body.admin .admin-sidebar .account-logout:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
