@@ -548,7 +548,7 @@ def call(request, database=None, bucket=None):
     about what the handler does once it has been let through.
     """
 
-    import media_admin_api
+    from api.admin import media as media_admin_api
     from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 

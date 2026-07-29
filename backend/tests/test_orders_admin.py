@@ -49,7 +49,7 @@ class AdminRequest(FakeRequest):
 
 
 def call(request, database=None, *, email="owner@example.com"):
-    import orders_admin_api
+    from api.admin import orders as orders_admin_api
     from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 

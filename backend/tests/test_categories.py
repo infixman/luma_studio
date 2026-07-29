@@ -229,17 +229,17 @@ class TestSavingAProductsCategories:
     def test_an_absent_field_leaves_them_alone(self):
         """A PUT that forgot categoryIds must not strip the product bare."""
 
-        import shop_admin_api
+        from api.admin import shop as shop_admin_api
 
         assert shop_admin_api._category_ids({"title": "x"}) is None
 
     def test_an_empty_list_clears_them(self):
-        import shop_admin_api
+        from api.admin import shop as shop_admin_api
 
         assert shop_admin_api._category_ids({"categoryIds": []}) == []
 
     def test_something_that_is_not_a_list_is_refused(self):
-        import shop_admin_api
+        from api.admin import shop as shop_admin_api
 
         with pytest.raises(ValueError):
             shop_admin_api._category_ids({"categoryIds": "c1"})

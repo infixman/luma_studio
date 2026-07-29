@@ -309,7 +309,7 @@ class JsonRequest(FakeRequest):
 def edit(body, database=None):
     """One page edit straight into the handler, returning what it wrote."""
 
-    import pages_admin_api
+    from api.admin import pages as pages_admin_api
     from shared.responses import Ctx
     from urllib.parse import parse_qs, urlsplit
 
@@ -450,7 +450,7 @@ class TestReorderingBlocks:
 
     @staticmethod
     def _call(ids, rows):
-        import pages_admin_api
+        from api.admin import pages as pages_admin_api
         from shared.responses import Ctx
         from urllib.parse import parse_qs, urlsplit
 

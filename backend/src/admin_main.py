@@ -14,17 +14,17 @@ This Worker owns the D1 schema. See `router.serve`.
 
 from workers import WorkerEntrypoint
 
-import admin_api
+from api.admin import routes as admin_api
+from api.admin import bio_link as bio_link_api
+from api.admin import customers as customers_admin_api
+from api.admin import media as media_admin_api
+from api.admin import orders as orders_admin_api
+from api.admin import pages as pages_admin_api
+from api.admin import shop as shop_admin_api
+from api.admin import site as site_admin_api
 import auth_admin
-import bio_link_api
-import customers_admin_api
 from domain import dashboard
-import media_admin_api
-import orders_admin_api
-import pages_admin_api
 from shared import rate_limit, router
-import shop_admin_api
-import site_admin_api
 from shared.common import OAuthError
 from shared.migrations import apply_migrations
 from shared.responses import Ctx
