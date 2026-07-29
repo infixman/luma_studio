@@ -15,7 +15,7 @@ written once, here.
 import re
 
 from shared import paging
-from domain import shipping, shop
+from domain import inventory, shipping, shop
 import mail
 from shared.common import d1_changed, d1_rows, random_alpha_numeric, utc_timestamp
 
@@ -200,29 +200,52 @@ async def give_back_stock(env, variant_id: str, quantity: int) -> None:
     ).run()
 
 
-async def create_order(env, customer: dict, *, priced: dict, method: dict, recipient: dict, day: str) -> dict:
+def _stock_wanted(priced: dict) -> dict[str, int]:
+    """How much of each InventoryItem the whole order needs.
+
+    Totalled across lines first: the same kit in two lines is one pile, and
+    reserving line by line could take it twice from a shelf holding one.
+    """
+
+    wanted: dict[str, int] = {}
+    for line in priced["lines"]:
+        for component in line.get("components", ()):
+            if component["type"] == "inventory":
+                wanted[component["targetId"]] = wanted.get(component["targetId"], 0) + component["requiredQuantity"]
+    return wanted
+
+
+async def create_order(env, customer: dict, *, priced: dict, method: dict | None, recipient: dict, day: str) -> dict:
     """Place an order, taking the stock for it as we go.
 
     Anything that fails part-way puts back what it already took. Without that,
     a customer whose last line sold out mid-checkout would silently remove the
     earlier lines from sale.
+
+    Stock comes off the InventoryItem now rather than the offer, so a kit
+    shared by three offers is one count. Courses take nothing: access is not a
+    thing there are only so many of.
     """
 
     if not priced["lines"]:
         raise OrderError("購物車是空的")
 
     taken: list[tuple[str, int]] = []
-    for line in priced["lines"]:
-        if await take_stock(env, line["variantId"], line["quantity"]):
-            taken.append((line["variantId"], line["quantity"]))
+    for item_id, quantity in _stock_wanted(priced).items():
+        if await inventory.take_stock(env, item_id, quantity):
+            taken.append((item_id, quantity))
             continue
-        for variant_id, quantity in taken:
-            await give_back_stock(env, variant_id, quantity)
-        raise OrderError(f"「{line['productTitle']}」剛剛被買走了，請重新確認購物車")
+        for reserved_id, reserved_quantity in taken:
+            await inventory.give_back_stock(env, reserved_id, reserved_quantity)
+        raise OrderError("購物車中有商品剛剛被買走了，請重新確認")
 
     now = utc_timestamp()
     subtotal = priced["subtotal"]
-    fee = shipping.fee_for(method, subtotal)
+    requires_shipping = any(line.get("requiresShipping", True) for line in priced["lines"])
+    # Nothing to post means no method and no fee. Storing a real method with
+    # an empty address reads as lost data on the order page.
+    fee = shipping.fee_for(method, priced.get("shippingSubtotal", subtotal)) if method and requires_shipping else 0
+    method_name = method["method"] if method and requires_shipping else "none"
     order_id = new_order_id(day)
 
     await env.DB.prepare(
@@ -235,7 +258,7 @@ async def create_order(env, customer: dict, *, priced: dict, method: dict, recip
         subtotal,
         fee,
         subtotal + fee,
-        method["method"],
+        method_name,
         recipient["name"],
         recipient["phone"],
         recipient["email"],
@@ -245,19 +268,46 @@ async def create_order(env, customer: dict, *, priced: dict, method: dict, recip
     ).run()
 
     for line in priced["lines"]:
+        item_id = random_alpha_numeric(20)
+        offer_id = line.get("offerId") or line["variantId"]
         await env.DB.prepare(
             "INSERT INTO order_items (id, order_id, variant_id, product_title, variant_title, unit_price,"
-            " quantity, subtotal) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+            " quantity, subtotal, product_id, offer_id, requires_shipping, contains_course)"
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
         ).bind(
-            random_alpha_numeric(20),
+            item_id,
             order_id,
-            line["variantId"],
+            offer_id,
             line["productTitle"],
             line["variantTitle"],
             line["unitPrice"],
             line["quantity"],
             line["lineTotal"],
+            line.get("productId", ""),
+            offer_id,
+            1 if line.get("requiresShipping", True) else 0,
+            1 if line.get("containsCourse", False) else 0,
         ).run()
+
+        # Snapshots of what was promised. The offer can be edited tomorrow;
+        # what this order was for must not change with it.
+        for component in line.get("components", ()):
+            await env.DB.prepare(
+                "INSERT INTO order_fulfillments (id, order_id, order_item_id, fulfillment_type, target_id,"
+                " target_title, sku, quantity, access_days, status, created_at, updated_at)"
+                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'pending', ?10, ?10)"
+            ).bind(
+                random_alpha_numeric(20),
+                order_id,
+                item_id,
+                component["type"],
+                component["targetId"],
+                component["targetTitle"],
+                component.get("sku"),
+                component.get("quantity", 1) * line["quantity"] if component["type"] == "inventory" else 1,
+                component.get("accessDays"),
+                now,
+            ).run()
 
     await audit(env, order_id, f"customer:{customer['id']}", "created", after="pending")
     return await get_order(env, order_id)
@@ -337,13 +387,24 @@ async def list_cards_for_customer(env, customer_id: str) -> list[dict]:
 
 
 async def release_stock(env, order_id: str) -> None:
-    """Put an order's items back on the shelf."""
+    """Put an order's physical items back on the shelf.
+
+    Driven by the fulfilment snapshots, not by the offer as it stands today:
+    an offer that has since been edited would give back the wrong things, and
+    one that was deleted would give back nothing at all.
+
+    Course fulfilments are skipped. There was never a count to return, and an
+    order cancelled before payment never granted anything to take away.
+    """
 
     rows = await d1_rows(
-        env.DB.prepare("SELECT variant_id, quantity FROM order_items WHERE order_id = ?1").bind(order_id)
+        env.DB.prepare(
+            "SELECT target_id, quantity FROM order_fulfillments"
+            " WHERE order_id = ?1 AND fulfillment_type = 'inventory'"
+        ).bind(order_id)
     )
     for row in rows:
-        await give_back_stock(env, row["variant_id"], int(row["quantity"]))
+        await inventory.give_back_stock(env, row["target_id"], int(row["quantity"]))
 
 
 async def mark_paid(env, order_id: str, actor: str, *, detail: str = "") -> bool:

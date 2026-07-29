@@ -33,19 +33,41 @@ def priced(*lines):
         "lines": list(lines),
         "problems": [],
         "subtotal": sum(line["lineTotal"] for line in lines),
+        "shippingSubtotal": sum(line["lineTotal"] for line in lines if line.get("requiresShipping", True)),
     }
 
 
 def line(variant_id="v1", quantity=1, price=300, title="蘇打托特包"):
+    """A physical line, with the inventory component every offer now carries.
+
+    The backfill gave each existing offer an item under its own id, which is
+    why the component's target matches the offer here.
+    """
+
     return {
         "variantId": variant_id,
+        "offerId": variant_id,
+        "productId": "p1",
         "productSlug": "soda-tote",
         "productTitle": title,
         "variantTitle": "M",
+        "offerTitle": None,
         "imagePath": None,
         "unitPrice": price,
         "quantity": quantity,
         "lineTotal": price * quantity,
+        "containsCourse": False,
+        "requiresShipping": True,
+        "components": [
+            {
+                "type": "inventory",
+                "targetId": variant_id,
+                "targetTitle": title,
+                "sku": "",
+                "quantity": 1,
+                "requiredQuantity": quantity,
+            }
+        ],
         "stockLeft": None,
     }
 
@@ -150,7 +172,7 @@ class TestPlacingAnOrder:
     def test_a_line_that_sells_out_mid_checkout_puts_back_what_was_taken(self, orders):
         """Otherwise the earlier lines quietly leave the shelf for nobody."""
 
-        database = FakeDatabase(changes={"UPDATE product_variants SET stock = stock -": 0})
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 0})
         with pytest.raises(orders.OrderError):
             run(
                 orders.create_order(
@@ -163,7 +185,7 @@ class TestPlacingAnOrder:
                 )
             )
         # Nothing was taken, so nothing needed giving back.
-        assert not any(sql.startswith("UPDATE product_variants SET stock = stock +") for sql, _ in database.writes)
+        assert not any(sql.startswith("UPDATE inventory_items SET stock = stock +") for sql, _ in database.writes)
 
     def test_stock_taken_before_the_failure_is_returned(self, orders):
         class Flaky(FakeDatabase):
@@ -200,7 +222,7 @@ class TestPlacingAnOrder:
                     day="20260728",
                 )
             )
-        returns = [binding for sql, binding in database.writes if sql.startswith("UPDATE product_variants SET stock = stock +")]
+        returns = [binding[:2] for sql, binding in database.writes if sql.startswith("UPDATE inventory_items SET stock = stock +")]
         assert returns == [("v1", 1)]
 
 
@@ -390,3 +412,212 @@ class TestCheckoutRoutes:
         )
         request = storefront("/api/orders/LS1/fake-payment", "POST", Cookie="luma_customer_session=" + "a" * 40)
         assert call(request, signed_in).status == 404
+
+
+def resolved_line(
+    offer_id="off-1",
+    *,
+    quantity=1,
+    price=3980,
+    title="水彩完整套組",
+    components=None,
+    contains_course=False,
+    requires_shipping=True,
+):
+    """A cart line in the shape `price_lines` now produces."""
+
+    return {
+        "variantId": offer_id,
+        "offerId": offer_id,
+        "productId": "prod-1",
+        "productSlug": "watercolour-set",
+        "productTitle": title,
+        "variantTitle": "",
+        "offerTitle": None,
+        "imagePath": None,
+        "unitPrice": price,
+        "quantity": quantity,
+        "lineTotal": price * quantity,
+        "containsCourse": contains_course,
+        "requiresShipping": requires_shipping,
+        "components": components
+        if components is not None
+        else [
+            {
+                "type": "inventory",
+                "targetId": "kit-1",
+                "targetTitle": "水彩材料包",
+                "sku": "KIT-1",
+                "quantity": 1,
+                "requiredQuantity": quantity,
+            }
+        ],
+        "stockLeft": None,
+    }
+
+
+def course_component(course_id="course-1", title="水彩花卉入門", access_days=None):
+    return {"type": "course", "targetId": course_id, "targetTitle": title, "accessDays": access_days}
+
+
+class TestReservingAgainstInventory:
+    """Stock comes off the InventoryItem, not off the offer."""
+
+    def test_what_is_reserved_is_the_component_times_the_quantity(self, orders):
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 1})
+
+        run(
+            orders.create_order(
+                make_env(database),
+                CUSTOMER,
+                priced={
+                    "lines": [
+                        resolved_line(
+                            quantity=3,
+                            components=[{
+                                "type": "inventory", "targetId": "kit-1", "targetTitle": "水彩材料包",
+                                "sku": "KIT-1", "quantity": 2, "requiredQuantity": 6,
+                            }],
+                        )
+                    ],
+                    "problems": [],
+                    "subtotal": 11940,
+                    "shippingSubtotal": 11940,
+                },
+                method=METHOD,
+                recipient=RECIPIENT,
+                day="20260728",
+            )
+        )
+
+        _, bindings = next(w for w in database.writes if "UPDATE inventory_items SET stock = stock -" in w[0])
+        assert bindings[:2] == ("kit-1", 6)
+
+    def test_a_line_that_sold_out_puts_back_what_was_already_taken(self, orders):
+        """Otherwise a customer whose last line vanished silently removes the
+        earlier lines from sale."""
+
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 0})
+
+        with pytest.raises(orders.OrderError):
+            run(
+                orders.create_order(
+                    make_env(database),
+                    CUSTOMER,
+                    priced={
+                        "lines": [resolved_line()],
+                        "problems": [],
+                        "subtotal": 3980,
+                        "shippingSubtotal": 3980,
+                    },
+                    method=METHOD,
+                    recipient=RECIPIENT,
+                    day="20260728",
+                )
+            )
+
+    def test_a_course_takes_no_stock(self, orders):
+        database = FakeDatabase()
+
+        run(
+            orders.create_order(
+                make_env(database),
+                CUSTOMER,
+                priced={
+                    "lines": [
+                        resolved_line(
+                            components=[course_component()], contains_course=True, requires_shipping=False
+                        )
+                    ],
+                    "problems": [],
+                    "subtotal": 3980,
+                    "shippingSubtotal": 0,
+                },
+                method=None,
+                recipient=RECIPIENT,
+                day="20260728",
+            )
+        )
+
+        assert not any("UPDATE inventory_items SET stock = stock -" in w[0] for w in database.writes)
+
+
+class TestWhatTheOrderPromised:
+    def _place(self, orders, database, *, components, contains_course=False, requires_shipping=True, method=METHOD):
+        return run(
+            orders.create_order(
+                make_env(database),
+                CUSTOMER,
+                priced={
+                    "lines": [
+                        resolved_line(
+                            components=components,
+                            contains_course=contains_course,
+                            requires_shipping=requires_shipping,
+                        )
+                    ],
+                    "problems": [],
+                    "subtotal": 3980,
+                    "shippingSubtotal": 3980 if requires_shipping else 0,
+                },
+                method=method,
+                recipient=RECIPIENT,
+                day="20260728",
+            )
+        )
+
+    def test_each_component_becomes_a_fulfilment_snapshot(self, orders):
+        """The offer can change what it grants tomorrow. What this order was
+        for has to survive that."""
+
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 1})
+
+        self._place(
+            orders,
+            database,
+            components=[
+                course_component(access_days=30),
+                {"type": "inventory", "targetId": "kit-1", "targetTitle": "水彩材料包",
+                 "sku": "KIT-1", "quantity": 1, "requiredQuantity": 1},
+            ],
+            contains_course=True,
+        )
+
+        written = [bindings for statement, bindings in database.writes if "INSERT INTO order_fulfillments" in statement]
+        assert len(written) == 2
+        # Title and window are copied, not referenced.
+        assert any("水彩花卉入門" in bindings and 30 in bindings for bindings in written)
+        assert any("KIT-1" in bindings for bindings in written)
+
+    def test_the_line_records_whether_it_ships_and_whether_it_grants(self, orders):
+        database = FakeDatabase()
+
+        self._place(
+            orders,
+            database,
+            components=[course_component()],
+            contains_course=True,
+            requires_shipping=False,
+            method=None,
+        )
+
+        _, bindings = next(w for w in database.writes if "INSERT INTO order_items" in w[0])
+        assert "prod-1" in bindings
+
+    def test_a_digital_order_is_stored_as_needing_no_delivery(self, orders):
+        """Not as an empty address on a real shipping method, which reads as
+        lost data on the order page."""
+
+        database = FakeDatabase()
+
+        self._place(
+            orders,
+            database,
+            components=[course_component()],
+            contains_course=True,
+            requires_shipping=False,
+            method=None,
+        )
+
+        _, bindings = next(w for w in database.writes if "INSERT INTO orders" in w[0])
+        assert "none" in bindings
