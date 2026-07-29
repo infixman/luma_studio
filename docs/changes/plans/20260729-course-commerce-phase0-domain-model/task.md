@@ -1,59 +1,51 @@
-﻿# Phase 0 工作項目：商城與課程共同模型
+# Phase 0 工作項目：商城與課程共同模型
+
+> `[x]` 僅表示本階段已完成 repo-grounded 盤點或設計收斂；不表示正式程式、migration 或 API 已實作。
 
 ## 1. 現況盤點
 
-- [ ] 列出 `products`、`product_variants`、`orders`、`order_items`、`customers`、
-      `shipping_methods` 的實際 schema、索引與讀寫入口。
-- [ ] 列出管理端商品建立、編輯、上架與刪除 API。
-- [ ] 列出商城商品頁、購物車驗算、結帳、付款成功、取消與逾期流程。
-- [ ] 確認所有會直接讀寫 `product_variants.stock` 的程式與測試。
-- [ ] 確認 localStorage 購物車格式與相容期限。
-- [ ] 記錄目前 D1 migration 的執行者、部署順序與失敗處理。
+- [x] 列出 `products`、`product_variants`、`orders`、`order_items`、`customers`、`shipping_methods` 的 schema 與索引。證據：`backend/src/shared/migrations.py:136-299`。
+- [x] 列出商品建立、編輯、上架與 variant CRUD。證據：`backend/src/api/admin/shop.py:148-230`, `268-287`；建立 UI：`frontend/src/admin/pages/ProductCreatePage.tsx:40-55`。
+- [x] 列出公開商品列表、詳情與可購買性。證據：`backend/src/api/front/pages.py:9-12`, `83-91`；`backend/src/domain/shop.py:166-213`。
+- [x] 列出 Cart localStorage 格式、validate request/response 與前端使用點。證據：`frontend/src/storefront/lib/cart.ts:10-60`；`backend/src/domain/cart.py:33-122`；`backend/src/api/front/checkout.py:12-27`。
+- [x] 確認價格、SKU、stock 的現況資料來源與限制。證據：`backend/src/domain/shop.py:36-42`, `101-106`, `143-153`；SKU 尚非 unique。
+- [x] 確認建單條件扣庫存、中途失敗回補、pending 逾期回補。證據：`backend/src/domain/orders.py:179-263`, `564-590`；cron：`backend/src/main.py:226-233`。
+- [x] 確認 checkout 對配送、電話、地址與超商資料的實際要求。證據：`backend/src/api/front/checkout.py:50-78`；`frontend/src/storefront/pages/CheckoutPage.tsx:124-188`。結論：目前所有訂單都要求配送方式／電話，超商門市欄位尚未由 checkout 寫入。
+- [x] 確認付款、重複通知與手動已付款路徑。證據：`backend/src/domain/orders.py:349-370`；`backend/src/api/admin/orders.py:123-153`；`backend/src/api/front/checkout.py:114-126`。結論：沒有正式 gateway callback，只有條件式付款轉移基礎。
+- [x] 確認訂單狀態與 audit。證據：`backend/src/domain/orders.py:172-176`, `373-428`, `546-590`；schema：`backend/src/shared/migrations.py:286-299`。
+- [x] 確認 Admin/Public Worker、migration 執行者與部署順序。證據：`backend/src/shared/router.py:32-59`、`backend/src/admin_main.py:104-106`、`backend/src/main.py:23-26`、`README.md:16-20`。
+- [x] 確認相關測試覆蓋與缺口。證據：`backend/tests/test_cart.py:32-205`、`backend/tests/test_orders.py:100-216`、`backend/tests/test_checkout_profile.py:57-100`；課程／component／entitlement／callback 測試尚不存在。
 
-## 2. 領域決策
+## 2. 模型與跨階段契約
 
-- [ ] 確認程式碼使用 `Offer` 語意，但初期是否保留 `product_variants` 實體表名。
-- [ ] 確認 default Offer 的 title、SKU 與 API 呈現方式。
-- [ ] 確認材料包是否允許不出現在商城但可被 Offer 引用。
-- [ ] 確認 bundle 是否禁止巢狀；預設禁止以避免循環和數量爆炸。
-- [ ] 確認課程授權預設永久，期限型方案使用 `access_days`。
-- [ ] 確認混合商品在付款後立即開課，不等待實體出貨。
-- [ ] 確認退款、取消已付款訂單與 chargeback 的授權政策。
-- [ ] 確認課程商品購買數量是否固定為 1，以及未來贈送課程是否另案處理。
-- [ ] 確認免運門檻計算是否包含數位內容；建議只計入指定的實體配送金額。
+- [x] 收斂 Product、Offer、Option、InventoryItem、OfferComponent、Course、VideoAsset、OrderFulfillment、Entitlement 的責任邊界；見 `design.md`「目標領域模型」。
+- [x] 定義 `product_variants` 暫作 Offer、default Offer 與 `variantId` 相容規則；見 `design.md`「Offer、default Offer 與舊 variantId」。
+- [x] 定義 InventoryItem 成為唯一庫存寫入來源、禁止長期雙寫與 backfill 對帳順序；見 `design.md`「庫存遷移與一致性」。
+- [x] 定義 Cart／Order 共用 `resolve_offer`、OrderItem／Fulfillment snapshot 與付款後 entitlement 冪等規則；見 `design.md`／`spec.md`。
+- [x] 定義 D1 polymorphic component 的應用層驗證與多品項補償策略；見 `design.md`「polymorphic OfferComponent」與 `spec.md`「狀態與補償」。
+- [x] 定義 candidate tables、索引、唯一性、狀態、相容／rollback 及 API shape 原則；見 `spec.md`。
+- [x] 檢查 Phase 1–7 的 design/spec 名詞與依賴；Phase 0 已明確交接。證據：`docs/changes/plans/20260729-course-commerce-phase1-optional-product-options/design.md:69-83`、`phase2-composable-offer-components/spec.md:71-107`、`phase3-mixed-cart-checkout-fulfillment/spec.md:58-169`、`phase4-video-ingestion-pipeline/design.md:156-194`、`phase5-course-authoring-catalog/spec.md:100-157`、`phase6-member-learning-playback/spec.md:32-126`、`phase7-integration-hardening-launch/spec.md:97-120`。
 
-## 3. Schema 草案
+## 3. 代表案例
 
-- [ ] 為 `offers`／`product_variants` 製作 additive migration 草案。
-- [ ] 為 `inventory_items`、`offer_components` 製作 schema 草案。
-- [ ] 為 `courses`、`course_sections`、`course_lessons`、`video_assets` 製作 schema 草案。
-- [ ] 為 `order_fulfillments`、`course_entitlements` 製作 schema 草案。
-- [ ] 定義所有唯一索引、查詢索引、狀態值與時間欄位。
-- [ ] 定義 D1 無法表達的 polymorphic reference 驗證責任。
-- [ ] 準備現有 variant 到 default/public Offer 的分類查詢。
-- [ ] 準備現有 variant 到 inventory item/component 的 backfill 對照表。
+- [x] 完成單一實體、多規格實體、純課程、課程＋材料包、多課程組合的資料形狀、商品頁、Cart、配送、庫存、快照、付款、取消／逾期與會員結果。見 `design.md`「五個代表案例」。
+- [x] 驗證案例可由 component 推導配送，不需 product-type enum。見 `design.md`「Cart、Order、snapshot 與履約」。
+- [ ] 以實作或測試驗證五案例。Blocker：Phase 1–3 尚未實作 Course／InventoryItem／OfferComponent／Fulfillment。
 
-## 4. 契約與流程
+## 4. 待產品／營運決策
 
-- [ ] 定義管理端 Product、Offer、Component、Course、VideoAsset JSON shape。
-- [ ] 定義公開商品卡、商品詳情、CartQuote、CheckoutRequest 的未來 shape。
-- [ ] 定義 `requiresShipping`、`containsCourse` 等衍生欄位的唯一計算位置。
-- [ ] 定義訂單建立時商品快照與履約快照內容。
-- [ ] 定義付款成功後授權建立的冪等鍵與重試策略。
-- [ ] 定義封存、刪除、撤銷與補發的狀態轉移圖。
+- [ ] 退款、已付款取消、chargeback 後 entitlement 政策。需要 owner 在 A 撤銷／B 保留／C 人工決定間選擇；影響 revoke action、audit 與 reconciliation。
+- [ ] 混合商品 paid 後的開課時間。需要 owner 在 paid／shipped／delivered 選擇；影響 digital fulfillment transition。
+- [ ] 預設觀看期限。需要 owner 在永久／固定天數／Offer 必填期限選擇；影響 `expires_at`。
+- [ ] 含 Course Offer 購買數量與未來 gifting。需要 owner 確認 quantity=1 是否成立；若 gifting，需 recipient entitlement flow。
+- [ ] 混合 Offer 免運門檻基數。需要 owner 選擇全 Offer、實體分攤或 shipping contribution；影響 quote 欄位／後台設定。
+- [ ] 純數位 paid 後是否自動 completed。需要 owner 確認對顧客訂單狀態與通知的語意。
+- [ ] archived Course 對既有 entitlement 的可看政策。需要 owner 確認繼續／停止／寬限。
+- [ ] 未來贈送課程是否需要。需要 owner 確認 scope；若要，另定 source_kind、recipient 與 audit。
 
-## 5. 驗證資料
+## 5. Phase gate
 
-- [ ] 建立五組代表案例：單一實體、多規格實體、純課程、課程＋材料包、多課程組合。
-- [ ] 對每組案例列出商品頁、購物車、配送、庫存、付款與會員結果。
-- [ ] 驗證每個案例不需要新增商品類型 enum。
-- [ ] 驗證訂單快照在商品或課程改名後仍可完整閱讀。
-- [ ] 驗證付款通知重送不會產生重複 entitlement。
-
-## 6. Phase Gate
-
-- [ ] 所有未定商業規則都有明確 owner 與決定，不留在程式碼中猜測。
-- [ ] phase1～phase7 文件引用相同名詞與狀態。
-- [ ] migration 可以分階段部署，不要求前後端同一秒切換。
-- [ ] 不在 phase0 修改正式 schema 或公開行為。
-- [ ] 設計審查通過後，才開始 phase1。
+- [x] Phase 0 未修改正式 schema、backend、frontend、wrangler、migration 或 Phase 1–7 文件；只修改 Phase 0 三份文件。
+- [x] 已定義 Admin-first migration、backfill、讀取切換、rollback 與清理順序；見 `spec.md`「migration、backfill、相容與 rollback 順序」。
+- [ ] Phase 1 implementation review 通過。需要確認 partial unique index 策略、single-variant／zero-variant backfill、Product+default Offer 一致性策略，以及 variantId 相容觀察期；見 `spec.md`「Phase 1 gate」。
+- [ ] Phase 3 課程 checkout 公開啟用。Blocker：第 4 節八項商業決策與 Phase 2 schema/backfill 尚未完成。

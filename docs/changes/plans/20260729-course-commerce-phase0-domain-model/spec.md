@@ -1,151 +1,142 @@
-﻿# Phase 0 規格：商城與課程共同架構
+# Phase 0 規格：商城與課程共同架構
 
-## 目標
+## 規格地位
 
-產出 phase1～phase7 共用且不互相矛盾的領域契約，確認現有資料可以漸進遷移，
-並把需要產品決策的問題在寫 migration 前定案。
+本文件是 Phase 1–7 的設計契約，不是現行 schema。現行 schema 的事實以
+`backend/src/shared/migrations.py:136-299` 為準；任何與本文件衝突之處，必須先以 additive migration 與相容 API 消化，不能假設資料庫已存在新欄位。
 
-## 架構原則
-
-1. Catalog、Inventory、Course、Video、Order、Fulfillment、Entitlement 分離。
-2. 對外的商品規格選配，內部的可購買 Offer 必備。
-3. 商品是否需要配送由 component 推導。
-4. 訂單保存不可變快照，履約不依賴目前商品設定。
-5. 付款、庫存與授權操作必須可安全重試。
-6. 每個 phase 的 migration 只向前新增或回填，不要求一次替換整個商城。
-
-## 概念型別
+## 名詞與不變條件
 
 ```text
+OfferId = 現行 product_variants.id（Phase 1 過渡期）或未來 offers.id
 ComponentType = "course" | "inventory"
 CourseStatus = "draft" | "published" | "archived"
-VideoAssetStatus = "uploading" | "uploaded" | "processing" | "ready" | "failed"
-EntitlementStatus = active when revoked_at is null and expires_at has not passed
-FulfillmentStatus = "pending" | "ready" | "fulfilled" | "cancelled"
+VideoAssetStatus = "uploading" | "uploaded" | "queued" | "processing" | "ready" | "failed" | "aborted" | "archived"
+FulfillmentStatus = "pending" | "ready" | "fulfilled" | "cancelled" | "revoked"
+Entitlement active = revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)
 ```
 
-不建立 `ProductType`。若前端需要顯示標籤，API 由 components 回傳衍生值：
+1. Product 只展示；Offer 才能定價與購買；InventoryItem 才能有可扣庫存；Course 才能授權觀看。
+2. 一個 active Product 至少一個 enabled Offer；每 Product 至多一個 `is_default=1`。
+3. 不建立 `product_type`。`containsCourse`、`containsPhysicalItem`、`requiresShipping`、`digitalOnly` 只能由 resolve result 推導，客戶端不可提交，資料庫不可重複存為真值。
+4. Component 平坦，只能指 Course 或 InventoryItem；Offer 不可作為 component target。
+5. 建單時寫不可變 Item／Fulfillment snapshots；付款後不得重新讀目前 Offer 重算交付內容。
+6. 一個 Course component 的 quantity 固定 1；inventory required quantity 為 component quantity × purchase quantity。
+7. 付款成功、管理員人工標記、未來 gateway callback、reconciliation 共用 provision 入口；所有入口可安全重送。
+
+## 候選 schema 與索引
+
+### Phase 1：Offer alias（沿用 `product_variants`）
+
+現行 `title TEXT NOT NULL`、`price INTEGER NOT NULL`、`stock INTEGER NOT NULL` 見
+`backend/src/shared/migrations.py:151-161`。Phase 1 只新增：
+
+| 欄位／索引 | 規格 |
+| --- | --- |
+| `is_default INTEGER NOT NULL DEFAULT 0` | 0/1；單一 Offer 商品為 1。 |
+| unique default | `CREATE UNIQUE INDEX ... ON product_variants(product_id) WHERE is_default = 1`；若 D1 環境不採 partial index，API 必須在同一寫入邊界保證。 |
+| title | default 的 DB 值使用 `''`，對外回 `null` 或省略；公開 multi Offer 必填且非空。 |
+| price／SKU／stock | Phase 1 維持既有 variant 欄位與驗證；price 不能為 0（現行規則為 1–20,000），SKU 不先宣稱唯一，stock 仍是暫時權威。 |
+
+Phase 1 不新增 `offers` 表，避免把同一 Offer 的 ID、價格或庫存拆成雙來源。`offerId` 是 API 名詞，值等於 `variantId`。
+
+### Phase 2：Inventory 與 components
+
+| Table | 欄位 | 約束／索引 |
+| --- | --- | --- |
+| `inventory_items` | `id PK, sku TEXT, title TEXT NOT NULL, stock INTEGER NOT NULL, enabled INTEGER NOT NULL, archived_at, created_at, updated_at` | stock >= 0；非空 SKU partial unique（backfill 清理後）；`(enabled,title)` picker；SKU／stock 將成為庫存唯一來源。 |
+| `courses` | `id PK, slug TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, created_at, updated_at` | slug unique；status enum。Phase 5 additive 擴充。 |
+| `offer_components` | `id PK, offer_id, component_type, component_id, quantity, access_days NULL, position, created_at, updated_at` | unique `(offer_id,component_type,component_id)`；`(offer_id,position)`；`(component_type,component_id)`。course quantity=1，access_days NULL/正整數；inventory quantity>0，access_days NULL。 |
+
+`component_id` 為 polymorphic reference，不能只依賴 D1 schema：寫入、啟用 Offer、封存／刪除前均須在 application domain 驗證 type、target、引用與狀態。
+
+### Phase 3：交易、履約與授權
+
+| Table | 欄位 | 約束／索引 |
+| --- | --- | --- |
+| `order_items` additive | `product_id`, `offer_id`, `requires_shipping`, `contains_course`，保留 `variant_id` | 新單全填 `offer_id`；相容期 `variant_id == offer_id`。產品／Offer ID 是來源，顯示名與金額仍採既有 snapshot 欄位。 |
+| `order_fulfillments` | `id PK, order_id, order_item_id, fulfillment_type, target_id, target_title, sku NULL, quantity, access_days NULL, status, created_at, updated_at` | `(order_id,fulfillment_type,status)` 操作索引；`(target_id,fulfillment_type)` 引用索引。target title/SKU/期限為 snapshot。 |
+| `course_entitlements` | `id PK, customer_id, course_id, granted_at, expires_at NULL, revoked_at NULL, revoke_reason NULL, created_at, updated_at` | unique `(customer_id,course_id)`，保證會員對同一 Course 的存取採集合語意；有效查詢 `(customer_id,revoked_at,expires_at)`。 |
+| `course_entitlement_sources` | `entitlement_id, source_kind, source_order_fulfillment_id NULL, actor NULL, created_at` | 購買來源 unique `(source_kind,source_order_fulfillment_id)`；手動／贈送不可偽造 order fulfillment，必填 actor/reason。 |
+
+`inventory_reservations` 是可選的操作追蹤表，不是用來取代 `inventory_items.stock` 的第二份可用量。若建立，至少有 `order_id/inventory_item_id/quantity/status/expires_at`、unique `(order_id,inventory_item_id)`；唯一扣減仍是條件 `UPDATE inventory_items SET stock=stock-? WHERE stock>=?`。
+
+## API shape 原則（不實作 endpoint）
+
+### 相容輸入與公開輸出
+
+```json
+// 過渡 cart line：兩者都可傳；不同時為 400
+{"variantId":"offer-1","offerId":"offer-1","quantity":1}
+
+// 正規化後的 CartQuote 核心
+{
+  "lines":[{"offerId":"offer-1","productTitle":"...","offerTitle":null,"unitPrice":680,"quantity":1,"lineTotal":680,"components":[]}],
+  "problems":[],
+  "subtotal":680,
+  "shippingSubtotal":680,
+  "requiresShipping":true,
+  "containsCourse":false,
+  "shipping":[]
+}
+```
+
+- Cart／Checkout 一律由伺服器 `resolve_offer` 重算 price、可買性、component、配送與庫存；拒絕或忽略 client subtotal、shipping fee、flags、component。
+- Public Product detail 提供 `requiresOfferSelection` 與可買 Offers；default Offer 不顯示假名稱。不得回 private R2 key。
+- Checkout request 對所有訂單要求登入與 email；`requiresShipping=false` 時不要求 shippingMethod／phone／address／store，並寫 `shipping_method='none'`；有實體時才驗證 home 地址或 cvs 門市快照。
+- 管理 component API 只收 `{type, componentId, quantity, accessDays}` 的完整集合，不收衍生 flag、R2 key 或任意 target；先驗證全體再儲存。
+- `mark_paid` 只負責一次 payment state transition；`provision_paid_order` 只根據已寫入 fulfillments 建 entitlement，兩者均可重跑且留 audit。
+
+### 唯一計算位置
+
+`resolve_offer(env, offer_id, purchase_quantity)` 是唯一展開函式，回傳 `ResolvedOffer`：
 
 ```text
-digitalOnly
-requiresShipping
-containsCourse
-containsPhysicalItem
+offerId, productId, price, purchaseQuantity,
+containsCourse, containsPhysicalItem, requiresShipping, digitalOnly,
+components[{type,targetId,targetTitle,sku?,requiredQuantity?,accessDays?}]
 ```
 
-## 資料表候選規格
+Cart quote 聚合同 InventoryItem 的 `requiredQuantity` 再查庫存；Order create 再做一次相同解析與條件 reserve。不得存在一套 Cart 展開、一套 Checkout 展開。
 
-### `offers`
-
-| 欄位 | 型別 | 約束 |
-| --- | --- | --- |
-| `id` | TEXT | PK |
-| `product_id` | TEXT | 必須存在 |
-| `title` | TEXT | default Offer 可為空字串 |
-| `price` | INTEGER | 新台幣整數且大於等於 0 |
-| `is_default` | INTEGER | 每商品最多一筆 |
-| `enabled` | INTEGER | 0 或 1 |
-| `position` | INTEGER | 同商品內排序 |
-
-若沿用 `product_variants`，上述欄位以 additive migration 加入，先保留現有 `sku` 與
-`stock`，直到 phase2 完成 inventory backfill。
-
-### `inventory_items`
-
-| 欄位 | 型別 | 約束 |
-| --- | --- | --- |
-| `id` | TEXT | PK |
-| `sku` | TEXT | 可空，非空時唯一 |
-| `title` | TEXT | 不得為空 |
-| `stock` | INTEGER | 大於等於 0 |
-| `enabled` | INTEGER | 0 或 1 |
-| `created_at` / `updated_at` | INTEGER | UTC Unix timestamp |
-
-### `offer_components`
-
-| 欄位 | 型別 | 約束 |
-| --- | --- | --- |
-| `id` | TEXT | PK |
-| `offer_id` | TEXT | 必須存在 |
-| `component_type` | TEXT | `course` 或 `inventory` |
-| `component_id` | TEXT | 依 type 指向對應實體 |
-| `quantity` | INTEGER | inventory 必須大於 0；course 固定 1 |
-| `access_days` | INTEGER NULL | course 使用；NULL 表永久 |
-| `position` | INTEGER | 顯示與展開順序 |
-
-應建立 `(offer_id, component_type, component_id)` 唯一索引，避免相同內容重複加入。
-D1 無法用一般 FK 表達 polymorphic reference，寫入 API 必須驗證目標存在與類型正確。
-
-### `order_fulfillments`
-
-除目標 id 外，也要保存標題、SKU、數量、授權天數等快照。即使原始課程或庫存品
-封存，後台仍能解釋這筆訂單當時應交付什麼。
-
-### `course_entitlements`
-
-唯一鍵使用 `(customer_id, course_id, source_order_item_id)`。授權流程使用
-`INSERT OR IGNORE`，並另設查詢索引 `(customer_id, revoked_at, expires_at)`。
-
-## 跨階段依賴
+## 狀態與補償
 
 ```mermaid
-flowchart TD
-    P0["Phase 0<br/>共同模型"] --> P1["Phase 1<br/>規格選配"]
-    P1 --> P2["Phase 2<br/>商品內容與庫存"]
-    P2 --> P3["Phase 3<br/>購物車、結帳與履約"]
-    P2 --> P4["Phase 4<br/>影片管線"]
-    P3 --> P5["Phase 5<br/>課程管理"]
-    P4 --> P5
-    P5 --> P6["Phase 6<br/>會員觀看"]
-    P6 --> P7["Phase 7<br/>整合與營運補強"]
+stateDiagram-v2
+    [*] --> PendingPayment
+    PendingPayment --> Paid: conditional mark_paid
+    PendingPayment --> Expired: conditional expiry
+    PendingPayment --> Cancelled: conditional cancellation
+    Paid --> DigitalProvisioning: course fulfillment exists
+    DigitalProvisioning --> DigitalFulfilled: all grants succeed
+    DigitalProvisioning --> DigitalProvisioning: retry/reconcile
+    Paid --> AwaitingPhysical: inventory fulfillment exists
+    AwaitingPhysical --> Shipped
+    Shipped --> Completed
 ```
 
-Phase3 與 Phase4 在 phase2 契約穩定後可以獨立開發，但課程商品不得在 phase6 完成前
-公開上架。
+- reserve 的多品項流程：依穩定排序逐筆條件扣減、記錄成功清單；後續 reserve、Order、Item 或 Fulfillment 寫入失敗時，只回補成功清單。現況對 variant 的相同模式可見於 `backend/src/domain/orders.py:203-263`。
+- 逾期／未付款取消只能釋放 physical InventoryItem。paid 後不增加／回補庫存，除非退款／退貨政策的明確 action。
+- 對 `course_entitlement_sources` 的 `INSERT OR IGNORE` 成功或既存皆視為該 fulfillment provision 成功；entitlement 以 `(customer_id,course_id)` upsert。不得在 callback 重送時延長 `expires_at`。若將來要累加觀看期，需新增明確 policy 與 audit，而不是更新同一 key。
+- payment、digital fulfillment、physical fulfillment 是獨立狀態。現行單一 `orders.status` 只能暫時表示顧客整體進度；Phase 3 必須在 Order detail 顯示 fulfillment 明細。
 
-## 相容性策略
+## migration、backfill、相容與 rollback 順序
 
-### 既有商品
+1. **Admin-first schema deploy**：新增 migration 只放 `backend/src/shared/migrations.py`；部署 Admin Worker，確認 admin `/api/health` migration list；再部署 public Worker，確認其只讀 health list。這是既有 deployment contract（`backend/src/shared/router.py:32-56`）。
+2. **Phase 1 additive**：新增 `is_default`，對「恰一筆 variant」標記 default，多筆維持非 default；不得猜測。舊 public／cart 仍讀 `variantId`。
+3. **Phase 2 additive/backfill**：新增 inventory/course/component 表，建立 mapping 與 idempotent backfill。先產出 null/duplicate SKU 與 stock 對帳；未完成即不得切換權威庫存。
+4. **讀取切換**：新 code 先能解析舊 offer IDs、用 compatibility adapter 讀 InventoryItem；切換後唯一寫入 InventoryItem，舊 `variant.stock` 不雙寫。
+5. **Phase 3 writes**：先部署能讀新／舊 schema 的 public API，再開 feature flag 寫 fulfillments／entitlements；舊訂單不補造 course entitlement 或改寫金額。必要的 physical fulfillment backfill 只能新增 snapshot，不改既有 status。
+6. **rollback**：每 phase 保留 additive columns/tables 與 old request reader；若新 deployment 出錯，關閉 course checkout flag、回到舊 variant 讀取路徑。不可 rollback DB 以刪欄位／刪表作為第一反應。
+7. **清理**：只有已完成 inventory 對帳、production 無舊 request、至少一個已發布 rollback 版本能讀新 schema、觀察期與備份／還原 runbook 完成，才停止舊 API/localStorage／`variant.stock` 相容讀取。D1 可保留停用欄位。
 
-每筆現有 `product_variants` 在 phase1 被視為 Offer。只有一筆 enabled variant 的
-商品可以將該筆標記為 default；多筆則維持公開方案。
+## Phase 1 gate
 
-### 既有庫存
+Phase 1 可以開始，但須先將下列 gate 寫入 implementation plan／review：
 
-phase2 為每筆現有 variant 建立一個 `inventory_item` 和一筆 inventory component，
-將 SKU 與庫存回填。切換讀取來源前必須比對兩邊總數與庫存值。
+- [ ] 確認 migration 使用 partial unique index 是否在目標 D1 migration 環境可驗證；否則明確採 API invariant 並以並發測試覆蓋。
+- [ ] 定義 existing single-variant backfill、zero-variant active Product 的處理，以及 `active -> no enabled Offer` 的拒絕規則。
+- [ ] 實作／測試 Product + default Offer 的一致性策略；現行 Python binding 沒有已驗證的 D1 batch 用法，需採已驗證的補償或在測試環境驗證 batch。
+- [ ] 保留 `variantId` localStorage/API；明訂舊 key 移除前的版本與觀察期。
 
-### 既有購物車
-
-瀏覽器目前保存 `variantId`。API 過渡期同時接受 `variantId` 與 `offerId`，兩者不得
-同時指向不同資料。完成前端部署與合理的購物車存活期間後，才能停止舊欄位。
-
-### 既有訂單
-
-既有 `order_items` 不補造課程或 bundle fulfillment；它們在新功能前全部是實體商品。
-必要時可建立 physical fulfillment snapshot，但不得更改金額與歷史狀態。
-
-## API 共通要求
-
-- 管理 API 的 component 寫入只接受實體 id，不接受 R2 key 或前端提供的衍生旗標。
-- 公開 API 不回傳 private object key。
-- Cart quote 必須由伺服器重算價格、內容、庫存與配送需求。
-- 建立訂單必須重新執行與 cart quote 相同的解析，不信任瀏覽器回傳的總額或旗標。
-- 付款通知、重試付款與管理員手動標記付款必須走同一個授權入口。
-
-## 安全與營運要求
-
-- 課程授權的來源訂單與操作人必須可追查。
-- 管理員撤銷或補發授權要寫 audit log。
-- 刪除被 Offer、Lesson、Order 或 Entitlement 引用的資料時預設拒絕，使用封存取代。
-- R2 source 與 HLS bucket 全程 private。
-- 管理端上傳權限與會員端播放權限使用不同的 API 與憑證範圍。
-
-## 驗收標準
-
-- 所有名詞在八個 phase 文件中使用一致。
-- 每個資料表只有一個明確責任。
-- 可以描述五種案例：單一實體、多規格實體、純課程、課程加材料包、多課程組合。
-- 可以從 component 推導配送需求，不需要商品類型 enum。
-- 現有商品、購物車與訂單都有可執行的相容策略。
-- 付款重送、商品下架與課程封存不會破壞既有授權。
+退款、混合開課、期限、數量、免運、純數位 completed、封存可看與 gifting 的待決策不阻擋只處理 Offer UI 的 Phase 1；它們阻擋 Phase 3 對課程 checkout／fulfillment 的公開啟用。
