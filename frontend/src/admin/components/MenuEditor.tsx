@@ -42,6 +42,7 @@ export function MenuEditor({
   }
 
   function describe(item: MenuItem): string {
+    if (item.targetKind === 'parent') return '父選單（無連結）'
     if (item.targetKind === 'page') {
       const page = state.pages.find((entry) => entry.id === item.target)
       if (!page) return '⚠ 找不到頁面'

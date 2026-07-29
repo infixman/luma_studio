@@ -26,7 +26,7 @@ export interface MenuItem {
   id: string
   parentId: string | null
   label: string
-  targetKind: 'page' | 'category' | 'url'
+  targetKind: 'parent' | 'page' | 'category' | 'url'
   target: string
   position: number
 }
@@ -41,7 +41,7 @@ export interface ResolvedMenuItem {
   id: string
   parentId: string | null
   label: string
-  href: string
+  href: string | null
 }
 
 export interface SiteChrome {

@@ -120,11 +120,29 @@
   position: relative;
 }
 
-.menu-level a {
+.menu-level a,
+.site-header .menu-level .menu-parent-label {
   display: block;
   padding: 0.4rem 0;
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.site-header .menu-level .menu-parent-label {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.site-header .menu-level .menu-parent-label:hover:not(:disabled) {
+  background: none;
+  color: inherit;
+}
+
+.site-header .menu-level span.menu-parent-label {
+  cursor: default;
 }
 
 /* Second and third levels hang off their parent on a pointer device. They are
@@ -153,20 +171,25 @@
 }
 
 .menu-level li:hover > .menu-level,
-.menu-level li:focus-within > .menu-level {
+.menu-level li:focus-within > .menu-level,
+.menu-level li.is-open > .menu-level {
   opacity: 1;
   visibility: visible;
 }
 
 .menu-level.depth-2 a,
-.menu-level.depth-3 a {
+.menu-level.depth-3 a,
+.site-header .menu-level.depth-2 .menu-parent-label,
+.site-header .menu-level.depth-3 .menu-parent-label {
   padding: 0.45rem 0.9rem;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .menu-level.depth-2 a:hover,
-.menu-level.depth-3 a:hover {
+.menu-level.depth-3 a:hover,
+.site-header .menu-level.depth-2 .menu-parent-label:hover,
+.site-header .menu-level.depth-3 .menu-parent-label:hover {
   background: rgb(0 0 0 / 0.05);
 }
 
@@ -296,6 +319,12 @@
 
   .site-menu .menu-level a {
     color: #2b2622;
+  }
+
+  .site-header .site-menu .menu-parent-label {
+    width: 100%;
+    color: #2b2622;
+    text-align: left;
   }
 
   .header-actions {

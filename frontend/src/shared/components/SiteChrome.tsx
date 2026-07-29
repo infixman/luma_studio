@@ -21,6 +21,7 @@ function children(menu: ResolvedMenuItem[], parentId: string | null): ResolvedMe
 }
 
 function MenuTree({ menu, parentId, depth }: { menu: ResolvedMenuItem[]; parentId: string | null; depth: number }) {
+  const [expanded, setExpanded] = useState<string[]>([])
   const items = children(menu, parentId)
   if (items.length === 0) return null
 
@@ -28,9 +29,34 @@ function MenuTree({ menu, parentId, depth }: { menu: ResolvedMenuItem[]; parentI
     <ul class={`menu-level depth-${depth}`}>
       {items.map((item) => {
         const nested = children(menu, item.id)
+        const isParent = item.href === null
+        const isExpanded = expanded.includes(item.id)
         return (
-          <li key={item.id} class={nested.length ? 'has-children' : ''}>
-            <a href={item.href}>{item.label}</a>
+          <li
+            key={item.id}
+            class={[nested.length ? 'has-children' : '', isExpanded ? 'is-open' : ''].filter(Boolean).join(' ')}
+          >
+            {isParent && nested.length ? (
+              <button
+                type="button"
+                class="menu-parent-label"
+                aria-haspopup="true"
+                aria-expanded={isExpanded}
+                onClick={() =>
+                  setExpanded((current) =>
+                    current.includes(item.id)
+                      ? current.filter((id) => id !== item.id)
+                      : [...current, item.id],
+                  )
+                }
+              >
+                {item.label}
+              </button>
+            ) : isParent ? (
+              <span class="menu-parent-label">{item.label}</span>
+            ) : (
+              <a href={item.href ?? undefined}>{item.label}</a>
+            )}
             <MenuTree menu={menu} parentId={item.id} depth={depth + 1} />
           </li>
         )

@@ -234,6 +234,22 @@ body.admin .menu-form input {
   min-width: 11rem;
 }
 
+body.admin .menu-parent-target {
+  display: flex;
+  min-width: 14rem;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+}
+
+body.admin .menu-parent-target strong {
+  min-height: 2.35rem;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 @media (max-width: 700px) {
   body.admin .menu-tree .controls {
     width: 100%;

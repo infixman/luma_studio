@@ -313,7 +313,12 @@ export function SitePage() {
           <div class="chrome-preview">
             <SiteHeader
               settings={settings}
-              menu={menu.menu.map((item) => ({ id: item.id, parentId: item.parentId, label: item.label, href: '#' }))}
+              menu={menu.menu.map((item) => ({
+                id: item.id,
+                parentId: item.parentId,
+                label: item.label,
+                href: item.targetKind === 'parent' ? null : '#',
+              }))}
               cartCount={2}
             />
             <SiteFooter settings={settings} />
@@ -345,51 +350,68 @@ export function SitePage() {
                   setDraft({ ...draft, targetKind: (event.target as HTMLSelectElement).value as MenuItem['targetKind'], target: '' })
                 }
               >
+                <option value="parent">父選單（無連結）</option>
                 <option value="page">頁面</option>
                 <option value="category">商品分類</option>
                 <option value="url">外部網址</option>
               </select>
             </label>
-            <label>
-              目標
-              {draft.targetKind === 'page' ? (
-                <select
-                  value={draft.target}
-                  onChange={(event) => setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })}
-                  required
-                >
-                  <option value="">選一個頁面</option>
-                  {menu.pages.map((page) => (
-                    <option key={page.id} value={page.id}>
-                      {page.title}
-                      {page.status === 'draft' ? '（草稿）' : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : draft.targetKind === 'category' ? (
-                <select
-                  value={draft.target}
-                  onChange={(event) => setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })}
-                  required
-                >
-                  <option value="">選一個分類</option>
-                  {menu.categories.map((category) => (
-                    <option key={category.slug} value={category.slug}>
-                      {category.title}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="url"
-                  placeholder="https://"
-                  value={draft.target}
-                  onInput={(event) => setDraft({ ...draft, target: (event.target as HTMLInputElement).value })}
-                  required
-                />
-              )}
-            </label>
-            <button type="submit" disabled={busy || !draft.label.trim() || !draft.target}>
+            {draft.targetKind === 'parent' ? (
+              <div class="menu-parent-target">
+                <span>目標</span>
+                <strong>無連結，只用來收納子項目</strong>
+              </div>
+            ) : (
+              <label>
+                目標
+                {draft.targetKind === 'page' ? (
+                  <select
+                    value={draft.target}
+                    onChange={(event) =>
+                      setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })
+                    }
+                    required
+                  >
+                    <option value="">選一個頁面</option>
+                    {menu.pages.map((page) => (
+                      <option key={page.id} value={page.id}>
+                        {page.title}
+                        {page.status === 'draft' ? '（草稿）' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : draft.targetKind === 'category' ? (
+                  <select
+                    value={draft.target}
+                    onChange={(event) =>
+                      setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })
+                    }
+                    required
+                  >
+                    <option value="">選一個分類</option>
+                    {menu.categories.map((category) => (
+                      <option key={category.slug} value={category.slug}>
+                        {category.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="url"
+                    placeholder="https://"
+                    value={draft.target}
+                    onInput={(event) =>
+                      setDraft({ ...draft, target: (event.target as HTMLInputElement).value })
+                    }
+                    required
+                  />
+                )}
+              </label>
+            )}
+            <button
+              type="submit"
+              disabled={busy || !draft.label.trim() || (draft.targetKind !== 'parent' && !draft.target)}
+            >
               新增項目
             </button>
           </form>

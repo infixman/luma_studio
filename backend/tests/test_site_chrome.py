@@ -230,6 +230,13 @@ class TestMenuDepth:
 
 
 class TestMenuTargets:
+    def test_a_parent_has_no_target(self, site_chrome):
+        fields = site_chrome.validate_menu_fields(
+            {"label": "課程", "targetKind": "parent", "target": "should-be-discarded"}
+        )
+        assert fields["target_kind"] == "parent"
+        assert fields["target"] == ""
+
     def test_a_page_target_is_kept_as_an_id(self, site_chrome):
         """Storing the id rather than the URL is what keeps the menu working
         when a page's path is renamed."""
@@ -301,6 +308,25 @@ class TestPublicSite:
         )
         menu = call(FakeRequest("/api/site"), database).json()["menu"]
         assert menu[0]["href"] == "https://instagram.com/x"
+
+    def test_a_parent_survives_without_a_link(self, call):
+        database = FakeDatabase(
+            {
+                "FROM menu_items": [
+                    {
+                        "id": "m1",
+                        "parent_id": None,
+                        "label": "課程",
+                        "target_kind": "parent",
+                        "target": "",
+                        "position": 0,
+                    }
+                ]
+            }
+        )
+        assert call(FakeRequest("/api/site"), database).json()["menu"] == [
+            {"id": "m1", "parentId": None, "label": "課程", "href": None}
+        ]
 
     def test_a_category_combination_needs_every_part_to_exist(self, call):
         """Dropping the half that vanished would quietly change what it shows."""

@@ -31,7 +31,7 @@ COLOURS = ("cream", "sand", "clay", "forest", "ink")
 TEXT_TONES = ("dark", "light")
 SIZES = ("small", "medium", "large")
 
-TARGET_KINDS = ("page", "category", "url")
+TARGET_KINDS = ("parent", "page", "category", "url")
 
 MAX_LABEL = 30
 MAX_COPYRIGHT = 200
@@ -322,7 +322,9 @@ def depth_of(items: list[dict], parent_id: str | None) -> int:
 def validate_menu_fields(body: dict) -> dict:
     kind = choice(body.get("targetKind"), TARGET_KINDS, "連結類型")
     target = str(body.get("target") or "").strip()
-    if not target:
+    if kind == "parent":
+        target = ""
+    elif not target:
         raise ChromeError("請選擇這個項目要連到哪裡")
     if kind == "url":
         target = validate_url(target)

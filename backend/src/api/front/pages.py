@@ -19,6 +19,11 @@ async def site_response(ctx: Ctx):
     resolved = []
     for item in await site_chrome.list_menu(env):
         href = None
+        if item["targetKind"] == "parent":
+            resolved.append(
+                {"id": item["id"], "parentId": item["parentId"], "label": item["label"], "href": None}
+            )
+            continue
         if item["targetKind"] == "page":
             page = by_id.get(item["target"])
             if page is not None:
