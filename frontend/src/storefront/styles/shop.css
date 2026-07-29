@@ -124,37 +124,6 @@ main.product .product-back a:focus-visible {
   gap: 0.8rem;
 }
 
-/* A card with an edge, not a bare thumbnail: it is what makes a grid of
-   photographs read as a row of things that can be bought. */
-.product-grid .card {
-  background: var(--card);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-}
-
-.product-grid .card:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
-}
-
-/* Full height and a column, so the price can be pushed to the bottom edge:
-   otherwise a two-line title drops its card's price below its neighbours'
-   and the row of numbers stops being a row. */
-.product-grid a {
-  color: inherit;
-  text-decoration: none;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.product-grid .price {
-  margin-top: auto;
-}
-
 .skeleton.line {
   height: 0.9rem;
   width: 70%;
@@ -172,58 +141,6 @@ main.product .product-back a:focus-visible {
   height: 1.4rem;
   width: 30%;
   margin-bottom: 1.2rem;
-}
-
-.product-grid .cover {
-  position: relative;
-  aspect-ratio: 1;
-  overflow: hidden;
-  background: rgb(0 0 0 / 0.05);
-}
-
-.product-grid img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* Sold out stays browsable rather than hidden: it tells a returning customer
-   the thing exists, and a restock is worth waiting for. */
-.card.sold-out .cover img {
-  filter: grayscale(0.7);
-  opacity: 0.75;
-}
-
-.ribbon {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 0.3rem;
-  text-align: center;
-  font-size: 0.8rem;
-  background: rgb(0 0 0 / 0.62);
-  color: #fff;
-}
-
-.product-grid h2 {
-  margin: 0;
-  padding: 0.6rem 0.7rem 0.1rem;
-  font-size: 0.92rem;
-  font-weight: 500;
-  line-height: 1.45;
-  /* Two lines, then an ellipsis. A four-line title pushes the price of one
-     card below the price of its neighbour and the row stops being a row. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.product-grid .price {
-  margin-bottom: 0;
-  padding: 0.25rem 0.7rem 0.7rem;
-  color: var(--accent);
-  font-size: 1rem;
-  font-weight: 600;
 }
 
 /* --- product page --- */

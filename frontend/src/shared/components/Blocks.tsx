@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { priceLabel } from '../money'
 import { srcSetFor } from '../srcset'
 import { apiUrl } from '../api'
 import { renderMarkdown, safeHref } from '../markdown'
 import type { ContactDetail, MediaRef, PageBlock, PublicProductCard } from '../types'
+import { ProductCard } from './ProductCard'
 import './blocks.css'
 
 /**
@@ -253,26 +253,15 @@ function ShopRow({
       {heading && <h2>{heading}</h2>}
       <ul>
         {products.map((card) => (
-          <li key={card.slug} class={card.inStock ? '' : 'sold-out'}>
-            <a
-              href={
-                productReturnPath
-                  ? `/shop/${encodeURIComponent(card.slug)}?from=${encodeURIComponent(productReturnPath)}`
-                  : `/shop/${encodeURIComponent(card.slug)}`
-              }
-            >
-              <span class="cover">
-                {card.coverPath ? <img src={apiUrl(card.coverPath)} alt="" loading="lazy" /> : <span />}
-                {!card.inStock && <span class="ribbon">售完</span>}
-              </span>
-              {/* One wrapper for both lines, so the overlay moves them together
-                  rather than needing two sets of coordinates. */}
-              <span class="label">
-                <span class="title">{card.title}</span>
-                <span class="price">{priceLabel(card.priceFrom, card.priceTo)}</span>
-              </span>
-            </a>
-          </li>
+          <ProductCard
+            key={card.slug}
+            card={card}
+            href={
+              productReturnPath
+                ? `/shop/${encodeURIComponent(card.slug)}?from=${encodeURIComponent(productReturnPath)}`
+                : `/shop/${encodeURIComponent(card.slug)}`
+            }
+          />
         ))}
       </ul>
     </section>

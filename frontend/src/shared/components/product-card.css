@@ -1,0 +1,89 @@
+/* Shared by the catalogue and page-embedded shop rows. Layout belongs to the
+   caller; the card is deliberately the same object in either context. */
+.product-card {
+  --product-card-surface: var(--block-card, var(--card, #fff));
+  --product-card-line: var(--block-line, var(--hairline, #d5cabb));
+  --product-card-page: var(--block-page, rgb(0 0 0 / 0.05));
+  --product-card-accent: var(--accent, #a8532c);
+
+  overflow: hidden;
+  border: 1px solid var(--product-card-line);
+  border-radius: 12px;
+  background: var(--product-card-surface);
+  box-shadow: 0 1px 2px rgb(43 38 34 / 0.06);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.product-card > a {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.product-card-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--product-card-page);
+}
+
+.product-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-card-ribbon {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.28rem;
+  background: rgb(43 38 34 / 0.76);
+  color: var(--product-card-surface);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.product-card-details {
+  display: grid;
+  align-content: start;
+  gap: 0.28rem;
+  min-height: 5.45rem;
+  padding: 0.75rem 0.85rem 0.85rem;
+}
+
+.product-card-title {
+  font-weight: 600;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-card-price {
+  margin-top: auto;
+  color: var(--product-card-accent);
+  font-size: 0.95rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-card.sold-out .product-card-cover img {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
+
+.product-card:hover {
+  border-color: var(--product-card-accent);
+  box-shadow: 0 10px 24px rgb(43 38 34 / 0.12);
+  transform: translateY(-3px);
+}
+
+.product-card > a:focus-visible {
+  outline: 3px solid rgb(168 83 44 / 0.45);
+  outline-offset: -3px;
+}
