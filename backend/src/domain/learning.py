@@ -51,26 +51,33 @@ async def playable(env, *, customer_id: str | None, lesson_id: str) -> dict:
     if lesson is None:
         return {"allowed": False, "reason": "not_found"}
 
-    if not lesson["video_asset_id"]:
-        return {"allowed": False, "reason": "no_video"}
-
     course = await _course_of_lesson(env, lesson["section_id"])
     if course is None:
         return {"allowed": False, "reason": "not_found"}
 
+    # Access is settled before anything about the video is. A text-only lesson
+    # used to answer "no video" to everybody, including somebody who had not
+    # bought the course — and that answer is treated as harmless further up,
+    # which turned a reading into a hole.
     is_preview = bool(lesson["is_preview"])
     entitlement = None
     if not is_preview:
         if customer_id is None:
-            return {"allowed": False, "reason": "not_entitled"}
+            return {"allowed": False, "reason": "not_entitled", "courseId": course["id"]}
         entitlement = await entitlements.get_entitlement(env, customer_id, course["id"])
         if entitlement is None:
-            return {"allowed": False, "reason": "not_entitled"}
+            return {"allowed": False, "reason": "not_entitled", "courseId": course["id"]}
         if not entitlements.is_active(entitlement, now=utc_timestamp()):
             # Told apart on purpose: a window that ran out can be bought
             # again, and a revoked one is a conversation with the shop.
             reason = "revoked" if entitlement["revokedAt"] is not None else "expired"
-            return {"allowed": False, "reason": reason}
+            return {"allowed": False, "reason": reason, "courseId": course["id"]}
+
+    if not lesson["video_asset_id"]:
+        # A reading, and one this member is allowed to have. The course id
+        # comes back so progress can be recorded against the course the lesson
+        # is actually in rather than whichever one the request claimed.
+        return {"allowed": False, "reason": "no_video", "courseId": course["id"], "lessonId": lesson["id"]}
 
     rows = await d1_rows(
         env.DB.prepare("SELECT * FROM video_assets WHERE id = ?1").bind(lesson["video_asset_id"])
@@ -78,7 +85,7 @@ async def playable(env, *, customer_id: str | None, lesson_id: str) -> dict:
     asset = rows[0] if rows else None
     if asset is None or asset["status"] != "ready" or asset["active_encode_version"] is None:
         # A clear "not yet" beats a player failing on a 404 it cannot explain.
-        return {"allowed": False, "reason": "not_ready"}
+        return {"allowed": False, "reason": "not_ready", "courseId": course["id"]}
 
     return {
         "allowed": True,

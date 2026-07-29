@@ -252,6 +252,47 @@ class TestGatewayRoutes:
     def test_the_learning_routes_need_a_session(self, call):
         assert call(self._request("/api/learning/courses")).status == 401
 
+    def test_progress_cannot_be_recorded_against_a_course_nobody_bought(self, call):
+        """A text-only lesson answers "no video", which the progress route
+        treats as fine. It must not treat somebody else's course as fine."""
+
+        from conftest import FakeRequest, STOREFRONT_ORIGIN
+
+        class JsonRequest(FakeRequest):
+            async def json(self):
+                return {"positionSeconds": 10, "completed": True, "courseId": "somebody-elses"}
+
+        database = FakeDatabase(
+            {
+                "FROM customer_sessions": [{
+                    "id": "cust-1", "email": "a@b.c", "display_name": "",
+                    "default_recipient_name": "", "default_recipient_phone": "",
+                    "default_address": "", "blocked": 0,
+                }],
+                "SELECT * FROM course_lessons": [lesson_row(video_asset_id=None)],
+                "FROM courses c JOIN course_sections": [{
+                    "id": "course-1", "slug": "watercolour", "title": "水彩入門",
+                    "status": "published", "created_at": 0, "updated_at": 0,
+                }],
+                # No entitlement at all.
+                "SELECT * FROM course_entitlements": [],
+            }
+        )
+        request = JsonRequest(
+            "/api/learning/lessons/lesson-1/progress",
+            "PUT",
+            {
+                "Origin": STOREFRONT_ORIGIN,
+                "x-luma-app": "1",
+                "Cookie": "luma_customer_session=" + "a" * 40,
+            },
+        )
+
+        response = call(request, database)
+
+        assert response.status == 403
+        assert not any("INSERT INTO course_lesson_progress" in write[0] for write in database.writes)
+
 
 class TestTheLearningPage:
     """A course as somebody who owns it reads it."""
@@ -300,3 +341,57 @@ class TestTheLearningPage:
         assert asyncio.run(
             learning.course_for_member(make_env(self._database(entitlements=[])), customer_id="cust-1", slug="watercolour")
         ) is None
+
+
+class TestAReadingIsStillPartOfACourse:
+    """A lesson with no video is not a lesson with no owner.
+
+    The video check used to run before the entitlement check, so a text-only
+    lesson answered "no video" to everybody — including somebody who had not
+    bought the course. That answer was then treated as harmless, and progress
+    was written against whatever course the request claimed.
+    """
+
+    def _database(self, *, entitlements):
+        return FakeDatabase(
+            {
+                "SELECT * FROM course_entitlements": entitlements,
+                "SELECT * FROM course_lessons": [lesson_row(video_asset_id=None)],
+                "FROM courses c JOIN course_sections": [{
+                    "id": "course-1", "slug": "watercolour", "title": "水彩入門", "status": "published",
+                    "created_at": 0, "updated_at": 0,
+                }],
+            }
+        )
+
+    def test_somebody_without_the_course_is_told_so_not_told_there_is_no_video(self, learning):
+        result = asyncio.run(
+            learning.playable(make_env(self._database(entitlements=[])), customer_id="cust-1", lesson_id="lesson-1")
+        )
+
+        assert result["reason"] == "not_entitled"
+
+    def test_an_owner_is_told_there_is_no_video(self, learning):
+        result = asyncio.run(
+            learning.playable(
+                make_env(self._database(entitlements=[entitlement_row()])),
+                customer_id="cust-1",
+                lesson_id="lesson-1",
+            )
+        )
+
+        assert result["reason"] == "no_video"
+
+    def test_a_refusal_still_says_which_course_it_was_about(self, learning):
+        """So progress can be recorded against the course the lesson is in
+        rather than against whichever one the request named."""
+
+        result = asyncio.run(
+            learning.playable(
+                make_env(self._database(entitlements=[entitlement_row()])),
+                customer_id="cust-1",
+                lesson_id="lesson-1",
+            )
+        )
+
+        assert result["courseId"] == "course-1"

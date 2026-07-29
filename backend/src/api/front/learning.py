@@ -107,22 +107,31 @@ async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: 
 
 
 async def progress_response(ctx: Ctx, customer: dict, lesson_id: str):
+    decision = await learning.playable(ctx.env, customer_id=customer["id"], lesson_id=lesson_id)
+    # A reading has no video and is still something to finish, so `no_video`
+    # is the one refusal that still allows progress. Every other one — not
+    # bought, expired, revoked — is a refusal to record anything.
+    if not decision["allowed"] and decision["reason"] != "no_video":
+        return _refusal(ctx, decision["reason"])
+
     try:
         body = await ctx.json_body()
-        decision = await learning.playable(ctx.env, customer_id=customer["id"], lesson_id=lesson_id)
-        if not decision["allowed"] and decision["reason"] != "no_video":
-            # A reading has no video and is still something to finish.
-            return _refusal(ctx, decision["reason"])
         await learning.save_progress(
             ctx.env,
             customer_id=customer["id"],
-            course_id=decision.get("courseId") or str(body.get("courseId") or ""),
+            # From the lesson, never from the request. A client-supplied course
+            # id is a client deciding which course its progress counts towards.
+            course_id=decision["courseId"],
             lesson_id=lesson_id,
             position_seconds=body.get("positionSeconds", 0),
             completed=bool(body.get("completed")),
         )
-    except (ValueError, AttributeError) as error:
+    except ValueError as error:
+        # Our own validation messages are meant to be read; anything else is
+        # an internal detail and is not repeated back.
         return ctx.error(str(error) or "Invalid progress", 400)
+    except (AttributeError, TypeError):
+        return ctx.error("Invalid progress", 400)
     return ctx.json({"saved": True})
 
 
