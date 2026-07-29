@@ -168,23 +168,20 @@ export function PagesPage() {
             {pages.map((page) => (
               <li key={page.id} class={page.status === 'published' ? 'page-row' : 'page-row draft'}>
                 <div class="detail">
-                  <a class="name" href={`/pages/${encodeURIComponent(page.id)}`}>
-                    {page.title}
-                  </a>
-                  <p class="meta">
-                    <code>{page.isHome ? '/' : page.path}</code>
-                    {page.isHome && <Badge tone="primary">首頁</Badge>}
-                    {/* The same control the ibon page and the dashboard use.
-                        It was a bare <a> here, which meant the browser's own
-                        underlined blue link sitting between two badges. */}
+                  <span class="title-row">
+                    <a class="name" href={`/pages/${encodeURIComponent(page.id)}`}>
+                      {page.title}
+                    </a>
                     {page.status === 'published' && (
                       <OpenButton
                         url={`${STOREFRONT_ORIGIN}${page.isHome ? '' : page.path}`}
                         label={page.title}
                       />
                     )}
-                    {/* Three states, because the third one is the one nobody
-                        can see otherwise: edited since it was published. */}
+                  </span>
+                  <p class="meta">
+                    <code>{page.isHome ? '/' : page.path}</code>
+                    {page.isHome && <Badge tone="primary">首頁</Badge>}
                     {page.publishState === 'modified' ? (
                       <Badge tone="warning">有未發布的修改</Badge>
                     ) : page.publishState === 'published' ? (

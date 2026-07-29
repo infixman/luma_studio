@@ -24,6 +24,27 @@ body.admin .page-row.draft {
   opacity: 0.72;
 }
 
+body.admin .page-row .title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+body.admin .page-row .title-row .copy-link {
+  width: auto;
+  height: auto;
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--muted);
+}
+
+body.admin .page-row .title-row .copy-link:hover {
+  background: none;
+  border: none;
+  color: var(--primary-text);
+}
+
 body.admin .page-row .name {
   font-weight: 600;
   text-decoration: none;

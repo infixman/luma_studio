@@ -404,16 +404,10 @@ def block_row(row: dict) -> dict | None:
 async def list_pages(env, *, only_published: bool = False) -> list[dict]:
     """Every page, with where it stands between its draft and the public.
 
-    The three states are worked out here from two timestamps rather than by
-    comparing payloads. `publish_state` does the exact comparison, and it has
-    to — it drives the button. This one drives a badge on a list of twenty
-    rows, and the exact answer would mean reading every block of every page to
-    draw it.
-
-    The two disagree in one direction only: edit a page and undo it by hand,
-    and the list says 有未發布的修改 while the editor says 已發布. Erring
-    towards "you may have something unpublished" is the safe way round for a
-    badge whose whole job is to stop a page sitting half-changed unnoticed.
+    Timestamps give the fast answer for drafts (never published) and pages
+    whose updated_at has not moved since they were published. For the rest
+    — where the timestamp says "modified" — the real content comparison
+    runs, so the list agrees with what the editor shows.
     """
 
     query = """SELECT pages.*, versions.published_at AS published_at
@@ -430,8 +424,10 @@ async def list_pages(env, *, only_published: bool = False) -> list[dict]:
         published_at = row["published_at"] if "published_at" in row else None
         if published_at is None:
             page["publishState"] = "draft"
+        elif int(row["updated_at"]) <= int(published_at):
+            page["publishState"] = "published"
         else:
-            page["publishState"] = "modified" if int(row["updated_at"]) > int(published_at) else "published"
+            page["publishState"] = await publish_state(env, page["id"])
         listed.append(page)
     return listed
 
