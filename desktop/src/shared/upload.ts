@@ -76,3 +76,20 @@ export interface UploadRequest {
 export type UploadResult =
   | { ok: true; result: Progress }
   | { ok: false; message: string; httpStatus: number | null }
+
+
+/**
+ * Which size the asset records.
+ *
+ * The source's, when the job started from a file. Two things read that column
+ * and both are wrong if it holds the encode total: the library calls it
+ * 原始檔容量, and the server divides it into multipart parts — so a tool cutting
+ * the real file by a part size derived from a different number produces a part
+ * the server refuses, partway through the upload.
+ *
+ * The folder-only entrance has no original to describe. The encode total is the
+ * only size there is, and that path uploads no source.
+ */
+export function recordedByteSize(sourceBytes: number | null | undefined, encodeTotal: number): number {
+  return typeof sourceBytes === 'number' && sourceBytes > 0 ? sourceBytes : encodeTotal
+}

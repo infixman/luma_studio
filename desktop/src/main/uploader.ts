@@ -23,7 +23,7 @@ import {
 } from '../shared/objects'
 import { withRetry, DEFAULT_ATTEMPTS } from '../shared/retry'
 import { jobId } from '../shared/resume'
-import type { Progress, ScannedFolder } from '../shared/upload'
+import { recordedByteSize, type Progress, type ScannedFolder } from '../shared/upload'
 import { requireToken } from './session'
 import * as ledger from './ledger'
 
@@ -83,6 +83,20 @@ export interface FolderUpload {
   durationSeconds?: number | null
   width?: number | null
   height?: number | null
+  /**
+   * How big the original file is, when there is one.
+   *
+   * The asset's recorded size is the *source's*, not the encode's. Two things
+   * read it: the library, which calls the column 原始檔容量, and the server's
+   * multipart arithmetic, which divides it into parts. Reporting the encode
+   * total there means the tool cuts the real file into a different number of
+   * parts than the server expects, and finds out partway through the upload.
+   *
+   * Absent for the folder-only entrance, which has no original to describe. The
+   * encode total is then the only size there is, and that path does not upload a
+   * source.
+   */
+  sourceBytes?: number | null
 }
 
 /**
@@ -106,7 +120,7 @@ export async function upload(request: FolderUpload, onProgress: OnProgress): Pro
 
   const details = {
     title: request.title || basename(request.folder),
-    byteSize: scanned.totalBytes,
+    byteSize: recordedByteSize(request.sourceBytes, scanned.totalBytes),
     durationSeconds: request.durationSeconds ?? null,
     width: request.width ?? null,
     height: request.height ?? null,

@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 
 import type { Progress, UploadRequest } from '../shared/upload'
@@ -46,6 +47,10 @@ export async function ingest(
       durationSeconds: encoded.probed.durationSeconds || null,
       width: encoded.probed.width,
       height: encoded.probed.height,
+      // The size of the file that was dropped in, not of what came out of the
+      // encoder. The server divides this into multipart parts, so the encode
+      // total here is an upload that fails partway through.
+      sourceBytes: statSync(request.source).size,
     },
     onProgress,
   )
