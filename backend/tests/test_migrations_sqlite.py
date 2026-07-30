@@ -641,3 +641,104 @@ class TestSpendingAPairingCodeOnce:
 
         count = database.execute("SELECT COUNT(*) FROM desktop_pairings").fetchone()[0]
         assert count == 1
+
+
+class TestRegisteringAVerifiedEncode:
+    """The statement `import` finishes with, against a database that has keys.
+
+    The tool creates the asset first — that is what gives it an id to sign upload
+    URLs for — and then calls import for the same id. So by the time this runs the
+    row already exists, and a plain INSERT is a primary key collision: a 500 on
+    the last step of a working upload, after every object is already in R2.
+
+    `FakeDatabase` has no keys and no constraints, so it accepted the collision
+    happily. This is the only place the statement meets one.
+    """
+
+    def _register(self, database, *, asset_id: str, title: str, version: int) -> None:
+        # The production statement, imported rather than copied.
+        from domain.video import REGISTER_SQL
+
+        database.execute(
+            REGISTER_SQL.replace("?1", f"'{asset_id}'")
+            .replace("?2", f"'{title}'")
+            .replace("?3", "'lesson.mp4'")
+            .replace("?4", "8")
+            .replace("?5", "1920")
+            .replace("?6", "1080")
+            .replace("?7", str(version))
+            .replace("?8", f"'videos/{asset_id}/{version}/master.m3u8'")
+            .replace("?9", "1700000000")
+        )
+
+    def _create(self, database, asset_id: str) -> None:
+        """What `POST /api/video-assets` leaves behind: an uploading row."""
+
+        database.execute(
+            "INSERT INTO video_assets (id, title, original_filename, source_key, status,"
+            " byte_size, created_at, updated_at)"
+            " VALUES (?, '暫定標題', 'lesson.mp4', '', 'uploading', 1234, 1, 1)",
+            (asset_id,),
+        )
+
+    def test_an_asset_the_tool_created_becomes_ready(self, database):
+        self._create(database, "a" * 24)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        row = database.execute(
+            "SELECT status, title, active_encode_version, master_key FROM video_assets WHERE id = ?",
+            ("a" * 24,),
+        ).fetchone()
+        assert row == ("ready", "第一課", 1, f"videos/{'a' * 24}/1/master.m3u8")
+
+    def test_it_does_not_create_a_second_row(self, database):
+        self._create(database, "a" * 24)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        assert database.execute("SELECT COUNT(*) FROM video_assets").fetchone()[0] == 1
+
+    def test_re_importing_the_same_version_is_idempotent(self, database):
+        """Somebody re-syncing after a dropped object runs this twice."""
+
+        self._create(database, "a" * 24)
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        assert database.execute("SELECT COUNT(*) FROM video_assets").fetchone()[0] == 1
+
+    def test_an_asset_with_no_row_at_all_is_still_inserted(self, database):
+        """The other entrance: an encode imported without the tool creating it."""
+
+        self._register(database, asset_id="b" * 24, title="舊課", version=1)
+
+        row = database.execute(
+            "SELECT status, active_encode_version FROM video_assets WHERE id = ?", ("b" * 24,)
+        ).fetchone()
+        assert row == ("ready", 1)
+
+    def test_the_size_measured_at_upload_is_not_overwritten_with_zero(self, database):
+        """`create` knows the source's size; `import` does not send one."""
+
+        self._create(database, "a" * 24)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        assert database.execute(
+            "SELECT byte_size FROM video_assets WHERE id = ?", ("a" * 24,)
+        ).fetchone()[0] == 1234
+
+    def test_a_new_encode_version_moves_the_active_one(self, database):
+        """S8 re-encodes into a new version and switches to it once verified."""
+
+        self._create(database, "a" * 24)
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=2)
+
+        row = database.execute(
+            "SELECT active_encode_version, master_key FROM video_assets WHERE id = ?", ("a" * 24,)
+        ).fetchone()
+        assert row == (2, f"videos/{'a' * 24}/2/master.m3u8")

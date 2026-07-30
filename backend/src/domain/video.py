@@ -532,6 +532,41 @@ async def create_asset(
     return asset_id
 
 
+# What `import` finishes with, and an upsert rather than an insert.
+#
+# The tool creates the asset first — that is what gives it an id to sign upload
+# URLs for — and then imports the same id, so the row already exists by the time
+# this runs. A plain INSERT was a primary key collision: a 500 on the last step of
+# an upload whose objects were all already in R2, which is the most expensive
+# place to fail. It is also what makes a re-import after a dropped object
+# idempotent instead of a second row.
+#
+# `byte_size` and `source_key` are deliberately absent from the update. `create`
+# knows the source's size and import does not send one, so listing it here would
+# overwrite a real number with zero.
+REGISTER_SQL = (
+    "INSERT INTO video_assets (id, title, original_filename, source_key, status, byte_size,"
+    " duration_seconds, width, height, active_encode_version, master_key, poster_key,"
+    " error_code, error_detail, created_at, updated_at)"
+    " VALUES (?1, ?2, ?3, '', 'ready', 0, ?4, ?5, ?6, ?7, ?8, NULL, NULL, NULL, ?9, ?9)"
+    " ON CONFLICT(id) DO UPDATE SET"
+    " title = excluded.title,"
+    " original_filename = CASE WHEN excluded.original_filename != ''"
+    " THEN excluded.original_filename ELSE video_assets.original_filename END,"
+    " status = 'ready',"
+    " duration_seconds = COALESCE(excluded.duration_seconds, video_assets.duration_seconds),"
+    " width = COALESCE(excluded.width, video_assets.width),"
+    " height = COALESCE(excluded.height, video_assets.height),"
+    " active_encode_version = excluded.active_encode_version,"
+    " master_key = excluded.master_key,"
+    # A previously failed attempt has an error recorded against it, and this row
+    # is now a working video.
+    " error_code = NULL,"
+    " error_detail = NULL,"
+    " updated_at = excluded.updated_at"
+)
+
+
 async def register_verified_asset(
     env,
     *,
@@ -552,12 +587,7 @@ async def register_verified_asset(
     """
 
     now = utc_timestamp()
-    await env.DB.prepare(
-        "INSERT INTO video_assets (id, title, original_filename, source_key, status, byte_size,"
-        " duration_seconds, width, height, active_encode_version, master_key, poster_key,"
-        " error_code, error_detail, created_at, updated_at)"
-        " VALUES (?1, ?2, ?3, '', 'ready', 0, ?4, ?5, ?6, ?7, ?8, NULL, NULL, NULL, ?9, ?9)"
-    ).bind(
+    await env.DB.prepare(REGISTER_SQL).bind(
         asset_id,
         title,
         original_filename,
