@@ -1,14 +1,27 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
+import { looksLikeSource } from '../../shared/sourceKinds'
 import type { Progress, ScannedFolder } from '../../shared/upload'
 
 const PHASE_LABELS: Record<Progress['phase'], string> = {
+  preparing: '準備轉檔工具',
+  probing: '讀取影片資訊',
+  encoding: '轉檔中',
+  poster: '產生封面',
+  writing: '寫出播放清單',
   scanning: '讀取資料夾',
   creating: '建立影片項目',
   uploading: '上傳中',
   registering: '驗證中',
   done: '完成',
   failed: '未完成',
+}
+
+/** Nothing to count during a transcode, so the bar reads `fraction` instead. */
+function barWidth(progress: Progress): number | null {
+  if (typeof progress.fraction === 'number') return Math.round(progress.fraction * 100)
+  if (progress.total > 0) return Math.round((progress.uploaded / progress.total) * 100)
+  return null
 }
 
 function readableSize(bytes: number): string {
@@ -37,6 +50,7 @@ function readableSize(bytes: number): string {
  */
 export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; onSignOut: () => void }) {
   const [scanned, setScanned] = useState<ScannedFolder | null>(null)
+  const [source, setSource] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [progress, setProgress] = useState<Progress | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -51,22 +65,30 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
     return () => unsubscribe.current?.()
   }, [])
 
-  async function choose(folder: string) {
+  async function choose(path: string) {
     setProblem(null)
     setProgress(null)
+    setScanned(null)
+    setSource(null)
+
+    // An MP4 is transcoded here; a folder is output somebody already produced.
+    // Both are accepted, and the difference is only which phases run.
+    if (looksLikeSource(path)) {
+      setSource(path)
+      return
+    }
+
     try {
-      const next = await window.desktop.upload.scan(folder)
+      const next = await window.desktop.upload.scan(path)
       setScanned(next)
-      if (!title) {
-        // The folder is named after the asset id, not the lesson, so this is a
-        // starting point rather than an answer.
-        setTitle('')
-      }
       if (next.objects.length === 0) {
-        setProblem('這個資料夾裡找不到轉檔輸出。應該要有 master.m3u8 和各畫質的資料夾。')
+        setProblem(
+          '這裡面找不到轉檔輸出，也不是影片檔。可以拖一個 MP4 進來轉檔，' +
+            '或是拖一個已經有 master.m3u8 的資料夾。',
+        )
       }
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : '無法讀取這個資料夾')
+      setProblem(error instanceof Error ? error.message : '無法讀取這個路徑')
     }
   }
 
@@ -103,9 +125,11 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
   })
 
   async function start() {
-    if (!scanned || scanned.objects.length === 0) return
+    if (!source && (!scanned || scanned.objects.length === 0)) return
     setProblem(null)
-    const result = await window.desktop.upload.start({ folder: scanned.folder, title })
+    const result = await window.desktop.upload.start(
+      source ? { source, title } : { folder: scanned!.folder, title },
+    )
     if (!result.ok) {
       setProblem(result.message)
       setProgress(null)
@@ -129,26 +153,31 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
           whether `ondrop` happens to be a property of the element, which is not
           a decision worth depending on — this says the name outright. */}
       <div ref={zone} class={`drop ${dragging ? 'over' : ''}`}>
-        <p>把轉檔輸出的資料夾拖到這裡</p>
+        <p>把高畫質 MP4 拖到這裡</p>
         <p class="muted">
-          資料夾裡應該有 master.m3u8、poster.webp，以及 1080p／720p／480p 的分段。
+          會在這台機器上轉出各畫質、分段，然後上傳。也可以拖一個已經轉好的資料夾，
+          那樣會跳過轉檔直接上傳。
         </p>
       </div>
 
-      {scanned && scanned.objects.length > 0 && (
+      {(source || (scanned && scanned.objects.length > 0)) && (
         <>
           <dl class="facts">
-            <dt>資料夾</dt>
+            <dt>{source ? '影片檔' : '資料夾'}</dt>
             <dd>
-              <code>{scanned.folder}</code>
+              <code>{source ?? scanned!.folder}</code>
             </dd>
-            <dt>檔案數</dt>
-            <dd>{scanned.objects.length}</dd>
-            <dt>總容量</dt>
-            <dd>{readableSize(scanned.totalBytes)}</dd>
+            {scanned && !source && (
+              <>
+                <dt>檔案數</dt>
+                <dd>{scanned.objects.length}</dd>
+                <dt>總容量</dt>
+                <dd>{readableSize(scanned.totalBytes)}</dd>
+              </>
+            )}
           </dl>
 
-          {scanned.unexpected.length > 0 && (
+          {scanned && scanned.unexpected.length > 0 && (
             <p class="muted">
               有 {scanned.unexpected.length} 個檔案不屬於轉檔輸出，會被略過：
               {scanned.unexpected.slice(0, 3).join('、')}
@@ -168,9 +197,16 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
             />
           </label>
 
-          <button type="button" onClick={() => void start()} disabled={busy}>
-            {busy ? '上傳中…' : '開始上傳'}
-          </button>
+          <div class="row-left">
+            <button type="button" onClick={() => void start()} disabled={busy}>
+              {busy ? '進行中…' : source ? '轉檔並上傳' : '開始上傳'}
+            </button>
+            {busy && (
+              <button type="button" class="ghost" onClick={() => void window.desktop.upload.cancel()}>
+                取消
+              </button>
+            )}
+          </div>
         </>
       )}
 
@@ -178,13 +214,14 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
         <section class="progress" aria-live="polite">
           <p>
             {PHASE_LABELS[progress.phase]}
+            {progress.rung ? `（${progress.rung}）` : ''}
             {progress.total > 0 && progress.phase === 'uploading'
               ? `：${progress.uploaded} / ${progress.total}`
               : ''}
           </p>
-          {progress.total > 0 && (
+          {barWidth(progress) !== null && (
             <div class="bar">
-              <div style={{ width: `${Math.round((progress.uploaded / progress.total) * 100)}%` }} />
+              <div style={{ width: `${barWidth(progress)}%` }} />
             </div>
           )}
           {progress.message && <p class="muted">{progress.message}</p>}

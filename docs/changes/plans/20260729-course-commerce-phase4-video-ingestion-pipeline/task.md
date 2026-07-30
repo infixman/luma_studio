@@ -33,7 +33,7 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：用 Worker 簽出的 URL，以 curl 真的 PUT 一個物件進 R2。
 
-- [ ] 建立 R2 S3 API token，以 secret 存入 Admin Worker，不進 repo 也不進工具。**需要你操作**，並把 `R2_S3_ENDPOINT` 的帳號 id 填上。填之前 presign 一律 503。**需要你操作**，並把 `R2_S3_ENDPOINT` 的帳號 id 填上。填之前 presign 一律 503。
+- [ ] 建立 R2 S3 API token，以 secret 存入 Admin Worker，不進 repo 也不進工具。**需要你操作**，並把 `R2_S3_ENDPOINT` 的帳號 id 填上。填之前 presign 一律 503。
 - [x] 實作 SigV4 presign（限定 bucket、key、method、期限）。與 botocore 對簽，簽章一致。
 - [x] 實作輸出物件的 key 形狀允許清單，越界 key 回 400。（`video.signable_key`；與播放閘道共用同一份清單）
 - [x] 實作 `POST /api/video-assets`。
@@ -50,11 +50,11 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 - [x] ~~建立管理員 TOTP seed 表。~~ 不需要：seed 由 `DESKTOP_PAIRING_SECRET` 與 email 導出，沒有表。
 - [x] ~~產生與保存 seed，建立時顯示一次。~~ 同上，沒有東西要保存或顯示。
 - [x] 實作 `GET /api/desktop/pairing-code`，需管理員 session。
-- [x] 後台一頁顯示目前配對碼與剩餘秒數。`/desktop-tool`；倒數用伺服器回的剩餘秒數，歸零才重新取，不自己算下一組碼。後端 `GET /api/desktop/pairing-code` 已完成，畫面未做。
+- [x] 後台一頁顯示目前配對碼與剩餘秒數。`/desktop-tool`；倒數用伺服器回的剩餘秒數，歸零才重新取，不自己算下一組碼。
 - [x] 實作 `POST /api/desktop/tokens`：接受目前與前一窗、固定時間比較、用過即失效（條件 upsert 記下用掉的時窗；真 SQLite 測試驗那道 WHERE）。
 - [x] 實作每個 email 的失敗次數上限與鎖定。刻意不用 `rate_limit`：它逐 IP 且 binding 缺席時放行，擋不住六位數字。這個在 D1、逐 email、失敗時關閉。
 - [x] 實作影片範圍 token 的簽發與驗證，非影片路由回 403。允許清單只放行建 asset／upload-urls／import。
-- [ ] 提供撤銷單一 token 的方式。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。
+- [ ] 提供撤銷單一 token 的方式。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。
 - [ ] 加入 presign 與 token 兌換的 per-IP rate limit。兌換已有逐帳號的鎖定；這一項是額外的濫用防護。
 - [x] 測試：正確、過期、前一窗、重放、次數上限；影片 token 打非影片路由回 403。另有端到端驗收：無 session 換 token → presign 200 → 訂單/顧客/儀表板/課程/列表/封存全部 403。
 
@@ -68,13 +68,12 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 - [x] 建立 `desktop/`：electron-vite 專案骨架。Preact，與 repo 一致；`npm run smoke` 用真 Electron 驗橋接。
 - [x] 啟動畫面：管理員 email + 配對碼，換 token 後存入 `safeStorage`。沒有加密可用時不存（不寫明文）。
-- [ ] 選擇已轉好的輸出目錄，逐物件取得 presigned URL 並上傳。
-- [ ] 每個物件有 retry 與正確 Content-Type。
-- [ ] 保存 asset id 與已完成的 key，關掉重開可續傳。
-- [ ] 上傳完成後呼叫 import，缺漏時只補傳缺的物件。
-- [ ] 顯示上傳進度、可取消。
-- [ ] 打一個丟掉的 NSIS 包，確認打包後跑得起來、找得到 userData 目錄。
-      不做這件事，S4 的 ffmpeg 路徑處理會在 S6 重寫一次。
+- [x] 選擇已轉好的輸出目錄，逐物件取得 presigned URL 並上傳。也接受拖入 MP4（S4 的轉檔路徑）。
+- [x] 每個物件有 retry 與正確 Content-Type。過期的 URL 會重換一次（一批 100 張只活 15 分鐘，慢速上傳會撞到）。
+- [x] 保存 asset id 與已完成的 key，關掉重開可續傳。ledger 的 key 含檔案數與容量，重新轉檔不會誤接續。
+- [x] 上傳完成後呼叫 import，缺漏時只補傳缺的物件。
+- [x] 顯示上傳進度、可取消。
+- [x] 打一個丟掉的包，確認打包後跑得起來、找得到 userData 目錄。`--self-check` + `npm run verify:packaged`。
 - [ ] 測試：驗證 Admin API request body 不承載影片；anonymous request 無法取得 presigned URL。
 
 ## S4：本機轉檔
@@ -83,17 +82,17 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：拖進 MP4 → ready。**到這裡是第一個能用的版本。**
 
-- [ ] 建立存放安裝檔與 FFmpeg 鏡像的 R2 bucket 或 prefix。
-- [ ] 鏡像釘死版本的 FFmpeg，連同 LICENSE 與對應原始碼。
-- [ ] 環境自檢：FFmpeg／ffprobe 是否存在、版本與 SHA256 是否相符。
-- [ ] 從 R2 鏡像下載，可續傳；雜湊不符即拒絕執行且不重試。
+- [ ] 建立存放安裝檔與 FFmpeg 鏡像的 R2 bucket 或 prefix。**需要你操作**；工具會抓 `{admin API}/tools/ffmpeg/{檔名}`。
+- [ ] 鏡像釘死版本的 FFmpeg，連同 LICENSE 與對應原始碼。**需要你操作**，然後把版本／檔名／大小／SHA256 填進 `desktop/src/shared/ffmpegRelease.ts`。
+- [x] 環境自檢：FFmpeg／ffprobe 是否存在、版本與 SHA256 是否相符。空的雜湊值當成「尚未設定」，不是「跳過檢查」。
+- [~] 從 R2 鏡像下載；雜湊不符即拒絕且不重試。**程式寫好了但無法端到端驗證 —— 鏡像還不存在。** 續傳未做（整檔重下）。
 - [ ] 「關於」畫面列出 LICENSE 與原始碼路徑。
-- [ ] 拖曳放開 MP4，ffprobe 讀真實格式與尺寸。
-- [ ] 依來源高度轉出不放大的畫質階梯，keyframe 對齊 segment 邊界。
-- [ ] 產生 poster。
-- [ ] 手寫 master.m3u8，相對路徑固定一層深。
-- [ ] 顯示轉檔進度、可取消、失敗可重試。
-- [ ] 清理本機工作目錄。
+- [x] 拖曳放開 MP4，ffprobe 讀真實格式與尺寸。沒有影像軌就拒絕，不會空轉二十分鐘。
+- [x] 依來源高度轉出不放大的畫質階梯，keyframe 對齊 segment 邊界。與後端 `ladder_for` 逐一核對。
+- [x] 產生 poster。`-ss` 在 `-i` 之前，所以是 seek 而不是解到那裡。
+- [x] 手寫 master.m3u8，相對路徑固定一層深。**修掉腳本的 bug：無音軌不再宣告 `mp4a.40.2`。**
+- [x] 顯示轉檔進度、可取消（真的 kill ffmpeg）、失敗可重試。
+- [x] 清理本機工作目錄 —— 只在註冊成功之後。上傳失敗的 encode 值得留著（重傳幾分鐘，重轉一小時）。
 - [ ] 測試：使用短、直式、無音軌、VFR、損壞影片 fixture。需實際媒體檔。
 
 ## S5：影片庫與原始檔上傳

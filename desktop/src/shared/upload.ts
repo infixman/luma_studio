@@ -15,7 +15,17 @@ export interface ScannedFolder {
   totalBytes: number
 }
 
+/**
+ * One list rather than two, because from the interface's point of view this is
+ * one job with a bar in it. Dropping an MP4 runs the first five; dropping a
+ * folder of finished output starts at `scanning`.
+ */
 export type UploadPhase =
+  | 'preparing'
+  | 'probing'
+  | 'encoding'
+  | 'poster'
+  | 'writing'
   | 'scanning'
   | 'creating'
   | 'uploading'
@@ -29,12 +39,24 @@ export interface Progress {
   uploaded: number
   total: number
   message?: string
+  /** Which rendition is encoding, during `encoding`. */
+  rung?: string
+  /** 0–1 during the transcode, where there is nothing to count. */
+  fraction?: number
   /** On `failed` after registration: every object the server could not find. */
   missing?: string[]
 }
 
+/**
+ * Either an MP4 to transcode or a folder of output already produced.
+ *
+ * Both, rather than one: the folder case is how uploading was proven before a
+ * transcoder existed, and it stays the way to re-upload an encode without
+ * spending an hour making it again.
+ */
 export interface UploadRequest {
-  folder: string
+  source?: string
+  folder?: string
   title: string
   durationSeconds?: number | null
   width?: number | null

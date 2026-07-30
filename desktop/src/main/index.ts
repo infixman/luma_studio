@@ -5,6 +5,8 @@ import { BrowserWindow, app, ipcMain, safeStorage, shell } from 'electron'
 import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
+import { ingest } from './ingest'
+import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
 import * as uploader from './uploader'
 
@@ -151,20 +153,28 @@ if (process.argv.includes('--self-check')) {
     })
 
     ipcMain.handle('upload:scan', (_event, folder: string) => uploader.scan(folder))
+    ipcMain.handle('upload:cancel', () => cancel())
 
     ipcMain.handle('upload:start', async (event, request: UploadRequest) => {
       try {
         // Progress goes to the window that asked, by event rather than by
         // return value: an upload is minutes long and a single resolved promise
         // would leave the interface with nothing to show for it.
-        const result = await uploader.upload(request, (progress) => {
+        const result = await ingest(request, session.requireToken().base, (progress) => {
           if (!event.sender.isDestroyed()) event.sender.send('upload:progress', progress)
         })
         return { ok: true as const, result }
       } catch (error) {
         return {
           ok: false as const,
-          message: error instanceof Error ? error.message : '上傳失敗',
+          // A cancellation is not a failure to explain, so it gets its own
+          // sentence rather than ffmpeg's exit code.
+          message:
+            error instanceof Cancelled
+              ? '已取消'
+              : error instanceof Error
+                ? error.message
+                : '上傳失敗',
           httpStatus: error instanceof AdminApiError ? error.status : null,
         }
       }

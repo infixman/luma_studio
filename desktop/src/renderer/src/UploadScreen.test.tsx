@@ -24,9 +24,11 @@ const SCANNED: ScannedFolder = {
 let container: HTMLDivElement
 let scan: ReturnType<typeof vi.fn>
 let start: ReturnType<typeof vi.fn>
+let cancelUpload: ReturnType<typeof vi.fn>
 let emit: ((progress: Progress) => void) | null = null
 
 function bridge(): void {
+  cancelUpload = vi.fn(async () => undefined)
   scan = vi.fn(async () => SCANNED)
   start = vi.fn(
     async (): Promise<UploadResult> => ({
@@ -43,6 +45,7 @@ function bridge(): void {
       upload: {
         scan,
         start,
+        cancel: cancelUpload,
         onProgress: (listener: (progress: Progress) => void) => {
           emit = listener
           return () => {
@@ -70,7 +73,8 @@ async function tick(): Promise<void> {
   for (let count = 0; count < 20; count++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function drop(): void {
+function drop(path: string = SCANNED.folder): void {
+  ;(window.desktop.pathFor as ReturnType<typeof vi.fn>).mockReturnValue(path)
   const zone = container.querySelector('.drop')!
   const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
   Object.defineProperty(event, 'dataTransfer', { value: { files: [new File([], 'x')] } })
@@ -208,7 +212,98 @@ test('the upload button is disabled while it runs', async () => {
   await tick()
 
   const button = [...container.querySelectorAll('button')].find((element) =>
-    element.textContent?.includes('上傳中'),
+    element.textContent?.includes('進行中'),
   )
   expect(button?.disabled).toBe(true)
+})
+
+test('dropping an MP4 shows the file and does not scan it as a folder', async () => {
+  /** A source is transcoded here; scanning it as a folder would fail with the
+   *  wrong sentence. */
+  await mount()
+  drop('C:\videos\lesson 01.mp4')
+  await tick()
+
+  expect(scan).not.toHaveBeenCalled()
+  expect(container.textContent).toContain('lesson 01.mp4')
+  expect(container.textContent).toContain('影片檔')
+})
+
+test('starting from an MP4 sends the source, not a folder', async () => {
+  await mount()
+  drop('C:\videos\lesson 01.mp4')
+  await tick()
+
+  // The button says what it will do, and for a source that includes transcoding.
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('轉檔並上傳'),
+  )
+  button?.click()
+  await tick()
+
+  expect(start).toHaveBeenCalledWith({ source: 'C:\videos\lesson 01.mp4', title: '' })
+})
+
+test('the transcode phases have their own labels', async () => {
+  /** "上傳中" during an hour of encoding would be a lie about what is happening. */
+  await mount()
+  drop('C:\videos\a.mp4')
+  await tick()
+
+  emit?.({ phase: 'encoding', uploaded: 0, total: 0, fraction: 0.4, rung: '720p' })
+  await tick()
+
+  expect(container.textContent).toContain('轉檔中')
+  expect(container.textContent).toContain('720p')
+})
+
+test('the bar follows the transcode fraction, since there is nothing to count', async () => {
+  await mount()
+  drop('C:\videos\a.mp4')
+  await tick()
+
+  emit?.({ phase: 'encoding', uploaded: 0, total: 0, fraction: 0.25 })
+  await tick()
+
+  expect(container.querySelector<HTMLElement>('.bar div')?.style.width).toBe('25%')
+})
+
+test('dropping something that is neither says both options', async () => {
+  scan.mockResolvedValue({ folder: 'C:\junk', objects: [], unexpected: [], totalBytes: 0 })
+  await mount()
+  drop('C:\junk')
+  await tick()
+
+  expect(container.textContent).toContain('MP4')
+  expect(container.textContent).toContain('master.m3u8')
+})
+
+test('a running job can be cancelled', async () => {
+  /** An encode is tens of minutes. Without this, "cancel" could only mean
+   *  "stop watching" while a core stays busy on output nobody will use. */
+  await mount()
+  drop('C:\videos\a.mp4')
+  await tick()
+
+  emit?.({ phase: 'encoding', uploaded: 0, total: 0, fraction: 0.3, rung: '1080p' })
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find(
+    (element) => element.textContent?.trim() === '取消',
+  )
+  button?.click()
+  await tick()
+
+  expect(cancelUpload).toHaveBeenCalled()
+})
+
+test('there is nothing to cancel before a job starts', async () => {
+  await mount()
+  drop('C:\videos\a.mp4')
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find(
+    (element) => element.textContent?.trim() === '取消',
+  )
+  expect(button).toBeUndefined()
 })

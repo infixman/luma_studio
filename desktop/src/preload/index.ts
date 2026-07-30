@@ -55,6 +55,9 @@ const api = {
     start: (request: UploadRequest): Promise<UploadResult> =>
       ipcRenderer.invoke('upload:start', request),
 
+    /** Kills ffmpeg, rather than stopping listening to it. */
+    cancel: (): Promise<void> => ipcRenderer.invoke('upload:cancel'),
+
     /**
      * Progress, as events rather than a promise. An upload is minutes long.
      *

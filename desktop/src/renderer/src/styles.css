@@ -188,3 +188,9 @@ footer.shell {
   font-size: 0.85rem;
   padding-top: 1.5rem;
 }
+
+.row-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
