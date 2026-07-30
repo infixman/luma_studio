@@ -134,6 +134,34 @@ class TestWhatATokenIsFor:
         assert playback.covers(claim, asset_id="asset-1", encode_version=2) is False
 
 
+class TestTheWireFormat:
+    """Members are holding these strings right now.
+
+    The signing lives in `shared.signed_token` so the desktop tool's tokens do
+    not become a second copy of it — but sharing it means a change there could
+    quietly alter the format here, and the symptom would be everybody mid-lesson
+    getting 403 after a deploy. This pins the exact bytes.
+    """
+
+    GOLDEN = (
+        "v1.eyJhc3NldElkIjoiYXNzZXQtMSIsImVuY29kZVZlcnNpb24iOjEsImV4cCI6MTc4NTI5MzcwMCwi"
+        "aWF0IjoxNzg1MjkyODAwLCJ2IjoxfQ.ScO3vyO3_pwW7f3DvKUinb6Trud0oCPpEaEtFU6G1Xk"
+    )
+
+    def test_the_token_is_exactly_what_it_has_always_been(self, playback):
+        minted = playback.issue(
+            {"assetId": "asset-1", "encodeVersion": 1}, secret="shhh", now=1785292800, ttl=900
+        )
+
+        assert minted == self.GOLDEN
+
+    def test_and_it_still_verifies(self, playback):
+        claim = playback.verify(self.GOLDEN, secret="shhh", now=1785292800)
+
+        assert claim is not None
+        assert claim["v"] == playback.TOKEN_VERSION
+
+
 class TestStartingTheClock:
     """A timed grant starts counting at the first watch, not at payment."""
 

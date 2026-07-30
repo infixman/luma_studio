@@ -16,23 +16,17 @@ The goal is that people who may not watch cannot, and that a URL shared out of
 context stops working quickly.
 """
 
-import base64
-import hmac
-import json
-from hashlib import sha256
+from shared import signed_token
 
 
 # In the token, first, so a later format change cannot be replayed against a
 # server that would misread the old shape as the new one.
 TOKEN_VERSION = 1
+PREFIX = f"v{TOKEN_VERSION}"
 
 # Long enough not to interrupt a lesson, short enough that revoking access
 # means something. The player refreshes before it lapses.
 DEFAULT_TTL = 15 * 60
-
-# Small tolerance for clock differences between isolates. Not a window for a
-# token minted well ahead of time, which is not skew.
-CLOCK_SKEW = 60
 
 SECONDS_PER_DAY = 86400
 
@@ -43,76 +37,25 @@ SECONDS_PER_DAY = 86400
 # serve something the pipeline was allowed to upload.
 
 
-def _b64(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-
-
-def _unb64(value: str) -> bytes:
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
-
-
-def _sign(payload: str, secret: str) -> str:
-    return _b64(hmac.new(secret.encode("utf-8"), payload.encode("ascii"), sha256).digest())
-
-
 def issue(claim: dict, *, secret: str, now: int, ttl: int = DEFAULT_TTL) -> str:
     """Mint a token for one member, one lesson, one encode.
 
-    Always signed with the current secret. During a rotation the previous one
-    still *verifies*, so nobody is signed out mid-lesson, but nothing new is
-    ever signed with a key that is on its way out.
+    `v` stays inside the claims as well as in the prefix. It was there before
+    the signing moved to `shared.signed_token`, and removing it would change
+    the payload of tokens members are already holding.
     """
 
-    body = {**claim, "v": TOKEN_VERSION, "iat": now, "exp": now + ttl}
-    payload = _b64(json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8"))
-    return f"v{TOKEN_VERSION}.{payload}.{_sign(payload, secret)}"
-
-
-def _verify_with(token: str, secret: str, now: int) -> dict | None:
-    try:
-        version, payload, signature = token.split(".")
-    except (ValueError, AttributeError):
-        return None
-    if version != f"v{TOKEN_VERSION}":
-        return None
-
-    # Constant time: a comparison that stops at the first wrong byte tells an
-    # attacker how much of their guess was right, one request at a time.
-    if not hmac.compare_digest(signature, _sign(payload, secret)):
-        return None
-
-    try:
-        claim = json.loads(_unb64(payload))
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(claim, dict):
-        return None
-
-    expires_at, issued_at = claim.get("exp"), claim.get("iat")
-    if not isinstance(expires_at, int) or not isinstance(issued_at, int):
-        return None
-    if now > expires_at:
-        return None
-    if issued_at > now + CLOCK_SKEW:
-        return None
-    return claim
+    return signed_token.issue(
+        {**claim, "v": TOKEN_VERSION}, prefix=PREFIX, secret=secret, now=now, ttl=ttl
+    )
 
 
 def verify(token: str, *, secret: str, now: int, previous_secret: str | None = None) -> dict | None:
-    """Read a token, or refuse it. None is the only failure signal.
+    """Read a token, or refuse it. None is the only failure signal."""
 
-    Callers get no detail about *why*: "expired" and "forged" are the same
-    answer to somebody probing, and the difference is in the log rather than
-    in the response.
-    """
-
-    claim = _verify_with(token, secret, now)
-    if claim is not None:
-        return claim
-    # A rotation must not sign every member out in the middle of a lesson.
-    if previous_secret:
-        return _verify_with(token, previous_secret, now)
-    return None
+    return signed_token.verify(
+        token, prefix=PREFIX, secret=secret, now=now, previous_secret=previous_secret
+    )
 
 
 def covers(claim: dict | None, *, asset_id: str, encode_version: int) -> bool:
