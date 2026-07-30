@@ -1297,3 +1297,25 @@ FFmpeg，今天就能驗完整條路。
 兩道限制讓它可以留在程式裡：**打包後一律拒絕**（`app.isPackaged`），因為一個能用
 環境變數指向任意編碼器的安裝版等於沒有釘死；**`PINNED.version` 一填上就照樣比版本**。
 可設定的只有「去哪裡找」，雜湊和版本永遠不是。
+
+## 鏡像填上了，順手抓到兩個錯
+
+`PINNED` 現在指向 `ffmpeg-8.1.2.zip`：gyan 的 release build 重新打包成只有
+`ffmpeg.exe`、`ffprobe.exe`、`LICENSE`。zip 而不是 gyan 給的 7z —— 解壓縮用的是
+Windows 內建的 bsdtar，它讀 zip 不讀 7z。
+
+**我的容量估計錯了，而且那是會壞的那種錯。** 我在註解裡寫「大約二十 MB」，實際 74 MB
+（兩支 exe 各 99 MB 未壓縮）。而 `serve_r2_object` 是整個讀進記憶體的：R2 的
+ArrayBuffer 一份，Python bytes 再一份，74 MB 變成大約 148 MB，Worker 的上限是 128 MB。
+
+所以加了 `Ctx.stream`，把 R2 的 body 直接當成 Response body 傳出去 ——
+`workers.Response` 的 `RESPONSE_ACCEPTED_TYPES` 收 `ReadableStream`，所以這是直通
+而不是自己重寫一個串流。
+
+有測試釘住，用一個 `arrayBuffer()` 會 raise 的假物件。突變驗證：把 buffering 版本
+放回去，只有那一條掛掉 —— 其他每條都還是綠的，因為 buffering 版在功能上完全正確，
+它只在正式環境、只在這條路線唯一存在的理由上失敗。
+
+**第二個錯**：`licencePaths()` 算的是 `binDir/../LICENSE`，那是我在壓縮檔還是假設性的
+時候寫的（假設 `ffmpeg-x/bin/*.exe` + `ffmpeg-x/LICENSE`）。實際打包出來 exe 和
+LICENSE 同一層，所以改成 `binDir/LICENSE`。

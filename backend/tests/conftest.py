@@ -179,12 +179,21 @@ class FakeBucket:
 
 
 class FakeObject:
-    """What R2 hands back: bytes reachable only through arrayBuffer()."""
+    """What R2 hands back.
+
+    `arrayBuffer()` reads the whole thing; `body` is the stream a handler can pass
+    straight to a Response without reading it. Real R2 offers both, and which one a
+    route uses is a decision about memory — see `Ctx.stream`.
+    """
 
     def __init__(self, content: bytes):
         self.content = bytes(content)
 
     async def arrayBuffer(self):
+        return self.content
+
+    @property
+    def body(self):
         return self.content
 
 

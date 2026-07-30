@@ -199,3 +199,46 @@ class TestMirrorRoute:
 
         assert response.status == 503
         assert "DESKTOP_TOOLS" in response.body
+
+    def test_the_object_is_streamed_rather_than_buffered(self, worker):
+        """74 MB read into memory is two copies of it and a Worker has 128 MB.
+
+        Pinned with an object that refuses to be buffered, because the buffering
+        version passes every other test here — it only fails in production, on the
+        one request this route exists for.
+        """
+        import asyncio
+
+        from conftest import ADMIN_ORIGIN, FakeBucket, FakeDatabase, make_env
+        from test_desktop import PAIRING_SECRET, TOKEN_SECRET
+
+        import admin_main
+        from shared import migrations
+
+        class StreamOnly:
+            def __init__(self, content):
+                self.body = content
+
+            async def arrayBuffer(self):
+                raise AssertionError("the mirror must not be read into memory")
+
+        def run(request):
+            migrations._applied_names = None
+            instance = admin_main.Default()
+            instance.env = make_env(
+                FakeDatabase({}),
+                origins=ADMIN_ORIGIN,
+                frontend=ADMIN_ORIGIN,
+                **dict(
+                    self.R2,
+                    DESKTOP_PAIRING_SECRET=PAIRING_SECRET,
+                    DESKTOP_TOKEN_SECRET=TOKEN_SECRET,
+                    DESKTOP_TOOLS=FakeBucket({f"ffmpeg/{self.ARCHIVE}": StreamOnly(self.BYTES)}),
+                ),
+            )
+            return asyncio.run(instance.fetch(request))
+
+        token = self._token(worker)
+        response = run(self._get(self.ARCHIVE, token))
+
+        assert response.status == 200

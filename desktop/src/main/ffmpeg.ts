@@ -240,7 +240,10 @@ export async function ensureTools(
  */
 export function licencePaths(): { licence: string; source: string } {
   return {
-    licence: join(toolsDir(), PINNED.binDir, '..', 'LICENSE'),
+    // Beside the executables, because that is how the archive is packed: the
+    // repacked zip holds `ffmpeg.exe`, `ffprobe.exe` and `LICENSE` in one folder.
+    // This said `binDir/../LICENSE` while the archive was still hypothetical.
+    licence: join(toolsDir(), PINNED.binDir, 'LICENSE'),
     source: join(toolsDir(), 'ffmpeg-source.tar.xz'),
   }
 }

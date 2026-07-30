@@ -13,7 +13,7 @@ nothing.
 
 from domain import desktop_auth, desktop_tools
 from shared.common import NotConfigured, utc_timestamp
-from shared.responses import Ctx, serve_r2_object
+from shared.responses import Ctx
 
 MIRROR_BINDING = "DESKTOP_TOOLS"
 
@@ -52,10 +52,11 @@ async def serve_mirror(ctx: Ctx, name: str):
     token — see `desktop_auth._VIDEO_ROUTES`. The bytes are a published GPL build
     rather than a secret; what the token protects is our bandwidth.
 
-    The whole object is read into memory — that is what `serve_r2_object` does.
-    Fine for the archive this is for, a minimal FFmpeg being around twenty
-    megabytes, and the reason the mirror should hold `ffmpeg.exe` and
-    `ffprobe.exe` rather than a full 170 MB build with a media player in it.
+    Streamed rather than read. `serve_r2_object` buffers, which costs two copies
+    of the whole object — R2's ArrayBuffer and the Python `bytes` built from it —
+    and a Worker has 128 MB. The archive is 74 MB even repacked down to two
+    executables and a licence, so buffering it is about 148 MB and the request
+    dies instead of answering.
     """
 
     key = desktop_tools.mirror_key(name)
@@ -72,12 +73,19 @@ async def serve_mirror(ctx: Ctx, name: str):
         # one of them is fixed by uploading something.
         return ctx.error(f"工具鏡像尚未設定（缺少 {MIRROR_BINDING} binding）", 503)
 
-    # No suffix map, so it falls through to `application/octet-stream` — which is
-    # what a zip somebody is about to hash and unpack should be. Immutable because
-    # the name carries the version and the tool checks a digest before unpacking:
-    # a stale copy cannot be a wrong copy.
-    return await serve_r2_object(
-        ctx, bucket, key, {}, cache=f"public, max-age={desktop_tools.CACHE_SECONDS}, immutable"
+    stored = await bucket.get(key)
+    if stored is None:
+        return ctx.error("Not found", 404)
+
+    # Immutable because the name carries the version and the tool checks a digest
+    # before unpacking: a stale copy cannot be a wrong copy.
+    return ctx.stream(
+        stored.body,
+        {
+            "content-type": "application/octet-stream",
+            "cache-control": f"public, max-age={desktop_tools.CACHE_SECONDS}, immutable",
+            "x-content-type-options": "nosniff",
+        },
     )
 
 

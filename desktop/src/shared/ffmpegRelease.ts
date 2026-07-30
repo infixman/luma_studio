@@ -29,20 +29,31 @@ export interface FfmpegRelease {
 }
 
 /**
- * Empty on purpose, and the tool refuses to transcode until it is filled.
+ * The build in the mirror, as of 2026-07-30.
  *
- * Filling it needs the mirror to exist: pick a build, upload it to R2, and put
- * its version, name, size and digest here. Until then `problemWith` says so, in
- * a sentence naming this file — a placeholder that silently disabled
- * verification would be worse than no verification, because it would look like
- * verification.
+ * A gyan.dev release build, repacked: `ffmpeg.exe`, `ffprobe.exe` and `LICENSE`
+ * and nothing else. `ffplay.exe` is a media player this tool has no use for and
+ * the largest file in the original archive. Repacking is not a shortcut — the
+ * mirror is our own object and the digest below is of our own archive.
+ *
+ * A `.zip`, not the `.7z` gyan publishes: unpacking uses the bsdtar that ships
+ * with Windows, which reads zip and not 7z.
+ *
+ * `version` is a substring match against `ffmpeg -version`, so it is the build
+ * tag rather than the whole line — the line also carries a copyright year.
+ *
+ * Changing any of this means uploading a new object under a new name. Editing a
+ * digest to match a file that is already in the mirror is how the check becomes
+ * decoration.
  */
 export const PINNED: FfmpegRelease = {
-  version: '',
-  archive: '',
-  sha256: '',
-  binDir: '',
-  bytes: 0,
+  version: '8.1.2-essentials_build',
+  archive: 'ffmpeg-8.1.2.zip',
+  sha256: '76ad7cad3f8efdb5d6e7e357b2da386fafffffc690a638e3561fd2b226a9827aa',
+  // The folder inside the archive. The two executables sit directly in it, which
+  // is a property of how it was repacked rather than of gyan's layout.
+  binDir: 'ffmpeg-8.1.2',
+  bytes: 74_157_700,
 }
 
 const SHA256_HEX = /^[0-9a-f]{64}$/

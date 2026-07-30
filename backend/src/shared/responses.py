@@ -126,6 +126,20 @@ class Ctx:
     def binary(self, content: bytes, headers: dict) -> Response:
         return Response(content, headers=self._headers(headers, None))
 
+    def stream(self, body, headers: dict) -> Response:
+        """Pass a ReadableStream straight through, without reading it here.
+
+        For anything large. `binary` costs two copies of the whole object — the
+        ArrayBuffer R2 hands over and the Python `bytes` built from it — and a
+        Worker has 128 MB. The FFmpeg mirror is a 74 MB archive, so buffering it
+        is roughly 148 MB and the request dies rather than answers.
+
+        `workers.Response` accepts a `ReadableStream` as a body, so this is a
+        passthrough and not a reimplementation of one.
+        """
+
+        return Response(body, headers=self._headers(headers, None))
+
     def too_many_requests(self, retry_after: int = 60) -> Response:
         return self.json(
             {"error": "Too many requests, please try again shortly"},
