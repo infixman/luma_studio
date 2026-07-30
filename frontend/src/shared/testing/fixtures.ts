@@ -7,7 +7,7 @@
  * and fill in the rest.
  */
 
-import type { Course, InventoryItem, PublicProductDetail, PublicVariant } from '../types'
+import type { Course, InventoryItem, PublicProductDetail, PublicVariant, VideoAsset } from '../types'
 
 export function aCourse(overrides: Partial<Course> = {}): Course {
   return {
@@ -47,6 +47,25 @@ export function anInventoryItem(overrides: Partial<InventoryItem> = {}): Invento
   }
 }
 
+export function aVideoAsset(overrides: Partial<VideoAsset> = {}): VideoAsset {
+  return {
+    id: 'asset-1',
+    title: '第一課：工具介紹',
+    originalFilename: 'lesson-01.mp4',
+    status: 'ready',
+    byteSize: 1_500_000_000,
+    durationSeconds: 754,
+    width: 1920,
+    height: 1080,
+    encodeVersion: 1,
+    hasPoster: true,
+    errorCode: null,
+    errorDetail: null,
+    createdAt: 1_700_000_000,
+    updatedAt: 1_700_000_000,
+    ...overrides,
+  }
+}
 
 export function aPublicProduct(overrides: Partial<PublicProductDetail> = {}): PublicProductDetail {
   return {

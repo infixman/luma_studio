@@ -2,15 +2,8 @@ import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { Badge, Button, EmptyState, IconButton, Select, TextField, useConfirm } from '../../components/ui'
 import { api } from '../../../shared/api'
+import { runtime } from '../../lib/videoFacts'
 import type { CourseLesson, CourseSection, VideoAsset } from '../../../shared/types'
-
-/** A video's length, for the picker. Nothing stores it; the video owns it. */
-function runtime(asset: VideoAsset): string {
-  if (asset.durationSeconds === null) return ''
-  const minutes = Math.floor(asset.durationSeconds / 60)
-  const seconds = asset.durationSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
 
 function emptyLesson(position: number): CourseLesson {
   return { id: null, title: '', contentHtml: '', videoAssetId: null, isPreview: false, position }
@@ -112,7 +105,9 @@ export function CourseOutlineEditor({
     { value: '', label: '文字單元（不放影片）' },
     ...assets.map((asset) => ({
       value: asset.id,
-      label: runtime(asset) ? `${asset.title}（${runtime(asset)}）` : asset.title,
+      label: runtime(asset.durationSeconds)
+        ? `${asset.title}（${runtime(asset.durationSeconds)}）`
+        : asset.title,
     })),
   ]
 

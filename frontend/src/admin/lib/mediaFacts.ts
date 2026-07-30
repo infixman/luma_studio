@@ -9,6 +9,11 @@
 
 import type { MediaItem } from '../../shared/types'
 
+// Sizes are not a media-library idea — the video library describes the same
+// number — so the formatting lives on its own. Re-exported because these are
+// the facts about a stored file, and callers of this module ask for them here.
+export { fileSize } from './bytes'
+
 /**
  * What to call an image on screen.
  *
@@ -18,12 +23,6 @@ import type { MediaItem } from '../../shared/types'
  */
 export function mediaName(item: MediaItem): string {
   return item.title || item.fileName
-}
-
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /**

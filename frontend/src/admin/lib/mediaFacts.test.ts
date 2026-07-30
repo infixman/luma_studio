@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fileSize, mediaCaption, mediaDimensions, mediaFormat, mediaName } from './mediaFacts'
+import { mediaCaption, mediaDimensions, mediaFormat, mediaName } from './mediaFacts'
 import type { MediaItem } from '../../shared/types'
 
 function item(overrides: Partial<MediaItem> = {}): MediaItem {
@@ -27,17 +27,6 @@ describe('mediaName', () => {
 
   it('falls back to the file name, because an empty title is a normal answer', () => {
     expect(mediaName(item())).toBe('cat.png')
-  })
-})
-
-describe('fileSize', () => {
-  it('stays in bytes below a kilobyte', () => {
-    expect(fileSize(900)).toBe('900 B')
-  })
-
-  it('rounds kilobytes and keeps one decimal for megabytes', () => {
-    expect(fileSize(2048)).toBe('2 KB')
-    expect(fileSize(1024 * 1024 * 2.5)).toBe('2.5 MB')
   })
 })
 

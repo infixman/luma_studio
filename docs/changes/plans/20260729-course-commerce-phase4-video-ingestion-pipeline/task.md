@@ -115,10 +115,16 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       版本那一列**先寫、asset 後寫**：中間失敗時寧可多一列沒人指向的版本（總量高估一個 encode，
       下次 import 就修正），不要一個 `ready` 的 asset 指向沒有列的版本（那正是孤兒盤點會判定
       「這些物件沒人要」的形狀，而它們是會員正在看的）。
-- [ ] 建立 Video Library 頁；列表、詳情、references 與封存 API 已完成。
-- [ ] 頁面開著時每三秒輪詢，離開停止。
-- [ ] failed 顯示可讀錯誤。
-- [ ] 未 ready 的 asset 不出現在課程單元的可選清單。
+- [x] 建立 Video Library 頁（`/videos`）；列表與封存已接上。
+      詳情與 references 還沒有畫面 —— 封存被拒時伺服器會說出正在使用它的單元名稱，
+      那是目前唯一需要 references 的地方。
+- [x] 頁面開著時每三秒輪詢，離開停止。分頁切到背景也停；連續失敗三次就停下並說出來
+      （輪詢失敗刻意不進狀態列：它沒有使用者在等，會蓋掉管理員自己動作的結果）。
+- [x] failed 顯示可讀錯誤。沒留下原因時說「沒有留下失敗原因」，不留空白。
+- [x] 未 ready 的 asset 不出現在課程單元的可選清單。（Phase 5 就做了，這裡確認並補上共用的長度格式）
+- [ ] 卡在 `uploading`／`uploaded`／`queued` 的 asset 沒有出路：`archived` 只能從
+      `ready` 或 `failed` 進去，而 `processing` 連 `aborted` 都到不了。正式環境現在就有
+      一個 `uploading` 的殘留。需要一個中止端點。
 - [ ] 實作原始檔 multipart 的 create／part／complete／abort，且 complete 與 abort 冪等。
 - [ ] 工具上傳原始檔。
 - [ ] 限制單檔大小、影片長度與同時 session 數。
