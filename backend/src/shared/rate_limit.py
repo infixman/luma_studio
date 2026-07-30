@@ -31,6 +31,11 @@ LOGIN = "LOGIN_LIMITER"
 PRINT = "PRINT_LIMITER"
 PUBLIC = "PUBLIC_LIMITER"
 ASSET = "ASSET_LIMITER"
+# The installer download, on the admin Worker. Its own name rather than reusing
+# ASSET: that one belongs to the storefront's images, and a limiter is a budget —
+# two Workers sharing a name would not share the budget, but the config test that
+# keeps each Worker declaring only what it uses could no longer tell them apart.
+RELEASE = "RELEASE_LIMITER"
 SHOP = "SHOP_LIMITER"
 CUSTOMER_LOGIN = "CUSTOMER_LOGIN_LIMITER"
 CHECKOUT = "CHECKOUT_LIMITER"

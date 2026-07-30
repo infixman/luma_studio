@@ -120,6 +120,7 @@ def test_every_binding_name_is_configured(rate_limit):
         rate_limit.PRINT: PUBLIC_CONFIG,
         rate_limit.PUBLIC: PUBLIC_CONFIG,
         rate_limit.ASSET: PUBLIC_CONFIG,
+        rate_limit.RELEASE: ADMIN_CONFIG,
     }
     for name, owner in owners.items():
         assert f'name = "{name}"' in _config(owner), f"{name} has no [[ratelimits]] block in {owner}"
@@ -128,7 +129,8 @@ def test_every_binding_name_is_configured(rate_limit):
 def test_a_worker_declares_only_the_limiters_it_uses(rate_limit):
     """Otherwise a flood at the storefront could spend the owner's login budget."""
 
-    assert f'name = "{rate_limit.LOGIN}"' not in _config(PUBLIC_CONFIG)
+    for name in (rate_limit.LOGIN, rate_limit.RELEASE):
+        assert f'name = "{name}"' not in _config(PUBLIC_CONFIG)
     for name in (rate_limit.PRINT, rate_limit.PUBLIC, rate_limit.ASSET):
         assert f'name = "{name}"' not in _config(ADMIN_CONFIG)
 

@@ -138,7 +138,7 @@ async def serve_release(ctx: Ctx, name: str):
     is the name.
     """
 
-    if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "release"):
+    if not await rate_limit.allows(ctx.env, rate_limit.RELEASE, ctx.request, "release"):
         # Unauthenticated and tens of megabytes an answer. The limiter is
         # advisory — it fails open when its binding is absent — but a public
         # route that hands out installers should at least be behind the same

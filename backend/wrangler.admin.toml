@@ -55,6 +55,18 @@ name = "LOGIN_LIMITER"
 namespace_id = "1001"
 simple = { limit = 10, period = 60 }
 
+# The installer and its update metadata, which are public: an updater looks for
+# a new build before anybody has signed into anything. Tens of megabytes an
+# answer, so it gets a limit rather than nothing — and its own namespace, so an
+# update storm cannot spend the login limiter's budget.
+#
+# Generous, because an updater fetching `latest.yml`, a blockmap and an installer
+# is three requests in a row and two admins may install at once.
+[[ratelimits]]
+name = "RELEASE_LIMITER"
+namespace_id = "1007"
+simple = { limit = 60, period = 60 }
+
 [vars]
 # Only the back office talks to this Worker. The storefront origins are
 # deliberately absent: nothing served from luma-studio.tw has any business
