@@ -824,6 +824,77 @@ class TestRetiringAVideo:
         assert database.execute("SELECT status FROM video_assets WHERE id = 'asset-2'").fetchone()[0] == "uploading"
 
 
+class TestEndingAnUploadSession:
+    """The conditional UPDATE that ends a source upload.
+
+    Two requests can arrive together — the tool completing while an admin
+    cancels — and whichever R2 actually acted on is the one the row must end up
+    describing. Without the status in the WHERE clause the later write wins
+    regardless, so a cancelled upload can be recorded as completed.
+    """
+
+    def _session(self, database, status: str = "uploading") -> None:
+        database.execute(
+            "INSERT INTO video_upload_sessions (id, asset_id, upload_id, part_size, part_count,"
+            " status, etag, expires_at, created_at, updated_at)"
+            " VALUES ('session-1', 'asset-1', 'upload-1', 67108864, 4, ?, NULL, 900, 0, 0)",
+            (status,),
+        )
+
+    def test_a_cancelled_session_does_not_stand_in_the_way_of_a_new_one(self, database):
+        """Opening a source upload refuses when the asset already has one. A
+        cancelled session left nothing behind, so it must not count — and the
+        `!= 'aborted'` that decides is SQL, which the fake database does not
+        evaluate."""
+
+        from domain.source_upload import ASSET_SESSIONS_SQL
+
+        self._session(database, status="aborted")
+
+        rows = database.execute(bind_literals(ASSET_SESSIONS_SQL, "asset-1")).fetchall()
+        assert rows == []
+
+    @pytest.mark.parametrize("status", ["uploading", "completed"])
+    def test_a_live_or_finished_session_does(self, database, status):
+        from domain.source_upload import ASSET_SESSIONS_SQL
+
+        self._session(database, status=status)
+
+        rows = database.execute(bind_literals(ASSET_SESSIONS_SQL, "asset-1")).fetchall()
+        assert rows == [("session-1", status)]
+
+    def _settle(self, database, *, status: str, etag=None) -> int:
+        from domain.source_upload import SETTLE_SQL
+
+        cursor = database.execute(bind_literals(SETTLE_SQL, "session-1", status, etag, 1_700_000_000))
+        return cursor.rowcount
+
+    def test_it_ends_a_session_that_is_still_open(self, database):
+        self._session(database)
+
+        assert self._settle(database, status="completed", etag='"deadbeef-2"') == 1
+        row = database.execute("SELECT status, etag FROM video_upload_sessions").fetchone()
+        assert row == ("completed", '"deadbeef-2"')
+
+    def test_a_session_that_already_ended_is_left_alone(self, database):
+        self._session(database, status="completed")
+
+        assert self._settle(database, status="aborted") == 0
+        assert database.execute("SELECT status FROM video_upload_sessions").fetchone()[0] == "completed"
+
+    def test_cancelling_does_not_erase_a_tag_that_was_recorded(self, database):
+        """`etag` is written by whichever step produced one; the other passes
+        NULL, and NULL must mean "nothing to say" rather than "clear it"."""
+
+        self._session(database)
+        self._settle(database, status="completed", etag='"deadbeef-2"')
+
+        database.execute("UPDATE video_upload_sessions SET status = 'uploading'")
+        self._settle(database, status="aborted", etag=None)
+
+        assert database.execute("SELECT etag FROM video_upload_sessions").fetchone()[0] == '"deadbeef-2"'
+
+
 class TestRecordingAnEncodeVersion:
     """One row per output version, written when the version verifies.
 

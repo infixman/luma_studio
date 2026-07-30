@@ -57,6 +57,20 @@ def an_asset(**extra) -> dict:
     }
 
 
+class SourceBucket:
+    """Enough of the R2 binding to answer "is the assembled object there"."""
+
+    def __init__(self, stored=None):
+        self.stored = stored
+        self.asked: list[str] = []
+
+    async def head(self, key: str):
+        import types
+
+        self.asked.append(key)
+        return None if self.stored is None else types.SimpleNamespace(**self.stored)
+
+
 def env_with(answers=None, changes=None):
     return make_env(FakeDatabase(answers or {}, changes=changes), **CREDENTIALS_ENV)
 
@@ -123,6 +137,24 @@ class TestOpeningASession:
 
         with pytest.raises(ValueError):
             self._start(source_upload, env_with(), asset=an_asset(status="ready"))
+
+    @pytest.mark.parametrize("status", ["uploading", "completed"])
+    def test_a_second_session_for_one_asset_is_refused(self, source_upload, monkeypatch, status):
+        """Every session for an asset writes the same key, and `complete` treats
+        an object at that key as evidence its own upload finished. A second
+        session would let the first one's object answer for it."""
+
+        started(source_upload, monkeypatch)
+        env = env_with({"FROM video_upload_sessions WHERE asset_id": [{"id": "session-0", "status": status}]})
+
+        with pytest.raises(ValueError):
+            self._start(source_upload, env)
+
+    def test_a_cancelled_session_does_not_block_trying_again(self, source_upload, monkeypatch):
+        started(source_upload, monkeypatch)
+        env = env_with({"FROM video_upload_sessions WHERE asset_id": []})
+
+        assert self._start(source_upload, env)["sessionId"]
 
     def test_too_many_pending_uploads_at_once_is_refused(self, source_upload, monkeypatch):
         """Every open session is a pending multipart upload in R2, billed and
@@ -226,3 +258,210 @@ class TestSigningAPart:
     def test_a_finished_session_signs_nothing(self, source_upload, status):
         with pytest.raises(ValueError):
             self._url(source_upload, session=a_session(status=status))
+
+
+class TestFinishing:
+    """Completing is the step that cannot be made idempotent by asking R2.
+
+    A finished upload's id stops existing, so a second complete and a complete of
+    something that never existed both answer `NoSuchUpload`. The row is what
+    tells them apart — and when the row does not know either, because the answer
+    to the first attempt was lost, the object itself is the evidence.
+    """
+
+    def _completing(self, source_upload, monkeypatch, result):
+        calls: list[dict] = []
+
+        async def fake_complete(*, credentials, bucket, key, upload_id, parts, now):
+            calls.append({"key": key, "upload_id": upload_id, "parts": list(parts)})
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        monkeypatch.setattr(source_upload.r2_s3, "complete_multipart", fake_complete)
+        return calls
+
+    def _env(self, answers=None, stored=None):
+        env = env_with(answers)
+        env.COURSE_SOURCE = SourceBucket(stored)
+        return env
+
+    def _complete(self, source_upload, env, session=None, parts=None, now=1785292800, asset=None):
+        return asyncio.run(
+            source_upload.complete(
+                env,
+                asset=asset or an_asset(),
+                session=session or a_session(),
+                parts=parts if parts is not None else [{"partNumber": 1, "eTag": '"abc"'}],
+                now=now,
+            )
+        )
+
+    def test_it_assembles_the_object_and_records_the_tag(self, source_upload, monkeypatch):
+        self._completing(source_upload, monkeypatch, '"deadbeef-2"')
+        env = self._env()
+
+        finished = self._complete(source_upload, env)
+
+        assert finished["etag"] == '"deadbeef-2"'
+        writes = [b for sql, b in env.DB.writes if sql.startswith("UPDATE video_upload_sessions")]
+        assert writes and "completed" in writes[0] and '"deadbeef-2"' in writes[0]
+
+    def test_the_parts_the_tool_reports_are_what_is_sent(self, source_upload, monkeypatch):
+        calls = self._completing(source_upload, monkeypatch, '"x"')
+
+        self._complete(
+            source_upload,
+            self._env(),
+            parts=[{"partNumber": 2, "eTag": '"b"'}, {"partNumber": 1, "eTag": '"a"'}],
+        )
+
+        assert sorted(calls[0]["parts"]) == [(1, '"a"'), (2, '"b"')]
+
+    def test_completing_again_answers_from_the_row_without_asking_r2(self, source_upload, monkeypatch):
+        """The tool retrying after a lost answer is the ordinary path, and asking
+        R2 again would get `NoSuchUpload` for an upload that worked."""
+
+        calls = self._completing(source_upload, monkeypatch, '"x"')
+
+        finished = self._complete(
+            source_upload, self._env(), session=a_session(status="completed", etag='"deadbeef-2"')
+        )
+
+        assert finished["etag"] == '"deadbeef-2"'
+        assert calls == []
+
+    def test_completing_an_upload_whose_video_was_retired_is_refused(self, source_upload, monkeypatch):
+        """An admin abandoned it while the tool was still pushing parts. Writing
+        the original of a retired video records something nothing will read."""
+
+        self._completing(source_upload, monkeypatch, '"x"')
+
+        with pytest.raises(ValueError):
+            self._complete(source_upload, self._env(), asset=an_asset(status="aborted"))
+
+    def test_a_session_somebody_else_already_ended_is_reported_not_overwritten(
+        self, source_upload, monkeypatch
+    ):
+        """A tool completing while an admin cancels is one request per outcome.
+        The one whose UPDATE changes nothing must not report its own."""
+
+        self._completing(source_upload, monkeypatch, '"x"')
+        env = self._env()
+        env.DB.changes = {"UPDATE video_upload_sessions": 0}
+
+        with pytest.raises(ValueError):
+            self._complete(source_upload, env)
+
+    def test_completing_an_abandoned_upload_is_refused(self, source_upload, monkeypatch):
+        self._completing(source_upload, monkeypatch, '"x"')
+
+        with pytest.raises(ValueError):
+            self._complete(source_upload, self._env(), session=a_session(status="aborted"))
+
+    def test_an_upload_r2_has_no_record_of_is_settled_by_looking_at_the_object(
+        self, source_upload, monkeypatch
+    ):
+        """The case that matters: R2 assembled the object and the answer never
+        arrived. Asking again says `NoSuchUpload`, which is the same thing it
+        says about an id that never existed — so the object decides."""
+
+        from shared.r2_s3 import R2Error
+
+        self._completing(source_upload, monkeypatch, R2Error("gone", status=404, code="NoSuchUpload"))
+        env = self._env(stored={"size": 4096, "etag": '"deadbeef-2"'})
+
+        finished = self._complete(source_upload, env)
+
+        assert finished["etag"] == '"deadbeef-2"'
+        writes = [b for sql, b in env.DB.writes if sql.startswith("UPDATE video_upload_sessions")]
+        assert writes and "completed" in writes[0]
+
+    def test_an_upload_r2_has_no_record_of_and_no_object_for_is_a_failure(
+        self, source_upload, monkeypatch
+    ):
+        from shared.r2_s3 import R2Error
+
+        self._completing(source_upload, monkeypatch, R2Error("gone", status=404, code="NoSuchUpload"))
+        env = self._env(stored=None)
+
+        with pytest.raises(R2Error):
+            self._complete(source_upload, env)
+
+        assert not [sql for sql, _ in env.DB.writes if sql.startswith("UPDATE video_upload_sessions")]
+
+    def test_any_other_refusal_is_not_reinterpreted(self, source_upload, monkeypatch):
+        from shared.r2_s3 import R2Error
+
+        self._completing(source_upload, monkeypatch, R2Error("nope", status=403, code="AccessDenied"))
+
+        with pytest.raises(R2Error):
+            self._complete(source_upload, self._env(stored={"size": 4096, "etag": '"x"'}))
+
+    @pytest.mark.parametrize(
+        "parts",
+        [
+            [],
+            [{"partNumber": "1", "eTag": '"a"'}],
+            [{"partNumber": 1}],
+            [{"eTag": '"a"'}],
+            "not a list",
+        ],
+    )
+    def test_a_part_list_that_is_not_one_is_refused(self, source_upload, monkeypatch, parts):
+        self._completing(source_upload, monkeypatch, '"x"')
+
+        with pytest.raises(ValueError):
+            self._complete(source_upload, self._env(), parts=parts)
+
+
+class TestCancelling:
+    def _cancelling(self, source_upload, monkeypatch, error=None):
+        calls: list[dict] = []
+
+        async def fake_abort(*, credentials, bucket, key, upload_id, now):
+            calls.append({"key": key, "upload_id": upload_id})
+            if error is not None:
+                raise error
+
+        monkeypatch.setattr(source_upload.r2_s3, "abort_multipart", fake_abort)
+        return calls
+
+    def _abort(self, source_upload, env, session=None, now=1785292800):
+        return asyncio.run(source_upload.abort(env, session=session or a_session(), now=now))
+
+    def test_it_cancels_the_upload_and_marks_the_row(self, source_upload, monkeypatch):
+        calls = self._cancelling(source_upload, monkeypatch)
+        env = env_with()
+
+        self._abort(source_upload, env)
+
+        assert calls and calls[0]["upload_id"] == UPLOAD_ID
+        writes = [b for sql, b in env.DB.writes if sql.startswith("UPDATE video_upload_sessions")]
+        assert writes and "aborted" in writes[0]
+
+    def test_cancelling_twice_is_not_an_error(self, source_upload, monkeypatch):
+        calls = self._cancelling(source_upload, monkeypatch)
+
+        self._abort(source_upload, env_with(), session=a_session(status="aborted"))
+
+        assert calls == []
+
+    def test_an_expired_session_can_still_be_cancelled(self, source_upload, monkeypatch):
+        """The row's window is over; the pending upload in R2 is not. Refusing
+        here would leave the only thing that can end it unreachable."""
+
+        calls = self._cancelling(source_upload, monkeypatch)
+
+        self._abort(source_upload, env_with(), session=a_session(expires_at=1785292799))
+
+        assert calls
+
+    def test_cancelling_a_finished_upload_is_refused(self, source_upload, monkeypatch):
+        """The object exists and is the asset's original. "Cancel" would either
+        do nothing or delete it, and neither is what the word says."""
+
+        self._cancelling(source_upload, monkeypatch)
+
+        with pytest.raises(ValueError):
+            self._abort(source_upload, env_with(), session=a_session(status="completed"))

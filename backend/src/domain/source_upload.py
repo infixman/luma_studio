@@ -17,7 +17,7 @@ must not pass through the Worker.
 
 from domain import video
 from shared import r2_s3, sigv4
-from shared.common import d1_rows, urlsafe_token, utc_timestamp
+from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
 from domain.video_storage import URL_TTL, bucket_for, credentials_for
 
 
@@ -81,6 +81,24 @@ async def get_session(env, session_id: str, *, asset_id: str) -> dict | None:
     return rows[0] if rows else None
 
 
+# Which sessions stand in the way of opening a new one. A fake database returns
+# whatever a test declared for a matching statement, so the `!= 'aborted'` is
+# only exercised where SQL is actually evaluated — hence the constant.
+ASSET_SESSIONS_SQL = (
+    "SELECT id, status FROM video_upload_sessions WHERE asset_id = ?1 AND status != 'aborted'"
+)
+
+
+async def sessions_for(env, asset_id: str) -> list[dict]:
+    """Sessions for this asset that are not cancelled.
+
+    A cancelled one leaves nothing behind, so it does not stand in the way of
+    trying again; a live or completed one does.
+    """
+
+    return await d1_rows(env.DB.prepare(ASSET_SESSIONS_SQL).bind(asset_id))
+
+
 async def live_sessions(env, now: int) -> int:
     rows = await d1_rows(
         env.DB.prepare(
@@ -103,6 +121,13 @@ async def start(env, *, asset: dict, now: int | None = None) -> dict:
         raise ValueError("這支影片已經不在上傳中")
 
     now = utc_timestamp() if now is None else now
+    # One original per asset, so one session that ever finished. Every session
+    # for an asset writes the same key, which is also what makes the "did the
+    # object appear" test in `complete` mean anything: with a second session
+    # allowed, an earlier upload's object would answer for a later one that
+    # never finished.
+    if await sessions_for(env, asset["id"]):
+        raise ValueError("這支影片已經有原始檔上傳，請先取消或改用重新轉檔")
     if await live_sessions(env, now) >= MAX_LIVE_SESSIONS:
         raise ValueError(f"同時最多 {MAX_LIVE_SESSIONS} 個原始檔上傳，請先完成或取消其中一個")
 
@@ -161,6 +186,143 @@ def usable(session: dict, now: int) -> None:
         raise ValueError("這次上傳已經結束")
     if int(session["expires_at"]) <= now:
         raise ValueError("這次上傳已經逾時，請重新開始")
+
+
+class InvalidParts(ValueError):
+    """The part list is not one. A malformed request, not a state conflict."""
+
+
+def _reported_parts(parts) -> list[tuple[int, str]]:
+    """What the tool says it uploaded, in the shape the S3 client takes.
+
+    Each part's ETag comes back to the tool in the PUT response and comes here in
+    the complete request, so this list is the one thing about the finished object
+    that is the caller's word. It is checked for shape only — `r2_s3` checks the
+    values, and R2 checks whether they are the parts it actually holds.
+    """
+
+    if not isinstance(parts, list) or not parts:
+        raise InvalidParts("沒有已完成的分段可以合併")
+
+    reported = []
+    for part in parts:
+        if not isinstance(part, dict):
+            raise InvalidParts("分段格式不正確")
+        number, etag = part.get("partNumber"), part.get("eTag")
+        if isinstance(number, bool) or not isinstance(number, int):
+            raise InvalidParts("分段編號必須是整數")
+        if not isinstance(etag, str) or not etag.strip():
+            raise InvalidParts(f"分段 {number} 沒有 ETag")
+        reported.append((number, etag.strip()))
+    return reported
+
+
+# Ending a session, and only from the state it was read in. Two requests can
+# arrive together — a tool completing while an admin cancels — and the last write
+# would otherwise win regardless of which one R2 actually acted on. A fake
+# database reports a row changed whatever this clause says, so it is a constant
+# the real-SQLite tests import.
+SETTLE_SQL = (
+    "UPDATE video_upload_sessions SET status = ?2, etag = COALESCE(?3, etag), updated_at = ?4"
+    " WHERE id = ?1 AND status = 'uploading'"
+)
+
+
+async def _settle(env, *, session: dict, status: str, etag: str | None, now: int) -> None:
+    """End the session, or say that somebody else already did.
+
+    The answer is checked rather than discarded. A tool completing while an admin
+    cancels is one request per outcome, and the loser writing nothing while still
+    reporting its own outcome tells one of them something untrue.
+    """
+
+    result = await env.DB.prepare(SETTLE_SQL).bind(session["id"], status, etag, now).run()
+    if not d1_changed(result):
+        raise ValueError("這次上傳的狀態已經改變，請重新讀取")
+
+
+async def complete(env, *, asset: dict, session: dict, parts, now: int | None = None) -> dict:
+    """Assemble the parts into the asset's original.
+
+    Idempotent, and it has to be done here rather than by asking R2 twice: a
+    completed upload's id stops existing, so a second complete answers
+    `NoSuchUpload` — the same answer as for an id that never existed. The row
+    remembers the tag, so a retry that arrives after a lost answer is answered
+    from D1 without touching R2.
+
+    When the row does not know either — the first attempt's answer was the thing
+    that was lost — the object is the evidence. R2 saying `NoSuchUpload` while an
+    object sits at the key means the assembly worked and the reply did not.
+    """
+
+    now = utc_timestamp() if now is None else now
+    # The session's expiry is deliberately not checked. It bounds how long parts
+    # may be signed for, not how long the tool has to say it finished — an upload
+    # that took longer than the window still produced an object, and refusing to
+    # record it would leave the bytes paid for and unusable.
+    if asset["status"] != "uploading":
+        raise ValueError("這支影片已經不在上傳中")
+    if session["status"] == "completed":
+        return {"etag": session["etag"] or "", "alreadyCompleted": True}
+    if session["status"] != "uploading":
+        raise ValueError("這次上傳已經取消，請重新開始")
+
+    reported = _reported_parts(parts)
+    key = video.source_key(session["asset_id"], UPLOAD_VERSION)
+    credentials = credentials_for(env)
+    bucket = bucket_for(env, "source")
+
+    try:
+        etag = await r2_s3.complete_multipart(
+            credentials=credentials,
+            bucket=bucket,
+            key=key,
+            upload_id=session["upload_id"],
+            parts=reported,
+            now=now,
+        )
+    except r2_s3.R2Error as error:
+        if error.code not in r2_s3.GONE_CODES:
+            raise
+        stored = await env.COURSE_SOURCE.head(key)
+        if stored is None:
+            # Nothing was assembled and the upload is not there to finish. The
+            # tool has to start again, and saying so beats a success it cannot
+            # act on.
+            raise
+        etag = str(getattr(stored, "etag", "") or "")
+
+    await _settle(env, session=session, status="completed", etag=etag, now=now)
+    return {"etag": etag, "alreadyCompleted": False}
+
+
+async def abort(env, *, session: dict, now: int | None = None) -> None:
+    """Cancel a pending upload, and stop it costing anything.
+
+    Idempotent for the same reason abort is in `r2_s3`: the retry is ordinary.
+    An expired session may still be cancelled — the row's window is over but the
+    pending upload in R2 is not, and refusing here would leave the only thing
+    that can end it unreachable.
+
+    A completed upload is refused rather than cancelled. The object exists and is
+    the asset's original; "cancel" would either do nothing or delete it, and
+    neither is what the word says.
+    """
+
+    now = utc_timestamp() if now is None else now
+    if session["status"] == "aborted":
+        return
+    if session["status"] != "uploading":
+        raise ValueError("這次上傳已經完成，不能取消")
+
+    await r2_s3.abort_multipart(
+        credentials=credentials_for(env),
+        bucket=bucket_for(env, "source"),
+        key=video.source_key(session["asset_id"], UPLOAD_VERSION),
+        upload_id=session["upload_id"],
+        now=now,
+    )
+    await _settle(env, session=session, status="aborted", etag=None, now=now)
 
 
 def part_url(env, *, asset: dict, session: dict, part_number: int, now: int | None = None) -> dict:

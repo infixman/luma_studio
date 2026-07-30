@@ -69,6 +69,12 @@ _VIDEO_ROUTES = (
         "POST",
         re.compile(r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload/[A-Za-z0-9_-]{1,64}/parts/\d{1,5}$"),
     ),
+    (
+        "POST",
+        re.compile(
+            r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload/[A-Za-z0-9_-]{1,64}/(?:complete|abort)$"
+        ),
+    ),
     # The FFmpeg mirror. Part of uploading rather than a separate permission: the
     # tool reaches it with an MP4 already dropped on it and no FFmpeg to encode
     # with. The bytes are a published GPL build and not a secret — what the token

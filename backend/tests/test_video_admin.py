@@ -395,6 +395,105 @@ class TestOpeningASourceUpload:
 
         assert response.status == 409
 
+    def test_finishing_reports_the_assembled_object(self, call, monkeypatch):
+        from shared import r2_s3
+
+        async def fake_complete(*, credentials, bucket, key, upload_id, parts, now):
+            return '"deadbeef-2"'
+
+        monkeypatch.setattr(r2_s3, "complete_multipart", fake_complete)
+
+        response = call(
+            JsonRequest(
+                f"/api/video-assets/{ASSET_ID}/source-upload/session-1/complete",
+                "POST",
+                {"parts": [{"partNumber": 1, "eTag": '"a"'}]},
+                {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+            ),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 200
+        assert response.json()["etag"] == '"deadbeef-2"'
+
+    def test_r2_refusing_to_finish_is_not_the_caller_s_fault(self, call, monkeypatch):
+        from shared import r2_s3
+
+        async def fake_complete(*, credentials, bucket, key, upload_id, parts, now):
+            raise r2_s3.R2Error("nope", status=500, code="InternalError")
+
+        monkeypatch.setattr(r2_s3, "complete_multipart", fake_complete)
+
+        response = call(
+            JsonRequest(
+                f"/api/video-assets/{ASSET_ID}/source-upload/session-1/complete",
+                "POST",
+                {"parts": [{"partNumber": 1, "eTag": '"a"'}]},
+                {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+            ),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 502
+
+    def test_cancelling_ends_the_session(self, call, monkeypatch):
+        from shared import r2_s3
+
+        cancelled: list[str] = []
+
+        async def fake_abort(*, credentials, bucket, key, upload_id, now):
+            cancelled.append(upload_id)
+
+        monkeypatch.setattr(r2_s3, "abort_multipart", fake_abort)
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/abort", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 200
+        assert cancelled == ["ABPnzm4-tEXAMPLE"]
+
+    @pytest.mark.parametrize("path", ["complete/now", "abort/../archive", "parts"])
+    def test_a_step_with_anything_after_it_is_not_found(self, call, path):
+        """The step is the whole segment. Matching a prefix would make
+        `.../complete/anything` a complete."""
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/{path}", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 404
+
+    def test_an_unknown_step_is_not_found(self, call):
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/finish", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 404
+
     def test_the_session_is_read_with_its_asset(self, call):
         """A session id alone would let a token for one asset name a session
         belonging to another."""

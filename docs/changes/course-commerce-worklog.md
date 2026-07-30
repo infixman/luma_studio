@@ -1820,3 +1820,65 @@ DELETE 和 POST 都同時帶著 `uploadId`，而簽章涵蓋整個 query**。一
 而 `validate_byte_size` 的 docstring 就寫著「一份上限。兩份最後一定會不一致，而不一致的
 表現方式是上傳開始了但傳不完」。簽章層擁有它（`shared` 不能 import `domain`），
 domain 從那裡讀。
+
+
+## S5.6／S5.7：原始檔上傳的 session，以及「冪等」到底是誰的性質
+
+四個端點做完了：開一個 session、簽一個 part、完成、取消。
+
+### 為什麼是 session 而不是一批 URL
+
+HLS 的幾百個物件是各自獨立的 PUT：掉了一個就重傳一個，放棄了也不留下東西。
+原始檔是**一個**幾 GB 的物件，而 multipart upload 是**R2 替我們保管的狀態** ——
+已經傳上去的分段會計費、在 bucket 列表裡看不到，而且會一直留著，直到有人完成或取消它。
+
+所以它需要一列。那一列回答三件別的地方回答不了的事：這個 asset 的 R2 upload id 是什麼、
+工具被告知要怎麼切這個檔案、以及這次上傳還能不能被寫入。
+
+工具拿到的只有 part 的 URL —— 那是 bytes。create／complete／abort 是 Worker 自己發的請求，
+理由寫在 `sigv4.py` 的 docstring 裡：**把 create 交給工具，就沒有人記得下 R2 發的 uploadId**。
+
+### 冪等不是一張 URL 的性質
+
+complete 的冪等原本是文件裡的一句要求。實作的時候才看清楚它為什麼不能在 S3 那一層做：
+**完成之後 uploadId 就不存在了**，所以「已經完成過」和「這個 id 從來不存在」回的是同一個
+`NoSuchUpload`。
+
+於是分成兩層：
+- session 已經是 `completed` 就直接用記下的 etag 回答，**連 parts 都不讀**。所以工具重送
+  什麼清單都一樣 —— 冪等是伺服器的性質，不是「工具每次送一樣的東西」。
+- 如果 session 自己也不知道（第一次的回應就是掉的那個東西），就去 **HEAD 那個 key**：
+  R2 說 `NoSuchUpload` 而物件在那裡，代表組好了、回應掉了。
+
+審查對第二點提出一個我沒想到的破口：**所有 session 寫的是同一個 key**，所以如果一個 asset
+可以有第二個 session，第一個 session 留下的物件會替第二個「作證」。修法不是把判斷寫複雜，
+是**一個 asset 只允許一個沒被取消的 session**（取消過的不算，那沒留下東西）。
+一個原始檔本來就只有一份。
+
+### `_settle` 的回傳值本來被丟掉
+
+結束 session 的 UPDATE 帶著 `status = 'uploading'` 的條件（工具在完成、管理員在取消，
+是一人一個結果）。但我沒有看它改了幾列 —— 於是輸的那一方**什麼都沒寫，卻照樣回報自己的結果**。
+更難看的是：abort 那邊的 `abort_multipart` 對已完成的 upload 收到 `NoSuchUpload` 會當成成功，
+所以它會回「已取消」，而物件其實好好地組起來了。
+
+現在改不到列就丟例外，路由回 409。而那道 WHERE 一樣用真 SQLite 測 —— 這是第五次了。
+
+### 突變驗證第二次抓到「fake 資料庫測不到 SQL 語意」
+
+「取消過的 session 不擋新的一次」這條規則寫在 SQL 的 `status != 'aborted'` 裡。
+我把它改成 `status = 'zzz'`，測試全綠 —— 因為 `FakeDatabase` 是用 SQL 子字串比對來回答的，
+改了 WHERE 還是命中同一個 fixture。抽成 `ASSET_SESSIONS_SQL`，在真 SQLite 裡測。
+
+### 幾個順手釘住的邊界
+
+- **part 的路徑段用 `isdigit()` 判斷**，不是 `int()`：`int` 收 `"+1"`、`" 1"`、
+  還有阿拉伯-印度數字。一個路徑段要嘛是數字，要嘛不是 part number。
+- **`.../complete/anything` 不是 complete。** step 是一整個路徑段，前綴比對會讓
+  `abort/../archive` 也算數。
+- **形狀錯誤回 400、狀態衝突回 409。** parts 的格式不對是請求寫錯，「這次上傳已經取消」
+  是狀態；用同一個碼回答，等於叫一個 body 寫錯的工具去看沒有錯的東西。
+- **complete 不檢查 session 過期。** 那個窗口界定的是「還能不能簽 part」，不是
+  「工具有多久可以說它傳完了」—— 傳超過窗口的上傳還是產生了物件，拒絕記錄它等於
+  bytes 付了錢又不能用。abort 同理，而且更明顯：R2 那邊的 pending upload 不會因為
+  我們的窗口過了就消失，唯一能結束它的東西不能被鎖在門外。

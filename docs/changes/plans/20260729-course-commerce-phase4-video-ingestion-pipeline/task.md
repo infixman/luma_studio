@@ -140,13 +140,13 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       upload 回 404 而那是成功（但只有 `NoSuchUpload`／空 code 算，`NoSuchBucket` 是設定錯）；
       **complete 沒辦法在這一層做到冪等** —— 完成後 uploadId 就不存在，所以「已經完成」和
       「從來不存在」都回 `NoSuchUpload`。`R2Error` 帶 `code`，讓路由層去分辨。
-- [ ] 實作原始檔 multipart 的 create／part／complete／abort 端點，且 complete 與 abort 冪等。
-      **`video_upload_sessions` 現在沒有地方存每個 part 的 ETag**（欄位只有 id／asset_id／
-      upload_id／part_size／status／expires_at／時間戳）。complete 需要那份清單，而如果只靠
-      工具重送，那 complete 的冪等就變成「工具每次送一樣的清單」而不是伺服器的性質。
-      要嘛加一張 part 表，要嘛明講冪等只涵蓋 abort。
-      另外：complete 收到 `NoSuchUpload` 時不能直接當失敗 —— 要先 HEAD 那個 key，
-      因為「R2 完成了、回應掉了」長得一模一樣。
+- [x] 實作原始檔 multipart 的 create／part／complete／abort 端點，且 complete 與 abort 冪等。
+      **每個 part 的 ETag 不存在伺服器**（工具在 complete 時一起送），而冪等仍然是伺服器的
+      性質：session 一旦是 `completed`，complete 會在讀 parts 之前就用記下的 etag 回答，
+      重送什麼清單都一樣。
+      complete 收到 `NoSuchUpload` 不當失敗 —— 先 HEAD 那個 key，因為「R2 完成了、回應掉了」
+      跟「這個 upload 從來不存在」是同一個答案。為了讓那個判斷有意義，**一個 asset 只允許一個
+      沒被取消的 session**：所有 session 寫的是同一個 key，第二個 session 會被第一個的物件冒認。
 - [ ] 工具上傳原始檔。
 - [ ] 限制單檔大小、影片長度與同時 session 數。
 - [ ] 實作 `GET /api/video-storage?prefix=`，只回 key／大小／時間，不回簽章 URL。

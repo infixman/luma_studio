@@ -404,6 +404,41 @@ async def handle(ctx: Ctx):
                 except ValueError as error:
                     return ctx.error(str(error) or "Invalid part", 400)
 
+            if step in ("complete", "abort") and not rest:
+                parts = None
+                if step == "complete":
+                    try:
+                        parts = (await ctx.json_body()).get("parts")
+                    except (AttributeError, TypeError, ValueError):
+                        return ctx.error("Invalid request", 400)
+                try:
+                    if step == "abort":
+                        await source_upload.abort(env, session=session)
+                        return ctx.json({"status": "aborted"})
+                    finished = await source_upload.complete(
+                        env, asset=asset, session=session, parts=parts
+                    )
+                    return ctx.json({"status": "completed", **finished})
+                except video_storage.NotConfigured:
+                    return ctx.error("影片上傳尚未設定完成", 503)
+                except r2_s3.R2Error:
+                    # The upload is not finished and this request cannot say more
+                    # than that. Retrying is safe — both steps are idempotent —
+                    # which is why this is not a 4xx.
+                    return ctx.error("R2 目前無法完成這個動作，請稍後再試", 502)
+                except source_upload.InvalidParts as error:
+                    # The request's shape, not the upload's state. Answering 409
+                    # to both would tell a tool with a malformed body to go and
+                    # look at something that is not wrong.
+                    return ctx.error(str(error), 400)
+                except ValueError as error:
+                    return ctx.error(str(error) or "Invalid request", 409)
+                except AttributeError:
+                    # A binding this deployment does not have — `COURSE_SOURCE`
+                    # is read only on this path. Not the caller's fault, and not
+                    # a conflict to resolve.
+                    return ctx.error("影片上傳尚未設定完成", 503)
+
             return ctx.error("Not found", 404)
 
         if action == "upload-urls" and method == "POST":

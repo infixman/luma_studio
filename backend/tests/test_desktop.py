@@ -369,6 +369,8 @@ class TestWhatAVideoTokenMayReach:
             ("POST", "/api/video-assets/import"),
             ("POST", "/api/video-assets/asset-1/source-upload"),
             ("POST", "/api/video-assets/asset-1/source-upload/session-1/parts/1"),
+            ("POST", "/api/video-assets/asset-1/source-upload/session-1/complete"),
+            ("POST", "/api/video-assets/asset-1/source-upload/session-1/abort"),
         ],
     )
     def test_the_upload_routes_are_reachable(self, desktop_auth, method, path):
