@@ -101,7 +101,7 @@ async def dispatch(ctx: Ctx):
     # all belong on this side of the gate above — the token exchange cannot,
     # since a tool has no session yet — so which of them is authenticated has to
     # be visible here instead of inferred from a prefix.
-    if path == "/api/desktop/pairing-code":
+    if path == "/api/desktop/pairing-code" or path.startswith("/tools/ffmpeg/"):
         return await desktop_admin_api.handle(ctx)
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):

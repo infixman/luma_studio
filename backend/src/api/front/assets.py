@@ -5,7 +5,7 @@ from urllib.parse import unquote
 from domain import media, shop, site_chrome
 from shared.common import CACHE_1D, CACHE_1H, IMAGE_CONTENT_TYPES, IbonError, validate_file_name, validate_folder
 from ibon import resolve_print_result
-from shared.responses import Ctx, frontend_origin, serve_r2_image
+from shared.responses import Ctx, frontend_origin, serve_r2_object
 
 
 def wants_json(ctx: Ctx) -> bool:
@@ -24,7 +24,7 @@ async def public_image_response(ctx: Ctx, path: str):
         folder, file_name = validate_folder(unquote(folder)), validate_file_name(unquote(file_name))
     except ValueError:
         return ctx.error("Invalid image URL", 400)
-    return await serve_r2_image(ctx, ctx.env.IBON_IMAGES, f"{folder}/{file_name}", IMAGE_CONTENT_TYPES, CACHE_1H)
+    return await serve_r2_object(ctx, ctx.env.IBON_IMAGES, f"{folder}/{file_name}", IMAGE_CONTENT_TYPES, CACHE_1H)
 
 
 async def media_image_response(ctx: Ctx, file_name: str):
@@ -36,7 +36,7 @@ async def media_image_response(ctx: Ctx, file_name: str):
     key = f"{media.OBJECT_PREFIX}/{file_name}"
     if not await media.key_is_known(ctx.env, key):
         return ctx.error("Image not found", 404)
-    return await serve_r2_image(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1D)
+    return await serve_r2_object(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1D)
 
 
 async def site_image_response(ctx: Ctx, file_name: str):
@@ -48,7 +48,7 @@ async def site_image_response(ctx: Ctx, file_name: str):
     key = await site_chrome.header_image_key(ctx.env)
     if key != f"{site_chrome.IMAGE_PREFIX}/{file_name}":
         return ctx.error("Image not found", 404)
-    return await serve_r2_image(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1H)
+    return await serve_r2_object(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1H)
 
 
 async def shop_image_response(ctx: Ctx, file_name: str):
@@ -60,7 +60,7 @@ async def shop_image_response(ctx: Ctx, file_name: str):
     key = await shop.image_key_for_file(ctx.env, file_name)
     if key is None:
         return ctx.error("Photo not found", 404)
-    return await serve_r2_image(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1H)
+    return await serve_r2_object(ctx, ctx.env.IBON_IMAGES, key, IMAGE_CONTENT_TYPES, CACHE_1H)
 
 
 async def print_response(ctx: Ctx, identifier: str):

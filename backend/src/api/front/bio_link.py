@@ -6,7 +6,7 @@ import workers
 
 from domain import bio_link
 from shared.common import CACHE_1H, IMAGE_CONTENT_TYPES
-from shared.responses import Ctx, serve_r2_image
+from shared.responses import Ctx, serve_r2_object
 
 
 async def response(ctx: Ctx):
@@ -56,4 +56,4 @@ async def avatar_response(ctx: Ctx, file_name: str):
     suffix = file_name[file_name.rfind(".") :].lower()
     if "/" in file_name or ".." in file_name or suffix not in bio_link.AVATAR_SUFFIXES:
         return ctx.error("Invalid avatar URL", 400)
-    return await serve_r2_image(ctx, ctx.env.IBON_IMAGES, f"{bio_link.AVATAR_PREFIX}/{file_name}", IMAGE_CONTENT_TYPES, CACHE_1H)
+    return await serve_r2_object(ctx, ctx.env.IBON_IMAGES, f"{bio_link.AVATAR_PREFIX}/{file_name}", IMAGE_CONTENT_TYPES, CACHE_1H)

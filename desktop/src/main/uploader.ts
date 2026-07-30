@@ -30,11 +30,14 @@ import * as ledger from './ledger'
 /**
  * Uploading a folder of encoded output.
  *
- * This step deliberately does not transcode. Its input is a directory produced
- * by `scripts/transcode-course-video.ps1`, which is the reason that script is
- * still in the repository: the integration — pairing, presigning, retrying,
- * content types, resuming, registering — is what goes wrong, and it is cheaper
- * to find out with a folder that is already known to be correct.
+ * This step deliberately does not transcode. Its input is a directory of
+ * finished output, which is how the integration — pairing, presigning, retrying,
+ * content types, resuming, registering — was proven before a transcoder existed:
+ * that is the part that goes wrong, and it is cheaper to find out with a folder
+ * already known to be correct.
+ *
+ * It stays a separate entrance for the same reason it started as one. Re-sending
+ * an encode is minutes; making it again is an hour.
  *
  * Nothing here logs a URL. A presigned URL is a bearer credential and a log
  * outlives its fifteen minutes.

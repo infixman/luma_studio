@@ -146,8 +146,14 @@ class Ctx:
         return Response("", status=204, headers=headers)
 
 
-async def serve_r2_image(ctx: Ctx, bucket, key: str, content_types: dict, cache: str = CACHE_1H):
-    """Read an object and produce the standard public image response."""
+async def serve_r2_object(ctx: Ctx, bucket, key: str, content_types: dict, cache: str = CACHE_1H):
+    """Read an object and produce the standard public response for it.
+
+    Named for objects rather than images because it also serves the FFmpeg mirror,
+    which is a zip. The default content type was already `application/octet-stream`
+    — what a caller with no suffix in `content_types` gets — so nothing about the
+    behaviour changed with the name.
+    """
 
     obj = await bucket.get(key)
     if obj is None:

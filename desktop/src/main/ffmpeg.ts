@@ -12,6 +12,7 @@ import {
   verifyDownload,
   versionMatches,
 } from '../shared/ffmpegRelease'
+import { requireToken } from './session'
 
 /**
  * Getting hold of the pinned FFmpeg, and refusing to run any other.
@@ -94,6 +95,54 @@ export interface FetchProgress {
   totalBytes: number
 }
 
+/** The environment variable that points at an FFmpeg already on this machine. */
+export const OVERRIDE_VAR = 'LUMA_FFMPEG_DIR'
+
+/**
+ * An FFmpeg somebody on this machine already has, for development only.
+ *
+ * The mirror is what every installed copy uses, and it cannot exist until
+ * somebody uploads a build to it. Without an escape hatch, nothing about
+ * transcoding can be exercised until that day — which is how a whole feature
+ * ends up first run in anger.
+ *
+ * Two limits make this safe to leave in:
+ *
+ * **Never in a packaged build.** `app.isPackaged` is the gate. An installed tool
+ * that could be pointed at an arbitrary encoder by setting an environment
+ * variable is an installed tool with no pin at all, and the pin is what keeps the
+ * output servable.
+ *
+ * **The version is still checked once there is one to check.** If `PINNED` names
+ * a version, a borrowed binary reporting a different one is refused. The digest
+ * and the version are never configurable — only where to look is.
+ */
+async function borrowedTools(): Promise<Tools | null> {
+  const dir = process.env[OVERRIDE_VAR]
+  if (!dir) return null
+  if (app.isPackaged) {
+    throw new FfmpegUnavailable(
+      `${OVERRIDE_VAR} 只在開發時有效，安裝後的版本一律使用釘死的 FFmpeg。`,
+    )
+  }
+
+  const tools = { ffmpeg: join(dir, 'ffmpeg.exe'), ffprobe: join(dir, 'ffprobe.exe') }
+  for (const [what, path] of Object.entries(tools)) {
+    if (!existsSync(path)) {
+      throw new FfmpegUnavailable(`${OVERRIDE_VAR} 指向 ${dir}，但那裡沒有 ${what}.exe。`)
+    }
+  }
+
+  if (PINNED.version && !(await isPinned(tools))) {
+    throw new FfmpegUnavailable(
+      `${OVERRIDE_VAR} 指向的 FFmpeg 不是釘死的版本（需要 ${PINNED.version}）。`,
+    )
+  }
+
+  console.warn(`[ffmpeg] 使用 ${OVERRIDE_VAR}=${dir}，未經釘死版本檢查。這只該出現在開發環境。`)
+  return tools
+}
+
 /**
  * Download the archive, check it, and unpack it.
  *
@@ -103,9 +152,18 @@ export interface FetchProgress {
  */
 async function install(base: string, onProgress?: (progress: FetchProgress) => void): Promise<void> {
   const url = mirrorUrl(base, PINNED)
-  const response = await fetch(url)
+  // The mirror is behind the desktop token. The bytes are a published GPL build
+  // and not a secret — what the token protects is our bandwidth, and the tool
+  // has one by the time it has an MP4 to encode.
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${requireToken().token}` },
+  })
   if (!response.ok) {
-    throw new FfmpegUnavailable(`無法從鏡像下載 FFmpeg（HTTP ${response.status}）`)
+    throw new FfmpegUnavailable(
+      response.status === 401 || response.status === 403
+        ? '配對已過期，請重新配對後再試'
+        : `無法從鏡像下載 FFmpeg（HTTP ${response.status}）`,
+    )
   }
 
   const chunks: Uint8Array[] = []
@@ -155,6 +213,9 @@ export async function ensureTools(
   base: string,
   onProgress?: (progress: FetchProgress) => void,
 ): Promise<Tools> {
+  const borrowed = await borrowedTools()
+  if (borrowed) return borrowed
+
   const unconfigured = problemWith(PINNED)
   if (unconfigured) throw new FfmpegUnavailable(unconfigured)
 

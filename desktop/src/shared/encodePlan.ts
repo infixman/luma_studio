@@ -3,8 +3,7 @@
  *
  * The rungs and their names mirror `video.RENDITIONS` in the backend, because
  * the names end up in object keys and the playback gateway refuses any it does
- * not recognise. The bitrates mirror `scripts/transcode-course-video.ps1`, which
- * is the encode this replaces.
+ * not recognise.
  *
  * All of it is pure. Deciding what to run is the part with rules worth checking;
  * running it is plumbing.

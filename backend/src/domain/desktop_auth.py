@@ -60,6 +60,11 @@ _VIDEO_ROUTES = (
     ("POST", re.compile(r"^/api/video-assets$")),
     ("POST", re.compile(r"^/api/video-assets/import$")),
     ("POST", re.compile(r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/upload-urls$")),
+    # The FFmpeg mirror. Part of uploading rather than a separate permission: the
+    # tool reaches it with an MP4 already dropped on it and no FFmpeg to encode
+    # with. The bytes are a published GPL build and not a secret — what the token
+    # protects is our bandwidth.
+    ("GET", re.compile(r"^/tools/ffmpeg/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")),
 )
 
 SCOPES = {SCOPE_VIDEO: _VIDEO_ROUTES}
