@@ -20,12 +20,15 @@ let summary: StorageSummary
 let candidates: CleanupCandidates
 let sources: StorageSource[]
 const posted: { path: string; body: unknown }[] = []
+let failing: string | null = null
+let refuseFirstCleanup = false
 
 vi.mock('../../shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/api')>()
   return {
     ...actual,
     api: vi.fn(async (path: string) => {
+      if (failing && path.startsWith(failing)) throw new actual.ApiError('壞了', 500, {})
       if (path.startsWith('/api/video-storage/summary')) return summary
       if (path.startsWith('/api/video-storage/cleanup-candidates')) return candidates
       if (path.startsWith('/api/video-storage/sources')) return { sources }
@@ -34,6 +37,9 @@ vi.mock('../../shared/api', async (importOriginal) => {
     }),
     apiJson: vi.fn(async (path: string, _method: string, body: unknown) => {
       posted.push({ path, body })
+      if (refuseFirstCleanup && posted.length === 1) {
+        throw new actual.ApiError('這支影片正被單元使用', 409, {})
+      }
       return {}
     }),
   }
@@ -47,6 +53,8 @@ let container: HTMLDivElement
 
 beforeEach(() => {
   posted.length = 0
+  failing = null
+  refuseFirstCleanup = false
   summary = {
     source: { bytes: 200 * GIGABYTE, objects: 42 },
     output: { bytes: 90 * GIGABYTE, objects: 8734 },
@@ -231,6 +239,41 @@ test('there is no way to select every original at once', async () => {
 
   expect(container.querySelector('input[type="checkbox"]')).toBeNull()
   expect(buttonFor('全部刪除')).toBeUndefined()
+})
+
+test('one endpoint failing does not blank the rest of the page', async () => {
+  /** The capacity figures are why somebody came. A spinner because the orphan
+   *  list is unavailable hides them behind an outage in the least important
+   *  part of the page. */
+  failing = '/api/video-storage/orphans'
+  render(<StoragePage />, container)
+  await settle()
+
+  expect(container.textContent).toContain('200.0 GB')
+})
+
+test('a refused entry does not stop the rest of the sweep-up', async () => {
+  /** The server can decline any of these on its own grounds. Stopping at the
+   *  first leaves some deletions done, some skipped, and no way to tell which. */
+  candidates = {
+    safe: [
+      { kind: 'orphan', bucket: 'output', keys: 312, bytes: 12 * GIGABYTE },
+      { kind: 'supersededVersion', assetId: 'asset-1', title: '第一課', encodeVersion: 1, bytes: GIGABYTE },
+    ],
+    needsJudgement: [],
+    scannedAt: 1785292800,
+  }
+  refuseFirstCleanup = true
+  render(<StoragePage />, container)
+  await settle()
+
+  buttonFor('全部清除')?.click()
+  await flush()
+  buttonFor('確定清除')?.click()
+  await flush()
+
+  expect(posted).toHaveLength(2)
+  expect(container.textContent).toContain('1 項被拒絕')
 })
 
 test('a source in use lists the lessons rather than a count', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -13,6 +13,7 @@ import type {
   StorageOrphan,
   StorageSource,
   StorageSummary,
+  StorageVersion,
 } from '../../shared/types'
 import '../styles/shop-admin.css'
 
@@ -43,28 +44,59 @@ export function StoragePage() {
   const [candidates, setCandidates] = useState<CleanupCandidates | null>(null)
   const [sources, setSources] = useState<StorageSource[] | null>(null)
   const [orphans, setOrphans] = useState<StorageOrphan[] | null>(null)
+  const [openAsset, setOpenAsset] = useState<string | null>(null)
+  const [versions, setVersions] = useState<StorageVersion[] | null>(null)
   const { message, showError, busy, run } = useStatus()
   const { ask, dialog } = useConfirm()
 
+  // A load answering after the page has gone, or after a newer one, must not
+  // set state — the same guard the video library uses, for the same reason.
+  const generation = useRef(0)
+
   const load = useCallback(async () => {
-    try {
-      const [overview, cleanup, sourceList, orphanList] = await Promise.all([
-        api<StorageSummary>('/api/video-storage/summary'),
-        api<CleanupCandidates>('/api/video-storage/cleanup-candidates'),
-        api<{ sources: StorageSource[] }>('/api/video-storage/sources'),
-        api<{ objects: StorageOrphan[] }>('/api/video-storage/orphans?bucket=output'),
-      ])
-      setSummary(overview)
-      setCandidates(cleanup)
-      setSources(sourceList.sources)
-      setOrphans(orphanList.objects)
-    } catch (error) {
-      showError(error)
-    }
+    const mine = ++generation.current
+    // Settled rather than all: one endpoint failing must not blank the other
+    // three. A page stuck on a spinner because the orphan list is unavailable
+    // hides the capacity figures, which are the reason somebody came.
+    const answers = await Promise.allSettled([
+      api<StorageSummary>('/api/video-storage/summary'),
+      api<CleanupCandidates>('/api/video-storage/cleanup-candidates'),
+      api<{ sources: StorageSource[] }>('/api/video-storage/sources'),
+      api<{ objects: StorageOrphan[] }>('/api/video-storage/orphans?bucket=output'),
+    ])
+    if (mine !== generation.current) return
+
+    const [overview, cleanup, sourceList, orphanList] = answers
+    if (overview.status === 'fulfilled') setSummary(overview.value)
+    if (cleanup.status === 'fulfilled') setCandidates(cleanup.value)
+    if (sourceList.status === 'fulfilled') setSources(sourceList.value.sources)
+    if (orphanList.status === 'fulfilled') setOrphans(orphanList.value.objects)
+
+    const failed = answers.find((answer) => answer.status === 'rejected')
+    if (failed && failed.status === 'rejected') showError(failed.reason)
   }, [showError])
+
+  const openVersions = useCallback(
+    async (assetId: string) => {
+      setOpenAsset(assetId)
+      setVersions(null)
+      try {
+        const answer = await api<{ versions: StorageVersion[] }>(
+          `/api/video-storage/versions?assetId=${encodeURIComponent(assetId)}`,
+        )
+        setVersions(answer.versions)
+      } catch (error) {
+        showError(error)
+      }
+    },
+    [showError],
+  )
 
   useEffect(() => {
     void load()
+    return () => {
+      generation.current++
+    }
   }, [load])
 
   async function sweep() {
@@ -88,13 +120,28 @@ export function StoragePage() {
     })
     if (!confirmed) return
 
+    const entries = candidates.safe
     await run(async () => {
-      // One request per entry rather than a batch endpoint: each of these is a
-      // separate refusal the server may make, and a batch would have to report
-      // them as a list nobody reads.
-      for (const entry of candidates.safe) {
-        await apiJson('/api/video-storage/cleanup', 'POST', entry)
+      // One request per entry, and one refusal does not stop the rest. The
+      // server can decline any of these on its own grounds — a version that
+      // became live, a source a lesson started using — and stopping at the
+      // first would leave some deletions done, some skipped, and no way to tell
+      // which.
+      let cleared = 0
+      const refused: string[] = []
+      for (const entry of entries) {
+        try {
+          await apiJson('/api/video-storage/cleanup', 'POST', entry)
+          cleared += 1
+        } catch (error) {
+          refused.push(error instanceof Error ? error.message : '未知的錯誤')
+        }
       }
+      // Returned rather than thrown: some of it worked, and `run` shows a
+      // returned sentence in the warning tone, which is what this is.
+      return refused.length
+        ? `清除了 ${cleared} 項，${refused.length} 項被拒絕：${refused[0]}`
+        : undefined
     }, '已清除。')
     await load()
   }
@@ -131,7 +178,14 @@ export function StoragePage() {
     {
       key: 'versions',
       label: '輸出',
-      render: (row) => `${row.versionCount} 版 / ${fileSize(row.versionBytes)}`,
+      // "No playable version" is not "old": it means the upload never finished,
+      // which points the other way about deleting it.
+      render: (row) =>
+        row.hasPlayableVersion ? (
+          `${row.versionCount} 版 / ${fileSize(row.versionBytes)}`
+        ) : (
+          <span class="muted">尚無可播放版本</span>
+        ),
     },
     {
       key: 'lessons',
@@ -162,10 +216,12 @@ export function StoragePage() {
       {dialog}
 
       <Panel title="影片儲存空間">
-        <nav class="ui-tabs">
+        <nav class="ui-tabs" role="tablist" aria-label="影片儲存空間">
           {TABS.map((entry) => (
             <Button
               key={entry.id}
+              role="tab"
+              aria-selected={entry.id === tab}
               tone={entry.id === tab ? 'primary' : 'ghost'}
               onClick={() => setTab(entry.id)}
             >
@@ -274,6 +330,31 @@ export function StoragePage() {
 
         {summary && tab === 'outputs' && (
           <>
+            <h3>轉檔版本</h3>
+            <p class="muted">選一支影片，看它有哪些版本、哪一個是會員正在看的。</p>
+            <ul class="storage-versions">
+              {(sources ?? []).map((row) => (
+                <li key={row.assetId}>
+                  <Button tone="ghost" onClick={() => void openVersions(row.assetId)}>
+                    {row.title || '未命名'}
+                  </Button>
+                  {openAsset === row.assetId && versions !== null ? (
+                    <ul>
+                      {versions.map((version) => (
+                        <li key={version.encodeVersion}>
+                          v{version.encodeVersion}：{version.objectCount} 個物件、
+                          {fileSize(version.bytes)}
+                          {version.isActive ? <Badge tone="success">播放中</Badge> : null}
+                          {version.isSuperseded ? <Badge tone="neutral">已被取代</Badge> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+
+            <h3>孤兒物件</h3>
             <p class="muted">
               孤兒是 R2 裡有、但沒有任何一列記錄的物件。這份清單來自上一次盤點，不是即時的。
             </p>
