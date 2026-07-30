@@ -142,15 +142,6 @@ test('an unconfigured worker is explained rather than reported as an error', asy
   expect(container.textContent).toContain('DESKTOP_PAIRING_SECRET')
 })
 
-test('it says not to share the code', async () => {
-  /** A code on a shared screen is a paired machine, and this page is the only
-   *  thing protecting it. */
-  render(<DesktopToolPage />, container)
-  await settle()
-
-  expect(container.textContent).toContain('螢幕分享')
-})
-
 test('the email can be copied rather than retyped', async () => {
   render(<DesktopToolPage />, container)
   await settle()

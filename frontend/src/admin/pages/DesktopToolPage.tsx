@@ -46,8 +46,12 @@ interface PairingCode {
  *
  * This page *is* the authorisation. The code is not secret in any deep sense —
  * the server both generates and verifies it — so the only thing that makes
- * showing one meaningful is that a stranger cannot see this screen. Which is
- * also why it says not to share it: a screenshot in a chat is a paired machine.
+ * showing one meaningful is that a stranger cannot see this screen.
+ *
+ * There used to be a line here warning against sharing it. It went: a code with
+ * a visible thirty-second countdown beside it does not need a paragraph saying
+ * it expires, and an admin reading their own back office is not the audience for
+ * a lecture. The countdown says the same thing by being true.
  *
  * The countdown comes from the server's remaining seconds rather than a local
  * 30-second timer. A timer started on load drifts out of step with the window
@@ -140,12 +144,6 @@ export function DesktopToolPage() {
               <dt>剩餘時間</dt>
               <dd aria-live="polite">{remaining} 秒</dd>
             </dl>
-            {/* Worth saying out loud: a code on a shared screen is a paired
-                machine, and the page it came from is the only thing protecting
-                it. */}
-            <p class="muted">
-              驗證碼每 30 秒更換，用過一次就失效。<strong>不要</strong>在螢幕分享或截圖中露出它。
-            </p>
           </>
         )}
       </Panel>
