@@ -343,6 +343,50 @@ class TestTheStorageOverview:
         assert module.scope_allows("video", "GET", "/api/video-storage/summary") is False
 
 
+class TestTheStorageLists:
+    def test_sources_carry_the_lessons_that_use_them(self, call):
+        response = call(
+            signed_in("/api/video-storage/sources"),
+            {
+                "FROM video_assets assets": [
+                    {
+                        "id": ASSET_ID, "title": "第一課", "status": "ready",
+                        "byte_size": 4096, "active_encode_version": 1, "created_at": 0,
+                        "version_count": 1, "version_bytes": 2048,
+                    }
+                ],
+                "FROM course_lessons lessons": [
+                    {
+                        "video_asset_id": ASSET_ID, "lesson_id": "l1", "lesson_title": "工具介紹",
+                        "course_id": "c1", "course_title": "水彩入門",
+                    }
+                ],
+            },
+        )
+
+        assert response.status == 200
+        assert response.json()["sources"][0]["lessons"][0]["courseTitle"] == "水彩入門"
+
+    def test_versions_need_to_know_which_asset(self, call):
+        assert call(signed_in("/api/video-storage/versions")).status == 400
+
+    def test_versions_mark_the_one_members_are_watching(self, call):
+        response = call(
+            signed_in(f"/api/video-storage/versions?assetId={ASSET_ID}"),
+            {
+                "FROM video_encode_versions versions": [
+                    {
+                        "asset_id": ASSET_ID, "encode_version": 2, "object_count": 14,
+                        "byte_size": 2048, "has_poster": 1, "verified_at": 5,
+                        "active_encode_version": 2,
+                    }
+                ]
+            },
+        )
+
+        assert response.json()["versions"][0]["isActive"] is True
+
+
 class TestSweepingForOrphans:
     """The one action that reads the buckets."""
 

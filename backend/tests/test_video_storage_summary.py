@@ -19,7 +19,7 @@ from conftest import FakeDatabase, make_env
 
 @pytest.fixture
 def video_storage():
-    from domain import video_storage as module
+    from domain import storage_report as module
 
     return module
 
@@ -48,7 +48,7 @@ class TestWhatIsStored:
         """Archiving does not delete anything, and neither does abandoning an
         upload. A total that hides those bytes says the cleanup is done."""
 
-        from domain.video_storage import SOURCE_TOTALS_SQL
+        from domain.storage_report import SOURCE_TOTALS_SQL
 
         assert "status" not in SOURCE_TOTALS_SQL.split("JOIN")[0]
 

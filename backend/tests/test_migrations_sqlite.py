@@ -930,7 +930,7 @@ class TestTheStorageTotals:
         """Archiving does not delete anything. A total that drops it says the
         cleanup is done when the bill disagrees."""
 
-        from domain.video_storage import SOURCE_TOTALS_SQL
+        from domain.storage_report import SOURCE_TOTALS_SQL
 
         self._asset(database, "a1", status="archived", byte_size=1_000)
         self._session(database, "a1", status="completed")
@@ -941,7 +941,7 @@ class TestTheStorageTotals:
         """Its size is what the tool declared, and there is no object yet. The
         orphan scan is what finds the parts it did send."""
 
-        from domain.video_storage import SOURCE_TOTALS_SQL
+        from domain.storage_report import SOURCE_TOTALS_SQL
 
         self._asset(database, "a1", status="uploading", byte_size=1_000)
         self._session(database, "a1", status="uploading")
@@ -949,7 +949,7 @@ class TestTheStorageTotals:
         assert database.execute(SOURCE_TOTALS_SQL).fetchone() == (0, 0)
 
     def test_the_output_total_adds_up_the_versions(self, database):
-        from domain.video_storage import OUTPUT_TOTALS_SQL
+        from domain.storage_report import OUTPUT_TOTALS_SQL
 
         self._version(database, "a1", byte_size=500)
         self._version(database, "a2", byte_size=700)
@@ -957,7 +957,7 @@ class TestTheStorageTotals:
         assert database.execute(OUTPUT_TOTALS_SQL).fetchone() == (1_200, 28)
 
     def test_growth_counts_both_halves_from_the_month_boundary(self, database):
-        from domain.video_storage import OUTPUT_GROWTH_SQL, SOURCE_GROWTH_SQL
+        from domain.storage_report import OUTPUT_GROWTH_SQL, SOURCE_GROWTH_SQL
 
         self._asset(database, "old", status="ready", byte_size=100)
         self._session(database, "old", status="completed", updated_at=1_000)

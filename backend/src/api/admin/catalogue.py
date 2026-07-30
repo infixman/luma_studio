@@ -8,7 +8,17 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
-from domain import courses, inventory, offers, shop, source_upload, storage_scan, video, video_storage
+from domain import (
+    courses,
+    inventory,
+    offers,
+    shop,
+    source_upload,
+    storage_report,
+    storage_scan,
+    video,
+    video_storage,
+)
 from shared import flags, r2_s3, sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
@@ -261,6 +271,15 @@ async def handle(ctx: Ctx):
         except ValueError as error:
             return ctx.error(str(error), 400)
 
+    if path == "/api/video-storage/sources" and method == "GET":
+        return ctx.json({"sources": await storage_report.sources(env)})
+
+    if path == "/api/video-storage/versions" and method == "GET":
+        asset_id = (ctx.query.get("assetId") or [""])[0].strip()
+        if not asset_id:
+            return ctx.error("缺少 assetId", 400)
+        return ctx.json({"versions": await storage_report.versions(env, asset_id=asset_id)})
+
     if path == "/api/video-storage/summary" and method == "GET":
         # Read from D1 only. Listing the buckets to answer this would be a few
         # hundred billed operations per asset, every time somebody opened the
@@ -269,7 +288,7 @@ async def handle(ctx: Ctx):
         # reporting module and the sweeping module do not import each other.
         scan = await storage_scan.latest_scan(env)
         return ctx.json(
-            await video_storage.summary(
+            await storage_report.summary(
                 env,
                 now=video.utc_timestamp(),
                 orphans=None
