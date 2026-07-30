@@ -75,7 +75,7 @@ COURSE_VIDEO_BUCKET = "luma-course-video"
 #
 # Fill in the account id before deploying. Left blank, every presign answers
 # 503 rather than handing out a URL that only fails once it reaches R2.
-R2_S3_ENDPOINT = ""
+R2_S3_ENDPOINT = "https://f1f2129c93f208cbd521a77bc777b360.r2.cloudflarestorage.com"
 
 # R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are secrets and are deliberately
 # absent from this file:

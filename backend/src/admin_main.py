@@ -147,6 +147,15 @@ async def dispatch(ctx: Ctx):
     return await admin_api.handle(ctx)
 
 
+# A tool pairing for the first time has no cookie and no token, so there is no
+# ambient credential a forged request could abuse. Everything else on this Worker
+# either carries a session — and needs the check — or carries a bearer token,
+# which `Ctx.carries_bearer_token` covers.
+CSRF_EXEMPT_PATHS = ("/api/desktop/tokens",)
+
+
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        return await router.serve(self.env, request, dispatch, owns_schema=True)
+        return await router.serve(
+            self.env, request, dispatch, owns_schema=True, csrf_exempt=CSRF_EXEMPT_PATHS
+        )

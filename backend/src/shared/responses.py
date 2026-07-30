@@ -10,6 +10,10 @@ from js import Uint8Array
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 APP_HEADER = "x-luma-app"
+
+# What a browser may send us cross-origin. `Authorization` is deliberately
+# absent, and `has_csrf_protection` depends on that: adding it here would make
+# the bearer-token exemption below reachable from a web page.
 ALLOWED_REQUEST_HEADERS = "content-type, x-luma-app"
 
 
@@ -55,6 +59,19 @@ class Ctx:
     def origin_allowed(self) -> bool:
         return bool(self.origin) and self.origin in self.allowed_origins
 
+    def carries_bearer_token(self) -> bool:
+        """Whether the caller authenticated itself rather than relying on a cookie.
+
+        The distinction is what makes the exemption below safe. Cross-site
+        request forgery works because a browser attaches a cookie on its own; it
+        cannot attach an `Authorization` header. Setting one makes the request
+        preflighted, and `ALLOWED_REQUEST_HEADERS` does not advertise it — so a
+        web page cannot reach us this way at all, and the header is proof the
+        caller meant to send it.
+        """
+
+        return (self.request.headers.get("Authorization") or "").startswith("Bearer ")
+
     def has_csrf_protection(self) -> bool:
         """Reject cross-site writes that a plain HTML form could forge.
 
@@ -63,9 +80,19 @@ class Ctx:
         on top of the cookie's SameSite=Lax: the custom header forces a
         preflight, which a cross-site form cannot send, and the Origin has to
         be one we published.
+
+        A bearer token is exempt, and it is not a hole — see
+        `carries_bearer_token`. Without it the desktop tool, which is not a
+        browser and has no origin it could honestly claim, is refused with
+        "Cross-site request rejected" before anything looks at its token. The
+        alternative would be teaching it to send an Origin it does not have,
+        which weakens the check for every real browser to accommodate one client
+        the check was never about.
         """
 
         if self.method in SAFE_METHODS:
+            return True
+        if self.carries_bearer_token():
             return True
         return self.request.headers.get(APP_HEADER) == "1" and self.origin_allowed()
 

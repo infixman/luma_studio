@@ -623,3 +623,117 @@ class TestPairedToolEndToEnd:
 
         assert first.status == 200
         assert second.status == 401
+
+
+class TestReachableBySomethingThatIsNotABrowser:
+    """The gap the earlier end-to-end test did not close.
+
+    Those tests built their own requests, and every one of them carried the
+    `Origin` and `x-luma-app` headers a browser sends. So they proved the routing
+    and the scope while the real tool — which is not a browser and has no
+    legitimate origin — could not get past the CSRF gate at all. It failed with
+    "Cross-site request rejected", which reads like a pairing problem and is not.
+
+    The gate exists to protect requests authenticated by a *cookie*, because that
+    is what a browser attaches on its own. A request carrying a bearer token
+    cannot be forged by a cross-site form: setting `Authorization` makes the
+    browser preflight, and the preflight advertises only `content-type` and
+    `x-luma-app`.
+    """
+
+    @pytest.fixture
+    def call(self):
+        import admin_main
+        from shared import migrations
+
+        def run(request, env=None, answers=None):
+            migrations._applied_names = None
+            worker = admin_main.Default()
+            worker.env = make_env(
+                FakeDatabase({**SIGNED_IN, **(answers or {})}),
+                origins=ADMIN_ORIGIN,
+                frontend=ADMIN_ORIGIN,
+                **(
+                    {"DESKTOP_PAIRING_SECRET": PAIRING_SECRET, "DESKTOP_TOKEN_SECRET": TOKEN_SECRET}
+                    if env is None
+                    else env
+                ),
+            )
+            return asyncio.run(worker.fetch(request))
+
+        return run
+
+    def _token(self) -> str:
+        from shared.common import utc_timestamp
+
+        env, now = paired_env(), utc_timestamp()
+        code = desktop_auth_module().pairing_code(env, OWNER, now=now)["code"]
+        granted = asyncio.run(desktop_auth_module().exchange(env, email=OWNER, code=code, now=now))
+        return granted["token"]
+
+    def test_a_tool_can_exchange_a_code_with_no_browser_headers(self, call):
+        """It has no session and no origin — that is what pairing is for."""
+
+        from shared.common import utc_timestamp
+
+        code = desktop_auth_module().pairing_code(paired_env(), OWNER, now=utc_timestamp())["code"]
+        request = JsonRequest("/api/desktop/tokens", "POST", {"email": OWNER, "code": code}, {})
+
+        response = call(request)
+
+        assert response.status == 200, response.body
+
+    def test_a_bearer_token_reaches_an_upload_route_with_no_browser_headers(self, call):
+        request = JsonRequest(
+            "/api/video-assets", "POST",
+            {"title": "第一課", "byteSize": 1_000_000},
+            {"Authorization": f"Bearer {self._token()}"},
+        )
+
+        response = call(
+            request,
+            env={
+                "DESKTOP_PAIRING_SECRET": PAIRING_SECRET,
+                "DESKTOP_TOKEN_SECRET": TOKEN_SECRET,
+                "VIDEO_UPLOAD_ENABLED": "1",
+            },
+        )
+
+        assert response.status == 201, response.body
+
+    def test_a_cookie_write_with_no_app_header_is_still_rejected(self, call):
+        """The property that must not regress. A cross-site form can make a
+        browser send a cookie; it cannot make it send this header."""
+
+        request = JsonRequest(
+            "/api/courses", "POST", {"slug": "x", "title": "x"},
+            {"Origin": ADMIN_ORIGIN, "Cookie": "luma_admin_session=" + "a" * 40},
+        )
+
+        assert call(request).status == 403
+
+    def test_a_cookie_write_from_another_origin_is_still_rejected(self, call):
+        request = JsonRequest(
+            "/api/courses", "POST", {"slug": "x", "title": "x"},
+            {"Origin": "https://evil.example", "x-luma-app": "1",
+             "Cookie": "luma_admin_session=" + "a" * 40},
+        )
+
+        assert call(request).status == 403
+
+    def test_a_bearer_that_is_not_ours_still_gets_nowhere(self, call):
+        """Exempting the gate is not admitting the request — the token is still
+        verified, and a wrong one is a 401."""
+
+        request = JsonRequest(
+            "/api/video-assets", "POST", {"title": "x", "byteSize": 1},
+            {"Authorization": "Bearer dv1.nonsense.signature"},
+        )
+
+        assert call(request).status == 401
+
+
+def desktop_auth_module():
+    from domain import desktop_auth
+
+    return desktop_auth

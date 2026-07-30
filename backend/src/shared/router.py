@@ -29,13 +29,19 @@ def path_and_query(request) -> tuple[str, dict]:
     return path.rstrip("/") or "/", parse_qs(raw_query)
 
 
-async def serve(env, request, dispatch, *, owns_schema: bool):
+async def serve(env, request, dispatch, *, owns_schema: bool, csrf_exempt: tuple = ()):
     """Run one request through the shared gates and hand it to `dispatch`.
 
     `owns_schema` belongs to exactly one deployment. Migrations are applied by
     the admin Worker and nowhere else: checkout is a hot path that should not
     pay for a schema check on every cold isolate, and a Worker the public can
     reach has no business being able to ALTER TABLE.
+
+    `csrf_exempt` names the few paths where there is no ambient credential for a
+    forged request to abuse — the desktop tool's pairing exchange has neither a
+    cookie nor a token yet, which is the whole reason it exists. Listed here, by
+    the deployment that owns the route, rather than inferred: a check that
+    exempts paths it guessed at is a check nobody can audit.
     """
 
     path, query = path_and_query(request)
@@ -44,7 +50,7 @@ async def serve(env, request, dispatch, *, owns_schema: bool):
     if ctx.method == "OPTIONS":
         return ctx.preflight()
 
-    if not ctx.has_csrf_protection():
+    if path not in csrf_exempt and not ctx.has_csrf_protection():
         if not ctx.allowed_origins:
             return ctx.error("Backend is missing ALLOWED_ORIGINS", 500)
         return ctx.error("Cross-site request rejected", 403)
