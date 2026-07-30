@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
 
-import { AdminApiError } from '../shared/adminApi'
+import { AdminApiError, listStorage } from '../shared/adminApi'
 import { explain } from '../shared/failures'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
@@ -11,6 +11,7 @@ import { ingest } from './ingest'
 import * as prefs from './prefs'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
+import { transport } from './transport'
 import * as uploader from './uploader'
 
 /**
@@ -188,6 +189,26 @@ if (process.argv.includes('--self-check')) {
       }
     })
     ipcMain.handle('upload:cancel', () => cancel())
+
+    // Read-only, and the only thing this tool can ask about the bucket. It is
+    // how somebody confirms the objects arrived without taking the tool's word
+    // for it — the same question the library page answers for the encode, asked
+    // from the machine that did the uploading.
+    ipcMain.handle('storage:list', async (_event, options: { prefix: string; kind?: 'source' | 'output' }) => {
+      try {
+        const { token, base } = session.requireToken()
+        return {
+          ok: true as const,
+          objects: await listStorage(transport, base, token, options),
+        }
+      } catch (error) {
+        return {
+          ok: false as const,
+          message: explain(error, {}),
+          httpStatus: error instanceof AdminApiError ? error.status : null,
+        }
+      }
+    })
 
     // Read here rather than in the renderer. `navigator.clipboard.readText` in a
     // sandboxed renderer depends on focus and permission state, and the failure

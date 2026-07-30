@@ -269,6 +269,49 @@ function sourcePath(base: string, assetId: string): string {
   return `${base}/api/video-assets/${encodeURIComponent(assetId)}/source-upload`
 }
 
+export interface StoredObject {
+  key: string
+  size: number
+  uploadedAt: number | null
+}
+
+/**
+ * What is actually in the bucket under a prefix.
+ *
+ * Read-only, and it answers one question: did the objects arrive. Nothing here
+ * signs a URL, so it grants no ability to read the bytes back — the tool wrote
+ * them and the playback gateway is the entrance for everybody else.
+ */
+export async function listStorage(
+  transport: Transport,
+  base: string,
+  token: string,
+  options: { prefix: string; kind?: 'source' | 'output' },
+): Promise<StoredObject[]> {
+  const query = new URLSearchParams({ prefix: options.prefix, kind: options.kind ?? 'output' })
+  const response = await transport(`${base}/api/video-storage?${query.toString()}`, {
+    method: 'GET',
+    headers: authorised(token, {}),
+  })
+  if (!response.ok) await readError(response, '無法讀取儲存空間內容')
+
+  const body = (await response.json()) as Record<string, unknown>
+  if (!Array.isArray(body.objects)) {
+    // Not an empty bucket. "Nothing is there" and "we could not look" are
+    // opposite answers to the only question this call asks, and a malformed
+    // answer is the second one.
+    throw new AdminApiError(response.status, '伺服器沒有回傳儲存空間內容')
+  }
+  return body.objects.map((entry) => {
+    const item = entry as Record<string, unknown>
+    return {
+      key: String(item.key ?? ''),
+      size: Number(item.size ?? 0),
+      uploadedAt: typeof item.uploadedAt === 'number' ? item.uploadedAt : null,
+    }
+  })
+}
+
 export interface Registration {
   ok: boolean
   /** Present when the encode is incomplete: every object the server could not find. */

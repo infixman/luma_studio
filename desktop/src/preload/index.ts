@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 import type { PairingInput } from '../shared/pairing'
 import type { SessionStatus } from '../shared/session'
-import type { Progress, ScanResult, UploadRequest, UploadResult } from '../shared/upload'
+import type { Progress, ScanResult, StorageListing, UploadRequest, UploadResult } from '../shared/upload'
 
 /**
  * The only things the interface can ask the operating system for.
@@ -84,6 +84,10 @@ const api = {
       ipcRenderer.on('upload:progress', wrapped)
       return () => ipcRenderer.removeListener('upload:progress', wrapped)
     },
+
+    /** Read-only, and the only question this tool asks about the bucket. */
+    listStorage: (options: { prefix: string; kind?: 'source' | 'output' }): Promise<StorageListing> =>
+      ipcRenderer.invoke('storage:list', options),
   },
 }
 

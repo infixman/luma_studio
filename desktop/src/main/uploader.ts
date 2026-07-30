@@ -9,8 +9,6 @@ import {
   isTransient,
   registerEncode,
   uploadUrls,
-  type HttpResponse,
-  type Transport,
 } from '../shared/adminApi'
 import {
   URL_BATCH,
@@ -27,6 +25,7 @@ import { shouldUploadSource } from '../shared/sourceUpload'
 import { recordedByteSize, type Progress, type ScannedFolder } from '../shared/upload'
 import { requireToken } from './session'
 import * as ledger from './ledger'
+import { transport } from './transport'
 import { uploadSource } from './sourceUploader'
 
 /**
@@ -45,8 +44,6 @@ import { uploadSource } from './sourceUploader'
  * outlives its fifteen minutes.
  */
 
-const transport: Transport = (url, init) => fetch(url, init) as Promise<HttpResponse>
-
 function walk(root: string, current = root, found: string[] = []): string[] {
   for (const entry of readdirSync(current, { withFileTypes: true })) {
     const full = join(current, entry.name)
@@ -63,7 +60,6 @@ export function scan(folder: string): ScannedFolder {
   const totalBytes = objects.reduce((sum, path) => sum + statSync(join(folder, path)).size, 0)
   return { folder, objects, unexpected, totalBytes }
 }
-
 
 async function putObject(url: string, body: Buffer, contentType: string): Promise<void> {
   const response = await fetch(url, {

@@ -12,7 +12,7 @@ import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { UploadScreen } from './UploadScreen'
-import type { Progress, ScannedFolder, UploadResult } from '../../shared/upload'
+import type { Progress, ScannedFolder, StorageListing, UploadResult } from '../../shared/upload'
 
 const SCANNED: ScannedFolder = {
   folder: 'C:\\encodes\\asset-1\\1',
@@ -26,6 +26,14 @@ let scan: ReturnType<typeof vi.fn>
 let start: ReturnType<typeof vi.fn>
 let cancelUpload: ReturnType<typeof vi.fn>
 let emit: ((progress: Progress) => void) | null = null
+let listed: { prefix: string; kind?: string }[] = []
+let listing: StorageListing = {
+  ok: true,
+  objects: [
+    { key: 'videos/asset-1/1/master.m3u8', size: 412, uploadedAt: 1_785_292_800 },
+    { key: 'videos/asset-1/1/720p/init.mp4', size: 1_048_576, uploadedAt: 1_785_292_800 },
+  ],
+}
 
 function bridge(): void {
   cancelUpload = vi.fn(async () => undefined)
@@ -46,6 +54,10 @@ function bridge(): void {
         scan,
         start,
         cancel: cancelUpload,
+        listStorage: vi.fn(async (options: { prefix: string; kind?: string }) => {
+          listed.push(options)
+          return listing
+        }),
         onProgress: (listener: (progress: Progress) => void) => {
           emit = listener
           return () => {
@@ -58,6 +70,14 @@ function bridge(): void {
 }
 
 beforeEach(() => {
+  listed = []
+  listing = {
+    ok: true,
+    objects: [
+      { key: 'videos/asset-1/1/master.m3u8', size: 412, uploadedAt: 1_785_292_800 },
+      { key: 'videos/asset-1/1/720p/init.mp4', size: 1_048_576, uploadedAt: 1_785_292_800 },
+    ],
+  }
   emit = null
   bridge()
   container = document.createElement('div')
@@ -155,6 +175,71 @@ test('progress events move the bar', async () => {
 
   expect(container.querySelector<HTMLElement>('.bar div')?.style.width).toBe('25%')
   expect(container.textContent).toContain('1 / 4')
+})
+
+test('a finished job can ask the bucket what is there', async () => {
+  /** The server verified every object before answering ready, so this is not a
+   *  second check — it is the same question answered by the bucket rather than
+   *  by this program, from the machine that did the uploading. */
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'done', assetId: 'asset-1', uploaded: 14, total: 14 })
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes('確認檔案'),
+  )
+  button?.click()
+  await tick()
+  await tick()
+
+  expect(listed).toEqual([{ prefix: 'videos/asset-1/', kind: 'output' }])
+  expect(container.textContent).toContain('2 個檔案')
+  // Scaled, not 1.0 MB of a gigabyte-sized encode.
+  expect(container.textContent).toContain('1.0 MB')
+})
+
+test('a listing that failed is not shown as an empty bucket', async () => {
+  /** "Nothing is there" and "we could not look" are opposite answers. */
+  listing = { ok: false, message: '只能瀏覽 sources/ 或 videos/ 底下的內容' }
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'done', assetId: 'asset-1', uploaded: 14, total: 14 })
+  await tick()
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes('確認檔案'),
+  )
+  button?.click()
+  await tick()
+  await tick()
+
+  expect(container.textContent).toContain('只能瀏覽')
+})
+
+test('a listing the bridge could not deliver is still not an empty bucket', async () => {
+  /** The IPC promise rejecting is rarer than a refusal and not impossible, and
+   *  an unhandled one leaves the button reading 讀取中… forever. */
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'done', assetId: 'asset-1', uploaded: 14, total: 14 })
+  await tick()
+  window.desktop.upload.listStorage = vi.fn(async () => {
+    throw new Error('主程式沒有回應')
+  })
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes('確認檔案'),
+  )
+  button?.click()
+  await tick()
+  await tick()
+
+  expect(container.textContent).toContain('主程式沒有回應')
 })
 
 test('sending the original is its own phase, and it counts parts', async () => {

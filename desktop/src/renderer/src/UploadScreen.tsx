@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { lastSegment } from '../../shared/failures'
 import { SOURCE_EXTENSIONS, looksLikeSource } from '../../shared/sourceKinds'
 import type { Progress, ScannedFolder } from '../../shared/upload'
+import { StoredObjects } from './StoredObjects'
 
 const PHASE_LABELS: Record<Progress['phase'], string> = {
   preparing: '準備轉檔工具',
@@ -253,6 +254,9 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
             </div>
           )}
           {progress.message && <p class="muted">{progress.message}</p>}
+          {progress.phase === 'done' && progress.assetId && (
+            <StoredObjects assetId={progress.assetId} />
+          )}
           {progress.missing && progress.missing.length > 0 && (
             <ul class="missing">
               {progress.missing.slice(0, 10).map((path) => (

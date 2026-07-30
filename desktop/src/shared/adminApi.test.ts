@@ -7,6 +7,7 @@ import {
   createAsset,
   exchangePairing,
   isTransient,
+  listStorage,
   registerEncode,
   sourcePartUrl,
   startSourceUpload,
@@ -410,5 +411,65 @@ describe('uploading the original file', () => {
     })
 
     expect(transport.mock.calls[0]![1].headers).toMatchObject({ Authorization: 'Bearer token-abc' })
+  })
+})
+
+
+describe('confirming the objects arrived', () => {
+  test('it lists what the server says is there', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, {
+        objects: [{ key: 'videos/asset-1/1/master.m3u8', size: 412, uploadedAt: 1_785_292_800 }],
+      }),
+    )
+
+    const objects = await listStorage(transport, BASE, 'token', {
+      prefix: 'videos/asset-1/1/',
+    })
+
+    expect(objects).toEqual([
+      { key: 'videos/asset-1/1/master.m3u8', size: 412, uploadedAt: 1_785_292_800 },
+    ])
+  })
+
+  test('the prefix goes in the query, not the path', async () => {
+    const transport = vi.fn<Transport>(async () => responding(200, { objects: [] }))
+
+    await listStorage(transport, BASE, 'token', { prefix: 'sources/asset-1/1/', kind: 'source' })
+
+    const url = new URL(String(transport.mock.calls[0]![0]))
+    expect(url.pathname).toBe('/api/video-storage')
+    expect(url.searchParams.get('prefix')).toBe('sources/asset-1/1/')
+    expect(url.searchParams.get('kind')).toBe('source')
+  })
+
+  test('a refusal is reported rather than read as an empty bucket', async () => {
+    /** "Nothing is there" and "we could not look" are opposite answers to the
+     *  question this screen exists to ask. */
+    const transport = vi.fn<Transport>(async () => responding(400, { error: '只能瀏覽 sources/' }))
+
+    await expect(
+      listStorage(transport, BASE, 'token', { prefix: 'somewhere/' }),
+    ).rejects.toThrow(AdminApiError)
+  })
+
+  test('an answer with no list in it is not an empty bucket', async () => {
+    /** "Nothing is there" and "we could not look" are opposite answers, and a
+     *  malformed 200 is the second one wearing the first one's clothes. */
+    const transport = vi.fn<Transport>(async () => responding(200, { truncated: false }))
+
+    await expect(
+      listStorage(transport, BASE, 'token', { prefix: 'videos/asset-1/1/' }),
+    ).rejects.toThrow(AdminApiError)
+  })
+
+  test('an object with no time is not given one', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, { objects: [{ key: 'videos/a/1/master.m3u8', size: 1 }] }),
+    )
+
+    const [object] = await listStorage(transport, BASE, 'token', { prefix: 'videos/a/1/' })
+
+    expect(object!.uploadedAt).toBeNull()
   })
 })

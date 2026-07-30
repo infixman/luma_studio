@@ -76,6 +76,17 @@ export interface UploadRequest {
   height?: number | null
 }
 
+/**
+ * What the bucket holds under a prefix, or why the tool could not look.
+ *
+ * A refusal is carried rather than thrown: "nothing is there" and "we could not
+ * look" are opposite answers to the question this screen exists to ask, and a
+ * screen that shows an empty list for both is worse than one that shows neither.
+ */
+export type StorageListing =
+  | { ok: true; objects: { key: string; size: number; uploadedAt: number | null }[] }
+  | { ok: false; message: string; httpStatus?: number | null }
+
 export type UploadResult =
   | { ok: true; result: Progress }
   | { ok: false; message: string; httpStatus: number | null }

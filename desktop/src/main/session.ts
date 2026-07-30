@@ -1,8 +1,9 @@
-import { AdminApiError, exchangePairing, type HttpResponse, type Transport } from '../shared/adminApi'
+import { AdminApiError, exchangePairing } from '../shared/adminApi'
 import { resolveAdminApi, UnsafeEndpoint } from '../shared/endpoint'
 import { isUsable, secondsLeft, type Session, type SessionStatus } from '../shared/session'
 import type { PairingInput } from '../shared/pairing'
 import * as store from './store'
+import { transport } from './transport'
 
 /**
  * The pairing token, and the fact that the interface never sees it.
@@ -16,8 +17,6 @@ import * as store from './store'
  */
 
 let current: Session | null = null
-
-const transport: Transport = (url, init) => fetch(url, init) as Promise<HttpResponse>
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
