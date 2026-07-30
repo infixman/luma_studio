@@ -367,6 +367,8 @@ class TestWhatAVideoTokenMayReach:
             ("POST", "/api/video-assets"),
             ("POST", "/api/video-assets/asset-1/upload-urls"),
             ("POST", "/api/video-assets/import"),
+            ("POST", "/api/video-assets/asset-1/source-upload"),
+            ("POST", "/api/video-assets/asset-1/source-upload/session-1/parts/1"),
         ],
     )
     def test_the_upload_routes_are_reachable(self, desktop_auth, method, path):
@@ -413,6 +415,21 @@ class TestWhatAVideoTokenMayReach:
 
     def test_a_near_miss_path_is_not_matched_by_prefix(self, desktop_auth):
         assert desktop_auth.scope_allows("video", "POST", "/api/video-assets-evil") is False
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/video-assets/asset-1/source-upload/session-1/parts/",
+            "/api/video-assets/asset-1/source-upload/session-1/parts/abc",
+            "/api/video-assets/asset-1/source-upload/session-1/parts/1/../../archive",
+            "/api/video-assets/asset-1/source-upload/session-1",
+        ],
+    )
+    def test_a_part_path_that_is_not_one_is_not_matched(self, desktop_auth, path):
+        """The pattern is the permission. A prefix match would have let anything
+        after `source-upload/` through."""
+
+        assert desktop_auth.scope_allows("video", "POST", path) is False
 
 
 class TestTheExchangeRoute:

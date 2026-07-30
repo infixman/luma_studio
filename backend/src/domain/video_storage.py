@@ -42,7 +42,13 @@ MAX_URLS = 100
 BUCKET_VARS = {"source": "COURSE_SOURCE_BUCKET", "output": "COURSE_VIDEO_BUCKET"}
 
 
-def _credentials(env) -> dict:
+def credentials_for(env) -> dict:
+    """The three values a signed request needs, or a refusal that says so.
+
+    Public because the source-file upload signs its own requests through
+    `shared.r2_s3` — same credentials, same refusal when they are absent.
+    """
+
     endpoint = env_var(env, "R2_S3_ENDPOINT")
     access_key_id = env_var(env, "R2_ACCESS_KEY_ID")
     secret_access_key = env_var(env, "R2_SECRET_ACCESS_KEY")
@@ -81,7 +87,7 @@ def upload_urls(env, *, asset: dict, keys, kind: str, version: int, now: int | N
         raise ValueError(f"一次最多 {MAX_URLS} 個檔案")
 
     bucket = bucket_for(env, kind)
-    credentials = _credentials(env)
+    credentials = credentials_for(env)
     checked = [
         video.signable_key(key, asset_id=asset["id"], version=version, kind=kind) for key in keys
     ]

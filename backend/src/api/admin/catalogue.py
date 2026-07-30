@@ -8,8 +8,8 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
-from domain import courses, inventory, offers, shop, video, video_storage
-from shared import flags, sanitize
+from domain import courses, inventory, offers, shop, source_upload, video, video_storage
+from shared import flags, r2_s3, sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
 
@@ -350,6 +350,61 @@ async def handle(ctx: Ctx):
 
         if action == "references" and method == "GET":
             return ctx.json({"lessons": await video.lessons_using(env, asset_id)})
+
+        # The original file's own upload. A pending multipart upload is state R2
+        # holds for us — parts already sent are billed and invisible in a listing
+        # — so opening one is a request to the Worker with a row behind it, not a
+        # URL the tool is handed. Only the parts are presigned.
+        if action == "source-upload" and method == "POST":
+            if not flags.enabled(env, flags.VIDEO_UPLOAD):
+                return ctx.error("影片上傳尚未開放", 403)
+            try:
+                return ctx.json(await source_upload.start(env, asset=asset), 201)
+            except video_storage.NotConfigured:
+                return ctx.error("影片上傳尚未設定完成", 503)
+            except r2_s3.R2Error:
+                # Not the caller's fault and not something a retry of the same
+                # request will fix in the next second. The message stays ours:
+                # R2's carries an error code and nothing an admin can act on.
+                return ctx.error("R2 目前無法開始上傳，請稍後再試", 502)
+            except ValueError as error:
+                return ctx.error(str(error) or "Invalid upload", 409)
+
+        if action.startswith("source-upload/") and method == "POST":
+            if not flags.enabled(env, flags.VIDEO_UPLOAD):
+                return ctx.error("影片上傳尚未開放", 403)
+            # `{sessionId}/{step}/{rest}`, split once so the steps below read as
+            # cases rather than as string surgery.
+            session_id, step, rest = (action[len("source-upload/") :].split("/", 2) + ["", ""])[:3]
+            session = await source_upload.get_session(env, session_id, asset_id=asset_id)
+            if session is None:
+                return ctx.error("Upload session not found", 404)
+
+            if step == "parts" and rest:
+                # The session's own state first, and with its own status: "this
+                # upload already ended" is a different answer from "that is not a
+                # part number", and a caller cannot tell them apart from a 400.
+                # `part_url` refuses it too — that copy is the domain keeping its
+                # invariant, this one is for the status code.
+                try:
+                    source_upload.usable(session, video.utc_timestamp())
+                except ValueError as error:
+                    return ctx.error(str(error), 409)
+                try:
+                    # `int` accepts "+1", " 1" and unicode digits; the path
+                    # segment either is digits or it is not a part number.
+                    part_number = int(rest) if rest.isascii() and rest.isdigit() else -1
+                    return ctx.json(
+                        source_upload.part_url(
+                            env, asset=asset, session=session, part_number=part_number
+                        )
+                    )
+                except video_storage.NotConfigured:
+                    return ctx.error("影片上傳尚未設定完成", 503)
+                except ValueError as error:
+                    return ctx.error(str(error) or "Invalid part", 400)
+
+            return ctx.error("Not found", 404)
 
         if action == "upload-urls" and method == "POST":
             if not flags.enabled(env, flags.VIDEO_UPLOAD):

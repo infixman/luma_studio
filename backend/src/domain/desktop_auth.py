@@ -60,6 +60,15 @@ _VIDEO_ROUTES = (
     ("POST", re.compile(r"^/api/video-assets$")),
     ("POST", re.compile(r"^/api/video-assets/import$")),
     ("POST", re.compile(r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/upload-urls$")),
+    # The original file goes up in parts, which is three more routes the tool
+    # drives. Opening a session and signing a part are part of uploading in the
+    # same sense `upload-urls` is; ending one is on the list because the tool is
+    # the only thing that knows the upload finished.
+    ("POST", re.compile(r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload$")),
+    (
+        "POST",
+        re.compile(r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload/[A-Za-z0-9_-]{1,64}/parts/\d{1,5}$"),
+    ),
     # The FFmpeg mirror. Part of uploading rather than a separate permission: the
     # tool reaches it with an MP4 already dropped on it and no FFmpeg to encode
     # with. The bytes are a published GPL build and not a secret — what the token

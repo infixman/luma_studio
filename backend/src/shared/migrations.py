@@ -1109,6 +1109,26 @@ MIGRATIONS = [
             " ON video_encode_versions (verified_at DESC)",
         ],
     },
+    {
+        # Phase 4: what a source-file upload session has to remember.
+        #
+        # `part_count` so a part number can be checked against the file the asset
+        # declared rather than against R2's ceiling, and `etag` so a repeated
+        # complete can answer with what the first one produced instead of asking
+        # R2 about an upload that no longer exists — which is indistinguishable
+        # from an upload that never did.
+        #
+        # `etag` is the *finished object's* tag, not somewhere to keep the
+        # per-part ones. Completing needs a list of (part number, tag) pairs and
+        # where those live is still open — see the S5 entry in task.md.
+        # Overloading this column for them would be a list in a single value.
+        "name": "0036_add_upload_session_parts",
+        "add_columns": [
+            ("video_upload_sessions", "part_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("video_upload_sessions", "etag", "TEXT"),
+        ],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

@@ -232,6 +232,191 @@ class TestAbandoningAnUpload:
         assert call(anonymous).status == 401
 
 
+class TestOpeningASourceUpload:
+    """The routes the tool drives a multipart upload of the original through.
+
+    The parts are presigned URLs; opening and finishing the upload are requests
+    to the Worker, because a pending multipart upload is state R2 holds for us
+    and the row that remembers it is the only way to end it.
+    """
+
+    R2_ENV = {
+        "R2_S3_ENDPOINT": "https://0123456789abcdef.r2.cloudflarestorage.com",
+        "R2_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+        "R2_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "COURSE_SOURCE_BUCKET": "luma-course-source",
+        "COURSE_VIDEO_BUCKET": "luma-course-video",
+        "VIDEO_UPLOAD_ENABLED": "1",
+    }
+
+    def _session_row(self, **extra):
+        return {
+            "id": "session-1", "asset_id": ASSET_ID, "upload_id": "ABPnzm4-tEXAMPLE",
+            "part_size": 64 * 1024 * 1024, "part_count": 64, "status": "uploading",
+            "etag": None, "expires_at": 4102444800, "created_at": 0, "updated_at": 0,
+            **extra,
+        }
+
+    def _r2(self, monkeypatch, upload_id="ABPnzm4-tEXAMPLE"):
+        from shared import r2_s3
+
+        async def fake_start(*, credentials, bucket, key, now):
+            if isinstance(upload_id, Exception):
+                raise upload_id
+            return upload_id
+
+        monkeypatch.setattr(r2_s3, "start_multipart", fake_start)
+
+    def test_starting_one_says_how_to_cut_the_file(self, call, monkeypatch):
+        self._r2(monkeypatch)
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload", "POST"),
+            {"SELECT * FROM video_assets": [an_asset(status="uploading")]},
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 201
+        body = response.json()
+        assert body["partSize"] > 0 and body["partCount"] > 0 and body["sessionId"]
+
+    def test_a_video_that_is_no_longer_uploading_is_refused(self, call, monkeypatch):
+        self._r2(monkeypatch)
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload", "POST"),
+            {"SELECT * FROM video_assets": [an_asset(status="ready")]},
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 409
+
+    def test_r2_being_unreachable_is_not_reported_as_the_caller_s_fault(self, call, monkeypatch):
+        from shared.r2_s3 import R2Error
+
+        self._r2(monkeypatch, upload_id=R2Error("R2 could not be reached"))
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload", "POST"),
+            {"SELECT * FROM video_assets": [an_asset(status="uploading")]},
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 502
+
+    def test_an_unconfigured_deployment_says_so_rather_than_signing_nothing(self, call, monkeypatch):
+        self._r2(monkeypatch)
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload", "POST"),
+            {"SELECT * FROM video_assets": [an_asset(status="uploading")]},
+            env={"VIDEO_UPLOAD_ENABLED": "1"},
+        )
+
+        assert response.status == 503
+
+    def test_a_part_url_is_signed_for_that_part(self, call):
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/3", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 200
+        assert "partNumber=3" in response.json()["url"]
+
+    def test_a_part_past_the_end_of_the_file_is_refused(self, call):
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/999", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 400
+
+    def test_an_unknown_session_is_not_found(self, call):
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-9/parts/1", "POST"),
+            {"SELECT * FROM video_assets": [an_asset(status="uploading")]},
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 404
+
+    def test_signing_a_part_is_gated_by_the_same_switch(self, call):
+        """Turning the flag off stops new sessions, and would otherwise leave the
+        ones already open able to keep writing."""
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/1", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env={**self.R2_ENV, "VIDEO_UPLOAD_ENABLED": "0"},
+        )
+
+        assert response.status == 403
+
+    @pytest.mark.parametrize("segment", ["+1", " 1", "1e3", "٣", "0x1", "1.0"])
+    def test_a_part_number_that_is_not_digits_is_refused_not_coerced(self, call, segment):
+        """`int` accepts a leading plus, surrounding space and unicode digits.
+        A path segment either is a part number or it is not one."""
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/{segment}", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 400
+
+    def test_a_session_that_already_ended_says_so_rather_than_400(self, call):
+        """"This upload is over" and "that is not a part number" are different
+        answers, and a caller cannot tell them apart from one status code."""
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/1", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row(status="completed")],
+            },
+            env=self.R2_ENV,
+        )
+
+        assert response.status == 409
+
+    def test_the_session_is_read_with_its_asset(self, call):
+        """A session id alone would let a token for one asset name a session
+        belonging to another."""
+
+        database = FakeDatabase(
+            {
+                **SIGNED_IN,
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT * FROM video_upload_sessions": [self._session_row()],
+            }
+        )
+
+        call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/source-upload/session-1/parts/1", "POST"),
+            database=database,
+            env=self.R2_ENV,
+        )
+
+        reads = [b for sql, b in database.reads if "FROM video_upload_sessions" in sql]
+        assert reads and reads[0] == ("session-1", ASSET_ID)
+
+
 class TestImporting:
     """Registering a ladder that was transcoded and uploaded elsewhere."""
 
