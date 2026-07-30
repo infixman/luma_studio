@@ -26,6 +26,9 @@ vi.mock('../../shared/api', async (importOriginal) => {
     ...actual,
     api: vi.fn(async (url: string) => {
       if (url.endsWith('/outline')) return { sections }
+      // The outline editor offers finished videos to choose from.
+      if (url.startsWith('/api/video-assets')) return { assets: [] }
+      if (url.startsWith('/api/media')) return { items: [] }
       return { course }
     }),
     apiJson: vi.fn(async (url: string) => {
@@ -98,7 +101,7 @@ test('every reason a course cannot be published is shown at once', async () => {
   expect(container.textContent).toContain('調色練習')
 })
 
-test('an outline is shown chapter by chapter', async () => {
+test('an outline is shown chapter by chapter, as editable rows', async () => {
   sections = [
     {
       id: 's1',
@@ -114,12 +117,15 @@ test('an outline is shown chapter by chapter', async () => {
   render(<CourseEditPage id="course-1" />, container)
   await settle()
 
-  expect(container.textContent).toContain('第一章')
-  expect(container.textContent).toContain('工具介紹')
-  expect(container.textContent).toContain('調色練習')
+  // A TextField renders a bare `input` with no explicit type, so this reads
+  // every one rather than filtering by a type that is not there.
+  const values = [...container.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value)
+  expect(values).toContain('第一章')
+  expect(values).toContain('工具介紹')
+  expect(values).toContain('調色練習')
 })
 
-test('a lesson anybody can watch is marked as such', async () => {
+test('a lesson anybody can watch is ticked', async () => {
   // Preview is the one lesson property with a consequence outside the editor:
   // it is watchable without buying.
   sections = [
@@ -136,7 +142,8 @@ test('a lesson anybody can watch is marked as such', async () => {
   render(<CourseEditPage id="course-1" />, container)
   await settle()
 
-  expect(container.textContent).toContain('試看')
+  const preview = container.querySelector<HTMLInputElement>('input[type="checkbox"]')
+  expect(preview?.checked).toBe(true)
 })
 
 test('a lesson with no video is not shown as broken', async () => {

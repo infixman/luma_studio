@@ -9,6 +9,7 @@ let the client keep believing it had been obeyed.
 """
 
 from domain import courses, inventory, offers, shop, video
+from shared import sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
 
@@ -48,11 +49,26 @@ def _course_display_fields(body: dict) -> dict:
     save a half-written course without being nagged for the rest of it.
     """
 
+    def html(name: str, label: str) -> str:
+        # Cleaned here, on the way in. The editor limits what an author can
+        # type; this is the boundary, and content arriving by any other route
+        # goes through the same door.
+        raw = validate_text(body.get(name) or "", courses.MAX_HTML, label, required=False)
+        return sanitize.sanitize_html(raw) if raw else ""
+
+    cover = str(body.get("coverMediaId") or "").strip() or None
     return {
         "summary": validate_text(body.get("summary") or "", courses.MAX_SUMMARY, "課程簡介", required=False),
         "instructorName": validate_text(body.get("instructorName") or "", 60, "講師", required=False),
         "level": validate_choice(body.get("level") or "all", courses.LEVELS, "難度"),
         "language": validate_text(body.get("language") or "zh-Hant", 20, "語言", required=False),
+        "coverMediaId": cover,
+        "descriptionHtml": html("descriptionHtml", "課程介紹"),
+        "instructorBioHtml": html("instructorBioHtml", "講師介紹"),
+        "audienceHtml": html("audienceHtml", "適合對象"),
+        "outcomesHtml": html("outcomesHtml", "學習成果"),
+        "prerequisitesHtml": html("prerequisitesHtml", "先備知識"),
+        "materialsHtml": html("materialsHtml", "工具與材料"),
     }
 
 

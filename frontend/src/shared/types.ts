@@ -655,3 +655,38 @@ export type PlaybackRefusal =
   | 'not_entitled'
   | 'expired'
   | 'revoked'
+
+export type VideoAssetStatus =
+  | 'uploading'
+  | 'uploaded'
+  | 'queued'
+  | 'processing'
+  | 'ready'
+  | 'failed'
+  | 'aborted'
+  | 'archived'
+
+/**
+ * A course video, as the back office may see it.
+ *
+ * Carries no object keys. The bucket is private, and publishing the map is a
+ * favour nobody asked for; the player gets signed, short-lived URLs from the
+ * playback gateway instead.
+ */
+export interface VideoAsset {
+  id: string
+  title: string
+  originalFilename: string
+  status: VideoAssetStatus
+  byteSize: number
+  durationSeconds: number | null
+  width: number | null
+  height: number | null
+  /** Null until an encode has been published. */
+  encodeVersion: number | null
+  hasPoster: boolean
+  errorCode: string | null
+  errorDetail: string | null
+  createdAt: number
+  updatedAt: number
+}

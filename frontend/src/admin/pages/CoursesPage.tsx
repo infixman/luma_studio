@@ -60,17 +60,20 @@ export function CoursesPage() {
 
   async function create(event: Event) {
     event.preventDefault()
+    const created = { id: '' }
     const ok = await run(async () => {
-      await apiJson<{ course: Course }>('/api/courses', 'POST', {
+      const course = await apiJson<{ course: Course }>('/api/courses', 'POST', {
         title: draft.title.trim(),
         slug: draft.slug.trim() || slugifyAscii(draft.title, 64),
         status: 'draft',
       })
+      created.id = course.course.id
     }, '課程已建立。')
 
-    if (ok) {
-      setDraft(EMPTY_DRAFT)
-      await load()
+    if (ok && created.id) {
+      // Straight into the editor. A new course is a name and nothing else, and
+      // the next thing anybody wants is to add a chapter to it.
+      location.assign(`/courses/${encodeURIComponent(created.id)}`)
     }
   }
 

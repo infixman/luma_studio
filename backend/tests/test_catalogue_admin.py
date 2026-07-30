@@ -378,3 +378,76 @@ class TestCourseOutlineRoutes:
         response = call(signed_in_json(f"/api/courses/{'b' * 18}/outline", "PUT", {"sections": []}))
 
         assert response.status == 404
+
+
+class TestCourseDisplayFields:
+    """The parts a product page reads, saved from the editor."""
+
+    def _course(self) -> dict:
+        return {
+            "SELECT * FROM courses WHERE id": [{
+                "id": "a" * 18, "slug": "watercolour", "title": "水彩入門", "status": "draft",
+                "created_at": 0, "updated_at": 0, "summary": "", "description_html": "",
+                "cover_media_id": None, "instructor_name": "", "instructor_bio_html": "",
+                "level": "all", "language": "zh-Hant", "audience_html": "", "outcomes_html": "",
+                "prerequisites_html": "", "materials_html": "", "published_at": None,
+            }],
+        }
+
+    def _save(self, call, body: dict):
+        return call(
+            signed_in_json("/api/courses/" + "a" * 18, "PUT", {"slug": "watercolour", "title": "水彩入門", **body}),
+            self._course(),
+        )
+
+    def test_the_long_form_fields_are_saved(self, call):
+        response = self._save(call, {"descriptionHtml": "<p>介紹</p>", "outcomesHtml": "<p>你會學到</p>"})
+
+        assert response.status == 200
+
+    def test_html_is_cleaned_on_the_way_in(self):
+        """The editor restricts what an author can type. That is a convenience,
+        and this is the boundary.
+
+        Asserted on what the route builds rather than on what it reads back:
+        the fake database returns the fixture unchanged, so a round-trip check
+        would pass without anything having been cleaned.
+        """
+
+        from api.admin import catalogue
+
+        fields = catalogue._course_display_fields({"descriptionHtml": "<p>好<script>alert(1)</script></p>"})
+
+        assert "script" not in fields["descriptionHtml"]
+        assert "好" in fields["descriptionHtml"]
+
+    def test_every_long_form_field_goes_through_the_same_door(self):
+        """One of them being missed is the failure that would not be noticed."""
+
+        from api.admin import catalogue
+
+        attack = "<p><script>alert(1)</script></p>"
+        fields = catalogue._course_display_fields(
+            {
+                "descriptionHtml": attack,
+                "instructorBioHtml": attack,
+                "audienceHtml": attack,
+                "outcomesHtml": attack,
+                "prerequisitesHtml": attack,
+                "materialsHtml": attack,
+            }
+        )
+
+        for name, value in fields.items():
+            if name.endswith("Html"):
+                assert "script" not in value, name
+
+    def test_a_cover_can_be_chosen(self, call):
+        response = self._save(call, {"coverMediaId": "media-1"})
+
+        assert response.status == 200
+
+    def test_html_beyond_a_sane_size_is_refused(self, call):
+        response = self._save(call, {"descriptionHtml": "<p>" + "a" * 70_000 + "</p>"})
+
+        assert response.status == 400

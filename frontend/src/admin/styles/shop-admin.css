@@ -814,3 +814,79 @@ body.admin .course-lessons li {
   align-items: center;
   gap: var(--space-2);
 }
+
+/* --- course outline editor --- */
+
+body.admin .course-outline-editor {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+body.admin .course-outline-editor > li {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* The chapter's own name and its move/remove controls share a row, so the
+   lessons below read as belonging to it rather than as siblings of it. */
+body.admin .course-section-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+body.admin .course-section-head .ui-field {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+body.admin .course-lesson-rows {
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+body.admin .course-lesson-rows > li {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+body.admin .course-lesson-rows .ui-field {
+  min-width: 8rem;
+  margin-bottom: 0;
+}
+
+body.admin .course-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+body.admin .course-cover {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+body.admin .course-cover img {
+  width: 8rem;
+  height: 8rem;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--sunken);
+}

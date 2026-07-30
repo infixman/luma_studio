@@ -125,12 +125,42 @@ async def update_course(
     instructorName: str = "",
     level: str = "all",
     language: str = "zh-Hant",
+    coverMediaId: str | None = None,
+    descriptionHtml: str = "",
+    instructorBioHtml: str = "",
+    audienceHtml: str = "",
+    outcomesHtml: str = "",
+    prerequisitesHtml: str = "",
+    materialsHtml: str = "",
 ) -> bool:
+    """Save a course. The HTML arrives already cleaned.
+
+    `status` is here because saving a draft is the normal case. Publishing is
+    its own route: it runs checks a plain save must not.
+    """
+
     result = await env.DB.prepare(
         "UPDATE courses SET slug = ?2, title = ?3, status = ?4, summary = ?5, instructor_name = ?6,"
-        " level = ?7, language = ?8, updated_at = ?9 WHERE id = ?1"
+        " level = ?7, language = ?8, cover_media_id = ?9, description_html = ?10,"
+        " instructor_bio_html = ?11, audience_html = ?12, outcomes_html = ?13,"
+        " prerequisites_html = ?14, materials_html = ?15, updated_at = ?16 WHERE id = ?1"
     ).bind(
-        course_id, slug, title, status, summary, instructorName, level, language, utc_timestamp()
+        course_id,
+        slug,
+        title,
+        status,
+        summary,
+        instructorName,
+        level,
+        language,
+        coverMediaId,
+        descriptionHtml,
+        instructorBioHtml,
+        audienceHtml,
+        outcomesHtml,
+        prerequisitesHtml,
+        materialsHtml,
+        utc_timestamp(),
     ).run()
     return d1_changed(result)
 
