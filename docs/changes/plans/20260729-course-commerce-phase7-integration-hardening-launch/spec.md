@@ -130,7 +130,11 @@ AND course fulfillment status != fulfilled
 - 卡在 uploading 且沒有進度的 asset。
 - ready 但 active master HEAD 失敗。
 - orphan output version：R2 有物件，D1 沒有對應的 encode version。
+- orphan source：R2 有原始檔，沒有 asset 指向它。
 - 過期的原始檔 multipart session。
+
+孤兒盤點會列 bucket，所以是一個明確的動作而非定期輪詢，而且必須排除仍在
+`uploading` 的 asset 與 24 小時內的物件 —— 正在上傳中的版本長得跟孤兒一樣。
 
 ### Reference Integrity
 

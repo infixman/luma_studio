@@ -64,6 +64,7 @@ POST   /api/video-assets
 POST   /api/video-assets/{assetId}/upload-urls
 POST   /api/video-assets/import
 GET    /api/video-assets/{assetId}
+GET    /api/video-assets/{assetId}/source-url
 POST   /api/video-assets/{assetId}/archive
 GET    /api/video-assets/{assetId}/references
 GET    /api/video-storage?prefix=
@@ -133,6 +134,33 @@ Part size 由 byte size 推算，確保不超過 R2 的 multipart 上限（目�
 parts，除最後一段外每段至少 5 MiB；實作前以官方
 [R2 Limits](https://developers.cloudflare.com/r2/platform/limits/) 再確認）。
 Complete 與 Abort 必須冪等，session 記在 `video_upload_sessions`，R2 secret 不入 D1。
+
+### 取得原始檔（重新轉檔用）
+
+`GET /api/video-assets/{assetId}/source-url` 回傳一張短效 presigned GET URL。
+
+```json
+{"url": "…", "expiresAt": 1785296400, "byteSize": 2147483648}
+```
+
+必須驗證：
+
+- 只簽這個 asset 自己的 `source_key`。**不接受任何 caller 指定的 key。**
+- asset 有原始檔。沒上傳過原始檔的 asset 回 404，訊息要說得出是「沒有原始檔」
+  而不是「沒有這支影片」。
+- 期限短。
+- 這是影片範圍 token 唯一的讀取權限；它不能讀 output bucket，也不能讀別的 asset。
+
+### 重新轉檔
+
+沿用既有端點，不需要新的狀態或表：
+
+1. `GET /source-url` 取得原始檔。
+2. `POST /api/video-assets`（帶 `assetId` 與新的 `encodeVersion`）建立新版本。
+3. 照一般流程 `upload-urls` → PUT → `import`。
+4. import 驗證通過才切換 `active_encode_version`。
+
+期間舊版本保持可播放。新版本驗證失敗不影響會員。
 
 ### 註冊（Import）
 
@@ -245,6 +273,115 @@ encode version 產生。
 - 需要重新編碼時使用新的 encode version，舊版本保持可播放直到新版本驗證通過。
 - 本機轉檔失敗就在本機重跑，不需要伺服器端的 queue 與 backoff。
 
+## 儲存總覽規格
+
+### `GET /api/video-storage/summary`
+
+```json
+{
+  "source": {"bytes": 214748364800, "objects": 42},
+  "output": {"bytes": 96636764160, "objects": 8734},
+  "orphans": {"sourceBytes": 5368709120, "outputBytes": 12884901888, "scannedAt": 1785296400},
+  "estimate": {
+    "monthlyUsd": 4.32,
+    "pricePerGbMonthUsd": 0.015,
+    "freeGb": 10,
+    "excludesOperations": true
+  },
+  "growth": {"bytesThisMonth": 21474836480}
+}
+```
+
+- `source` 與 `output` 由 D1 加總，不列 bucket：原始檔看 `video_assets.byte_size`，
+  輸出看 `video_encode_versions.byte_size`。開這個頁面不產生 R2 的 list 操作。
+- `orphans` 是**上一次盤點的結果**，帶盤點時間。沒盤點過就回 null，畫面顯示
+  「尚未盤點」而不是 0 —— 0 看起來像「沒有孤兒」。
+- 單價與免費額度是設定值，不是程式裡的常數。R2 的價目會變，一個過期的數字比
+  沒有數字更糟，因為它看起來像事實。
+- `excludesOperations` 是提醒畫面要標明估算範圍，不要把它說成帳單。
+
+### `GET /api/video-storage/orphans?bucket=source|output`
+
+回上一次盤點找到的孤兒物件：key、大小、最後修改時間。兩個桶用同一個端點，
+因為判斷方式一樣。
+
+### `POST /api/video-storage/scan`
+
+真的去列 bucket，比對 D1，寫下結果。這是唯一會產生大量 list 操作的地方，所以是
+一個明確的動作，不是任何頁面的副作用。
+
+孤兒的判斷：
+
+- 輸出桶：`videos/{assetId}/{version}/` 底下有物件，但 `video_encode_versions`
+  沒有對應的一列。
+- 原始檔桶：`sources/{assetId}/{uploadVersion}/` 底下有物件，但沒有 asset 指向它。
+- **排除仍在 `uploading` 的 asset**，並對還沒進 D1 的 prefix 加 24 小時的年齡門檻。
+  正在上傳中的版本長得跟孤兒一模一樣，寧可漏掉一個，不要刪掉一支正在傳的影片。
+
+### `GET /api/video-storage/cleanup-candidates`
+
+分類回傳，前端不自己判斷安全程度：
+
+```json
+{
+  "safe": [
+    {"kind": "orphan", "bucket": "output", "keys": 312, "bytes": 12884901888},
+    {"kind": "supersededVersion", "assetId": "…", "encodeVersion": 1, "bytes": 8589934592}
+  ],
+  "needsJudgement": [
+    {"kind": "unusedSource", "assetId": "…", "title": "…", "bytes": 5368709120,
+     "consequence": "刪除後這支影片無法再重新轉檔"}
+  ]
+}
+```
+
+- `safe` 可以批次執行。
+- `needsJudgement` 每一項單獨確認，確認文字帶影片名稱與 `consequence`。不提供全選。
+- **課程還在用的原始檔不出現在任何一邊**，也沒有刪除端點會接受它。不是靠警告擋，
+  是不給入口。
+
+## 影片庫清單規格
+
+`GET /api/video-assets` 已存在，用於輸出導向的一般清單。原始檔頁另外需要：
+
+`GET /api/video-storage/sources` 一列一支原始檔：
+
+| 欄位 | 來源 |
+| --- | --- |
+| `bytes` | `video_assets.byte_size` |
+| `hasPlayableVersion` | 有沒有 active encode version |
+| `activeEncodeVersion` | `video_assets.active_encode_version` |
+| `versionCount` / `versionBytes` | `video_encode_versions` 加總 |
+| `lessons` | 使用它的課程單元，含課程與單元名稱 |
+| `createdAt` | 上傳時間 |
+
+`lessons` 要能點進去看，不能只回數量。刪除的決定不會建立在「3 個單元」上，
+會建立在「那門課去年就下架了」上。
+
+`GET /api/video-storage/versions?assetId=` 一列一個 encode version：物件數、位元組、
+驗證時間、是不是 active、是不是已被取代。
+
+## 保存規格
+
+| 物件 | 政策 |
+| --- | --- |
+| 課程還在用的原始檔 | 不刪，也不提供刪除入口 |
+| 沒有課程使用的原始檔 | 可刪，但需逐項確認並顯示「無法再重新轉檔」 |
+| 目前 active 的 encode version | 不刪 |
+| 被取代的舊 encode version | 切換成功後過了 rollback 期可刪 |
+| 兩個桶的孤兒物件 | 可刪 |
+| 過期未完成的 multipart session | 可清理 |
+
+清理程式：
+
+- 刪除前重新查一次 asset 與 lesson 的引用，不信任清單產生時的快照。
+- 一律先出 dry-run 清單，人看過才執行。
+- 錯誤方向必須是少刪一個，不是多刪一個。
+
+不設定任何依時間刪除的 lifecycle rule。刪除一律由人在後台按下，而後台要先說清楚
+按下去會失去什麼。設 lifecycle rule 等於讓重新轉檔對舊影片默默失效，
+而那要到有人按下重新轉檔的那天才會發現。
+
 ## 管理前端規格
 
 影片庫顯示：
@@ -275,6 +412,13 @@ Electron 的上傳不受瀏覽器 CORS 限制，但後台若日後直接上傳�
 - Token scope：影片 token 打非影片路由回 403。
 - Presign：只作用於指定 bucket、key、method 與期限；越界 key 被拒。
 - key 形狀允許清單。
+- `source-url` 忽略 caller 提供的任何 key，只簽該 asset 的 `source_key`。
+- 影片範圍 token 不能用 presigned GET 讀 output bucket 或別的 asset。
+- 清理程式在引用存在時不刪除。
+- 孤兒盤點不把仍在 `uploading` 的 asset 或 24 小時內的物件算成孤兒。
+- 課程還在用的原始檔不出現在 cleanup candidates，且刪除端點拒絕它。
+- 儲存總覽由 D1 加總，不觸發 R2 list 操作。
+- 沒盤點過時 `orphans` 回 null，不回 0。
 - Import 冪等。
 - 非法狀態轉移。
 - playlist 完整性驗證，含缺 init segment、缺中段、master 指向不存在的 rendition。
@@ -304,5 +448,7 @@ Electron 的上傳不受瀏覽器 CORS 限制，但後台若日後直接上傳�
 - source 與 video bucket 都沒有 public URL。
 - 缺檔的上傳會被拒絕，並一次列出所有缺漏。
 - 失敗不會覆蓋目前 ready 的版本。
+- 重新轉檔期間舊版本一直可播放。
+- 有 asset 指向的原始檔不會被任何清理程式刪掉。
 - 安裝檔可從後台取得，工具能自我更新。
 - 課程尚未引用影片，會員端也沒有公開播放入口。

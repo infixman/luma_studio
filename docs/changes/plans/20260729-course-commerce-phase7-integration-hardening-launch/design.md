@@ -185,8 +185,9 @@ Lesson、影片、觀看進度、訂單或 audit，因此 restore 隨時可行�
 ## 備份與復原
 
 - D1 備份必須包含 Course、Entitlement、Progress、Video metadata。
-- R2 影片需要獨立備份或明確接受「可由 source 重建」的策略。
-- 若 source 會刪除，HLS output 就不再是可隨時重建，必須有第二份保存或接受遺失風險。
+- HLS 輸出不另外備份，因為它可以從原始檔重建。
+- 原始檔在管理員的機器與 R2 各一份 —— 兩個不同的失效域，這才算兩份。上傳完刪掉本機那份，等於換個地方放同一份。
+- 不設依時間刪除原始檔的 lifecycle rule。刪除一律由人在後台按下，而課程還在用的原始檔沒有刪除入口。
 - Runbook 要能從 D1 asset 記錄定位 R2 keys，但備份檔與 log 不包含 presigned URL 或桌面工具 token。
 - 原始檔留著的話，HLS 輸出可以重建 —— 但重建需要一台裝著桌面工具的機器，不是一個雲端按鈕。復原時間要照這個算。
 

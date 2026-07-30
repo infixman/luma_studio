@@ -72,7 +72,7 @@
 ## 7. 備份與 Runbook
 
 - [ ] 更新 D1 備份與還原，涵蓋新增表。 未做。
-- [ ] 決定 R2 source 與 HLS 的第二份保存策略。 需你決定。
+- [x] 決定 R2 source 與 HLS 的第二份保存策略。 原始檔在管理員機器與 R2 各一份（兩個失效域）；HLS 可從原始檔重建，不另備份。不設依時間刪除的 lifecycle rule。見 phase4/spec.md「保存規格」。
 - [ ] 實際演練從備份還原 Course、Entitlement 與 Video metadata。 blocker：需部署環境。
 - [ ] 撰寫付款成功但未授權 runbook。 runbook 未寫。
 - [ ] 撰寫誤撤銷 entitlement 的 restore runbook。 runbook 未寫。
