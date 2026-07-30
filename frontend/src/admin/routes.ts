@@ -6,6 +6,7 @@ export type AdminRouteId =
   | 'inventory'
   | 'courses'
   | 'videos'
+  | 'storage'
   | 'categories'
   | 'shipping'
   | 'pages'
@@ -33,6 +34,9 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
   // Beside the courses rather than under tools: it is the other half of building
   // one, and the tool that fills it is already listed separately.
   { id: 'videos', path: '/videos', label: '影片庫', group: 'shop' },
+  // Its own page rather than a panel on the library: the library is about one
+  // video at a time, and this is about the bill.
+  { id: 'storage', path: '/storage', label: '影片儲存空間', group: 'shop' },
   { id: 'shipping', path: '/shipping', label: '運費', group: 'shop' },
   { id: 'pages', path: '/pages', label: '頁面', group: 'site' },
   { id: 'site', path: '/site', label: '頁首/頁尾', group: 'site' },

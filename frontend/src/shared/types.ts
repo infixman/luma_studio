@@ -690,3 +690,71 @@ export interface VideoAsset {
   createdAt: number
   updatedAt: number
 }
+
+
+/** What the two buckets hold, as the overview reads it out of D1. */
+export interface StorageSummary {
+  source: { bytes: number; objects: number }
+  output: { bytes: number; objects: number }
+  /** Null until somebody has swept. Zero would read as "there are none". */
+  orphans: {
+    sourceBytes: number
+    outputBytes: number
+    scannedAt: number
+    truncated: boolean
+  } | null
+  /** Null when this deployment has not been told what a gigabyte costs. */
+  estimate: {
+    monthlyUsd: number
+    pricePerGbMonthUsd: number
+    freeGb: number
+    excludesOperations: boolean
+  } | null
+  growth: { bytesThisMonth: number }
+}
+
+export interface StorageSource {
+  assetId: string
+  title: string
+  status: VideoAssetStatus
+  bytes: number
+  hasPlayableVersion: boolean
+  activeEncodeVersion: number | null
+  versionCount: number
+  versionBytes: number
+  lessons: { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }[]
+  createdAt: number
+}
+
+export interface StorageVersion {
+  assetId: string
+  encodeVersion: number
+  objectCount: number
+  bytes: number
+  hasPoster: boolean
+  verifiedAt: number
+  isActive: boolean
+  isSuperseded: boolean
+}
+
+export interface StorageOrphan {
+  key: string
+  size: number
+  uploadedAt: number | null
+}
+
+/** Split by consequence. The page does not decide which is which. */
+export interface CleanupCandidates {
+  safe: (
+    | { kind: 'orphan'; bucket: 'source' | 'output'; keys: number; bytes: number }
+    | { kind: 'supersededVersion'; assetId: string; title: string; encodeVersion: number; bytes: number }
+  )[]
+  needsJudgement: {
+    kind: 'unusedSource'
+    assetId: string
+    title: string
+    bytes: number
+    consequence: string
+  }[]
+  scannedAt: number | null
+}
