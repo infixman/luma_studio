@@ -2,10 +2,14 @@ import { describe, expect, test, vi } from 'vitest'
 
 import {
   AdminApiError,
+  abortSourceUpload,
+  completeSourceUpload,
   createAsset,
   exchangePairing,
   isTransient,
   registerEncode,
+  sourcePartUrl,
+  startSourceUpload,
   uploadUrls,
   type HttpResponse,
   type Transport,
@@ -253,5 +257,158 @@ describe('registering a finished encode', () => {
     const transport = vi.fn<Transport>(async () => responding(409, { error: 'x' }))
 
     await expect(registerEncode(transport, BASE, 'tok', DETAILS)).resolves.toMatchObject({ ok: false })
+  })
+})
+
+describe('uploading the original file', () => {
+  const SESSION = { sessionId: 'session-1', partSize: 67_108_864, partCount: 3, expiresAt: 1_785_336_000 }
+
+  test('starting one reports how to cut the file', async () => {
+    const transport = vi.fn<Transport>(async () => responding(201, SESSION))
+
+    const session = await startSourceUpload(transport, BASE, 'token', { assetId: 'asset-1' })
+
+    expect(session.partSize).toBe(67_108_864)
+    expect(session.partCount).toBe(3)
+    expect(transport.mock.calls[0]![0]).toBe(`${BASE}/api/video-assets/asset-1/source-upload`)
+  })
+
+  test('a session with no expiry is refused', async () => {
+    /** The window is what the tool checks before signing another part. Zero
+     *  means "already over", which is not what a fresh session is. */
+    const transport = vi.fn<Transport>(async () =>
+      responding(201, { sessionId: 'session-1', partSize: 1, partCount: 1 }),
+    )
+
+    await expect(startSourceUpload(transport, BASE, 'token', { assetId: 'asset-1' })).rejects.toThrow(
+      AdminApiError,
+    )
+  })
+
+  test('an answer that does not say how to cut it is refused', async () => {
+    /** Without a part size the tool would find out by sending a part the server
+     *  refuses — after the bytes. */
+    const transport = vi.fn<Transport>(async () => responding(201, { sessionId: 'session-1' }))
+
+    await expect(startSourceUpload(transport, BASE, 'token', { assetId: 'asset-1' })).rejects.toThrow(
+      AdminApiError,
+    )
+  })
+
+  test('a part url is asked for by number', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, { url: 'https://r2/put', expiresAt: 1_785_336_000 }),
+    )
+
+    const granted = await sourcePartUrl(transport, BASE, 'token', {
+      assetId: 'asset-1',
+      sessionId: 'session-1',
+      partNumber: 3,
+    })
+
+    expect(granted.url).toBe('https://r2/put')
+    expect(transport.mock.calls[0]![0]).toBe(
+      `${BASE}/api/video-assets/asset-1/source-upload/session-1/parts/3`,
+    )
+  })
+
+  test('an answer with no url in it is refused', async () => {
+    /** A part uploaded to an empty string is a part that never went anywhere,
+     *  and the upload would fail at the end with nothing to point at. */
+    const transport = vi.fn<Transport>(async () => responding(200, { expiresAt: 1 }))
+
+    await expect(
+      sourcePartUrl(transport, BASE, 'token', {
+        assetId: 'asset-1',
+        sessionId: 'session-1',
+        partNumber: 1,
+      }),
+    ).rejects.toThrow(AdminApiError)
+  })
+
+  test('an answer with no expiry is refused', async () => {
+    /** Zero reads as "already expired" to anything that checks it, and checking
+     *  it is the whole reason the field is there. */
+    const transport = vi.fn<Transport>(async () => responding(200, { url: 'https://r2/put' }))
+
+    await expect(
+      sourcePartUrl(transport, BASE, 'token', {
+        assetId: 'asset-1',
+        sessionId: 'session-1',
+        partNumber: 1,
+      }),
+    ).rejects.toThrow(AdminApiError)
+  })
+
+  test('a part url is not shaped like the encode uploader batch', async () => {
+    /** Those carry the object key they belong to and get collected into a Map by
+     *  it. Every part of a source upload writes the same object, so a `key` here
+     *  would be empty and the map would collapse to one entry. */
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, { url: 'https://r2/put', expiresAt: 1_785_336_000 }),
+    )
+
+    const granted = await sourcePartUrl(transport, BASE, 'token', {
+      assetId: 'asset-1',
+      sessionId: 'session-1',
+      partNumber: 1,
+    })
+
+    expect('key' in granted).toBe(false)
+  })
+
+  test('completing sends the parts it collected', async () => {
+    const transport = vi.fn<Transport>(async () => responding(200, { etag: '"deadbeef-2"' }))
+
+    const finished = await completeSourceUpload(transport, BASE, 'token', {
+      assetId: 'asset-1',
+      sessionId: 'session-1',
+      parts: [{ partNumber: 1, eTag: '"a"' }],
+    })
+
+    expect(finished.etag).toBe('"deadbeef-2"')
+    expect(JSON.parse(String(transport.mock.calls[0]![1].body))).toEqual({
+      parts: [{ partNumber: 1, eTag: '"a"' }],
+    })
+  })
+
+  test('an upload the server had already finished is not an error', async () => {
+    /** The retry after a lost answer is the ordinary path, and the server
+     *  answers it from its own row. */
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, { etag: '"deadbeef-2"', alreadyCompleted: true }),
+    )
+
+    const finished = await completeSourceUpload(transport, BASE, 'token', {
+      assetId: 'asset-1',
+      sessionId: 'session-1',
+      parts: [{ partNumber: 1, eTag: '"a"' }],
+    })
+
+    expect(finished.alreadyCompleted).toBe(true)
+  })
+
+  test('cancelling reports a refusal rather than swallowing it', async () => {
+    /** Parts left in R2 are billed and invisible in a listing, so a failed
+     *  cancel is something somebody has to hear about. */
+    const transport = vi.fn<Transport>(async () => responding(502, { error: 'R2 目前無法完成這個動作' }))
+
+    await expect(
+      abortSourceUpload(transport, BASE, 'token', { assetId: 'asset-1', sessionId: 'session-1' }),
+    ).rejects.toThrow(AdminApiError)
+  })
+
+  test('the token goes with every one of them', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(200, { url: 'https://r2/put', expiresAt: 1_785_336_000 }),
+    )
+
+    await sourcePartUrl(transport, BASE, 'token-abc', {
+      assetId: 'asset-1',
+      sessionId: 'session-1',
+      partNumber: 1,
+    })
+
+    expect(transport.mock.calls[0]![1].headers).toMatchObject({ Authorization: 'Bearer token-abc' })
   })
 })

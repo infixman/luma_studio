@@ -147,7 +147,12 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       complete 收到 `NoSuchUpload` 不當失敗 —— 先 HEAD 那個 key，因為「R2 完成了、回應掉了」
       跟「這個 upload 從來不存在」是同一個答案。為了讓那個判斷有意義，**一個 asset 只允許一個
       沒被取消的 session**：所有 session 寫的是同一個 key，第二個 session 會被第一個的物件冒認。
-- [ ] 工具上傳原始檔。
+- [ ] 工具上傳原始檔。純邏輯與 API 呼叫做好了（`shared/sourceUpload.ts` 切段與 ETag、
+      `shared/adminApi.ts` 的四支呼叫），**還沒接進 ingest 流程**。接的時候要注意三件事：
+      part URL 只活 15 分鐘而一段最大 64 MiB，所以要**送之前才要那一段的 URL**，不是先要一批；
+      失敗時要呼叫 `abortSourceUpload`，不然 session 會佔著 12 小時（而且同一個 asset
+      在那之前開不了第二個），已傳的分段還在計費；PUT 回 200 但沒有 ETag 要當成可重試
+      （它丟的是普通 Error，沒有 status，`isTransient` 分類不到）。
 - [x] 限制單檔大小、影片長度與同時 session 數。
       大小 20 GiB（`validate_byte_size`）、長度 6 小時（`validate_duration` —— 轉檔是
       每一階近似即時，一支放錯的十二小時檔等於佔住一台機器一天半）、同時 5 個 session

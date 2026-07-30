@@ -132,6 +132,143 @@ export async function uploadUrls(
   return granted
 }
 
+export interface SourceUploadSession {
+  sessionId: string
+  partSize: number
+  partCount: number
+  expiresAt: number
+}
+
+/**
+ * Open the multipart upload for the original file.
+ *
+ * The server talks to R2 for this, not the tool: the upload id R2 issues has to
+ * be written down somewhere that survives this process, and the only thing that
+ * can end an upload — complete or abort — needs it.
+ */
+export async function startSourceUpload(
+  transport: Transport,
+  base: string,
+  token: string,
+  options: { assetId: string },
+): Promise<SourceUploadSession> {
+  const response = await transport(sourcePath(base, options.assetId), {
+    method: 'POST',
+    headers: authorised(token, { 'Content-Type': 'application/json' }),
+    body: '{}',
+  })
+  if (!response.ok) await readError(response, '無法開始上傳原始檔')
+
+  const body = (await response.json()) as Record<string, unknown>
+  const session = {
+    sessionId: String(body.sessionId ?? ''),
+    partSize: Number(body.partSize ?? 0),
+    partCount: Number(body.partCount ?? 0),
+    expiresAt: Number(body.expiresAt ?? 0),
+  }
+  if (!session.sessionId || session.partSize <= 0 || session.partCount <= 0 || session.expiresAt <= 0) {
+    // Without these the tool cannot cut the file, and it would find out by
+    // sending a part the server refuses.
+    throw new AdminApiError(response.status, '伺服器沒有說明要怎麼切這個檔案')
+  }
+  return session
+}
+
+export interface PartUrl {
+  url: string
+  expiresAt: number
+}
+
+/**
+ * A URL for one part, asked for immediately before the part is sent.
+ *
+ * Its own type rather than `GrantedUrl`, which carries the object key the batch
+ * upload maps URLs by. A part has no key of its own — every part of a source
+ * upload writes the same object — and a list of `GrantedUrl`s with empty keys
+ * collapses to one entry the moment somebody builds the same `Map(...)` the
+ * encode uploader does.
+ *
+ * Short-lived: the server signs these for fifteen minutes, and a 64 MiB part on
+ * a home connection can outlive that. So the caller asks for one part at a time,
+ * just before sending it, rather than taking a batch up front.
+ */
+export async function sourcePartUrl(
+  transport: Transport,
+  base: string,
+  token: string,
+  options: { assetId: string; sessionId: string; partNumber: number },
+): Promise<PartUrl> {
+  const response = await transport(
+    `${sourcePath(base, options.assetId)}/${encodeURIComponent(options.sessionId)}/parts/${options.partNumber}`,
+    { method: 'POST', headers: authorised(token, { 'Content-Type': 'application/json' }), body: '{}' },
+  )
+  if (!response.ok) await readError(response, '無法取得分段上傳網址')
+
+  const body = (await response.json()) as Record<string, unknown>
+  const url = String(body.url ?? '')
+  const expiresAt = Number(body.expiresAt ?? 0)
+  if (!url) throw new AdminApiError(response.status, '伺服器沒有回傳分段上傳網址')
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
+    // Zero reads as "already expired" to anything that checks it, which is the
+    // one thing this value is for.
+    throw new AdminApiError(response.status, '伺服器沒有說明這個網址何時到期')
+  }
+  return { url, expiresAt }
+}
+
+export interface SourceUploadResult {
+  etag: string
+  alreadyCompleted: boolean
+}
+
+export async function completeSourceUpload(
+  transport: Transport,
+  base: string,
+  token: string,
+  options: {
+    assetId: string
+    sessionId: string
+    parts: readonly { partNumber: number; eTag: string }[]
+  },
+): Promise<SourceUploadResult> {
+  const response = await transport(
+    `${sourcePath(base, options.assetId)}/${encodeURIComponent(options.sessionId)}/complete`,
+    {
+      method: 'POST',
+      headers: authorised(token, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ parts: options.parts }),
+    },
+  )
+  if (!response.ok) await readError(response, '無法完成原始檔上傳')
+
+  const body = (await response.json()) as Record<string, unknown>
+  return { etag: String(body.etag ?? ''), alreadyCompleted: Boolean(body.alreadyCompleted) }
+}
+
+/**
+ * Cancel the upload, and say nothing if it was already cancelled.
+ *
+ * Called when a job is abandoned. Not cancelling leaves parts in R2 that are
+ * billed and invisible in a listing, so this runs on the way out of a failure
+ * rather than being left to a person who will not know it is there.
+ */
+export async function abortSourceUpload(
+  transport: Transport,
+  base: string,
+  token: string,
+  options: { assetId: string; sessionId: string },
+): Promise<void> {
+  const response = await transport(
+    `${sourcePath(base, options.assetId)}/${encodeURIComponent(options.sessionId)}/abort`,
+    { method: 'POST', headers: authorised(token, { 'Content-Type': 'application/json' }), body: '{}' },
+  )
+  if (!response.ok) await readError(response, '無法取消原始檔上傳')
+}
+
+function sourcePath(base: string, assetId: string): string {
+  return `${base}/api/video-assets/${encodeURIComponent(assetId)}/source-upload`
+}
+
 export interface Registration {
   ok: boolean
   /** Present when the encode is incomplete: every object the server could not find. */
