@@ -1,0 +1,39 @@
+# Packaging. The installer, the icon and the update feed are S7; what is here is
+# the minimum needed to produce a packaged app and check that it runs.
+#
+# A packaged app is not the same program as `electron-vite dev`. Its files are
+# inside an asar archive, `import.meta.dirname` points somewhere else, and
+# `app.getPath('userData')` finally means what it will mean in production. Every
+# path this tool builds is worth proving there before a transcoder starts
+# guessing at ffmpeg's location.
+appId: tw.luma-studio.video-uploader
+productName: Luma Video Uploader
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+
+# Not signed, and this is a decision rather than an omission: there is no
+# certificate. The consequence is that Windows SmartScreen warns on download and
+# on first run, and the admin has to click through it. Said out loud in the
+# README rather than discovered during an install.
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Per-user, so installing needs no administrator prompt. The tool writes only
+  # to its own userData directory.
+  perMachine: false
+
+# electron-builder tries to reach a code-signing service otherwise, which fails
+# slowly rather than quickly on a machine with no certificate.
+forceCodeSigning: false

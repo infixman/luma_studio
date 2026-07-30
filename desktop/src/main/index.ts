@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import { BrowserWindow, app, ipcMain, shell } from 'electron'
+import { BrowserWindow, app, ipcMain, safeStorage, shell } from 'electron'
 
 import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
@@ -69,9 +69,46 @@ function createWindow(): BrowserWindow {
   return window
 }
 
+/**
+ * `--self-check`: report what the app can see, then exit.
+ *
+ * A packaged app is not the same program as `electron-vite dev`. Its files live
+ * inside an asar archive, `import.meta.dirname` resolves somewhere else, and
+ * `app.getPath('userData')` finally means what it will mean on somebody's
+ * machine. Those are the paths every later feature builds on — ffmpeg's
+ * location, the resume ledger, the stored token — so being able to ask a
+ * packaged build about them is worth one flag.
+ *
+ * It is also the answer to "it will not start" from somebody who cannot be
+ * looked over the shoulder of: run it with this and send the file.
+ */
+async function selfCheck(): Promise<void> {
+  const { existsSync, writeFileSync } = await import('node:fs')
+
+  const preload = join(import.meta.dirname, '../preload/index.cjs')
+  const renderer = join(import.meta.dirname, '../renderer/index.html')
+  const report = {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    userData: app.getPath('userData'),
+    preload: { path: preload, exists: existsSync(preload) },
+    renderer: { path: renderer, exists: existsSync(renderer) },
+    canEncryptStorage: safeStorage.isEncryptionAvailable(),
+  }
+
+  const out = join(app.getPath('userData'), 'self-check.json')
+  writeFileSync(out, JSON.stringify(report, null, 2))
+  process.stdout.write(`${out}\n`)
+  // Non-zero when something it needs is absent, so a script does not have to
+  // parse the file to know.
+  app.exit(report.preload.exists && report.renderer.exists ? 0 : 1)
+}
+
 // One instance. Two copies transcoding into the same working directory would
 // interleave their output, and the second one would look like a corrupt encode.
-if (!app.requestSingleInstanceLock()) {
+if (process.argv.includes('--self-check')) {
+  void app.whenReady().then(selfCheck)
+} else if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
