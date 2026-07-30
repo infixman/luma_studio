@@ -66,8 +66,8 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：一支真的 `ready` 的影片，由工具做出來。
 
-- [ ] 建立 `desktop/`：electron-vite 專案骨架。
-- [ ] 啟動畫面：管理員 email + 配對碼，換 token 後存入作業系統的憑證儲存。
+- [x] 建立 `desktop/`：electron-vite 專案骨架。Preact，與 repo 一致；`npm run smoke` 用真 Electron 驗橋接。
+- [x] 啟動畫面：管理員 email + 配對碼，換 token 後存入 `safeStorage`。沒有加密可用時不存（不寫明文）。
 - [ ] 選擇已轉好的輸出目錄，逐物件取得 presigned URL 並上傳。
 - [ ] 每個物件有 retry 與正確 Content-Type。
 - [ ] 保存 asset id 與已完成的 key，關掉重開可續傳。

@@ -1,28 +1,46 @@
 // @vitest-environment happy-dom
 
 /**
- * The skeleton's one behaviour: it says what this tool is and what it holds.
+ * Which screen the tool opens on.
  *
- * Worth a test rather than a glance, because the sentence about not holding an
- * R2 key is the thing somebody needs to read before installing this on a
- * laptop, and a refactor that drops a paragraph does not look like a bug.
+ * The decision belongs to the main process — it holds the token — so what is
+ * worth testing here is that this component believes it, including the case
+ * where a remembered pairing has expired and the answer is the pairing screen
+ * rather than an upload screen that refuses everything.
  */
 
 import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { App } from './App'
+import type { SessionStatus } from '../../shared/session'
+
+const PAIRED: SessionStatus = {
+  paired: true,
+  adminEmail: 'owner@example.com',
+  secondsLeft: 43_200,
+  remembered: true,
+  endpoint: 'https://admin-api.example.com',
+  endpointProblem: null,
+}
+
+const UNPAIRED: SessionStatus = { ...PAIRED, paired: false, adminEmail: null, secondsLeft: 0 }
 
 let container: HTMLDivElement
 
-beforeEach(() => {
-  // The bridge is provided by the preload script, which does not exist here.
-  // Stubbed rather than mocked away, so the component still goes through the
-  // same call it will make in the app.
+function bridge(status: SessionStatus) {
+  const signOut = vi.fn(async () => UNPAIRED)
   Object.defineProperty(window, 'desktop', {
     configurable: true,
-    value: { version: vi.fn(async () => '1.2.3') },
+    value: {
+      version: vi.fn(async () => '1.2.3'),
+      auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
+    },
   })
+  return { signOut }
+}
+
+beforeEach(() => {
   container = document.createElement('div')
   document.body.append(container)
 })
@@ -37,25 +55,48 @@ async function settle(): Promise<void> {
     if (!(container.textContent ?? '').includes('讀取中')) return
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
-  throw new Error('the version never arrived')
+  throw new Error('the status never arrived')
 }
 
+test('with no pairing it asks for a code', async () => {
+  bridge(UNPAIRED)
+  render(<App />, container)
+  await settle()
+
+  expect(container.textContent).toContain('連結管理後台')
+  expect(container.querySelector('.code-input')).not.toBeNull()
+})
+
+test('with a pairing it says who it is connected as', async () => {
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+
+  expect(container.textContent).toContain('owner@example.com')
+})
+
 test('it says the tool holds no R2 key', async () => {
+  /** The sentence somebody needs before installing this on a laptop. */
+  bridge(PAIRED)
   render(<App />, container)
   await settle()
 
   expect(container.textContent).toContain('沒有 R2 金鑰')
 })
 
-test('it reports its version across the bridge', async () => {
+test('unlinking returns to the pairing screen', async () => {
+  const { signOut } = bridge(PAIRED)
   render(<App />, container)
   await settle()
 
-  expect(container.textContent).toContain('1.2.3')
-})
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('取消連結'),
+  )
+  button?.click()
+  for (let tick = 0; tick < 30 && !container.textContent?.includes('連結管理後台'); tick++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
 
-test('a bridge that answers slowly shows something rather than an empty line', async () => {
-  render(<App />, container)
-
-  expect(container.textContent).toContain('讀取中')
+  expect(signOut).toHaveBeenCalled()
+  expect(container.textContent).toContain('連結管理後台')
 })

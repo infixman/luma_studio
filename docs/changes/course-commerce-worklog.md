@@ -1002,6 +1002,89 @@ method 也是比對的一部分，因為 `/api/video-assets` 的 GET 和 POST �
 「不是管理員」、「碼錯了」、「碼用過了」、「帳號鎖定中」都回同一個 401 和同一句話。
 告訴對方「帳號已鎖定」就是告訴他猜到哪裡了。差別留在 log。
 
+## S3.1：Electron 骨架
+
+`desktop/`。一個視窗、一個版本號，其他什麼都沒有。
+
+單獨切一步的理由：**Electron 最先壞掉的不是功能。** 是 preload 找不到、橋接沒出現、
+打包後的畫面載不進來 —— 這三件事都表現為「一個空白視窗」，什麼訊息都沒有。
+在半成品上傳器底下找這些，比現在找貴得多。
+
+而且其中兩件真的是壞的：
+
+### 一、top-level `await` 會 deadlock
+
+Electron 的 `ready` 事件在入口模組**還在評估的時候**就該發生。所以
+`await app.whenReady()` 寫在頂層等於：promise 要等評估結束才 resolve，
+評估要等 promise resolve 才結束。
+
+它不報錯，它就是掛著。而且我第一次除錯**一行輸出都沒有** —— 因為 buffer 跟著
+被殺掉的進程一起死了。改成寫檔案才看到。
+
+### 二、sandbox 的 preload 不能是 ESM
+
+`package.json` 有 `type: module`，所以 electron-vite 產出 `.mjs`，而 Electron
+拒絕載入一個 ESM 的 sandboxed preload —— `window.desktop` 是 undefined，
+console 一片乾淨。
+
+改成把 preload 建成 CJS，而不是關掉 sandbox。為了一個語法偏好放棄 sandbox 不划算。
+
+### `npm run smoke`
+
+抓到第二件的就是它：用真的 main bundle 跑 Electron、等視窗、**從頁面裡呼叫橋接**。
+它是 `npm run build` 的一部分，因為「編譯過了」和「跑得起來」是兩件事，
+而當時只有一件是真的。
+
+## S3.2：配對畫面
+
+### 一個我自己造的坑
+
+後台把驗證碼顯示成 `418 302`（六位數字連在一起很難從螢幕上讀）。所以使用者會照著
+打、照著貼。而伺服器只收六位數字。
+
+**不清空格就會拒絕後台剛剛顯示的那組碼**，然後怪使用者。`normaliseCode` 把空格、
+連字號、點、底線、還有某些客戶端會貼出來的不換行空格全部清掉。
+
+### token 不進 renderer
+
+所有需要 token 的請求都在 main process 發。renderer 問的是結果
+（「用這組碼配對」、「現在有 session 嗎」），拿回來的是**關於** session 的事實，
+不是 session 本身。`SessionStatus` 裡沒有 token。
+
+理由跟整個 scope 設計一致：renderer 裡的 token 是任何一次腳本注入就能拿到的 token，
+而「弄丟工具不等於弄丟商城」是這條線的全部意義。
+
+### 沒有加密就不存
+
+token 走 `safeStorage`（Windows 上是綁使用者帳號的 DPAPI）。
+**作業系統不提供加密的機器上，什麼都不存。** Linux 沒有 keyring 就是這種情況，
+而替代方案是「在最沒有保護能力的機器上把憑證明文寫進硬碟」。
+
+代價是每次啟動要重新配對，而畫面會說明這件事，不會讓人自己發現配對留不住。
+
+### 只有 localhost 可以不走 https
+
+一個設定值錯了不是設定錯誤，是**憑證被交出去** —— 配對碼和之後每一個請求的 token
+都在裡面。所以非 https 一律拒絕，只有 localhost 例外（它不離開這台機器）。
+
+測試裡有一條 `http://localhost.evil.example`：只用字串包含判斷會放行它。
+
+### 送出前先檢查形狀
+
+六位數字後面有次數鎖定，所以送一個工具自己看得出來是錯的碼，等於白花一次額度。
+一個「因為太熱心而把管理員鎖在門外」的工具比一個會說「這只有五位數」的工具糟。
+
+失敗之後**清掉驗證碼欄位** —— 它反正已經失效了，留在框裡只會引誘人再按一次。
+
+### 又是測試的問題
+
+五個測試一開始全掛，看起來像 submit handler 沒跑。診斷之後發現 handler 有跑 ——
+是**我在填欄位和送出之間沒有讓 Preact flush**。狀態更新是批次的，所以送出時
+state 還是空的。
+
+猜了兩次（改用 `requestSubmit`、改事件型別）都沒中，第三次才直接印出來看。
+教訓跟後端那次一樣：**猜兩次的成本已經超過直接觀察。**
+
 ### S2 驗收
 
 你要的那條路走通了，而且有測試：**沒有 session 的工具換到 token → 建 asset 200

@@ -40,3 +40,70 @@ h1 {
 .muted {
   color: var(--muted);
 }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 22rem;
+  margin: 2rem 0;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+label span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+input {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  /* Typing is the one thing that should feel like a text field. */
+  user-select: text;
+}
+
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.4rem;
+  letter-spacing: 0.2em;
+}
+
+button {
+  align-self: flex-start;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #1a1408;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 1.4rem;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.alert {
+  background: #3a1f22;
+  border: 1px solid #6b3238;
+  border-radius: 6px;
+  color: #ffc9cd;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+}

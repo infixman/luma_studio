@@ -50,23 +50,46 @@ function loaded(window) {
   })
 }
 
+/** The interface draws after two IPC round trips, so `did-finish-load` is early. */
+async function settled(window) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const heading = await window.webContents.executeJavaScript(
+      'document.querySelector("h1")?.textContent ?? ""',
+    )
+    if (heading) return heading
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('the page never rendered a heading')
+}
+
 async function check(window) {
-  const bridged = await window.webContents.executeJavaScript(
-    'typeof window.desktop?.version === "function"',
-  )
-  if (bridged !== true) throw new Error('window.desktop.version is not exposed')
+  for (const path of ['window.desktop?.version', 'window.desktop?.auth?.pair']) {
+    const bridged = await window.webContents.executeJavaScript(`typeof ${path} === "function"`)
+    if (bridged !== true) throw new Error(`${path} is not exposed`)
+  }
 
   const version = await window.webContents.executeJavaScript('window.desktop.version()')
   if (typeof version !== 'string' || version.length === 0) {
     throw new Error(`version came back as ${JSON.stringify(version)}`)
   }
 
-  const heading = await window.webContents.executeJavaScript(
-    'document.querySelector("h1")?.textContent ?? ""',
-  )
-  if (!heading.includes('影片上傳工具')) throw new Error(`the page rendered "${heading}"`)
+  // The status handler reaches the session store, which reaches `safeStorage`.
+  // Nothing else here exercises that, and it is the part that differs between a
+  // developer's machine and a packaged install.
+  const status = await window.webContents.executeJavaScript('window.desktop.auth.status()')
+  if (typeof status !== 'object' || status === null || typeof status.paired !== 'boolean') {
+    throw new Error(`auth.status() came back as ${JSON.stringify(status)}`)
+  }
 
-  return version
+  const heading = await settled(window)
+  // With no pairing stored — which is the state on any machine running this
+  // check — the tool opens on the pairing screen.
+  const expected = status.paired ? '影片上傳工具' : '連結管理後台'
+  if (!heading.includes(expected)) {
+    throw new Error(`paired=${status.paired} but the page rendered "${heading}"`)
+  }
+
+  return `${version}, paired=${status.paired}, remembered=${status.remembered}`
 }
 
 app

@@ -2,6 +2,10 @@ import { join } from 'node:path'
 
 import { BrowserWindow, app, ipcMain, shell } from 'electron'
 
+import { AdminApiError } from '../shared/adminApi'
+import type { PairingInput } from '../shared/pairing'
+import * as session from './session'
+
 /**
  * The main process: the only part of this tool with an operating system.
  *
@@ -86,6 +90,26 @@ if (!app.requestSingleInstanceLock()) {
     // Electron's own version, which looks wrong in development and is right in
     // the only build anybody installs.
     ipcMain.handle('app:version', () => app.getVersion())
+
+    // The token lives in this process and is never sent to the renderer, so
+    // these hand back facts about the session rather than the session.
+    session.restore()
+    ipcMain.handle('auth:status', () => session.status())
+    ipcMain.handle('auth:signOut', () => session.signOut())
+    ipcMain.handle('auth:pair', async (_event, input: PairingInput) => {
+      try {
+        return { ok: true as const, status: await session.pair(input) }
+      } catch (error) {
+        // Turned into a value rather than thrown across IPC. An exception
+        // arriving in the renderer becomes "Error invoking remote method",
+        // which is the wrong sentence to show somebody typing a code.
+        return {
+          ok: false as const,
+          message: error instanceof Error ? error.message : '配對失敗',
+          httpStatus: error instanceof AdminApiError ? error.status : null,
+        }
+      }
+    })
 
     createWindow()
 
