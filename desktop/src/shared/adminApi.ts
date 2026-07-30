@@ -269,6 +269,53 @@ function sourcePath(base: string, assetId: string): string {
   return `${base}/api/video-assets/${encodeURIComponent(assetId)}/source-upload`
 }
 
+export interface VersionPolicy {
+  latest: string
+  minSupported: string
+  forceUpdate: boolean
+  blocked: boolean
+  notes: string
+  feedUrl: string
+  verdict: {
+    allowed: boolean
+    mustUpdate: boolean
+    updateAvailable: boolean
+    reason: string
+  } | null
+}
+
+/**
+ * Ask whether this build may still work.
+ *
+ * The version goes in the request and a verdict comes back, rather than a policy
+ * this side interprets: two implementations of "am I too old" eventually
+ * disagree, and the one that is wrong is the one still uploading.
+ */
+export async function fetchVersionPolicy(
+  transport: Transport,
+  base: string,
+  token: string,
+  version: string,
+): Promise<VersionPolicy> {
+  const response = await transport(
+    `${base}/api/desktop/version-policy?version=${encodeURIComponent(version)}`,
+    { method: 'GET', headers: authorised(token, {}) },
+  )
+  if (!response.ok) await readError(response, '無法確認版本狀態')
+
+  const body = (await response.json()) as Record<string, unknown>
+  const verdict = body.verdict as VersionPolicy['verdict']
+  return {
+    latest: String(body.latest ?? ''),
+    minSupported: String(body.minSupported ?? ''),
+    forceUpdate: body.forceUpdate === true,
+    blocked: body.blocked === true,
+    notes: String(body.notes ?? ''),
+    feedUrl: String(body.feedUrl ?? ''),
+    verdict: verdict ?? null,
+  }
+}
+
 export interface StoredObject {
   key: string
   size: number

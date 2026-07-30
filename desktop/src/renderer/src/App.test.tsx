@@ -14,6 +14,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { App } from './App'
 import type { SessionStatus } from '../../shared/session'
+import type { VersionState } from '../../shared/versionGate'
 
 const PAIRED: SessionStatus = {
   paired: true,
@@ -27,6 +28,11 @@ const PAIRED: SessionStatus = {
 const UNPAIRED: SessionStatus = { ...PAIRED, paired: false, adminEmail: null, secondsLeft: 0 }
 
 let container: HTMLDivElement
+let versionAnswer: { state: unknown; message: string } = { state: null, message: '' }
+
+function resetVersion(): void {
+  versionAnswer = { state: null, message: '' }
+}
 
 function bridge(status: SessionStatus) {
   const signOut = vi.fn(async () => UNPAIRED)
@@ -34,6 +40,7 @@ function bridge(status: SessionStatus) {
     configurable: true,
     value: {
       version: vi.fn(async () => '1.2.3'),
+      versionState: vi.fn(async () => versionAnswer),
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
       upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
       clipboard: vi.fn(async () => ''),
@@ -45,6 +52,7 @@ function bridge(status: SessionStatus) {
 }
 
 beforeEach(() => {
+  resetVersion()
   container = document.createElement('div')
   document.body.append(container)
 })
@@ -122,4 +130,49 @@ test('logging out returns to the pairing screen', async () => {
 
   expect(signOut).toHaveBeenCalled()
   expect(container.textContent).toContain('連結管理後台')
+})
+
+
+function versionSaying(state: VersionState, message: string): void {
+  versionAnswer = { state, message }
+}
+
+test('a build the server stopped does not get an upload screen', async () => {
+  /** Disabling the drop target would leave a tool that refuses files silently,
+   *  which reads as broken rather than as out of date. */
+  versionSaying(
+    {
+      verdict: { allowed: false, mustUpdate: true, updateAvailable: true, reason: 'blocked' },
+      latest: '2.0.0',
+      notes: '',
+    },
+    '這個版本已被停用，請安裝新版之後再繼續。（最新版本 2.0.0）',
+  )
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).toContain('已被停用')
+  expect(container.querySelector('.drop')).toBeNull()
+})
+
+test('a build with an update available keeps working and says so', async () => {
+  /** Two levers: "there is a new one" and "you cannot work". Blurring them
+   *  teaches people to ignore both. */
+  versionSaying(
+    {
+      verdict: { allowed: true, mustUpdate: false, updateAvailable: true, reason: 'ok' },
+      latest: '2.0.0',
+      notes: '',
+    },
+    '有新版本 2.0.0 可以更新。',
+  )
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).toContain('有新版本')
+  expect(container.querySelector('.drop')).not.toBeNull()
 })

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 import type { PairingInput } from '../shared/pairing'
+import type { VersionState } from '../shared/versionGate'
 import type { SessionStatus } from '../shared/session'
 import type { Progress, ScanResult, StorageListing, UploadRequest, UploadResult } from '../shared/upload'
 
@@ -58,6 +59,10 @@ const api = {
     rememberEmail: (email: string): Promise<{ rememberedEmail: string }> =>
       ipcRenderer.invoke('prefs:rememberEmail', email),
   },
+
+  /** Whether this build may still work, and what to say about it. */
+  versionState: (): Promise<{ state: VersionState | null; message: string }> =>
+    ipcRenderer.invoke('app:versionState'),
 
   auth: {
     status: (): Promise<SessionStatus> => ipcRenderer.invoke('auth:status'),

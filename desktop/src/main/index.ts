@@ -3,8 +3,9 @@ import { join } from 'node:path'
 
 import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
 
-import { AdminApiError, listStorage } from '../shared/adminApi'
+import { AdminApiError, fetchVersionPolicy, listStorage } from '../shared/adminApi'
 import { explain } from '../shared/failures'
+import { mayWork, versionMessage, type VersionState } from '../shared/versionGate'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
@@ -190,6 +191,24 @@ if (process.argv.includes('--self-check')) {
     })
     ipcMain.handle('upload:cancel', () => cancel())
 
+    // Asked once a session exists, because the answer needs the token. Kept in
+    // memory rather than re-asked per action: the policy changes when somebody
+    // publishes a release, not between two clicks.
+    let versionState: VersionState | null = null
+
+    ipcMain.handle('app:versionState', async () => {
+      try {
+        const { token, base } = session.requireToken()
+        const policy = await fetchVersionPolicy(transport, base, token, app.getVersion())
+        versionState = { verdict: policy.verdict, latest: policy.latest, notes: policy.notes }
+      } catch {
+        // Not being able to ask does not stop anything — every upload goes
+        // through the same API, so a tool that cannot ask cannot upload either.
+        versionState = null
+      }
+      return { state: versionState, message: versionMessage(versionState) }
+    })
+
     // Read-only, and the only thing this tool can ask about the bucket. It is
     // how somebody confirms the objects arrived without taking the tool's word
     // for it — the same question the library page answers for the encode, asked
@@ -225,6 +244,12 @@ if (process.argv.includes('--self-check')) {
     })
 
     ipcMain.handle('upload:start', async (event, request: UploadRequest) => {
+      // The gate, applied where the work starts rather than only on a screen.
+      // A build the server stopped should not be able to write to the bucket
+      // because a window was already open when the policy changed.
+      if (!mayWork(versionState)) {
+        return { ok: false as const, message: versionMessage(versionState) }
+      }
       try {
         // Progress goes to the window that asked, by event rather than by
         // return value: an upload is minutes long and a single resolved promise
