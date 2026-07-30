@@ -73,11 +73,12 @@ async function tick(): Promise<void> {
   for (let count = 0; count < 20; count++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function drop(path: string = SCANNED.folder): void {
+function drop(path: string = SCANNED.folder, count = 1): void {
   ;(window.desktop.pathFor as ReturnType<typeof vi.fn>).mockReturnValue(path)
   const zone = container.querySelector('.drop')!
   const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
-  Object.defineProperty(event, 'dataTransfer', { value: { files: [new File([], 'x')] } })
+  const files = Array.from({ length: count }, (_unused, index) => new File([], `x${index}`))
+  Object.defineProperty(event, 'dataTransfer', { value: { files } })
   zone.dispatchEvent(event)
 }
 
@@ -329,4 +330,27 @@ test('a refusal from the scan is shown as the sentence it came with', async () =
   expect(container.textContent).toContain('「car_h64.png」是一個檔案')
   expect(container.textContent).not.toContain('ENOTDIR')
   expect(container.textContent).not.toContain('remote method')
+})
+
+test('more than one dropped item is refused rather than silently reduced to one', async () => {
+  /** It used to take `files[0]` and ignore the rest. Four lessons vanishing while
+   *  the screen looks like it worked is the kind of failure somebody finds three
+   *  days later. */
+  await mount()
+
+  drop(SCANNED.folder, 5)
+  await tick()
+
+  expect(scan).not.toHaveBeenCalled()
+  expect(container.textContent).toContain('5')
+  expect(container.textContent).toContain('一次')
+})
+
+test('one dropped item still works', async () => {
+  await mount()
+
+  drop(SCANNED.folder, 1)
+  await tick()
+
+  expect(scan).toHaveBeenCalledWith(SCANNED.folder)
 })

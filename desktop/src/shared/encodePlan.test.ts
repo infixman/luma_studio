@@ -197,6 +197,27 @@ describe('the poster', () => {
 
     expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))
   })
+
+  test('the still encoder is named rather than left to ffmpeg', () => {
+    /** Left to itself, ffmpeg picks `libwebp_anim` for a `.webp` output even with
+     *  `-frames:v 1` — checked against the real binary. The animated encoder
+     *  allocates for a sequence, and on a real lesson it failed outright:
+     *  `[vost#0:0/libwebp_anim] Terminating thread with return code -12 (Cannot
+     *  allocate memory)`. A still image should not go through it whatever the
+     *  source happens to be. */
+    const args = posterArgs({ source: 's.mp4', out: 'poster.webp', atSeconds: 10 })
+
+    expect(args.join(' ')).toContain('-c:v libwebp')
+    expect(args.join(' ')).not.toContain('libwebp_anim')
+  })
+
+  test('and the audio track is dropped', () => {
+    /** A poster has no use for it, and mapping one into a webp is a whole class
+     *  of muxer complaint that need not exist. */
+    const args = posterArgs({ source: 's.mp4', out: 'poster.webp', atSeconds: 10 })
+
+    expect(args).toContain('-an')
+  })
 })
 
 describe('the master playlist', () => {

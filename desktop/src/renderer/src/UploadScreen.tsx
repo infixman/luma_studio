@@ -113,7 +113,19 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
     const dropped = (event: Event): void => {
       event.preventDefault()
       setDragging(false)
-      const [file] = [...((event as DragEvent).dataTransfer?.files ?? [])]
+      const files = [...((event as DragEvent).dataTransfer?.files ?? [])]
+
+      // Refused rather than reduced to the first one. This took `files[0]` and
+      // ignored the rest, so dropping five lessons uploaded one and looked like
+      // it had worked — the sort of thing somebody finds three days later.
+      if (files.length > 1) {
+        setProblem(
+          `一次只能處理一支影片或一個資料夾，這次拖了 ${files.length} 個。請一個一個來。`,
+        )
+        return
+      }
+
+      const [file] = files
       // Electron resolves this through `webUtils` in the preload; a browser
       // could not, and `File.path` no longer exists.
       const path = file ? window.desktop.pathFor(file) : ''
@@ -196,9 +208,13 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
             </p>
           )}
 
-          <label>
-            <span>影片名稱</span>
+          {/* The same `.field` the pairing screen uses, so the label sits above
+              its input with the same gap rather than relying on a bare `label`
+              being a block element, which it is not. */}
+          <div class="field">
+            <label for="video-title">影片名稱</label>
             <input
+              id="video-title"
               type="text"
               value={title}
               maxLength={200}
@@ -206,9 +222,9 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
               placeholder="第一課 起稿"
               onInput={(event) => setTitle((event.currentTarget as HTMLInputElement).value)}
             />
-          </label>
+          </div>
 
-          <div class="row-left">
+          <div class="row-left actions">
             <button type="button" onClick={() => void start()} disabled={busy}>
               {busy ? '進行中…' : source ? '轉檔並上傳' : '開始上傳'}
             </button>

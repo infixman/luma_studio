@@ -1345,3 +1345,38 @@ build，對應的 FFmpeg 原始碼為上游 commit 38b88335f9」。三句話全�
 真的發生時問題比「補一個 zip」大：我們交出去的是別人編譯的 build，對應原始碼指的是
 那個 build 的全部來源，而 gyan 只公佈 FFmpeg 的 commit，不公佈 x264／x265 用的
 revision。三條路（不散布 binary／盡力補／自己編）也寫在那裡了。
+
+## 第一次真的拖 MP4 進去，抓到一個轉檔 bug
+
+階梯全部轉完，掛在封面：
+
+```
+產生封面失敗：[vost#0:0/libwebp_anim @ ...] Terminating thread with
+return code -12 (Cannot allocate memory)
+```
+
+`libwebp_anim` 是**動畫** webp 編碼器。`-frames:v 1` 一直都在，所以不是幀數問題 ——
+是 ffmpeg 對 `.webp` 輸出**預設就挑動畫編碼器**，即使只要一幀。在你機器上用真的
+ffmpeg 確認過：
+
+```
+Stream #0:0 -> #0:0 (h264 (native) -> webp (libwebp_anim))
+```
+
+動畫編碼器會為一整個序列配置記憶體。我用 12 秒的 testsrc 重現不出來（那支過了），
+所以確切的觸發條件跟來源有關 —— 但**用動畫編碼器產一張靜態圖本身就是錯的**，
+不需要先找到觸發條件才修。
+
+加了 `-c:v libwebp`（靜態編碼器，明講不推論）和 `-an`（封面用不到音軌，而且把音軌
+map 進 webp 是一整類不必存在的 muxer 抱怨）。用同一組參數對「有音軌的來源」實測過，
+輸出是 1280x720 的靜態 webp。
+
+有測試釘住 `-c:v libwebp` 在參數裡、`libwebp_anim` 不在。
+
+順手兩個間距：`.alert` 原本 `margin: 0`（因為它一直待在有 gap 的 `.stack` 裡），
+在上傳畫面直接貼著按鈕，所以改成有上邊距、並在 `.stack` 裡歸零免得算兩次。
+影片名稱那個 `<label>` 不是 block 元素，label／input／button 全貼在一起，改用
+配對畫面同一個 `.field`。
+
+以及：多檔拖曳原本 `const [file] = [...files]` 取第一個、其餘丟掉 ——
+拖五支課會上傳一支而畫面看起來成功。現在明說拒絕。

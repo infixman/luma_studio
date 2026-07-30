@@ -151,6 +151,15 @@ export function posterArgs(options: { source: string; out: string; atSeconds: nu
     '-ss', String(options.atSeconds),
     '-i', options.source,
     '-frames:v', '1',
+    // Named, not inferred. For a `.webp` output ffmpeg selects `libwebp_anim`
+    // even with `-frames:v 1` — the animated encoder — and on a real lesson that
+    // failed outright: `[vost#0:0/libwebp_anim] Terminating thread with return
+    // code -12 (Cannot allocate memory)`. It allocates for a sequence, and this
+    // is one frame.
+    '-c:v', 'libwebp',
+    // A poster has no use for audio, and mapping a track into a webp is a class
+    // of muxer complaint that need not exist.
+    '-an',
     '-vf', 'scale=-2:720',
     options.out,
   ]

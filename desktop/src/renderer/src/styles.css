@@ -157,6 +157,13 @@ input.code-slot:focus-visible {
   flex: 1;
 }
 
+/* The buttons that act on whatever is above them. Spaced away from it: sitting
+   directly under the input's bottom edge, a filled button reads as part of the
+   field rather than as the thing that submits it. */
+.row-left.actions {
+  margin-top: 1.25rem;
+}
+
 /* A field and whatever belongs beside it on the same line. */
 .field-row {
   display: flex;
@@ -342,8 +349,17 @@ button.ghost:hover:not(:disabled) {
   border: 1px solid #e8b4b4;
   border-radius: 6px;
   color: #8c2f2f;
-  margin: 0;
+  /* Off the thing above it. Touching the button that produced it, a filled panel
+     reads as part of the control rather than as its answer. `margin: 0` was fine
+     while every alert sat inside a `.stack`, which supplies its own gap. */
+  margin: 1rem 0 0;
   padding: 0.6rem 0.8rem;
+}
+
+/* Inside a `.stack` or a flex column the gap already does this, so the margin
+   would be counted twice. */
+.stack > .alert {
+  margin: 0;
 }
 
 /* Big enough to be an obvious target for a folder, without pushing the rest of
