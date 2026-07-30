@@ -45,16 +45,6 @@ const api = {
   },
 
   /**
-   * The bundled FFmpeg's licence, as text. `null` when FFmpeg has not been
-   * fetched yet, which is true of every machine before its first transcode.
-   *
-   * The text rather than its path: FFmpeg is GPL and this tool distributes it,
-   * so the licence has to be readable, and an absolute path in a footer is not
-   * reading it.
-   */
-  licenceText: (): Promise<string | null> => ipcRenderer.invoke('app:licenceText'),
-
-  /**
    * Show the corresponding source in the file manager.
    *
    * The other half of the same obligation, and the reason the path can stay off

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { app } from 'electron'
@@ -168,19 +168,18 @@ export async function ensureTools(
   return tools
 }
 
-/** Where the licence and source live, for the About screen. GPL, so they ship. */
+/**
+ * Where the licence and source live. GPL, so both ship.
+ *
+ * The terms shown in the interface are a bundled copy rather than a read of the
+ * `licence` path here — reading it fails on every machine that has not
+ * transcoded yet, and the failure looked like a stuck panel. This path stays
+ * because the file still has to be *installed* beside the binary, and `source`
+ * is what the interface reveals in the file manager.
+ */
 export function licencePaths(): { licence: string; source: string } {
   return {
     licence: join(toolsDir(), PINNED.binDir, '..', 'LICENSE'),
     source: join(toolsDir(), 'ffmpeg-source.tar.xz'),
-  }
-}
-
-/** Read back for the About screen; absent is reported rather than hidden. */
-export function licenceText(): string | null {
-  try {
-    return readFileSync(licencePaths().licence, 'utf8')
-  } catch {
-    return null
   }
 }

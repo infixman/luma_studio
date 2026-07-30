@@ -7,7 +7,7 @@ import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
-import { licencePaths, licenceText } from './ffmpeg'
+import { licencePaths } from './ffmpeg'
 import * as prefs from './prefs'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
@@ -174,10 +174,11 @@ if (process.argv.includes('--self-check')) {
     ipcMain.handle('upload:scan', (_event, folder: string) => uploader.scan(folder))
     ipcMain.handle('upload:cancel', () => cancel())
 
-    // FFmpeg is GPL, and this tool distributes a copy of it. The licence and
-    // the corresponding source ship alongside it, and these two are how
-    // somebody reaches them — an obligation, not a credit.
-    ipcMain.handle('app:licenceText', () => licenceText())
+    // FFmpeg is GPL and this tool distributes a copy of it, so the
+    // corresponding source ships alongside it and this is how somebody reaches
+    // it — an obligation, not a credit. The terms themselves are bundled into
+    // the interface, because reading them off the FFmpeg install fails on every
+    // machine that has not transcoded yet.
     ipcMain.handle('app:revealSource', () => {
       const { source } = licencePaths()
       if (!existsSync(source)) return false

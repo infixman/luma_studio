@@ -140,13 +140,18 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
 
   return (
     <main class="shell">
+      {/* Who is signed in belongs next to the way out, not on a line of its own
+          under the title where it reads as the first thing this screen has to
+          say. It is context for the sign-out button. */}
       <header class="row">
         <h1>上傳課程影片</h1>
-        <button type="button" class="ghost" onClick={onSignOut} disabled={busy}>
-          登出
-        </button>
+        <div class="row-left">
+          <span class="muted">已連結 {adminEmail}</span>
+          <button type="button" class="ghost" onClick={onSignOut} disabled={busy}>
+            登出
+          </button>
+        </div>
       </header>
-      <p class="muted">已連結 {adminEmail}</p>
 
       {/* Listeners are attached below rather than as JSX props. Preact chooses
           between `addEventListener('drop')` and `addEventListener('Drop')` by

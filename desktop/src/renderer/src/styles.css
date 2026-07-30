@@ -245,6 +245,98 @@ button.ghost:hover:not(:disabled) {
   border-color: var(--muted);
 }
 
+/* Error state shake, from transitions.dev/detail.html?t=error-state-shake.
+   Kept as published — the variable names, the per-stop easing and the
+   cumulative %-stops — so it stays recognisable as that transition rather than
+   drifting into an approximation of it.
+///
+   One deviation, and it is deliberate: `.t-input` is the wrapper rather than the
+   `<input>` the border belongs to. The paste button is positioned inside that
+   wrapper, and shaking only the field would leave the button standing still.
+   Border width is constant across states, so nothing shifts. */
+:root {
+  --shake-distance: 6px;
+  --shake-overshoot: 4px;
+  --shake-dur-a: 80ms;
+  --shake-dur-b: 60ms;
+  --shake-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --revert-hold: 3000ms;
+  --revert-dur: 280ms;
+  --error: #b23c3c;
+}
+
+.t-input {
+  transition: border-color 150ms ease-out;
+  will-change: transform;
+}
+
+.t-input.is-error {
+  /* The error border reverts on the hold timer, so its fade-out uses the slower
+     revert duration and lands with the message. */
+  transition: border-color var(--revert-dur, 280ms) ease-out;
+}
+
+.t-input.is-error input {
+  border-color: var(--error);
+}
+
+/* Visibility is delayed by --revert-dur on hide so the message stays painted
+   for the whole opacity fade. Entering .is-error drops the delay to zero. */
+.t-error-msg {
+  margin: 0;
+  color: var(--error);
+  font-size: 0.85rem;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear var(--revert-dur, 280ms);
+}
+
+.t-input-wrap.is-error .t-error-msg {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear 0s;
+}
+
+/* %-stops are cumulative durations as a fraction of the total
+   (80 + 60 + 80 + 60 = 280ms): 28.57%, 57.14%, 78.57%, 100%. Recompute if any
+   segment duration changes. */
+.t-input.is-shaking {
+  animation: t-input-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+}
+
+@keyframes t-input-shake {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: var(--shake-ease);
+  }
+  28.57% {
+    transform: translateX(var(--shake-distance));
+    animation-timing-function: var(--shake-ease);
+  }
+  57.14% {
+    transform: translateX(calc(var(--shake-distance) * -1));
+    animation-timing-function: var(--shake-ease);
+  }
+  78.57% {
+    transform: translateX(var(--shake-overshoot));
+    animation-timing-function: var(--shake-ease);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-input {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
 .alert {
   background: #fdecec;
   border: 1px solid #e8b4b4;
@@ -323,8 +415,10 @@ footer.shell {
   padding-top: 1.5rem;
 }
 
-.about button {
-  margin-top: 0.5rem;
+/* One line: version on the left, the way to the licence on the right, both in
+   the same muted footer type. */
+.about .row {
+  align-items: baseline;
 }
 
 /* Over the page rather than inside the footer: the licence is thousands of
@@ -354,20 +448,46 @@ footer.shell {
   box-shadow: 0 10px 40px rgb(20 18 15 / 25%);
 }
 
-.licence {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  margin: 0;
+textarea.licence {
+  /* `rows` decides the height, so no `flex: 1` — stretching it to the sheet
+     would put the sheet's height back in charge and let it reach past the
+     bottom of the window on a short one. */
+  width: 100%;
   padding: 0.75rem;
   background: var(--sunken);
+  border: 1px solid var(--line);
   border-radius: 6px;
+  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   line-height: 1.5;
+  resize: none;
   /* Licence text is hard-wrapped already; re-wrapping it reads worse than a
-     horizontal scrollbar on the few lines that are long. */
+     scrollbar on the few lines that are long. */
   white-space: pre;
+  overflow: auto;
   /* The one thing here somebody might genuinely want to copy. */
   user-select: text;
+}
+
+/* Text that happens to be clickable. Not a button: the generic `button` rule
+   gives everything the gold fill of a call to action, and nothing in a footer is
+   one — this has to read exactly like the version number beside it, which is
+   what `font: inherit` and the muted colour are for. */
+button.linkish {
+  align-self: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+}
+
+button.linkish:hover:not(:disabled) {
+  /* The only thing that says it is clickable at all, and only once the pointer
+     is already on it. */
+  text-decoration: underline;
 }
