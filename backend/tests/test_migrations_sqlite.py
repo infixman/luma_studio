@@ -769,6 +769,61 @@ class TestRegisteringAVerifiedEncode:
         ).fetchone()[0] == f"videos/{'a' * 24}/1/poster.webp"
 
 
+class TestRetiringAVideo:
+    """The conditional UPDATE behind archive and abort.
+
+    `retire_asset` reads the status first, the way everything here does, and that
+    read loses a race — the WHERE clause is what survives one. `FakeDatabase`
+    reports one row changed whatever the clause says, so this is the only place
+    the guard is exercised, and the only place a swapped binding would show.
+    """
+
+    def _asset(self, database, status: str) -> None:
+        database.execute(
+            "INSERT INTO video_assets (id, title, original_filename, source_key, status,"
+            " byte_size, created_at, updated_at)"
+            " VALUES ('asset-1', '第一課', 'lesson.mp4', '', ?, 1234, 0, 0)",
+            (status,),
+        )
+
+    def _retire(self, database, *, to_status: str, expected_status: str) -> int:
+        from domain.video import RETIRE_SQL
+
+        cursor = database.execute(
+            bind_literals(RETIRE_SQL, "asset-1", to_status, expected_status, 1_700_000_000)
+        )
+        return cursor.rowcount
+
+    def test_it_moves_a_row_that_is_where_it_was_read(self, database):
+        self._asset(database, "uploading")
+
+        assert self._retire(database, to_status="aborted", expected_status="uploading") == 1
+        row = database.execute("SELECT status, updated_at FROM video_assets").fetchone()
+        assert row == ("aborted", 1_700_000_000)
+
+    def test_a_row_that_moved_in_between_is_left_alone(self, database):
+        """The other request got there first — an upload that finished while the
+        admin was reading the confirmation must not be retired by an answer to a
+        question about a different state."""
+
+        self._asset(database, "ready")
+
+        assert self._retire(database, to_status="aborted", expected_status="uploading") == 0
+        assert database.execute("SELECT status FROM video_assets").fetchone()[0] == "ready"
+
+    def test_it_touches_only_the_asset_named(self, database):
+        self._asset(database, "uploading")
+        database.execute(
+            "INSERT INTO video_assets (id, title, original_filename, source_key, status,"
+            " byte_size, created_at, updated_at)"
+            " VALUES ('asset-2', '第二課', 'lesson.mp4', '', 'uploading', 1234, 0, 0)"
+        )
+
+        self._retire(database, to_status="aborted", expected_status="uploading")
+
+        assert database.execute("SELECT status FROM video_assets WHERE id = 'asset-2'").fetchone()[0] == "uploading"
+
+
 class TestRecordingAnEncodeVersion:
     """One row per output version, written when the version verifies.
 

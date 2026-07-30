@@ -70,6 +70,11 @@ KINDS = ("source", "output")
 
 STATUSES = ("uploading", "uploaded", "queued", "processing", "ready", "failed", "aborted", "archived")
 
+# The two endings. An asset in one of these is finished with by somebody's
+# decision, which is why `import` refuses to write over it: registering an encode
+# goes straight to `ready` and would otherwise undo that decision silently.
+RETIRED = ("aborted", "archived")
+
 # Every move the pipeline actually makes, and nothing else. Written as a table
 # because the interesting part is what is missing: nothing reaches `ready`
 # without having been `processing`, and nothing comes back from `archived`.
@@ -381,15 +386,39 @@ async def lessons_using(env, asset_id: str) -> list[dict]:
     return [{"id": row["id"], "sectionId": row["section_id"], "title": row["title"]} for row in rows]
 
 
-async def archive_asset(env, asset_id: str) -> bool:
-    """Retire a video. Only from a state it makes sense to retire from."""
+# The WHERE clause is the whole point, so it is a constant a real-SQLite test can
+# import: the status read a moment ago has to still be the row's status. A fake
+# database reports one row changed whatever the clause says.
+RETIRE_SQL = "UPDATE video_assets SET status = ?2, updated_at = ?4 WHERE id = ?1 AND status = ?3"
+
+
+async def retire_asset(env, asset_id: str, to_status: str) -> bool:
+    """Take a video out of use, one way or the other.
+
+    Two endings, one statement. `archived` is for a video that was something and
+    is finished with; `aborted` is for an upload that never became one. The state
+    table decides which is available from where, and the status in the WHERE
+    clause decides whether the row is still where it was read.
+
+    Unlike `change_status` this leaves `error_code` and `error_detail` alone.
+    Retiring a failed asset is often *because* it failed, and clearing the reason
+    on the way out removes the only record of it.
+
+    That difference is also why the target is checked here rather than left to
+    `can_change`: `processing -> ready` is a legal move, and making it through
+    this function would publish a video while quietly keeping last week's error
+    on the row. This is the retirement door, not a general status write.
+    """
+
+    if to_status not in RETIRED:
+        raise ValueError(f"Not a way to retire a video: {to_status}")
 
     rows = await d1_rows(env.DB.prepare("SELECT status FROM video_assets WHERE id = ?1").bind(asset_id))
-    if not rows or not can_change(rows[0]["status"], "archived"):
+    if not rows or not can_change(rows[0]["status"], to_status):
         return False
-    result = await env.DB.prepare(
-        "UPDATE video_assets SET status = 'archived', updated_at = ?2 WHERE id = ?1 AND status = ?3"
-    ).bind(asset_id, utc_timestamp(), rows[0]["status"]).run()
+    result = await env.DB.prepare(RETIRE_SQL).bind(
+        asset_id, to_status, rows[0]["status"], utc_timestamp()
+    ).run()
     return d1_changed(result)
 
 

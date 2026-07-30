@@ -75,6 +75,7 @@ POST   /api/video-assets/import
 GET    /api/video-assets/{assetId}
 GET    /api/video-assets/{assetId}/source-url
 POST   /api/video-assets/{assetId}/archive
+POST   /api/video-assets/{assetId}/abort
 GET    /api/video-assets/{assetId}/references
 GET    /api/video-storage?prefix=
 ```
@@ -241,7 +242,7 @@ Import 必須冪等。重送同一 asset 與 encode version 時重新驗證並�
 
 ```text
 uploading -> uploaded -> queued -> processing -> ready
-uploading -> aborted
+uploading/uploaded/queued -> aborted（管理員放棄這次上傳）
 queued/processing -> failed
 failed -> queued
 ready -> queued（新 encode version）
@@ -250,6 +251,10 @@ ready -> archived
 
 任何不合法轉移回 409。`ready` 只有在 master playlist 與所有引用 object 驗證完成後
 才能寫入，而且只有 import 端點能寫。
+
+`aborted` 與 `archived` 是終點，而 import 是唯一繞過狀態機的地方 —— 所以 import 會
+**拒絕**已經是這兩個狀態的 asset（409）。沒有這道檢查，放棄一次上傳只是改一列，
+而握著 presigned URL 的工具傳完再 import，那支影片就自己回到 `ready`。
 
 ## 轉檔輸出規格
 
@@ -396,7 +401,7 @@ encode version 產生。
 影片庫顯示：
 
 - 標題、原始檔名、大小。
-- uploading/uploaded/queued/processing/ready/failed/archived。
+- uploading/uploaded/queued/processing/ready/failed/aborted/archived。
 - duration、resolution、建立時間。
 - failed 的可讀錯誤。
 - 被哪些課程單元引用；phase5 接上資料。

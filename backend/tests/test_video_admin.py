@@ -152,6 +152,86 @@ class TestArchiving:
         assert response.json()["lessons"][0]["title"] == "工具介紹"
 
 
+class TestAbandoningAnUpload:
+    """The exit an upload that stopped halfway did not have.
+
+    Only `ready` and `failed` reach `archived`, so an asset the tool created and
+    never finished uploading had no button in the back office at all — and
+    production has one: the row left behind when import collided on the primary
+    key. Its objects are in R2 and nothing in D1 says the upload is over, which
+    is also what keeps the orphan scan from touching them.
+    """
+
+    def _abort(self, call, asset, database=None):
+        return call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/abort", "POST"),
+            {
+                "SELECT * FROM video_assets": [asset],
+                "SELECT status FROM video_assets": [{"status": asset["status"]}],
+            },
+            database=database,
+        )
+
+    def test_an_unfinished_upload_can_be_abandoned(self, call, database_of):
+        database = database_of(
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading", active_encode_version=None)],
+                "SELECT status FROM video_assets": [{"status": "uploading"}],
+            }
+        )
+
+        response = call(signed_in(f"/api/video-assets/{ASSET_ID}/abort", "POST"), database=database)
+
+        assert response.status == 200
+        # On the UPDATE, not on the row read back: the fake answers reads from
+        # what this test declared, so it would report 'aborted' either way.
+        moves = [
+            bindings
+            for sql, bindings in database.writes
+            if sql.startswith("UPDATE video_assets") and "status = ?2" in sql
+        ]
+        assert moves and moves[0][1] == "aborted"
+
+    def test_a_playable_video_is_not_abandoned_it_is_archived(self, call):
+        """`ready -> aborted` is not a move the pipeline makes. Answering 200 to a
+        request that changed nothing is the worst of the options."""
+
+        response = self._abort(call, an_asset(status="ready"))
+
+        assert response.status == 409
+
+    def test_a_video_a_lesson_uses_is_refused_by_name(self, call):
+        """Same check as archiving, and for the same reason: the lesson would be
+        left pointing at nothing, and a member would find out before an admin."""
+
+        response = call(
+            signed_in(f"/api/video-assets/{ASSET_ID}/abort", "POST"),
+            {
+                "SELECT * FROM video_assets": [an_asset(status="uploading")],
+                "SELECT status FROM video_assets": [{"status": "uploading"}],
+                "SELECT id, section_id, title FROM course_lessons": [
+                    {"id": "l1", "section_id": "s1", "title": "工具介紹"}
+                ],
+            },
+        )
+
+        assert response.status == 409
+        assert "工具介紹" in response.json()["error"]
+
+    def test_an_unknown_asset_is_not_found(self, call):
+        assert call(signed_in(f"/api/video-assets/{ASSET_ID}/abort", "POST")).status == 404
+
+    def test_it_needs_a_session(self, call):
+        anonymous = FakeRequest(
+            f"/api/video-assets/{ASSET_ID}/abort",
+            "POST",
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"},
+            host=ADMIN_HOST,
+        )
+
+        assert call(anonymous).status == 401
+
+
 class TestImporting:
     """Registering a ladder that was transcoded and uploaded elsewhere."""
 
@@ -293,6 +373,23 @@ class TestImporting:
         self._call(call, self._call_body(), complete=False, database=database)
 
         assert not [sql for sql, _ in database.writes if "INSERT INTO video_encode_versions" in sql]
+
+    @pytest.mark.parametrize("status", ["aborted", "archived"])
+    def test_a_retired_asset_is_not_brought_back(self, call, database_of, status):
+        """Import writes straight to `ready` — the one place the state machine is
+        bypassed — so nothing else would stop it.
+
+        The scenario is not hypothetical: abandoning an upload only changes a row,
+        and the tool holding presigned URLs keeps going. It finishes, calls import
+        with the same asset id, and the video an admin retired is playable again.
+        """
+
+        database = database_of({"SELECT * FROM video_assets": [an_asset(status=status)]})
+
+        response = self._call(call, {**self._call_body(), "assetId": ASSET_ID}, database=database)
+
+        assert response.status == 409
+        assert not [sql for sql, _ in database.writes if sql.startswith("INSERT INTO video_assets")]
 
     def test_a_measurement_may_be_absent(self, call):
         """A source with no readable duration is still worth registering."""

@@ -400,6 +400,12 @@ class TestWhatAVideoTokenMayReach:
 
         assert desktop_auth.scope_allows("video", "POST", "/api/video-assets/asset-1/archive") is False
 
+    def test_abandoning_an_upload_is_not_either(self, desktop_auth):
+        """Same reason as archiving: it retires an asset, and what a lesson still
+        points at is known in the back office."""
+
+        assert desktop_auth.scope_allows("video", "POST", "/api/video-assets/asset-1/abort") is False
+
     def test_an_unknown_scope_reaches_nothing(self, desktop_auth):
         """Not a default. A new scope has to say what it opens."""
 

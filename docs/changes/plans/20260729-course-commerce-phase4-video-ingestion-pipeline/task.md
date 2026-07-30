@@ -122,9 +122,15 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       （輪詢失敗刻意不進狀態列：它沒有使用者在等，會蓋掉管理員自己動作的結果）。
 - [x] failed 顯示可讀錯誤。沒留下原因時說「沒有留下失敗原因」，不留空白。
 - [x] 未 ready 的 asset 不出現在課程單元的可選清單。（Phase 5 就做了，這裡確認並補上共用的長度格式）
-- [ ] 卡在 `uploading`／`uploaded`／`queued` 的 asset 沒有出路：`archived` 只能從
-      `ready` 或 `failed` 進去，而 `processing` 連 `aborted` 都到不了。正式環境現在就有
-      一個 `uploading` 的殘留。需要一個中止端點。
+- [x] 卡在 `uploading`／`uploaded`／`queued` 的 asset 有出路了：
+      `POST /api/video-assets/{id}/abort`，影片庫的列選單裡是「放棄上傳」。
+      跟封存共用同一道引用檢查。import 會拒絕已放棄或已封存的 asset ——
+      不然放棄只是改一列，工具傳完再 import 就把它帶回 `ready`。
+- [ ] `processing` 仍然沒有出路：狀態表裡 `processing` 只到 `ready` 或 `failed`。
+      今天不會發生（轉檔在本機，伺服器不寫 `processing`），排程化之後才需要。
+- [ ] 放棄留下的物件是孤兒，但 S6 的盤點判斷是「prefix 有沒有對應的版本列」，
+      而原始檔上傳從來不會有版本列。**盤點要把 `aborted`／`archived` 的 asset 的
+      key 當成可刪**，不是當成有主。
 - [ ] 實作原始檔 multipart 的 create／part／complete／abort，且 complete 與 abort 冪等。
 - [ ] 工具上傳原始檔。
 - [ ] 限制單檔大小、影片長度與同時 session 數。

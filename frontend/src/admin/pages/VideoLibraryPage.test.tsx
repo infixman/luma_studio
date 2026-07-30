@@ -264,6 +264,52 @@ test('a video still uploading offers no archive button', async () => {
   expect(buttonFor('封存')).toBeUndefined()
 })
 
+test('an unfinished upload can be abandoned', async () => {
+  /** Its objects are in R2 and nothing in D1 says the upload is over — which is
+   *  also what stops the orphan scan from touching them. Production has one such
+   *  row, left behind when import collided on the primary key. */
+  assets = [aVideoAsset({ status: 'uploading', encodeVersion: null })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+  buttonFor('放棄上傳')?.click()
+  await flush()
+  buttonFor('確定放棄')?.click()
+  await flush()
+
+  expect(posted).toEqual([{ path: '/api/video-assets/asset-1/abort', method: 'POST', body: {} }])
+})
+
+test('a refused abandon is shown as the server phrased it', async () => {
+  /** The abort path plumbs its own error message. Only the archive branch was
+   *  covered, so a regression on this side would have passed the suite. */
+  assets = [aVideoAsset({ status: 'uploading', encodeVersion: null })]
+  archiveFailure = { status: 409, message: '這支影片正被單元「渲染與縫合」使用，請先替換影片' }
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+  buttonFor('放棄上傳')?.click()
+  await flush()
+  buttonFor('確定放棄')?.click()
+  await flush()
+
+  expect(statusText()).toContain('渲染與縫合')
+})
+
+test('a playable video is not offered the abandon action', async () => {
+  /** It is archived instead, and `ready -> aborted` is not a move the server
+   *  makes. */
+  assets = [aVideoAsset({ status: 'ready' })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+
+  expect(buttonFor('放棄上傳')).toBeUndefined()
+})
+
 test('an unfinished upload shows dashes rather than zeros', async () => {
   /** It was never probed, so there is no length, no size and no version. `0` and
    *  `v0` would each be a claim about the file. */

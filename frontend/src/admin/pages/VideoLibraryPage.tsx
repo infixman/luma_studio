@@ -15,7 +15,7 @@ import type { Column } from '../components/ui'
 import { ApiError, api, apiJson } from '../../shared/api'
 import { dateTime } from '../../shared/dates'
 import { fileSize } from '../lib/bytes'
-import { canArchive, runtime, videoFailure, videoStatusLabel, videoStatusTone } from '../lib/videoFacts'
+import { canAbort, canArchive, runtime, videoFailure, videoStatusLabel, videoStatusTone } from '../lib/videoFacts'
 import type { VideoAsset } from '../../shared/types'
 import '../styles/shop-admin.css'
 
@@ -135,28 +135,55 @@ export function VideoLibraryPage() {
     }
   }, [load, stalled])
 
-  async function archive(asset: VideoAsset) {
-    const confirmed = await ask({
-      title: '封存這支影片？',
-      body: (
-        <p>
-          「{asset.title}」會從可選清單中移除。已經在使用它的課程單元會擋下這個動作，
-          所以封存不會讓任何會員看不到影片。
-        </p>
-      ),
-      confirmLabel: '確定封存',
-    })
-    if (!confirmed) return
+  /**
+   * The two ways out of use, which differ only in words.
+   *
+   * Archiving is for a video that was something; abandoning is for an upload that
+   * never became one. Same guard on the server, same shape here — one function so
+   * the confirmation and the reload cannot drift apart between them.
+   */
+  async function retire(asset: VideoAsset, kind: 'archive' | 'abort') {
+    const words =
+      kind === 'archive'
+        ? {
+            title: '封存這支影片？',
+            body: (
+              <p>
+                「{asset.title}」會從可選清單中移除。已經在使用它的課程單元會擋下這個動作，
+                所以封存不會讓任何會員看不到影片。
+              </p>
+            ),
+            confirmLabel: '確定封存',
+            done: '影片已封存。',
+          }
+        : {
+            // Both sentences are checked against what the server actually does.
+            // Registering refuses a retired asset, so "will not become playable"
+            // is true even if the tool finishes and calls import. The leftover
+            // objects are real and there is no cleanup tool yet, so this says
+            // they stay rather than promising something will collect them.
+            title: '放棄這次上傳？',
+            body: (
+              <p>
+                「{asset.title}」的上傳沒有完成，放棄之後它不會再變成可播放的影片，
+                工具傳完也一樣。已經傳上去的檔案會留在儲存空間裡，要另外清掉。
+              </p>
+            ),
+            confirmLabel: '確定放棄',
+            done: '已放棄這次上傳。',
+          }
+
+    if (!(await ask(words))) return
 
     // Nothing is returned from the work: `run` treats whatever it hands back as
     // a sentence to show instead of the success message, and `apiJson` answers
-    // with the archived asset — which renders as an empty status bar.
+    // with the asset — which renders as an empty status bar.
     //
     // The refusal is the interesting answer: the server names the lesson still
     // using the video, and `run` shows exactly that sentence.
     await run(async () => {
-      await apiJson(`/api/video-assets/${encodeURIComponent(asset.id)}/archive`, 'POST', {})
-    }, '影片已封存。')
+      await apiJson(`/api/video-assets/${encodeURIComponent(asset.id)}/${kind}`, 'POST', {})
+    }, words.done)
     await load()
   }
 
@@ -220,13 +247,20 @@ export function VideoLibraryPage() {
             rows={assets}
             columns={columns}
             rowKey={(asset) => asset.id}
-            menu={(asset) =>
-              canArchive(asset) ? (
-                <MenuItem tone="danger" onClick={() => void archive(asset)}>
-                  封存
-                </MenuItem>
-              ) : null
-            }
+            menu={(asset) => (
+              <>
+                {canArchive(asset) ? (
+                  <MenuItem tone="danger" onClick={() => void retire(asset, 'archive')}>
+                    封存
+                  </MenuItem>
+                ) : null}
+                {canAbort(asset) ? (
+                  <MenuItem tone="danger" onClick={() => void retire(asset, 'abort')}>
+                    放棄上傳
+                  </MenuItem>
+                ) : null}
+              </>
+            )}
             empty={
               <EmptyState
                 title="還沒有影片"

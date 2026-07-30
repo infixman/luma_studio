@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { aVideoAsset } from '../../shared/testing/fixtures'
-import { canArchive, runtime, videoFailure, videoStatusLabel } from './videoFacts'
+import { canAbort, canArchive, runtime, videoFailure, videoStatusLabel } from './videoFacts'
 
 describe('runtime', () => {
   it('reads as minutes and seconds', () => {
@@ -75,6 +75,29 @@ describe('videoFailure', () => {
     const asset = aVideoAsset({ status: 'ready', errorCode: 'transcode', errorDetail: '舊的失敗' })
 
     expect(videoFailure(asset)).toBe('')
+  })
+})
+
+describe('canAbort', () => {
+  it('offers the exit an unfinished upload otherwise does not have', () => {
+    for (const status of ['uploading', 'uploaded', 'queued'] as const) {
+      expect(canAbort(aVideoAsset({ status }))).toBe(true)
+    }
+  })
+
+  it('is not offered for a video that became something', () => {
+    /** `ready` and `failed` are archived, not abandoned, and `aborted`/`archived`
+     *  are already over. */
+    for (const status of ['ready', 'failed', 'aborted', 'archived'] as const) {
+      expect(canAbort(aVideoAsset({ status }))).toBe(false)
+    }
+  })
+
+  it('is not offered while a transcode is running', () => {
+    /** `processing -> aborted` is not in the server's state table at all, so the
+     *  button would be a 409. That gap is recorded in task.md rather than papered
+     *  over here. */
+    expect(canAbort(aVideoAsset({ status: 'processing' }))).toBe(false)
   })
 })
 

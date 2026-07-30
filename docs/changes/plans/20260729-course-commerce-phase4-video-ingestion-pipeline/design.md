@@ -275,6 +275,8 @@ stateDiagram-v2
     [*] --> uploading
     uploading --> uploaded: 所有物件已 PUT
     uploading --> aborted: 使用者取消/過期
+    uploaded --> aborted: 管理員放棄
+    queued --> aborted: 管理員放棄
     uploaded --> queued
     queued --> processing
     processing --> ready: 所有輸出驗證通過

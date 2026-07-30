@@ -283,8 +283,17 @@ async def handle(ctx: Ctx):
         asset_id = str(body.get("assetId") or "").strip()
         if asset_id:
             # Re-verifying an upload that was fixed and synced again.
-            if await video.get_asset(env, asset_id) is None:
+            existing = await video.get_asset(env, asset_id)
+            if existing is None:
                 return ctx.error("Video not found", 404)
+            # Registering writes straight to `ready`, bypassing the state
+            # machine, so nothing else here would stop an abandoned upload from
+            # coming back. And it would: abandoning changes a row, while the tool
+            # holding presigned URLs keeps going, finishes, and calls import with
+            # the same id. An admin's decision to retire a video has to outlast
+            # whatever the tool does next.
+            if existing["status"] in video.RETIRED:
+                return ctx.error("這支影片已經封存或放棄，請重新建立一支", 409)
         else:
             asset_id = video.urlsafe_token(18)
 
@@ -376,16 +385,28 @@ async def handle(ctx: Ctx):
 
             return ctx.json({"urls": granted})
 
-        if action == "archive" and method == "POST":
-            # A published lesson pointing at an archived video surfaces as a
-            # member unable to watch, which is a worse way to find out than an
-            # admin action being refused.
+        # Two ways out of use, and the same guard in front of both. `archive` is
+        # for a video that was something; `abort` is for an upload that never
+        # became one — an asset the tool created and never finished has no other
+        # exit, because only `ready` and `failed` reach `archived`.
+        #
+        # One branch rather than two, because the guard in front of them is the
+        # part that must not differ: a lesson pointing at a retired video
+        # surfaces as a member unable to watch, which is a worse way to find out
+        # than an admin action being refused.
+        if action in ("archive", "abort") and method == "POST":
+            to_status = "archived" if action == "archive" else "aborted"
+            refused = (
+                "這支影片目前的狀態不能封存"
+                if action == "archive"
+                else "這支影片目前的狀態不能放棄上傳"
+            )
             lessons = await video.lessons_using(env, asset_id)
             if lessons:
                 names = "、".join(lesson["title"] for lesson in lessons[:3])
                 return ctx.error(f"這支影片正被單元「{names}」使用，請先替換影片", 409)
-            if not await video.archive_asset(env, asset_id):
-                return ctx.error("這支影片目前的狀態不能封存", 409)
+            if not await video.retire_asset(env, asset_id, to_status):
+                return ctx.error(refused, 409)
             return ctx.json({"asset": await video.get_asset(env, asset_id)})
 
         return ctx.error("Not found", 404)

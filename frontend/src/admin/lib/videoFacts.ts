@@ -88,6 +88,18 @@ export function canArchive(asset: VideoAsset): boolean {
 }
 
 /**
+ * Whether this upload can be abandoned.
+ *
+ * The other half of the same table: `uploading`, `uploaded` and `queued` reach
+ * `aborted`. `processing` does not — a transcode that died leaves a row nothing
+ * can retire, which is recorded in task.md rather than papered over with a
+ * button that 409s.
+ */
+export function canAbort(asset: VideoAsset): boolean {
+  return asset.status === 'uploading' || asset.status === 'uploaded' || asset.status === 'queued'
+}
+
+/**
  * Why this video will not play, if that is where it is.
  *
  * Only for a failed asset. Reaching `ready` clears the recorded error on the
