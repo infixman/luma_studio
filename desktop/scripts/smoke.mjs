@@ -81,6 +81,14 @@ async function check(window) {
   // The status handler reaches the session store, which reaches `safeStorage`.
   // Nothing else here exercises that, and it is the part that differs between a
   // developer's machine and a packaged install.
+  //
+  // It will nearly always answer `paired: false`, and not because nothing is
+  // paired: `electron scripts/smoke.mjs` has no package.json to take a name from,
+  // so `app.getName()` is "Electron" and userData is an empty directory beside
+  // the real one. Left that way on purpose — pointing it at the real store would
+  // make it fight `requestSingleInstanceLock` with any running copy of the app,
+  // and lose silently, exit 0, no output. The check below reads whichever answer
+  // comes back instead of assuming one, which is what keeps it honest either way.
   const status = await window.webContents.executeJavaScript('window.desktop.auth.status()')
   if (typeof status !== 'object' || status === null || typeof status.paired !== 'boolean') {
     throw new Error(`auth.status() came back as ${JSON.stringify(status)}`)

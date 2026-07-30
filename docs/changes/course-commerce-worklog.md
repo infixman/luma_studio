@@ -1480,3 +1480,31 @@ encode version 會搬動 `active_encode_version`（S8 要的）。
 `C:\encodes\a` 和 `C:/encodes/a` 在 Windows 是同一個資料夾，卻是兩個字串。
 `jobId` 現在正規化分隔符並轉小寫，而且搬到 `shared/resume.ts` —— 它本來在
 `main/uploader.ts` 裡，那個檔案 import 了 electron 所以測不到，這是它一直沒有測試的原因。
+
+## 鏡像下載那條也驗完了，代價是三個 Windows 路徑坑
+
+清掉 `LUMA_FFMPEG_DIR`、用全新的 userData 跑，逼它真的去鏡像抓。連撞四次才通。
+
+**一、雜湊 65 個字。** 貼進 `PINNED` 的值是 `fa fffff c`（五個 f），實際是四個 —— 複製時多了一個字。
+`problemWith` 在下載之前就擋掉了，訊息是「SHA-256 尚未填寫或格式不對」。
+**這正是那道檢查存在的理由**：格式不對當成「尚未設定」，不是「跳過檢查」。
+現在有測試釘住長度，讓壞的貼上死在測試裡而不是死在 74 MB 之後。
+
+**二、物件放在桶根目錄，程式找 `ffmpeg/` 前綴。** 回 404（不是 401/403 —— token 是通的）。
+prefix 留著，因為那個桶之後還要放原始碼、安裝檔、updater metadata；用 wrangler 把物件放到
+`ffmpeg/ffmpeg-8.1.2.zip`。
+
+**三、`tar` 不是 bsdtar。** 下載和雜湊都過了，掛在解壓縮：`tar: Cannot connect to C: resolve failed`。
+GNU tar 把 `C:\...` 讀成 `host:path`。我先以為是路徑格式問題，改成在目標目錄用相對檔名之後
+變成 `This does not look like a tar archive` —— 才發現真正的原因：**PATH 上的 `tar` 是
+Git for Windows 的 GNU tar，它根本不讀 zip**。改成指名 `%SystemRoot%\System32\tar.exe`。
+
+那個註解原本寫「Windows 從 1809 就內建 bsdtar」—— 沒錯，但它不在 PATH 的第一位。
+指名一支唯一平台上的工具，成本是零。
+
+跑通的完整路徑：74 MB 下載 → SHA-256 → bsdtar 解壓 → ffprobe → 三個階梯 → 封面 →
+master.m3u8 → 14 個 presigned PUT → 驗證 14 個 → `ready`。
+
+順帶記下 `npm run smoke` 的 `paired=false` 是怎麼來的（`electron <script>` 沒有 package.json
+可取名字，userData 是隔壁的空目錄），因為那個假設害我先去找不存在的 token bug。
+不改它 —— 指向真的 store 會讓它跟執行中的 app 搶 single-instance lock，然後靜靜地 exit 0。

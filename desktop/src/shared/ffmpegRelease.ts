@@ -49,7 +49,11 @@ export interface FfmpegRelease {
 export const PINNED: FfmpegRelease = {
   version: '8.1.2-essentials_build',
   archive: 'ffmpeg-8.1.2.zip',
-  sha256: '76ad7cad3f8efdb5d6e7e357b2da386fafffffc690a638e3561fd2b226a9827aa',
+  // Computed from the archive itself. The first value pasted in here had 65
+  // characters — one duplicated `f` — and `problemWith` refused it rather than
+  // running with a digest it could not check, which is the whole point of
+  // treating a malformed hash as "not configured".
+  sha256: '76ad7cad3f8efdb5d6e7e357b2da386faffffc690a638e3561fd2b226a9827aa',
   // The folder inside the archive. The two executables sit directly in it, which
   // is a property of how it was repacked rather than of gyan's layout.
   binDir: 'ffmpeg-8.1.2',

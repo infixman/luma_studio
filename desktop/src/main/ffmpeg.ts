@@ -33,6 +33,9 @@ export interface Tools {
 
 export class FfmpegUnavailable extends Error {}
 
+/** Windows' bundled bsdtar. See the extraction step for why it is not `'tar'`. */
+const BSDTAR = join(process.env.SystemRoot || 'C:\Windows', 'System32', 'tar.exe')
+
 function toolsDir(): string {
   const path = join(app.getPath('userData'), 'tools')
   mkdirSync(path, { recursive: true })
@@ -56,10 +59,12 @@ export function run(
   options: {
     onStdout?: (chunk: string) => void
     onSpawn?: (child: ReturnType<typeof spawn>) => void
+    /** Where to run it, for tools that read a drive letter as a hostname. */
+    cwd?: string
   } = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { windowsHide: true })
+    const child = spawn(command, [...args], { windowsHide: true, cwd: options.cwd })
     options.onSpawn?.(child)
     let stdout = ''
     let stderr = ''
@@ -191,10 +196,17 @@ async function install(base: string, onProgress?: (progress: FetchProgress) => v
   writeFileSync(pending, archive)
   renameSync(pending, settled)
 
-  // `tar` rather than a dependency: Windows has shipped bsdtar since 1809 and it
-  // reads zip. This is a Windows-only build, so that is not a limitation being
-  // accepted here — it is the only platform there is.
-  const extracted = await run('tar', ['-xf', settled, '-C', toolsDir()])
+  // Windows' own bsdtar, by full path rather than by name.
+  //
+  // `tar` on PATH is whatever comes first, and on a developer's machine that is
+  // usually Git for Windows' GNU tar — which cannot read a zip at all. It fails
+  // twice over: it reads `C:\...` as `host:path` (`Cannot connect to C: resolve
+  // failed`), and once given a relative name it says `This does not look like a
+  // tar archive`. Both were seen, in that order, chasing the wrong bug.
+  //
+  // bsdtar has shipped in System32 since Windows 10 1809 and reads zip. There is
+  // no non-Windows build of this tool, so naming it outright costs nothing.
+  const extracted = await run(BSDTAR, ['-xf', PINNED.archive], { cwd: toolsDir() })
   if (extracted.code !== 0) {
     throw new FfmpegUnavailable(`FFmpeg 解壓縮失敗：${extracted.stderr.trim() || extracted.code}`)
   }

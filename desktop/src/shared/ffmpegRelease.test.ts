@@ -18,15 +18,28 @@ const A_RELEASE: FfmpegRelease = {
   bytes: 123_456_789,
 }
 
-describe('an unfilled pin', () => {
-  test('the pinned release ships unconfigured', () => {
-    /** The mirror does not exist yet: a build has to be chosen, uploaded, and
-     *  its digest written down. */
-    expect(isConfigured(PINNED)).toBe(false)
+describe('the pin that ships', () => {
+  test('it is configured', () => {
+    /** It was not, for as long as the mirror did not exist. Now it does, and a
+     *  build that shipped with an empty pin would refuse to transcode at all. */
+    expect(isConfigured(PINNED)).toBe(true)
+    expect(problemWith(PINNED)).toBeNull()
   })
 
-  test('and it says where to fix it', () => {
-    expect(problemWith(PINNED)).toContain('ffmpegRelease.ts')
+  test('the digest is a whole SHA-256 and nothing else', () => {
+    /** The first value written here had sixty-five characters — one duplicated
+     *  `f` from a copied line. `problemWith` refused it, which is the behaviour
+     *  worth keeping: a malformed digest is "not configured", never "skip the
+     *  check". This pins the length so a bad paste fails here rather than after a
+     *  74 MB download. */
+    expect(PINNED.sha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('and the archive is a zip, because bsdtar cannot read 7z', () => {
+    /** Unpacking uses the bsdtar Windows ships. The published build is a `.7z`,
+     *  so the mirrored copy is repacked — and a pin that named a 7z would get
+     *  through every check here and fail at extraction. */
+    expect(PINNED.archive).toMatch(/\.zip$/)
   })
 })
 
