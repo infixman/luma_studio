@@ -2,9 +2,38 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { Panel, Spinner } from '../components/ui'
+import { IconButton, Panel, Spinner } from '../components/ui'
 import { ApiError, api } from '../../shared/api'
 import '../styles/shop-admin.css'
+
+/**
+ * Copy a value, and say so.
+ *
+ * Both of these get typed into another window, and the code has a thirty-second
+ * life — a copy button is the difference between reading six digits off a screen
+ * and having them. The confirmation matters as much: without it somebody presses
+ * it twice and pastes nothing the second time, having no idea whether it worked.
+ */
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+
+  return (
+    <IconButton
+      label={copied ? '已複製' : label}
+      size="sm"
+      onClick={() => {
+        void navigator.clipboard.writeText(value).then(() => {
+          setCopied(true)
+          // Long enough to be seen, short enough that the button is ready again
+          // before the next code arrives.
+          setTimeout(() => setCopied(false), 1_500)
+        })
+      }}
+    >
+      {copied ? '✓' : '⧉'}
+    </IconButton>
+  )
+}
 
 interface PairingCode {
   code: string
@@ -96,14 +125,19 @@ export function DesktopToolPage() {
             <p class="muted">在桌面工具的登入畫面輸入這組信箱與驗證碼。</p>
             <dl class="desktop-pairing">
               <dt>管理者信箱</dt>
-              <dd>
+              <dd class="copyable">
                 <code>{pairing.adminEmail}</code>
+                <CopyButton value={pairing.adminEmail} label="複製信箱" />
               </dd>
               <dt>驗證碼</dt>
-              <dd>
+              <dd class="copyable">
                 <strong class="desktop-pairing-code" aria-label={`驗證碼 ${pairing.code.split('').join(' ')}`}>
                   {grouped(pairing.code)}
                 </strong>
+                {/* The digits, not the spaced form. The tool strips separators
+                    anyway, but pasting exactly what the server will accept is
+                    one fewer thing that can be wrong. */}
+                <CopyButton value={pairing.code} label="複製驗證碼" />
               </dd>
               <dt>剩餘時間</dt>
               <dd aria-live="polite">{remaining} 秒</dd>

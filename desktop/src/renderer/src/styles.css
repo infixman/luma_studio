@@ -1,13 +1,16 @@
-/* Dark by default: this tool is used beside a video editor, and a white window
-   next to one is a flashbang. */
+/* Light, and close to the back office rather than to a code editor: the two are
+   used minutes apart, and a dark tool beside a cream admin reads as a different
+   product. The gold is the one the logo uses. */
 :root {
-  --bg: #14151a;
-  --panel: #1c1e26;
-  --text: #e8e9ed;
-  --muted: #9a9db0;
-  --accent: #d8a657;
-  --line: #2b2e3a;
-  color-scheme: dark;
+  --bg: #faf7f2;
+  --panel: #ffffff;
+  --text: #2b2823;
+  --muted: #6f6a60;
+  --accent: #b8873f;
+  --accent-ink: #ffffff;
+  --line: #e4ddd1;
+  --sunken: #f2ece2;
+  color-scheme: light;
 }
 
 * {
@@ -28,7 +31,7 @@ body {
 .shell {
   max-width: 46rem;
   margin: 0 auto;
-  padding: 3rem 2rem;
+  padding: 2.5rem 2rem;
 }
 
 h1 {
@@ -41,11 +44,24 @@ h1 {
   color: var(--muted);
 }
 
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.row-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .stack {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 22rem;
+  max-width: 24rem;
   margin: 2rem 0;
 }
 
@@ -60,13 +76,15 @@ label span {
   font-size: 0.9rem;
 }
 
-input {
+input[type='text'],
+input[type='email'] {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text);
   font: inherit;
   padding: 0.6rem 0.7rem;
+  width: 100%;
   /* Typing is the one thing that should feel like a text field. */
   user-select: text;
 }
@@ -76,10 +94,58 @@ input:focus-visible {
   outline-offset: 1px;
 }
 
+/* An input with a button sitting inside its right edge. */
+.with-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.with-action input {
+  padding-right: 2.6rem;
+}
+
+.icon-button {
+  position: absolute;
+  right: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--text);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
+
 .code-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 1.4rem;
   letter-spacing: 0.2em;
+}
+
+.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check span {
+  color: var(--text);
+  font-size: 0.95rem;
 }
 
 button {
@@ -87,7 +153,7 @@ button {
   background: var(--accent);
   border: none;
   border-radius: 6px;
-  color: #1a1408;
+  color: var(--accent-ink);
   cursor: pointer;
   font: inherit;
   font-weight: 600;
@@ -99,26 +165,24 @@ button:disabled {
   cursor: default;
 }
 
-.alert {
-  background: #3a1f22;
-  border: 1px solid #6b3238;
-  border-radius: 6px;
-  color: #ffc9cd;
-  margin: 0;
-  padding: 0.6rem 0.8rem;
-}
-
-.row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 button.ghost {
   background: transparent;
   border: 1px solid var(--line);
   color: var(--muted);
+}
+
+button.ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.alert {
+  background: #fdecec;
+  border: 1px solid #e8b4b4;
+  border-radius: 6px;
+  color: #8c2f2f;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
 }
 
 /* Big enough to be an obvious target for a folder, without pushing the rest of
@@ -129,11 +193,12 @@ button.ghost {
   margin: 1.5rem 0;
   padding: 2rem 1.5rem;
   text-align: center;
+  background: var(--panel);
 }
 
 .drop.over {
   border-color: var(--accent);
-  background: #1f2029;
+  background: var(--sunken);
 }
 
 .drop p {
@@ -163,7 +228,7 @@ button.ghost {
 }
 
 .bar {
-  background: var(--panel);
+  background: var(--sunken);
   border-radius: 999px;
   height: 8px;
   overflow: hidden;
@@ -187,12 +252,6 @@ footer.shell {
   border-top: 1px solid var(--line);
   font-size: 0.85rem;
   padding-top: 1.5rem;
-}
-
-.row-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .about summary {

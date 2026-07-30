@@ -22,6 +22,10 @@ files:
 # on first run, and the admin has to click through it. Said out loud in the
 # README rather than discovered during an install.
 win:
+  # Seven sizes, 16 through 256. Without the large ones Windows scales a 48 up
+  # for the taskbar and the installer, which is the difference between an icon
+  # and a smudge.
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:

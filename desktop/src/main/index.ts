@@ -1,12 +1,13 @@
 import { join } from 'node:path'
 
-import { BrowserWindow, app, ipcMain, safeStorage, shell } from 'electron'
+import { BrowserWindow, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
 
 import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
 import { licencePaths } from './ffmpeg'
+import * as prefs from './prefs'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
 import * as uploader from './uploader'
@@ -29,7 +30,11 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    // The starburst comes in S7 with the rest of the packaging.
+    // Set here as well as in the packaging config: electron-builder puts the
+    // icon on the executable, which does nothing for `electron-vite dev`, and a
+    // default Electron logo in the corner during development is how it ends up
+    // shipping that way.
+    icon: join(import.meta.dirname, '../../build/icon.png'),
     webPreferences: {
       // `.cjs` because the sandbox refuses an ES module preload. See the
       // preload build in electron.vite.config.ts.
@@ -160,6 +165,20 @@ if (process.argv.includes('--self-check')) {
     // the corresponding source ship alongside it, and this is how somebody
     // finds them — an obligation, not a credit.
     ipcMain.handle('app:licences', () => licencePaths())
+
+    // Read here rather than in the renderer. `navigator.clipboard.readText` in a
+    // sandboxed renderer depends on focus and permission state, and the failure
+    // is a paste button that silently does nothing.
+    ipcMain.handle('app:clipboard', () => clipboard.readText())
+
+    // Not a secret, so not in the encrypted store — and worth remembering even
+    // on a machine where the token cannot be kept. See `prefs.ts`.
+    ipcMain.handle('prefs:read', () => prefs.read())
+    ipcMain.handle('prefs:rememberEmail', (_event, email: string) => {
+      if (email) prefs.rememberEmail(email)
+      else prefs.forgetEmail()
+      return prefs.read()
+    })
 
     ipcMain.handle('upload:start', async (event, request: UploadRequest) => {
       try {

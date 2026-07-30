@@ -45,6 +45,11 @@ import { DesktopToolPage } from './DesktopToolPage'
 let container: HTMLDivElement
 
 beforeEach(() => {
+  // The copy buttons write to it; jsdom-alikes do not provide one.
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn(async () => undefined) },
+  })
   calls = 0
   failStatus = null
   pairings.length = 0
@@ -150,4 +155,43 @@ test('it says the tool holds no R2 key', async () => {
   await settle()
 
   expect(container.textContent).toContain('沒有 R2 金鑰')
+})
+
+test('the email can be copied rather than retyped', async () => {
+  render(<DesktopToolPage />, container)
+  await settle()
+
+  const button = [...container.querySelectorAll('button')].find(
+    (element) => element.getAttribute('aria-label') === '複製信箱',
+  )
+  button?.click()
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('owner@example.com')
+})
+
+test('the code copies as digits, not as the spaced form', async () => {
+  /** The tool strips separators anyway, but pasting exactly what the server
+   *  accepts is one fewer thing that can be wrong. */
+  render(<DesktopToolPage />, container)
+  await settle()
+
+  const button = [...container.querySelectorAll('button')].find(
+    (element) => element.getAttribute('aria-label') === '複製驗證碼',
+  )
+  button?.click()
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('418302')
+})
+
+test('copying says so, because otherwise nobody knows it worked', async () => {
+  render(<DesktopToolPage />, container)
+  await settle()
+
+  const button = [...container.querySelectorAll('button')].find(
+    (element) => element.getAttribute('aria-label') === '複製驗證碼',
+  )
+  button?.click()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.querySelector('[aria-label="已複製"]')).not.toBeNull()
 })

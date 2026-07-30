@@ -26,12 +26,23 @@ const STATUS: SessionStatus = {
 
 let container: HTMLDivElement
 let pair: ReturnType<typeof vi.fn>
+let clipboard: ReturnType<typeof vi.fn>
+let rememberEmail: ReturnType<typeof vi.fn>
+let remembered: string
 
 beforeEach(() => {
+  remembered = ''
   pair = vi.fn(async () => ({ ok: true, status: { ...STATUS, paired: true } }))
+  clipboard = vi.fn(async () => '')
+  rememberEmail = vi.fn(async (email: string) => ({ rememberedEmail: email }))
   Object.defineProperty(window, 'desktop', {
     configurable: true,
-    value: { version: vi.fn(async () => '1.2.3'), auth: { status: vi.fn(), pair, signOut: vi.fn() } },
+    value: {
+      version: vi.fn(async () => '1.2.3'),
+      clipboard,
+      prefs: { read: vi.fn(async () => ({ rememberedEmail: remembered })), rememberEmail },
+      auth: { status: vi.fn(), pair, signOut: vi.fn() },
+    },
   })
   container = document.createElement('div')
   document.body.append(container)
@@ -49,13 +60,39 @@ afterEach(() => {
  * submits the state from before the typing — every assertion then fails on an
  * empty form and looks like the handler never ran.
  */
+async function mount(onPaired: () => void = vi.fn()): Promise<void> {
+  render(<PairingScreen status={STATUS} onPaired={onPaired} />, container)
+  // The remembered address arrives from an effect and then a promise, so a
+  // single tick is not enough — anything typed before it lands is overwritten.
+  await flush()
+}
+
+/** By type, not by position: a checkbox sits between the two text fields. */
+function emailField(): HTMLInputElement {
+  return container.querySelector<HTMLInputElement>('input[type="email"]')!
+}
+
+function codeField(): HTMLInputElement {
+  return container.querySelector<HTMLInputElement>('input.code-input')!
+}
+
 async function fill(email: string, code: string): Promise<void> {
-  const [emailInput, codeInput] = [...container.querySelectorAll('input')]
-  emailInput!.value = email
-  emailInput!.dispatchEvent(new Event('input', { bubbles: true }))
-  codeInput!.value = code
-  codeInput!.dispatchEvent(new Event('input', { bubbles: true }))
+  const emailInput = emailField()
+  const codeInput = codeField()
+  emailInput.value = email
+  emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+  // A separate tick, because a person does not fill two fields in one. Filling
+  // them together used to submit the state from before the typing.
   await new Promise((resolve) => setTimeout(resolve, 0))
+  codeInput.value = code
+  codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function submitButton(): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll('button')].find(
+    (element) => element.type === 'submit',
+  ) as HTMLButtonElement | undefined
 }
 
 function submit(): void {
@@ -69,7 +106,7 @@ async function flush(): Promise<void> {
 }
 
 test('a well-formed pair is sent', async () => {
-  render(<PairingScreen status={STATUS} onPaired={vi.fn()} />, container)
+  await mount()
   await fill('owner@example.com', '418302')
   submit()
   await flush()
@@ -79,7 +116,7 @@ test('a well-formed pair is sent', async () => {
 
 test('the space the back office shows is accepted', async () => {
   /** The page renders `418 302`, so that is what gets typed and pasted. */
-  render(<PairingScreen status={STATUS} onPaired={vi.fn()} />, container)
+  await mount()
   await fill('owner@example.com', '418 302')
   submit()
   await flush()
@@ -90,7 +127,7 @@ test('the space the back office shows is accepted', async () => {
 test('a short code is not sent at all', async () => {
   /** Sending it would spend an attempt against the lockout for something the
    *  tool could see was wrong. */
-  render(<PairingScreen status={STATUS} onPaired={vi.fn()} />, container)
+  await mount()
   await fill('owner@example.com', '41830')
   submit()
   await flush()
@@ -100,7 +137,7 @@ test('a short code is not sent at all', async () => {
 })
 
 test('a missing email is not sent either', async () => {
-  render(<PairingScreen status={STATUS} onPaired={vi.fn()} />, container)
+  await mount()
   await fill('', '418302')
   submit()
   await flush()
@@ -110,15 +147,17 @@ test('a missing email is not sent either', async () => {
 
 test('a refusal is shown and the code is cleared', async () => {
   /** It is spent either way, so leaving it in the box invites somebody to press
-   *  the button again with the same digits. */
+   *  the button again with the same digits.
+   *
+   *  No explicit submit: six digits send on their own, so pressing the button
+   *  afterwards would be submitting the empty field this test is checking for. */
   pair.mockResolvedValue({ ok: false, message: '配對失敗，請重新取得驗證碼', httpStatus: 401 })
-  render(<PairingScreen status={STATUS} onPaired={vi.fn()} />, container)
+  await mount()
   await fill('owner@example.com', '418302')
-  submit()
   await flush()
 
   expect(container.textContent).toContain('配對失敗')
-  expect([...container.querySelectorAll('input')][1]!.value).toBe('')
+  expect(codeField().value).toBe('')
 })
 
 test('a machine that cannot remember the pairing is told so', async () => {
@@ -138,16 +177,104 @@ test('an unusable endpoint blocks the button rather than failing on submit', asy
     container,
   )
 
-  expect(container.querySelector('button')?.disabled).toBe(true)
+  expect(submitButton()?.disabled).toBe(true)
   expect(container.textContent).toContain('只接受 https')
 })
 
 test('pairing hands the new status upwards', async () => {
   const onPaired = vi.fn()
-  render(<PairingScreen status={STATUS} onPaired={onPaired} />, container)
+  await mount(onPaired)
+  await fill('owner@example.com', '418302')
+  await flush()
+
+  expect(onPaired).toHaveBeenCalledWith({ ...STATUS, paired: true })
+})
+
+test('a remembered address is filled in on launch', async () => {
+  /** The code changes every thirty seconds; the address does not. Typing it
+   *  again each time is a step that only costs seconds off the window. */
+  remembered = 'owner@example.com'
+  await mount()
+
+  expect(emailField().value).toBe('owner@example.com')
+})
+
+test('and the checkbox reflects that it was remembered', async () => {
+  remembered = 'owner@example.com'
+  await mount()
+
+  const check = container.querySelector<HTMLInputElement>('input[type="checkbox"]')
+  expect(check?.checked).toBe(true)
+})
+
+test('nothing is remembered unless the box is ticked', async () => {
+  await mount()
   await fill('owner@example.com', '418302')
   submit()
   await flush()
 
-  expect(onPaired).toHaveBeenCalledWith({ ...STATUS, paired: true })
+  expect(rememberEmail).toHaveBeenCalledWith('')
+})
+
+test('ticking the box remembers the address', async () => {
+  await mount()
+  await fill('owner@example.com', '418302')
+  container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click()
+  await flush()
+  submit()
+  await flush()
+
+  expect(rememberEmail).toHaveBeenCalledWith('owner@example.com')
+})
+
+test('the paste button puts the clipboard into the email field', async () => {
+  clipboard.mockResolvedValue('  owner@example.com  ')
+  await mount()
+
+  const paste = [...container.querySelectorAll('button')].find(
+    (element) => element.getAttribute('aria-label') === '貼上信箱',
+  )
+  paste?.click()
+  await flush()
+
+  expect(emailField().value).toBe('owner@example.com')
+})
+
+test('six digits pair on their own once there is an address', async () => {
+  /** The code is short-lived and typed by hand; a separate button press only
+   *  ever costs seconds off the window. */
+  await mount()
+  await fill('owner@example.com', '418302')
+  await flush()
+
+  expect(pair).toHaveBeenCalledWith({ email: 'owner@example.com', code: '418302' })
+})
+
+test('five digits do not', async () => {
+  await mount()
+  await fill('owner@example.com', '41830')
+  await flush()
+
+  expect(pair).not.toHaveBeenCalled()
+})
+
+test('six digits with no address wait rather than spending an attempt', async () => {
+  await mount()
+  await fill('', '418302')
+  await flush()
+
+  expect(pair).not.toHaveBeenCalled()
+})
+
+test('the same digits are not sent twice', async () => {
+  /** A code is spent by the attempt. Firing again on every keystroke after the
+   *  sixth would walk the admin into the lockout a character at a time. */
+  pair.mockResolvedValue({ ok: false, message: '配對失敗', httpStatus: 401 })
+  await mount()
+  await fill('owner@example.com', '418302')
+  await flush()
+  await fill('owner@example.com', '418302')
+  await flush()
+
+  expect(pair).toHaveBeenCalledTimes(1)
 })

@@ -143,7 +143,7 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
       <header class="row">
         <h1>上傳課程影片</h1>
         <button type="button" class="ghost" onClick={onSignOut} disabled={busy}>
-          取消連結
+          登出
         </button>
       </header>
       <p class="muted">已連結 {adminEmail}</p>

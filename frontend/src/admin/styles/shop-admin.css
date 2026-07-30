@@ -914,3 +914,9 @@ body.admin .desktop-pairing-code {
   font-size: 2rem;
   letter-spacing: 0.15em;
 }
+
+body.admin .desktop-pairing dd.copyable {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

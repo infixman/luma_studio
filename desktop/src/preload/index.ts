@@ -53,6 +53,21 @@ const api = {
   licences: (): Promise<{ licence: string; source: string }> =>
     ipcRenderer.invoke('app:licences'),
 
+  /**
+   * What is on the clipboard.
+   *
+   * Read in the main process: `navigator.clipboard.readText` in a sandboxed
+   * renderer depends on focus and permission state, and when it refuses the
+   * symptom is a paste button that quietly does nothing.
+   */
+  clipboard: (): Promise<string> => ipcRenderer.invoke('app:clipboard'),
+
+  prefs: {
+    read: (): Promise<{ rememberedEmail: string }> => ipcRenderer.invoke('prefs:read'),
+    rememberEmail: (email: string): Promise<{ rememberedEmail: string }> =>
+      ipcRenderer.invoke('prefs:rememberEmail', email),
+  },
+
   auth: {
     status: (): Promise<SessionStatus> => ipcRenderer.invoke('auth:status'),
     pair: (input: PairingInput): Promise<PairResult> => ipcRenderer.invoke('auth:pair', input),

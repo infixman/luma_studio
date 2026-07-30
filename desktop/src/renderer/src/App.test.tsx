@@ -37,6 +37,8 @@ function bridge(status: SessionStatus) {
       licences: vi.fn(async () => ({ licence: '/tools/LICENSE', source: '/tools/src.tar.xz' })),
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
       upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
+      clipboard: vi.fn(async () => ''),
+      prefs: { read: vi.fn(async () => ({ rememberedEmail: '' })), rememberEmail: vi.fn() },
       pathFor: vi.fn(() => ''),
     },
   })
@@ -87,13 +89,13 @@ test('it says the tool holds no R2 key', async () => {
   expect(container.textContent).toContain('沒有 R2 金鑰')
 })
 
-test('unlinking returns to the pairing screen', async () => {
+test('logging out returns to the pairing screen', async () => {
   const { signOut } = bridge(PAIRED)
   render(<App />, container)
   await settle()
 
   const button = [...container.querySelectorAll('button')].find((element) =>
-    element.textContent?.includes('取消連結'),
+    element.textContent?.includes('登出'),
   )
   button?.click()
   for (let tick = 0; tick < 30 && !container.textContent?.includes('連結管理後台'); tick++) {
