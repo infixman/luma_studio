@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PublicProductDetail } from '../../shared/types'
+import { aPublicProduct, aPublicVariant } from '../../shared/testing/fixtures'
 import { initialOfferId, offerPurchaseState, productReturnTarget, showOfferChooser } from './ProductPage'
 
-const singleOffer: PublicProductDetail = {
+const singleOffer: PublicProductDetail = aPublicProduct({
   slug: 'canvas-bag',
   title: 'Canvas bag',
-  description: '',
-  images: [],
-  requiresOfferSelection: false,
-  variants: [{ id: 'offer-1', title: null, price: 300, inStock: true, stockLeft: null }],
-  categories: [],
-}
+  variants: [aPublicVariant({ id: 'offer-1', price: 300 })],
+})
 
 describe('productReturnTarget', () => {
   it('returns to the page that embedded the shop row', () => {

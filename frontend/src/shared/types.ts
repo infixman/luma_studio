@@ -114,6 +114,45 @@ export interface PublicProductDetail {
   requiresOfferSelection: boolean
   variants: PublicVariant[]
   categories: { slug: string; title: string }[]
+  /**
+   * The courses this product's offers grant, as a visitor may read them.
+   *
+   * Deduplicated: "online" and "with materials" usually grant the same course.
+   * Empty for an ordinary physical product.
+   */
+  courses: PublicCourse[]
+  containsCourse: boolean
+}
+
+/** A lesson as a product page names it. Content only for a preview. */
+export interface PublicCourseLesson {
+  id: string | null
+  title: string
+  isPreview: boolean
+  hasVideo: boolean
+  contentHtml?: string
+}
+
+export interface PublicCourseSection {
+  title: string
+  lessons: PublicCourseLesson[]
+}
+
+export interface PublicCourse {
+  slug: string
+  title: string
+  summary: string
+  descriptionHtml: string
+  instructorName: string
+  instructorBioHtml: string
+  level: CourseLevel
+  language: string
+  audienceHtml: string
+  outcomesHtml: string
+  prerequisitesHtml: string
+  materialsHtml: string
+  lessonCount: number
+  sections: PublicCourseSection[]
 }
 
 export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'completed' | 'cancelled' | 'expired'

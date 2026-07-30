@@ -16,6 +16,7 @@
     "deploy:admin": "wrangler deploy -c wrangler.admin.jsonc"
   },
   "dependencies": {
+    "hls.js": "^1.6.16",
     "preact": "^10.29.7"
   },
   "devDependencies": {

@@ -2,7 +2,14 @@ import { useContext, useEffect, useState } from 'preact/hooks'
 
 import { ApiError, api, apiUrl } from '../../shared/api'
 import { money, priceLabel } from '../../shared/money'
-import type { PublicProductDetail, PublicVariant } from '../../shared/types'
+import type { CourseLevel, PublicProductDetail, PublicVariant } from '../../shared/types'
+
+const COURSE_LEVELS: Record<CourseLevel, string> = {
+  beginner: '入門',
+  intermediate: '進階',
+  advanced: '專業',
+  all: '不限程度',
+}
 import * as cart from '../lib/cart'
 import { track } from '../lib/activity'
 import { CustomerContext } from '../components/Chrome'
@@ -301,6 +308,81 @@ export function ProductPage({ slug }: { slug: string }) {
           )}
         </section>
       )}
+
+      {/* Everything a course needs said before somebody buys it. A physical
+          product has none of this and renders none of it. */}
+      {product.courses.map((course) => (
+        <section class="course-detail" key={course.slug}>
+          <h2>{product.courses.length > 1 ? `課程：${course.title}` : course.title}</h2>
+          {course.summary && <p class="course-summary">{course.summary}</p>}
+
+          <dl class="course-facts">
+            <div>
+              <dt>單元數</dt>
+              <dd>{course.lessonCount}</dd>
+            </div>
+            {course.instructorName && (
+              <div>
+                <dt>講師</dt>
+                <dd>{course.instructorName}</dd>
+              </div>
+            )}
+            <div>
+              <dt>難度</dt>
+              <dd>{COURSE_LEVELS[course.level]}</dd>
+            </div>
+          </dl>
+
+          {/* Sanitised on the server. The editor's limits are a convenience;
+              this is the same HTML the back office saved. */}
+          {course.outcomesHtml && (
+            <div class="course-block">
+              <h3>你將學會</h3>
+              <div dangerouslySetInnerHTML={{ __html: course.outcomesHtml }} />
+            </div>
+          )}
+          {course.audienceHtml && (
+            <div class="course-block">
+              <h3>適合對象</h3>
+              <div dangerouslySetInnerHTML={{ __html: course.audienceHtml }} />
+            </div>
+          )}
+          {course.descriptionHtml && (
+            <div class="course-block">
+              <h3>課程介紹</h3>
+              <div dangerouslySetInnerHTML={{ __html: course.descriptionHtml }} />
+            </div>
+          )}
+
+          <div class="course-block">
+            <h3>課程大綱</h3>
+            <ol class="course-outline-public">
+              {course.sections.map((section) => (
+                <li key={section.title}>
+                  <p class="course-section-name">{section.title}</p>
+                  <ul>
+                    {/* Every lesson is named: knowing what is covered is the
+                        point of the page. Only a preview says more. */}
+                    {section.lessons.map((lesson) => (
+                      <li key={lesson.id ?? lesson.title}>
+                        <span>{lesson.title}</span>
+                        {lesson.isPreview && <span class="course-preview-tag">試看</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {course.instructorBioHtml && (
+            <div class="course-block">
+              <h3>關於講師</h3>
+              <div dangerouslySetInnerHTML={{ __html: course.instructorBioHtml }} />
+            </div>
+          )}
+        </section>
+      ))}
     </main>
   )
 }

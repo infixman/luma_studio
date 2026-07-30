@@ -58,14 +58,20 @@ export function CheckoutPage() {
 
   async function placeOrder(event: Event) {
     event.preventDefault()
-    if (busy || !method) return
+    // A digital cart is never offered a delivery method, so requiring one
+    // here would make the button permanently dead for course buyers.
+    if (busy || (quote?.requiresShipping && !method)) return
     setBusy(true)
     setError(null)
     try {
       const placed = await apiJson<OrderDetail>('/api/checkout', 'POST', {
         lines: cart.read(),
-        shippingMethod: method,
-        ...form,
+        // Only what this order actually has. Sending a delivery method and a
+        // phone number for a download would be describing a parcel that does
+        // not exist, and the server refuses fields it did not ask for.
+        ...(quote?.requiresShipping
+          ? { shippingMethod: method, ...form }
+          : { recipientName: form.recipientName, recipientEmail: form.recipientEmail }),
       })
       // Only once the order exists. Clearing earlier would lose the basket
       // for anyone whose payment details were refused a second later.
@@ -109,7 +115,7 @@ export function CheckoutPage() {
 
   const delivery = quote.shipping.find((option) => option.method === method)
   const total = quote.subtotal + (delivery?.fee ?? 0)
-  const needsAddress = method === 'home'
+  const needsAddress = quote.requiresShipping && method === 'home'
 
   return (
     <main class="checkout">
@@ -123,49 +129,65 @@ export function CheckoutPage() {
       )}
 
       <form class="checkout-form" onSubmit={placeOrder}>
-        <section>
-          <h2>配送方式</h2>
-          <ul class="delivery">
-            {quote.shipping.map((option) => (
-              <li key={option.method}>
-                <label>
-                  <input
-                    type="radio"
-                    name="delivery"
-                    checked={option.method === method}
-                    onChange={() => setMethod(option.method)}
-                  />
-                  <span class="label">{option.label}</span>
-                  <span class="fee">{option.fee === 0 ? '免運' : `NT$${option.fee}`}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          {method === 'cvs_c2c' && <p class="hint">取貨門市會在下一步的付款頁面選擇。</p>}
-        </section>
+        {quote.requiresShipping ? (
+          <section>
+            <h2>配送方式</h2>
+            <ul class="delivery">
+              {quote.shipping.map((option) => (
+                <li key={option.method}>
+                  <label>
+                    <input
+                      type="radio"
+                      name="delivery"
+                      checked={option.method === method}
+                      onChange={() => setMethod(option.method)}
+                    />
+                    <span class="label">{option.label}</span>
+                    <span class="fee">{option.fee === 0 ? '免運' : `NT$${option.fee}`}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {method === 'cvs_c2c' && <p class="hint">取貨門市會在下一步的付款頁面選擇。</p>}
+          </section>
+        ) : (
+          <section>
+            <h2>這筆訂單不需要配送</h2>
+            <p class="hint">付款完成後就可以在「我的課程」開始觀看。</p>
+          </section>
+        )}
 
         <section>
-          <h2>收件資料</h2>
+          <h2>{quote.requiresShipping ? '收件資料' : '訂購人資料'}</h2>
           <label>
-            收件人姓名
+            {quote.requiresShipping ? '收件人姓名' : '姓名'}
             <input
+              name="recipientName"
               value={form.recipientName}
               maxLength={25}
               required
               onInput={(event) => setForm({ ...form, recipientName: (event.target as HTMLInputElement).value })}
             />
-            <small>超商取件時會核對，請填真實姓名，且不能包含表情符號。</small>
+            <small>
+              {quote.requiresShipping
+                ? '超商取件時會核對，請填真實姓名，且不能包含表情符號。'
+                : '會顯示在收據與通知信上。'}
+            </small>
           </label>
-          <label>
-            手機號碼
-            <input
-              value={form.recipientPhone}
-              inputMode="numeric"
-              placeholder="09xxxxxxxx"
-              required
-              onInput={(event) => setForm({ ...form, recipientPhone: (event.target as HTMLInputElement).value })}
-            />
-          </label>
+          {/* Nobody is going to ring about a download. */}
+          {quote.requiresShipping && (
+            <label>
+              手機號碼
+              <input
+                name="recipientPhone"
+                value={form.recipientPhone}
+                inputMode="numeric"
+                placeholder="09xxxxxxxx"
+                required
+                onInput={(event) => setForm({ ...form, recipientPhone: (event.target as HTMLInputElement).value })}
+              />
+            </label>
+          )}
           <label>
             電子信箱
             <input
@@ -196,20 +218,28 @@ export function CheckoutPage() {
               <dt>小計</dt>
               <dd>NT${quote.subtotal}</dd>
             </div>
-            <div>
-              <dt>運費</dt>
-              <dd>{delivery ? (delivery.fee === 0 ? '免運' : `NT$${delivery.fee}`) : '—'}</dd>
-            </div>
+            {quote.requiresShipping && (
+              <div>
+                <dt>運費</dt>
+                <dd>{delivery ? (delivery.fee === 0 ? '免運' : `NT$${delivery.fee}`) : '—'}</dd>
+              </div>
+            )}
             <div class="grand">
               <dt>總計</dt>
               <dd>NT${total}</dd>
             </div>
           </dl>
           {error && <p class="failed">{error}</p>}
-          <button type="submit" class="place" disabled={busy || !method || quote.problems.length > 0}>
+          <button
+            type="submit"
+            class="place"
+            disabled={busy || (quote.requiresShipping && !method) || quote.problems.length > 0}
+          >
             {busy ? '處理中…' : '送出訂單'}
           </button>
-          <p class="hint">送出後庫存會保留 15 分鐘。</p>
+          <p class="hint">
+            {quote.requiresShipping ? '送出後庫存會保留 15 分鐘。' : '送出後請在 15 分鐘內完成付款。'}
+          </p>
         </section>
       </form>
     </main>

@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'vitest'
 
-import { RENEW_BEFORE_SECONDS, renewDelay, worthRetrying } from './playback'
+import { RENEW_BEFORE_SECONDS, renewDelay, shouldSaveProgress, worthRetrying } from './playback'
 
 describe('when a refusal is worth another try', () => {
   test('a video still encoding will become ready on its own', () => {
@@ -35,5 +35,32 @@ describe('renewing before the session lapses', () => {
 
   test('a session that has already lapsed does not schedule a negative wait', () => {
     expect(renewDelay(1000, 5000)).toBe(0)
+  })
+})
+
+describe('deciding when to record progress', () => {
+  test('the first movement is worth recording', () => {
+    expect(shouldSaveProgress(1, null)).toBe(true)
+  })
+
+  test('sitting at the very start is not', () => {
+    // Opening a lesson and not playing it is not progress.
+    expect(shouldSaveProgress(0, null)).toBe(false)
+  })
+
+  test('a second of playback after a save is not worth another write', () => {
+    // timeupdate fires several times a second; this is the whole reason for
+    // the throttle.
+    expect(shouldSaveProgress(41, 40)).toBe(false)
+  })
+
+  test('a whole interval of playback is', () => {
+    expect(shouldSaveProgress(60, 40)).toBe(true)
+  })
+
+  test('scrubbing backwards a long way is recorded without waiting', () => {
+    // They have moved. Waiting for the interval would lose it if they closed
+    // the tab, and "continue" would send them back to the end.
+    expect(shouldSaveProgress(10, 600)).toBe(true)
   })
 })

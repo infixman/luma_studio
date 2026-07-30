@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { api } from '../../shared/api'
-import { renewDelay, requestSession, worthRetrying } from '../lib/playback'
+import { HlsVideo } from '../components/HlsVideo'
+import { api, apiJson } from '../../shared/api'
+import { renewDelay, requestSession, shouldSaveProgress, worthRetrying } from '../lib/playback'
 import type { PlaybackRefusal } from '../../shared/types'
 import '../styles/shop.css'
 
@@ -47,6 +48,7 @@ export function LearnPage({ slug }: { slug: string }) {
   const [refusal, setRefusal] = useState<{ reason: PlaybackRefusal | 'unknown'; message: string } | null>(null)
   const [failed, setFailed] = useState(false)
   const renewal = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSaved = useRef<number | null>(null)
 
   useEffect(() => {
     document.title = '課程 | Luma Studio'
@@ -79,8 +81,25 @@ export function LearnPage({ slug }: { slug: string }) {
     renewal.current = setTimeout(() => void open(id), wait * 1000)
   }, [])
 
+  const record = useCallback(
+    (seconds: number, completed: boolean) => {
+      if (lessonId === null) return
+      if (!completed && !shouldSaveProgress(seconds, lastSaved.current)) return
+      lastSaved.current = seconds
+      // Deliberately unawaited and deliberately swallowed. A dropped progress
+      // write costs somebody twenty seconds of rewinding; an error banner over
+      // a playing video costs them the lesson.
+      void apiJson(`/api/learning/lessons/${encodeURIComponent(lessonId)}/progress`, 'PUT', {
+        positionSeconds: seconds,
+        completed,
+      }).catch(() => {})
+    },
+    [lessonId],
+  )
+
   useEffect(() => {
     if (lessonId === null) return
+    lastSaved.current = null
     void open(lessonId)
     return () => {
       if (renewal.current) clearTimeout(renewal.current)
@@ -104,7 +123,12 @@ export function LearnPage({ slug }: { slug: string }) {
   }
 
   const lessons = course.sections.flatMap((section) => section.lessons)
-  const current = lessons.find((lesson) => lesson.id === lessonId) ?? null
+  const index = lessons.findIndex((lesson) => lesson.id === lessonId)
+  const current = index >= 0 ? lessons[index]! : null
+  // Across chapters, not within one: to somebody watching, the course is one
+  // sequence and a chapter boundary is not a wall.
+  const previous = index > 0 ? lessons[index - 1]! : null
+  const next = index >= 0 && index < lessons.length - 1 ? lessons[index + 1]! : null
 
   return (
     <main class="shop learn">
@@ -121,9 +145,12 @@ export function LearnPage({ slug }: { slug: string }) {
               {refusal && <p class="note">{refusal.message}</p>}
 
               {playbackUrl && (
-                // `credentials` matters: the permission is a cookie on this
-                // path, and a media element that does not send it gets a 403.
-                <video class="learn-video" controls crossOrigin="use-credentials" src={playbackUrl} />
+                <HlsVideo
+                  src={playbackUrl}
+                  onPosition={(seconds) => record(seconds, false)}
+                  onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
+                  onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}
+                />
               )}
 
               {!current.hasVideo && <p class="note">這是文字單元。</p>}
@@ -131,6 +158,20 @@ export function LearnPage({ slug }: { slug: string }) {
               {/* Already sanitised on the server; the editor's own limits are
                   a convenience rather than the boundary. */}
               <div class="learn-content" dangerouslySetInnerHTML={{ __html: current.contentHtml }} />
+
+              <div class="learn-actions">
+                <button type="button" disabled={previous === null} onClick={() => previous && setLessonId(previous.id)}>
+                  上一單元
+                </button>
+                {/* A reading has no `ended` to fire, so finishing it is a
+                    thing the member says rather than something observed. */}
+                <button type="button" onClick={() => record(Math.max(1, lastSaved.current ?? 1), true)}>
+                  標記完成
+                </button>
+                <button type="button" disabled={next === null} onClick={() => next && setLessonId(next.id)}>
+                  下一單元
+                </button>
+              </div>
             </>
           )}
         </section>

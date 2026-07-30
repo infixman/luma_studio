@@ -428,3 +428,49 @@ async def publish(env, course_id: str) -> bool:
         " WHERE id = ?1"
     ).bind(course_id, now).run()
     return d1_changed(result)
+
+
+async def public_for_offers(env, offer_ids: list[str]) -> list[dict]:
+    """The courses a product's offers grant, as a visitor may read them.
+
+    Deduplicated by course. "Online" and "with materials" usually grant the
+    same course, and listing it once per offer would read as two different
+    courses with the same name.
+
+    An unpublished course is left out entirely rather than shown as
+    unavailable: it cannot be sold, so the page has nothing to say about it,
+    and saying anything would leak an unfinished course.
+
+    A product with no course components asks the database nothing. An ordinary
+    physical product should not pay for any of this.
+    """
+
+    if not offer_ids:
+        return []
+
+    offer_placeholders = ", ".join(f"?{index + 1}" for index in range(len(offer_ids)))
+    components = await d1_rows(
+        env.DB.prepare(
+            f"SELECT * FROM offer_components WHERE component_type = 'course'"
+            f" AND offer_id IN ({offer_placeholders})"
+        ).bind(*offer_ids)
+    )
+    course_ids = sorted({row["component_id"] for row in components})
+    if not course_ids:
+        return []
+
+    course_placeholders = ", ".join(f"?{index + 1}" for index in range(len(course_ids)))
+    rows = await d1_rows(
+        env.DB.prepare(f"SELECT * FROM courses WHERE id IN ({course_placeholders})").bind(*course_ids)
+    )
+
+    listed = []
+    for row in rows:
+        course = course_row(row)
+        # Filtered here rather than in the query. A product has one or two
+        # courses, so the difference is nothing, and the rule stays somewhere
+        # a test can reach without a database.
+        if not is_sellable(course):
+            continue
+        listed.append(public_course(course, await get_outline(env, course["id"])))
+    return listed

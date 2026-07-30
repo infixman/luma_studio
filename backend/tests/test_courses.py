@@ -268,3 +268,80 @@ class TestWhatAVisitorSees:
 
         assert summary["lessonCount"] == 2
         assert summary["sections"][0]["title"] == "第一章"
+
+
+class TestWhatAProductPageShows:
+    """A product that grants courses describes them, once each."""
+
+    def _database(self, components, *, course_status="published"):
+        return FakeDatabase(
+            {
+                "SELECT * FROM offer_components": components,
+                "SELECT * FROM courses WHERE id IN": [{
+                    "id": "course-1", "slug": "watercolour", "title": "水彩入門", "status": course_status,
+                    "created_at": 0, "updated_at": 0, "summary": "兩小時學會", "description_html": "<p>介紹</p>",
+                    "cover_media_id": "m1", "instructor_name": "王老師", "instructor_bio_html": "",
+                    "level": "beginner", "language": "zh-Hant", "audience_html": "", "outcomes_html": "",
+                    "prerequisites_html": "", "materials_html": "", "published_at": 1,
+                }],
+                "SELECT * FROM course_sections": [
+                    {"id": "s1", "course_id": "course-1", "title": "第一章", "position": 0,
+                     "created_at": 0, "updated_at": 0}
+                ],
+                "SELECT * FROM course_lessons": [{
+                    "id": "l1", "section_id": "s1", "title": "工具介紹", "content_html": "<p>付費</p>",
+                    "video_asset_id": "a1", "is_preview": 0, "position": 0,
+                }],
+            }
+        )
+
+    def _component(self, component_id="course-1", offer_id="off-1"):
+        return {
+            "id": f"oc-{offer_id}", "offer_id": offer_id, "component_type": "course",
+            "component_id": component_id, "quantity": 1, "access_days": None, "position": 0,
+        }
+
+    def test_a_product_with_no_course_asks_the_database_nothing(self, courses):
+        """An ordinary physical product must not pay for a course query."""
+
+        database = FakeDatabase()
+
+        listed = asyncio.run(courses.public_for_offers(make_env(database), []))
+
+        assert listed == []
+        assert database.reads == []
+
+    def test_a_course_offer_describes_its_course(self, courses):
+        database = self._database([self._component()])
+
+        listed = asyncio.run(courses.public_for_offers(make_env(database), ["off-1"]))
+
+        assert listed[0]["title"] == "水彩入門"
+        assert listed[0]["lessonCount"] == 1
+
+    def test_a_course_two_offers_share_is_described_once(self, courses):
+        """"Online" and "with materials" grant the same course. Listing it
+        twice would read as two different courses."""
+
+        database = self._database([self._component(offer_id="off-1"), self._component(offer_id="off-2")])
+
+        listed = asyncio.run(courses.public_for_offers(make_env(database), ["off-1", "off-2"]))
+
+        assert len(listed) == 1
+
+    def test_a_locked_lesson_is_named_without_its_content(self, courses):
+        database = self._database([self._component()])
+
+        listed = asyncio.run(courses.public_for_offers(make_env(database), ["off-1"]))
+
+        lesson = listed[0]["sections"][0]["lessons"][0]
+        assert lesson["title"] == "工具介紹"
+        assert "contentHtml" not in lesson
+
+    def test_an_unpublished_course_is_not_described_at_all(self, courses):
+        """A draft cannot be sold, so a product page has nothing to say about
+        it — and saying anything would leak an unfinished course."""
+
+        database = self._database([self._component()], course_status="draft")
+
+        assert asyncio.run(courses.public_for_offers(make_env(database), ["off-1"])) == []

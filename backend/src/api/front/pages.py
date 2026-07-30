@@ -2,7 +2,7 @@
 
 from urllib.parse import unquote
 
-from domain import block_data, categories, pages, shop, site_chrome
+from domain import block_data, categories, courses, pages, shop, site_chrome
 from shared.responses import Ctx
 
 
@@ -88,4 +88,15 @@ async def shop_product_response(ctx: Ctx, slug: str):
     product = await shop.get_product_by_slug(ctx.env, slug)
     if product is None or product["status"] != "active":
         return ctx.error("Product not found", 404)
-    return ctx.json(shop.public_detail(product, await shop.list_variants(ctx.env, product["id"]), await shop.list_images(ctx.env, product["id"]), await categories.of_product(ctx.env, product["id"])))
+    variants = await shop.list_variants(ctx.env, product["id"])
+    detail = shop.public_detail(
+        product,
+        variants,
+        await shop.list_images(ctx.env, product["id"]),
+        await categories.of_product(ctx.env, product["id"]),
+    )
+    # Only offers a customer could actually buy carry courses worth describing.
+    # A physical product asks for none of this and pays for none of it.
+    offer_ids = [variant["id"] for variant in variants if variant["enabled"]]
+    listed = await courses.public_for_offers(ctx.env, offer_ids)
+    return ctx.json({**detail, "courses": listed, "containsCourse": bool(listed)})

@@ -7,7 +7,7 @@
  * and fill in the rest.
  */
 
-import type { Course, InventoryItem } from '../types'
+import type { Course, InventoryItem, PublicProductDetail, PublicVariant } from '../types'
 
 export function aCourse(overrides: Partial<Course> = {}): Course {
   return {
@@ -45,4 +45,24 @@ export function anInventoryItem(overrides: Partial<InventoryItem> = {}): Invento
     updatedAt: 0,
     ...overrides,
   }
+}
+
+
+export function aPublicProduct(overrides: Partial<PublicProductDetail> = {}): PublicProductDetail {
+  return {
+    slug: 'soda-tote',
+    title: '蘇打托特包',
+    description: '',
+    images: [],
+    requiresOfferSelection: false,
+    variants: [],
+    categories: [],
+    courses: [],
+    containsCourse: false,
+    ...overrides,
+  }
+}
+
+export function aPublicVariant(overrides: Partial<PublicVariant> = {}): PublicVariant {
+  return { id: 'v1', title: null, price: 350, inStock: true, stockLeft: null, ...overrides }
 }

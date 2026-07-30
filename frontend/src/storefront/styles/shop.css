@@ -1234,3 +1234,168 @@ main.order .totals {
   line-height: 1.7;
   color: var(--muted);
 }
+
+/* --- course information on a product page --- */
+
+.course-detail {
+  margin-top: var(--space-6, 2rem);
+}
+
+.course-summary {
+  font-size: 1.05rem;
+}
+
+.course-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4, 1.5rem);
+  margin: 0 0 var(--space-4, 1.5rem);
+}
+
+.course-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.course-facts dt {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.course-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.course-block {
+  margin-bottom: var(--space-4, 1.5rem);
+}
+
+.course-outline-public {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.course-section-name {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+}
+
+.course-outline-public ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.course-outline-public ul li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Free to watch, so it is worth pointing at rather than merely recording. */
+.course-preview-tag {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  opacity: 0.8;
+}
+
+/* --- my courses, and watching one --- */
+
+.course-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.course-card .title {
+  font-weight: 600;
+}
+
+.learn-layout {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.learn-video {
+  width: 100%;
+  background: #000;
+  border-radius: 0.5rem;
+}
+
+.learn-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.learn-outline ul {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-outline button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.2rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.learn-outline button.is-current {
+  font-weight: 600;
+}
+
+/* Two columns once there is room for the video and the contents side by side.
+   Below that the contents go under the player rather than squeezing it. */
+@media (min-width: 60rem) {
+  .learn-layout {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+  }
+}
+
+/* Visible to a screen reader, not on screen. Completion is a tick plus this,
+   because a tick alone is a shape and two greens are the same green to a good
+   number of people. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
