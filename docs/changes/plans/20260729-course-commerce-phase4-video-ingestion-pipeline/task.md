@@ -84,7 +84,7 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：拖進 MP4 → ready。**到這裡是第一個能用的版本。**
 
-- [ ] 建立 `luma-desktop-tools` bucket 存放安裝檔與 FFmpeg 鏡像。**需要你操作**（binding `DESKTOP_TOOLS` 已寫進 `wrangler.admin.toml`）。
+- [x] 建立 `luma-desktop-tools` bucket 存放安裝檔與 FFmpeg 鏡像（binding `DESKTOP_TOOLS`；Standard、非公開）。
       獨立一個 bucket 而不是塞在 video 桶的 prefix：播放閘道讀 video 桶，裡面非影片的東西越少，它的 key 允許清單越不容易出錯。
 - [x] `GET /tools/ffmpeg/{檔名}` 路由。檔名走 pattern（單一路徑段、不得以點開頭、只收壓縮檔後綴），
       需要桌面 token（bytes 不是機密，擋的是流量）。沒有 binding 時回 503 並說缺哪個，不是 404。
