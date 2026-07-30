@@ -11,6 +11,14 @@ dependencies = [
 dev = [
     "workers-py>=0.10.0",
     "pytest>=8.3",
+    # Oracles, not dependencies. `shared/sigv4.py` and `shared/totp.py` are
+    # hand-written because Pyodide has neither library at runtime, and a
+    # signature or a code that is *almost* right fails in a way that reads as
+    # something else entirely. The tests sign the same requests with these and
+    # compare. Skipping them when absent would leave the suite green while the
+    # only check that can catch a wrong signature quietly stopped running.
+    "botocore>=1.34",
+    "pyotp>=2.9",
 ]
 
 [tool.uv]
