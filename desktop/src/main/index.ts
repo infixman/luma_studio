@@ -8,7 +8,6 @@ import { explain } from '../shared/failures'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
-import { licencePaths } from './ffmpeg'
 import * as prefs from './prefs'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
@@ -189,21 +188,6 @@ if (process.argv.includes('--self-check')) {
       }
     })
     ipcMain.handle('upload:cancel', () => cancel())
-
-    // FFmpeg is GPL and this tool distributes a copy of it, so the
-    // corresponding source ships alongside it and this is how somebody reaches
-    // it — an obligation, not a credit. The terms themselves are bundled into
-    // the interface, because reading them off the FFmpeg install fails on every
-    // machine that has not transcoded yet.
-    ipcMain.handle('app:revealSource', () => {
-      const { source } = licencePaths()
-      if (!existsSync(source)) return false
-      // `showItemInFolder` rather than `openPath`: opening a .tar.xz hands it to
-      // whatever is registered for the extension, which on a clean Windows is
-      // nothing, and the button appears to do nothing.
-      shell.showItemInFolder(source)
-      return true
-    })
 
     // Read here rather than in the renderer. `navigator.clipboard.readText` in a
     // sandboxed renderer depends on focus and permission state, and the failure

@@ -45,15 +45,6 @@ const api = {
   },
 
   /**
-   * Show the corresponding source in the file manager.
-   *
-   * The other half of the same obligation, and the reason the path can stay off
-   * the screen: a button that opens the folder is access, a path somebody has to
-   * retype is not. `false` if the archive is not there yet.
-   */
-  revealSource: (): Promise<boolean> => ipcRenderer.invoke('app:revealSource'),
-
-  /**
    * What is on the clipboard.
    *
    * Read in the main process: `navigator.clipboard.readText` in a sandboxed

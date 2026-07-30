@@ -88,7 +88,8 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       獨立一個 bucket 而不是塞在 video 桶的 prefix：播放閘道讀 video 桶，裡面非影片的東西越少，它的 key 允許清單越不容易出錯。
 - [x] `GET /tools/ffmpeg/{檔名}` 路由。檔名走 pattern（單一路徑段、不得以點開頭、只收壓縮檔後綴），
       需要桌面 token（bytes 不是機密，擋的是流量）。沒有 binding 時回 503 並說缺哪個，不是 404。
-- [ ] 鏡像釘死版本的 FFmpeg，連同 LICENSE 與對應原始碼。**需要你操作**，然後把版本／檔名／大小／SHA256 填進 `desktop/src/shared/ffmpegRelease.ts`。
+- [x] 鏡像釘死版本的 FFmpeg（`ffmpeg-8.1.2.zip`，gyan release build 重新打包成只有 ffmpeg.exe／ffprobe.exe／LICENSE），並填好 `ffmpegRelease.ts`。
+- [x] ~~鏡像對應原始碼。~~ **不放，這是一個有記錄的決定 —— 見下面 S7 的前置條件。**
 - [x] 環境自檢：FFmpeg／ffprobe 是否存在、版本與 SHA256 是否相符。空的雜湊值當成「尚未設定」，不是「跳過檢查」。
 - [x] `LUMA_FFMPEG_DIR` 開發用逃生口：指向機器上已有的 FFmpeg，讓轉檔在鏡像存在之前就能驗。
       打包後一律拒絕（`app.isPackaged`），而且 `PINNED.version` 一填上就照樣比版本 —— 可設定的只有「去哪裡找」，不是雜湊或版本。
@@ -148,6 +149,29 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 **陷阱**：如果 1.0.0 裝上去而更新機制還沒好，就推不了修正。所以 `minSupported`
 與 `blocked` 必須跟第一個發布版一起上，不能晚於它。
+
+### 前置條件：GPL 對應原始碼（安裝檔外流給第三方前必須先解決）
+
+工具會裝一份 FFmpeg 的 GPL binary。GPL 的「提供對應原始碼」義務是在
+**conveying（散布給別人）** 時成立 —— 目前只有兩個擁有這個系統的管理員自己安裝，
+屬於內部使用，義務未觸發。所以鏡像裡刻意不放原始碼，工具裡也刻意沒有「開啟原始碼」
+的按鈕（那顆按鈕曾經存在，指向一個工具永遠不會下載的檔案，按了什麼都不會發生 ——
+一個假裝滿足了義務的控制項比沒有控制項糟）。
+
+**這一階要把安裝檔放上下載頁，那一刻義務就成立。** 而且問題比「補一個 zip」大：
+我們散布的是**別人編譯的** build，對應原始碼指的是那個 build 的全部來源。gyan 只公佈
+FFmpeg 的 commit（8.1.2 是 `38b88335f9`），不公佈 libx264、libx265 等依賴用的 revision，
+所以無法精確重建。
+
+三條路，開始 S7 前選一條：
+
+1. **不散布 binary** —— 工具改成從上游下載，我們只保留 SHA-256 釘死。義務歸零，也省下
+   R2 的 74 MB 與流量。障礙：gyan 只給 `.7z`（Windows 內建 bsdtar 讀不了），
+   BtbN 給 `.zip` 但用移動的 `latest` tag（重建一次 digest 就失效）。所以要多一個
+   7z 解壓縮相依，或另找穩定 URL。**這一階本來就要處理安裝檔的下載路由，一起解最划算。**
+2. **盡力補原始碼** —— 放 FFmpeg 該 commit 的 zip 加上 x264／x265 同期 snapshot，附
+   written offer。依賴版本是推測的，嚴格說不完全合規。
+3. **自己編 FFmpeg** —— 完全合規，成本是一條 build pipeline。
 
 - [ ] 建立桌面工具版本政策表。
 - [ ] 實作 `GET /api/desktop/version-policy`。

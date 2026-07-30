@@ -1319,3 +1319,23 @@ ArrayBuffer 一份，Python bytes 再一份，74 MB 變成大約 148 MB，Worker
 **第二個錯**：`licencePaths()` 算的是 `binDir/../LICENSE`，那是我在壓縮檔還是假設性的
 時候寫的（假設 `ffmpeg-x/bin/*.exe` + `ffmpeg-x/LICENSE`）。實際打包出來 exe 和
 LICENSE 同一層，所以改成 `binDir/LICENSE`。
+
+## 原始碼那半：一個有記錄的決定，不是一個待辦
+
+那顆「開啟原始碼所在資料夾」拿掉了，沒有東西取代它的功能 —— 取代它的是一句真話。
+
+原因不是懶。GPL 的「提供對應原始碼」義務在 **conveying（散布給別人）** 時成立，
+現在只有兩個擁有這個系統的管理員自己安裝，屬於內部使用，義務沒有觸發。而那顆按鈕
+指向 `toolsDir()/ffmpeg-source.tar.xz` —— 工具永遠不會下載那個檔案，按了什麼都不會
+發生。**一個假裝滿足了義務的控制項比沒有控制項糟**，因為它讓人以為這件事處理完了。
+
+現在視窗裡是條款全文，加上一行「FFmpeg 8.1.2-essentials_build，gyan.dev 的 release
+build，對應的 FFmpeg 原始碼為上游 commit 38b88335f9」。三句話全部可以查證。
+
+順手清掉因此變成死碼的三樣東西：`app:revealSource` handler、preload 的 `revealSource`、
+`licencePaths()`。
+
+**義務會在 S7 成立**，所以寫進了 task.md 的 S7 前置條件而不是留在腦子裡。而且那時候
+問題比「補一個 zip」大：我們散布的是別人編譯的 build，對應原始碼指的是那個 build 的
+全部來源，而 gyan 只公佈 FFmpeg 的 commit，不公佈 x264／x265 用的 revision。
+三條路（不散布 binary／盡力補／自己編）也寫在那裡了。

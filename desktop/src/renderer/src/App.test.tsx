@@ -34,7 +34,6 @@ function bridge(status: SessionStatus) {
     configurable: true,
     value: {
       version: vi.fn(async () => '1.2.3'),
-      revealSource: vi.fn(async () => true),
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
       upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
       clipboard: vi.fn(async () => ''),

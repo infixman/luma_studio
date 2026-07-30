@@ -3,15 +3,21 @@
 /**
  * The About footer, and the licence window behind it.
  *
- * Tested because it is an obligation rather than a credit: this tool
- * distributes a GPL binary, so the terms have to be readable and the
- * corresponding source has to be reachable — and a refactor that drops either
- * does not look like a bug.
+ * Tested because it is an obligation rather than a credit: this tool installs a
+ * GPL binary, so the terms have to be readable — and a refactor that drops the
+ * window does not look like a bug.
  *
  * The terms are bundled into the build rather than read from the FFmpeg install,
  * so there is no loading state to test and no missing-file state either. What is
  * worth pinning is that the bundled text is the real thing: a stub that says
  * "GPL" would pass a naive assertion and satisfy nothing.
+ *
+ * There is no source-archive control any more, and one test says so. The
+ * corresponding-source obligation begins on conveying the binary to somebody
+ * else, and this tool is installed by the two admins who own it — so the honest
+ * thing to show is which build it is and where it came from. A button that
+ * implies the obligation has been met, while pointing at a file nothing ever
+ * downloads, is worse than no button.
  */
 
 import { render } from 'preact'
@@ -20,13 +26,11 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { About } from './About'
 
 let container: HTMLDivElement
-let revealSource: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  revealSource = vi.fn(async () => true)
   Object.defineProperty(window, 'desktop', {
     configurable: true,
-    value: { version: vi.fn(async () => '1.2.3'), revealSource },
+    value: { version: vi.fn(async () => '1.2.3') },
   })
   container = document.createElement('div')
   document.body.append(container)
@@ -148,20 +152,32 @@ test('escape closes it too', async () => {
   expect(box()).toBeNull()
 })
 
-test('the corresponding source is reachable from the window', async () => {
-  /** The half people forget. A licence without the source it applies to does
-   *  not satisfy the GPL, and hiding the path only shifts the obligation from
-   *  printing it to opening it. */
+test('it says which build this is and where it came from', async () => {
+  /** What replaced the "open the corresponding source" button. That button
+   *  pointed at an archive this tool never downloads, so it did nothing — and a
+   *  control that implies an obligation has been met is worse than none. The
+   *  source obligation begins on conveying the binary to somebody else; this is
+   *  installed by the admins who own it. */
+  render(<About />, container)
+  await settle()
+
+  opener()?.click()
+  await flush()
+
+  const sheet = container.querySelector('.sheet')?.textContent ?? ''
+
+  expect(sheet).toContain('gyan.dev')
+  expect(sheet).toContain('38b88335f9')
+  expect(sheet).toContain('GPL')
+})
+
+test('and offers nothing that claims to open a source archive', async () => {
   render(<About />, container)
   await settle()
   opener()?.click()
   await flush()
 
-  const reveal = [...container.querySelectorAll('button')].find((element) =>
-    element.textContent?.includes('原始碼'),
-  )
-  reveal?.click()
-  await flush()
+  const buttons = [...container.querySelectorAll('button')].map((b) => b.textContent ?? '')
 
-  expect(revealSource).toHaveBeenCalled()
+  expect(buttons.some((label) => label.includes('原始碼'))).toBe(false)
 })

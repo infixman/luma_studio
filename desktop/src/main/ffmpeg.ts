@@ -229,21 +229,3 @@ export async function ensureTools(
   return tools
 }
 
-/**
- * Where the licence and source live. GPL, so both ship.
- *
- * The terms shown in the interface are a bundled copy rather than a read of the
- * `licence` path here — reading it fails on every machine that has not
- * transcoded yet, and the failure looked like a stuck panel. This path stays
- * because the file still has to be *installed* beside the binary, and `source`
- * is what the interface reveals in the file manager.
- */
-export function licencePaths(): { licence: string; source: string } {
-  return {
-    // Beside the executables, because that is how the archive is packed: the
-    // repacked zip holds `ffmpeg.exe`, `ffprobe.exe` and `LICENSE` in one folder.
-    // This said `binDir/../LICENSE` while the archive was still hypothetical.
-    licence: join(toolsDir(), PINNED.binDir, 'LICENSE'),
-    source: join(toolsDir(), 'ffmpeg-source.tar.xz'),
-  }
-}

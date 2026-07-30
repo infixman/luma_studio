@@ -12,6 +12,7 @@ import { useEffect, useState } from 'preact/hooks'
 // build under different terms — an LGPL one, say — this file has to move with
 // it. That is the one thing about it that can go wrong.
 import licence from './ffmpeg-licence.txt?raw'
+import { PINNED } from '../../shared/ffmpegRelease'
 
 /**
  * Version, and the licence of the FFmpeg this tool ships.
@@ -21,11 +22,16 @@ import licence from './ffmpeg-licence.txt?raw'
  * corresponding source has to be reachable — and shipping them is only half of
  * it: somebody has to get to them without reading the repository.
  *
- * Both used to be absolute Windows paths printed in the footer, which satisfied
- * that and looked like a stack trace. Now the terms are shown, and the source is
- * a button that opens the folder it sits in. Neither path is written anywhere on
- * screen and both are one click away, which is the part that matters — a path
- * nobody can act on is not access.
+ * The terms are shown rather than pointed at: they used to be two absolute
+ * Windows paths printed in the footer, which satisfied nothing and looked like a
+ * stack trace.
+ *
+ * There is no "open the corresponding source" button. There was, and it pointed
+ * at an archive this tool never downloads, so pressing it did nothing. The source
+ * obligation begins when a binary is conveyed to somebody else, and this tool is
+ * installed by the two admins who own it — so what belongs here is which build it
+ * is and where it came from, which is true, instead of a button that implies an
+ * obligation has been met.
  */
 export function About() {
   const [version, setVersion] = useState('')
@@ -90,16 +96,18 @@ export function About() {
                 height is stated in lines so the panel cannot outgrow the
                 window it opens over. */}
             <textarea class="licence" readOnly rows={20} spellcheck={false} value={licence} />
-            <div class="row">
-              <span class="muted">轉檔使用 FFmpeg，授權為 GPL。</span>
-              <button
-                type="button"
-                class="linkish muted"
-                onClick={() => void window.desktop.revealSource()}
-              >
-                開啟原始碼所在資料夾
-              </button>
-            </div>
+            {/* Which build, and where it came from. There was a button here
+                offering to open the corresponding source; it pointed at a file
+                this tool never downloads, so it did nothing — and a button that
+                pretends an obligation is met is worse than no button.
+                See the note in the phase 4 task list: the source obligation
+                begins when the installer reaches somebody outside, and this tool
+                is used by the two admins who own it. */}
+            <p class="muted">
+              轉檔使用 FFmpeg {PINNED.version || '（版本未設定）'}，授權為 GPL。
+              這是 gyan.dev 的 release build，對應的 FFmpeg 原始碼為上游 commit{' '}
+              <code>38b88335f9</code>。
+            </p>
           </div>
         </div>
       )}
