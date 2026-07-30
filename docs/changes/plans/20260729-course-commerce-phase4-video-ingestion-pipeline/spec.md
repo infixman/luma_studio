@@ -295,7 +295,7 @@ encode version 產生。
 {
   "source": {"bytes": 214748364800, "objects": 42},
   "output": {"bytes": 96636764160, "objects": 8734},
-  "orphans": {"sourceBytes": 5368709120, "outputBytes": 12884901888, "scannedAt": 1785296400},
+  "orphans": {"sourceBytes": 5368709120, "outputBytes": 12884901888, "scannedAt": 1785296400, "truncated": false},
   "estimate": {
     "monthlyUsd": 4.32,
     "pricePerGbMonthUsd": 0.015,
@@ -308,7 +308,7 @@ encode version 產生。
 
 - `source` 與 `output` 由 D1 加總，不列 bucket：原始檔看 `video_assets.byte_size`，
   輸出看 `video_encode_versions.byte_size`。開這個頁面不產生 R2 的 list 操作。
-- `orphans` 是**上一次盤點的結果**，帶盤點時間。沒盤點過就回 null，畫面顯示
+- `orphans` 是**上一次跑完的盤點**的結果，帶盤點時間與 `truncated`（那次有沒有掃完／記完）。沒盤點過就回 null，畫面顯示
   「尚未盤點」而不是 0 —— 0 看起來像「沒有孤兒」。
 - 單價與免費額度是設定值，不是程式裡的常數。R2 的價目會變，一個過期的數字比
   沒有數字更糟，因為它看起來像事實。

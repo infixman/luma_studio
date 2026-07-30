@@ -343,6 +343,118 @@ class TestTheStorageOverview:
         assert module.scope_allows("video", "GET", "/api/video-storage/summary") is False
 
 
+class TestSweepingForOrphans:
+    """The one action that reads the buckets."""
+
+    class Bucket:
+        def __init__(self, keys):
+            self.keys = keys
+            self.pages = 0
+
+        async def list(self, *, prefix, limit, cursor=None):
+            self.pages += 1
+            objects = [
+                types.SimpleNamespace(
+                    key=key,
+                    size=1024,
+                    uploaded=types.SimpleNamespace(getTime=lambda: 1_600_000_000_000),
+                )
+                for key in self.keys
+                if key.startswith(prefix)
+            ]
+            return types.SimpleNamespace(objects=objects, truncated=False, cursor=None)
+
+    def _scan(self, call, database=None, keys=None):
+        bucket = self.Bucket(keys if keys is not None else [f"videos/{ASSET_ID}/9/master.m3u8"])
+        return (
+            call(
+                signed_in("/api/video-storage/scan", "POST"),
+                database=database,
+                bucket=bucket,
+                source_bucket=bucket,
+                env={"VIDEO_UPLOAD_ENABLED": "1"},
+            ),
+            bucket,
+        )
+
+    def test_it_reports_what_nothing_accounts_for(self, call, database_of):
+        database = database_of()
+
+        response, _ = self._scan(call, database=database)
+
+        assert response.status == 200
+        assert response.json()["output"]["objects"] == 1
+        recorded = [b for sql, b in database.writes if sql.startswith("INSERT INTO video_storage_orphans")]
+        assert recorded and recorded[0][2] == f"videos/{ASSET_ID}/9/master.m3u8"
+
+    def test_a_version_d1_records_is_not_reported(self, call, database_of):
+        database = database_of(
+            {
+                "FROM video_encode_versions versions": [
+                    {"asset_id": ASSET_ID, "encode_version": 9}
+                ]
+            }
+        )
+
+        response, _ = self._scan(call, database=database)
+
+        assert response.json()["output"]["objects"] == 0
+
+    def test_the_sweep_is_written_down_before_and_after(self, call, database_of):
+        """A sweep that dies halfway leaves a row with no finish time, which is
+        a fact worth having: the overview can say the last one did not complete
+        rather than showing its half-counts as today's answer."""
+
+        database = database_of()
+
+        self._scan(call, database=database)
+
+        statements = [sql for sql, _ in database.writes]
+        assert any(sql.startswith("INSERT INTO video_storage_scans") for sql in statements)
+        assert any(sql.startswith("UPDATE video_storage_scans SET finished_at") for sql in statements)
+
+    def test_orphans_are_read_from_the_last_finished_sweep(self, call):
+        response = call(
+            signed_in("/api/video-storage/orphans?bucket=output"),
+            {
+                "FROM video_storage_scans WHERE finished_at IS NOT NULL": [
+                    {
+                        "id": "scan-1", "finished_at": 1785292800, "truncated": 0,
+                        "source_orphan_bytes": 0, "source_orphan_objects": 0,
+                        "output_orphan_bytes": 2048, "output_orphan_objects": 2,
+                    }
+                ],
+                "FROM video_storage_orphans": [
+                    {"object_key": "videos/x/9/master.m3u8", "byte_size": 2048, "uploaded_at": 1}
+                ],
+            },
+        )
+
+        assert response.status == 200
+        assert response.json()["objects"][0]["size"] == 2048
+        assert response.json()["scan"]["scannedAt"] == 1785292800
+
+    def test_a_bucket_that_is_not_one_is_refused(self, call):
+        assert call(signed_in("/api/video-storage/orphans?bucket=elsewhere")).status == 400
+
+    def test_a_sweep_already_running_is_a_conflict(self, call, database_of):
+        """Two sweeps are two full listings of both buckets, which is the exact
+        cost this design spends once on purpose."""
+
+        database = database_of(
+            {"FROM video_storage_scans WHERE finished_at IS NULL": [{"id": "scan-0"}]}
+        )
+
+        response, _ = self._scan(call, database=database)
+
+        assert response.status == 409
+
+    def test_the_desktop_token_cannot_sweep(self):
+        from domain import desktop_auth
+
+        assert desktop_auth.scope_allows("video", "POST", "/api/video-storage/scan") is False
+
+
 class TestOpeningASourceUpload:
     """The routes the tool drives a multipart upload of the original through.
 

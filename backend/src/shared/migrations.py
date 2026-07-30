@@ -1129,6 +1129,47 @@ MIGRATIONS = [
         ],
         "statements": [],
     },
+    {
+        # Phase 4 S6: what a bucket sweep found, so the answer outlives the
+        # request that produced it.
+        #
+        # Listing both buckets is the only operation in this system billed per
+        # object, and a course library is tens of thousands of them. So it is a
+        # deliberate action somebody takes, its result is written down, and every
+        # screen reads the writing rather than sweeping again.
+        #
+        # One row per scan, and the orphans it found beside it. Keeping the scan
+        # row even when nothing was found is what lets the overview say "swept an
+        # hour ago, nothing" rather than "never swept" — those are different
+        # facts and only one of them is reassuring.
+        "name": "0037_create_storage_scans",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS video_storage_scans (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 started_at INTEGER NOT NULL,
+                 finished_at INTEGER,
+                 source_orphan_bytes INTEGER NOT NULL DEFAULT 0,
+                 source_orphan_objects INTEGER NOT NULL DEFAULT 0,
+                 output_orphan_bytes INTEGER NOT NULL DEFAULT 0,
+                 output_orphan_objects INTEGER NOT NULL DEFAULT 0,
+                 truncated INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_video_storage_scans_finished"
+            " ON video_storage_scans (finished_at DESC)",
+            """CREATE TABLE IF NOT EXISTS video_storage_orphans (
+                 scan_id TEXT NOT NULL,
+                 bucket TEXT NOT NULL,
+                 object_key TEXT NOT NULL,
+                 byte_size INTEGER NOT NULL DEFAULT 0,
+                 uploaded_at INTEGER,
+                 PRIMARY KEY (scan_id, bucket, object_key)
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_video_storage_orphans_scan"
+            " ON video_storage_orphans (scan_id, bucket)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

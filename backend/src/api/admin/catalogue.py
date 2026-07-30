@@ -8,7 +8,7 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
-from domain import courses, inventory, offers, shop, source_upload, video, video_storage
+from domain import courses, inventory, offers, shop, source_upload, storage_scan, video, video_storage
 from shared import flags, r2_s3, sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
@@ -236,11 +236,52 @@ async def handle(ctx: Ctx):
 
         return ctx.error("Not found", 404)
 
+    if path == "/api/video-storage/scan" and method == "POST":
+        # The only thing here that lists a bucket, and the only one billed per
+        # object. A deliberate action with a written-down result, so every screen
+        # reads the writing rather than sweeping again.
+        try:
+            return ctx.json(await storage_scan.run_scan(env))
+        except video_storage.NotConfigured:
+            return ctx.error("影片儲存空間尚未設定完成", 503)
+        except ValueError as error:
+            # Another sweep is already running. A conflict rather than a fault:
+            # the answer is to wait for the one that is going.
+            return ctx.error(str(error), 409)
+
+    if path == "/api/video-storage/orphans" and method == "GET":
+        try:
+            bucket = (ctx.query.get("bucket") or ["output"])[0]
+            return ctx.json(
+                {
+                    "scan": await storage_scan.latest_scan(env),
+                    "objects": await storage_scan.orphans(env, bucket=bucket),
+                }
+            )
+        except ValueError as error:
+            return ctx.error(str(error), 400)
+
     if path == "/api/video-storage/summary" and method == "GET":
         # Read from D1 only. Listing the buckets to answer this would be a few
         # hundred billed operations per asset, every time somebody opened the
         # page that exists to make them look.
-        return ctx.json(await video_storage.summary(env, now=video.utc_timestamp()))
+        # The sweep's result is joined in here rather than by `summary`, so the
+        # reporting module and the sweeping module do not import each other.
+        scan = await storage_scan.latest_scan(env)
+        return ctx.json(
+            await video_storage.summary(
+                env,
+                now=video.utc_timestamp(),
+                orphans=None
+                if scan is None
+                else {
+                    "sourceBytes": scan["sourceBytes"],
+                    "outputBytes": scan["outputBytes"],
+                    "scannedAt": scan["scannedAt"],
+                    "truncated": scan["truncated"],
+                },
+            )
+        )
 
     if path == "/api/video-storage" and method == "GET":
         # Read-only, and it answers the tool's one remaining question: did the

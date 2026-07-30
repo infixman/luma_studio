@@ -110,7 +110,7 @@ async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None
     the playback gateway is the entrance to.
     """
 
-    bucket = _binding(env, kind)
+    bucket = binding_for(env, kind)
     listing = await bucket.list(prefix=validate_prefix(prefix), limit=MAX_LISTED, cursor=cursor)
     return {
         "objects": [
@@ -118,7 +118,7 @@ async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None
                 "key": item.key,
                 "size": int(item.size),
                 # R2 gives a Date; the rest of this API speaks epoch seconds.
-                "uploadedAt": int(item.uploaded.getTime() // 1000) if hasattr(item, "uploaded") else None,
+                "uploadedAt": uploaded_seconds(item) or None,
             }
             for item in listing.objects
         ],
@@ -127,7 +127,24 @@ async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None
     }
 
 
-def _binding(env, kind: str):
+def uploaded_seconds(item) -> int:
+    """When R2 says this object landed, in the seconds the rest of this speaks.
+
+    Zero when it will not say. Used by the orphan scan as an age, where "unknown"
+    must not read as "brand new" — an object nobody can date is one the scan is
+    allowed to judge.
+    """
+
+    uploaded = getattr(item, "uploaded", None)
+    if uploaded is None:
+        return 0
+    try:
+        return int(uploaded.getTime() // 1000)
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def binding_for(env, kind: str):
     """The R2 binding for this kind of object.
 
     Separate from `bucket_for`, which answers with the bucket's *name* for a
@@ -225,8 +242,14 @@ def _pricing(env) -> dict | None:
     return {"price": price, "free_gb": max(free_gb, 0)}
 
 
-async def summary(env, *, now: int) -> dict:
-    """Capacity and what it costs, read from D1 and nothing else."""
+async def summary(env, *, now: int, orphans: dict | None = None) -> dict:
+    """Capacity and what it costs, read from D1 and nothing else.
+
+    `orphans` is handed in rather than looked up. The sweep that produces it
+    lives in its own module, and having this one reach for that module while
+    that one reaches back for this is a circle held together by both imports
+    being deferred to call time.
+    """
 
     source_rows = await d1_rows(env.DB.prepare(SOURCE_TOTALS_SQL))
     output_rows = await d1_rows(env.DB.prepare(OUTPUT_TOTALS_SQL))
@@ -257,9 +280,9 @@ async def summary(env, *, now: int) -> dict:
     return {
         "source": source,
         "output": output,
-        # Nothing until somebody scans. Zero would read as "there are none",
-        # which is the answer the scan exists to find out.
-        "orphans": None,
+        # What the last finished sweep found, or nothing at all. Zero would read
+        # as "there are none", which is the answer the sweep exists to find out.
+        "orphans": orphans,
         "estimate": estimate,
         "growth": {
             "bytesThisMonth": _bytes_of(source_growth) + _bytes_of(output_growth),

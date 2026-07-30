@@ -192,9 +192,14 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       成長把兩半都算（一支上個月建立、這個月才轉完的影片，是這個月長的）。
 - [x] 單價與免費額度做成設定值（`R2_PRICE_PER_GB_MONTH_USD`／`R2_FREE_GB`，寫進 wrangler.admin.toml）。
       沒設定就**不給估算**，不給一個看起來像事實的過期數字。
-- [ ] 實作 `POST /api/video-storage/scan`：列兩個 bucket、比對 D1、記下孤兒與時間。
-- [ ] 盤點排除仍在 `uploading` 的 asset，以及 24 小時內的物件。
-- [ ] 實作 `GET /api/video-storage/orphans?bucket=source|output`。
+- [x] 實作 `POST /api/video-storage/scan`：列兩個 bucket、比對 D1、記下孤兒與時間。
+      盤點列先寫、最後才補 `finished_at` —— 死在半路的那次留下一列沒有結束時間，
+      而「上一次沒跑完」跟「上一次找到這些」是不同的事實。同時只允許一次（30 分鐘內），
+      因為兩次盤點就是兩次整桶列舉。單次最多記 500 筆孤兒（這個 runtime 沒有 batch insert，
+      五萬筆就是五萬次 await），超過的仍然計入總量並標記 truncated。
+- [x] 盤點排除仍在 `uploading` 的 asset，以及 24 小時內的物件。
+      封存／放棄的 asset **不排除** —— 它們的物件還在、還在計費，那正是要清的東西。
+- [x] 實作 `GET /api/video-storage/orphans?bucket=source|output`。只讀上一次**跑完**的盤點。
 - [ ] 實作 `GET /api/video-storage/cleanup-candidates`，分 `safe` 與 `needsJudgement`。
 - [ ] 實作 `GET /api/video-storage/sources`：容量、有沒有可播放版本、使用它的課程單元。
 - [ ] 實作 `GET /api/video-storage/versions?assetId=`。
