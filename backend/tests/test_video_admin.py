@@ -301,6 +301,48 @@ class TestBrowsingTheBuckets:
         assert self._call(call, bucket=False).status == 503
 
 
+class TestTheStorageOverview:
+    """Capacity and cost, so somebody remembers to clean up."""
+
+    def test_it_reports_what_is_stored_and_what_it_costs(self, call):
+        response = call(
+            signed_in("/api/video-storage/summary"),
+            {
+                "COUNT(*) AS objects FROM video_assets": [{"bytes": 200 * 1024**3, "objects": 42}],
+                "FROM video_encode_versions": [{"bytes": 90 * 1024**3, "objects": 8734}],
+            },
+            env={"R2_PRICE_PER_GB_MONTH_USD": "0.015", "R2_FREE_GB": "10"},
+        )
+
+        assert response.status == 200
+        body = response.json()
+        assert body["source"]["objects"] == 42
+        assert body["estimate"]["monthlyUsd"] > 0
+        assert body["estimate"]["excludesOperations"] is True
+
+    def test_a_deployment_with_no_price_shows_no_estimate(self, call):
+        response = call(signed_in("/api/video-storage/summary"))
+
+        assert response.status == 200
+        assert response.json()["estimate"] is None
+
+    def test_it_needs_a_session(self, call):
+        anonymous = FakeRequest(
+            "/api/video-storage/summary", "GET", {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"},
+            host=ADMIN_HOST,
+        )
+
+        assert call(anonymous).status == 401
+
+    def test_the_desktop_token_cannot_read_it(self):
+        """Cost and capacity are the back office's business. The tool's token is
+        for getting a video in, and this route is not part of that."""
+
+        from domain import desktop_auth as module
+
+        assert module.scope_allows("video", "GET", "/api/video-storage/summary") is False
+
+
 class TestOpeningASourceUpload:
     """The routes the tool drives a multipart upload of the original through.
 

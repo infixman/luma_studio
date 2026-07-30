@@ -185,8 +185,13 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 依賴 S5 的 `video_encode_versions`。做完這一階才有人會想起該清東西。
 
-- [ ] 實作 `GET /api/video-storage/summary`：兩桶容量、每月費用估算、本月成長。
-- [ ] 單價與免費額度做成設定值，不是程式常數。
+- [x] 實作 `GET /api/video-storage/summary`：兩桶容量、每月費用估算、本月成長。
+      容量**完全不列 bucket**（原始檔看有完成 session 的 asset、輸出看 `video_encode_versions`）。
+      「有沒有完成上傳」而不是「asset 是什麼狀態」：封存和放棄都不會刪物件，那些 bytes 還在計費；
+      而沒傳完的原始檔只有宣告的大小、沒有物件，算進去等於發明儲存。
+      成長把兩半都算（一支上個月建立、這個月才轉完的影片，是這個月長的）。
+- [x] 單價與免費額度做成設定值（`R2_PRICE_PER_GB_MONTH_USD`／`R2_FREE_GB`，寫進 wrangler.admin.toml）。
+      沒設定就**不給估算**，不給一個看起來像事實的過期數字。
 - [ ] 實作 `POST /api/video-storage/scan`：列兩個 bucket、比對 D1、記下孤兒與時間。
 - [ ] 盤點排除仍在 `uploading` 的 asset，以及 24 小時內的物件。
 - [ ] 實作 `GET /api/video-storage/orphans?bucket=source|output`。

@@ -895,6 +895,85 @@ class TestEndingAnUploadSession:
         assert database.execute("SELECT etag FROM video_upload_sessions").fetchone()[0] == '"deadbeef-2"'
 
 
+class TestTheStorageTotals:
+    """The overview's three statements, against an engine that parses them.
+
+    A fake database matches on a fragment of the SQL and answers with whatever
+    the test declared, so a join that names a column that does not exist passes
+    every route test and fails on the deployed database — where the page it
+    serves is the one that exists to make somebody look.
+    """
+
+    def _asset(self, database, asset_id: str, *, status: str, byte_size: int, created_at: int = 0) -> None:
+        database.execute(
+            "INSERT INTO video_assets (id, title, original_filename, source_key, status,"
+            " byte_size, created_at, updated_at) VALUES (?, '課', 'a.mp4', '', ?, ?, ?, ?)",
+            (asset_id, status, byte_size, created_at, created_at),
+        )
+
+    def _session(self, database, asset_id: str, *, status: str, updated_at: int = 0) -> None:
+        database.execute(
+            "INSERT INTO video_upload_sessions (id, asset_id, upload_id, part_size, part_count,"
+            " status, etag, expires_at, created_at, updated_at)"
+            " VALUES (?, ?, 'u', 5242880, 1, ?, NULL, 0, 0, ?)",
+            (f"session-{asset_id}", asset_id, status, updated_at),
+        )
+
+    def _version(self, database, asset_id: str, *, byte_size: int, created_at: int = 0) -> None:
+        database.execute(
+            "INSERT INTO video_encode_versions (asset_id, encode_version, object_count, byte_size,"
+            " has_poster, verified_at, created_at, updated_at) VALUES (?, 1, 14, ?, 1, ?, ?, ?)",
+            (asset_id, byte_size, created_at, created_at, created_at),
+        )
+
+    def test_an_archived_video_still_counts_towards_what_is_stored(self, database):
+        """Archiving does not delete anything. A total that drops it says the
+        cleanup is done when the bill disagrees."""
+
+        from domain.video_storage import SOURCE_TOTALS_SQL
+
+        self._asset(database, "a1", status="archived", byte_size=1_000)
+        self._session(database, "a1", status="completed")
+
+        assert database.execute(SOURCE_TOTALS_SQL).fetchone() == (1_000, 1)
+
+    def test_an_original_that_never_finished_uploading_is_not_counted(self, database):
+        """Its size is what the tool declared, and there is no object yet. The
+        orphan scan is what finds the parts it did send."""
+
+        from domain.video_storage import SOURCE_TOTALS_SQL
+
+        self._asset(database, "a1", status="uploading", byte_size=1_000)
+        self._session(database, "a1", status="uploading")
+
+        assert database.execute(SOURCE_TOTALS_SQL).fetchone() == (0, 0)
+
+    def test_the_output_total_adds_up_the_versions(self, database):
+        from domain.video_storage import OUTPUT_TOTALS_SQL
+
+        self._version(database, "a1", byte_size=500)
+        self._version(database, "a2", byte_size=700)
+
+        assert database.execute(OUTPUT_TOTALS_SQL).fetchone() == (1_200, 28)
+
+    def test_growth_counts_both_halves_from_the_month_boundary(self, database):
+        from domain.video_storage import OUTPUT_GROWTH_SQL, SOURCE_GROWTH_SQL
+
+        self._asset(database, "old", status="ready", byte_size=100)
+        self._session(database, "old", status="completed", updated_at=1_000)
+        self._asset(database, "new", status="ready", byte_size=300)
+        self._session(database, "new", status="completed", updated_at=9_000)
+        self._version(database, "old", byte_size=50, created_at=1_000)
+        self._version(database, "new", byte_size=90, created_at=9_000)
+        # Still going, so its bytes are a declaration rather than an object.
+        self._asset(database, "inflight", status="uploading", byte_size=999)
+        self._session(database, "inflight", status="uploading", updated_at=9_500)
+
+        source = database.execute(bind_literals(SOURCE_GROWTH_SQL, 5_000)).fetchone()[0]
+        output = database.execute(bind_literals(OUTPUT_GROWTH_SQL, 5_000)).fetchone()[0]
+        assert (source, output) == (300, 90)
+
+
 class TestRecordingAnEncodeVersion:
     """One row per output version, written when the version verifies.
 

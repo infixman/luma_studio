@@ -77,6 +77,14 @@ VIDEO_UPLOAD_ENABLED = "1"
 COURSE_SOURCE_BUCKET = "luma-course-source"
 COURSE_VIDEO_BUCKET = "luma-course-video"
 
+# What storage costs, for the overview's estimate. Configuration rather than a
+# constant in the program: R2's prices change, and a number nobody remembers to
+# look at reads exactly like an accurate one. Unset means the overview shows no
+# estimate at all, which is the honest answer when nobody has said what a
+# gigabyte costs.
+R2_PRICE_PER_GB_MONTH_USD = "0.015"
+R2_FREE_GB = "10"
+
 # The S3-compatible endpoint for this account, from R2's settings. Not a
 # secret — it is in every signed URL — but it is account-specific, so it lives
 # here rather than in the code.

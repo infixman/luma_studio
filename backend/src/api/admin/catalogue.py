@@ -236,6 +236,12 @@ async def handle(ctx: Ctx):
 
         return ctx.error("Not found", 404)
 
+    if path == "/api/video-storage/summary" and method == "GET":
+        # Read from D1 only. Listing the buckets to answer this would be a few
+        # hundred billed operations per asset, every time somebody opened the
+        # page that exists to make them look.
+        return ctx.json(await video_storage.summary(env, now=video.utc_timestamp()))
+
     if path == "/api/video-storage" and method == "GET":
         # Read-only, and it answers the tool's one remaining question: did the
         # objects actually arrive. No signed URLs — confirming an upload does not
