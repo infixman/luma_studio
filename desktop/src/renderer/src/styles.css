@@ -77,10 +77,46 @@ h1 {
   font-size: 0.9rem;
 }
 
-/* The code is six characters. A field as wide as the email one invites the
-   thought that something longer belongs in it. */
-.code-field {
-  max-width: 12rem;
+.field > label,
+.field-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Six slots rather than one box: a narrow box beside a wide email field looks
+   like a mistake, and a wide one invites the thought that something longer than
+   six characters belongs in it. */
+.code-slots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.code-slot {
+  width: 2.4rem;
+  padding: 0.2rem 0;
+  background: transparent;
+  border: none;
+  /* An underline rather than a box. Six boxes is a lot of furniture for six
+     characters. */
+  border-bottom: 2px solid var(--line);
+  border-radius: 0;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.5rem;
+  text-align: center;
+  user-select: text;
+}
+
+.code-slot:focus-visible {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+/* Beside the slots rather than inside a field, so it needs no absolute
+   positioning to be centred. */
+.icon-button.static {
+  position: static;
+  transform: none;
 }
 
 input[type='text'],

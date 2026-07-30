@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
+import { CodeInput } from './CodeInput'
 import { PasteIcon } from './Icons'
 import { CODE_LENGTH, normaliseCode, problemWith } from '../../shared/pairing'
 import type { SessionStatus } from '../../shared/session'
@@ -175,27 +176,12 @@ export function PairingScreen({
         </div>
 
         <div class="field">
-          <label for="pairing-code">驗證碼</label>
-          <div class="with-action code-field">
-            <input
-              id="pairing-code"
-              // Not `type="number"`: it strips leading zeros and offers a spinner
-              // for something that is not a quantity.
-              type="text"
-              inputMode="numeric"
-              value={code}
-              // Room for the space the back office renders, so pasting `418 302`
-              // is not silently truncated to five digits.
-              maxLength={CODE_LENGTH + 4}
-              autoComplete="off"
-              spellcheck={false}
-              disabled={busy}
-              class="code-input"
-              onInput={(event) => onCode((event.currentTarget as HTMLInputElement).value)}
-            />
+          <span class="field-label">驗證碼</span>
+          <div class="field-row">
+            <CodeInput value={code} disabled={busy} onChange={onCode} />
             <button
               type="button"
-              class="icon-button"
+              class="icon-button static"
               title="貼上"
               aria-label="貼上驗證碼"
               disabled={busy}

@@ -69,7 +69,7 @@ test('with no pairing it asks for a code', async () => {
   await settle()
 
   expect(container.textContent).toContain('連結管理後台')
-  expect(container.querySelector('.code-input')).not.toBeNull()
+  expect(container.querySelectorAll('.code-slot')).toHaveLength(6)
 })
 
 test('with a pairing it says who it is connected as', async () => {

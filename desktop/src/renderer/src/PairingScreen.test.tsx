@@ -72,20 +72,29 @@ function emailField(): HTMLInputElement {
   return container.querySelector<HTMLInputElement>('input[type="email"]')!
 }
 
-function codeField(): HTMLInputElement {
-  return container.querySelector<HTMLInputElement>('input.code-input')!
+/** The code is six slots now. Filling the first one with the whole value is a
+ *  paste, which the component spreads across them. */
+function codeSlots(): HTMLInputElement[] {
+  return [...container.querySelectorAll<HTMLInputElement>('.code-slot')]
+}
+
+function codeValue(): string {
+  return codeSlots()
+    .map((slot) => slot.value)
+    .join('')
 }
 
 async function fill(email: string, code: string): Promise<void> {
   const emailInput = emailField()
-  const codeInput = codeField()
   emailInput.value = email
   emailInput.dispatchEvent(new Event('input', { bubbles: true }))
   // A separate tick, because a person does not fill two fields in one. Filling
   // them together used to submit the state from before the typing.
   await new Promise((resolve) => setTimeout(resolve, 0))
-  codeInput.value = code
-  codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+  const first = codeSlots()[0]!
+  first.value = code
+  first.dispatchEvent(new Event('input', { bubbles: true }))
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
@@ -115,13 +124,13 @@ test('a well-formed pair is sent', async () => {
 })
 
 test('the space the back office shows is accepted', async () => {
-  /** The page renders `418 302`, so that is what gets typed and pasted. */
+  /** The page renders `418 302`, so that is what gets pasted. The slots spread
+   *  it and hand back digits, so what reaches the server is already clean. */
   await mount()
   await fill('owner@example.com', '418 302')
-  submit()
   await flush()
 
-  expect(pair).toHaveBeenCalledWith({ email: 'owner@example.com', code: '418 302' })
+  expect(pair).toHaveBeenCalledWith({ email: 'owner@example.com', code: '418302' })
 })
 
 test('a short code is not sent at all', async () => {
@@ -133,6 +142,7 @@ test('a short code is not sent at all', async () => {
   await flush()
 
   expect(pair).not.toHaveBeenCalled()
+  // Five digits cannot even fill the slots, so the form refuses on submit.
   expect(container.textContent).toContain('6 位數字')
 })
 
@@ -157,7 +167,7 @@ test('a refusal is shown and the code is cleared', async () => {
   await flush()
 
   expect(container.textContent).toContain('配對失敗')
-  expect(codeField().value).toBe('')
+  expect(codeValue()).toBe('')
 })
 
 test('a machine that cannot remember the pairing is told so', async () => {
