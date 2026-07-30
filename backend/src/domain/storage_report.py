@@ -222,6 +222,40 @@ async def sources(env) -> list[dict]:
     ]
 
 
+ALL_VERSIONS_SQL = VERSIONS_SQL.replace(" WHERE versions.asset_id = ?1", "").replace(
+    " ORDER BY versions.encode_version DESC", " ORDER BY versions.asset_id, versions.encode_version DESC"
+)
+
+
+def _version_row(row: dict) -> dict:
+    return {
+        "assetId": row["asset_id"],
+        "encodeVersion": int(row["encode_version"]),
+        "objectCount": int(row["object_count"] or 0),
+        "bytes": int(row["byte_size"] or 0),
+        "hasPoster": bool(row["has_poster"]),
+        "verifiedAt": int(row["verified_at"] or 0),
+        "isActive": row["active_encode_version"] is not None
+        and int(row["active_encode_version"]) == int(row["encode_version"]),
+        "isSuperseded": row["active_encode_version"] is not None
+        and int(row["active_encode_version"]) != int(row["encode_version"]),
+    }
+
+
+async def versions_by_asset(env) -> dict:
+    """Every version, grouped by asset, in one query.
+
+    For the cleanup screen, which considers every source in turn. Asking per
+    asset is the same N+1 the lessons query already avoided — and this one would
+    run it twice over, once for the list and once for the candidates.
+    """
+
+    grouped: dict = {}
+    for row in await d1_rows(env.DB.prepare(ALL_VERSIONS_SQL)):
+        grouped.setdefault(row["asset_id"], []).append(_version_row(row))
+    return grouped
+
+
 async def versions(env, *, asset_id: str) -> list[dict]:
     """One row per encode version of one asset.
 
@@ -230,19 +264,4 @@ async def versions(env, *, asset_id: str) -> list[dict]:
     finish — and that is a different decision from deleting last year's encode.
     """
 
-    rows = await d1_rows(env.DB.prepare(VERSIONS_SQL).bind(asset_id))
-    return [
-        {
-            "assetId": row["asset_id"],
-            "encodeVersion": int(row["encode_version"]),
-            "objectCount": int(row["object_count"] or 0),
-            "bytes": int(row["byte_size"] or 0),
-            "hasPoster": bool(row["has_poster"]),
-            "verifiedAt": int(row["verified_at"] or 0),
-            "isActive": row["active_encode_version"] is not None
-            and int(row["active_encode_version"]) == int(row["encode_version"]),
-            "isSuperseded": row["active_encode_version"] is not None
-            and int(row["active_encode_version"]) != int(row["encode_version"]),
-        }
-        for row in rows
-    ]
+    return [_version_row(row) for row in await d1_rows(env.DB.prepare(VERSIONS_SQL).bind(asset_id))]

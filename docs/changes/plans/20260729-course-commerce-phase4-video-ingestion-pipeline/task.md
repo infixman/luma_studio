@@ -200,17 +200,19 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 - [x] 盤點排除仍在 `uploading` 的 asset，以及 24 小時內的物件。
       封存／放棄的 asset **不排除** —— 它們的物件還在、還在計費，那正是要清的東西。
 - [x] 實作 `GET /api/video-storage/orphans?bucket=source|output`。只讀上一次**跑完**的盤點。
-- [ ] 實作 `GET /api/video-storage/cleanup-candidates`，分 `safe` 與 `needsJudgement`。
-- [ ] 實作 `GET /api/video-storage/sources`：容量、有沒有可播放版本、使用它的課程單元。
-- [ ] 實作 `GET /api/video-storage/versions?assetId=`。
+- [x] 實作 `GET /api/video-storage/cleanup-candidates`，分 `safe` 與 `needsJudgement`。
+      孤兒一個桶一列（不是一個 key 一列），被取代的版本要過 7 天 rollback 期才進 `safe`。
+- [x] 實作 `GET /api/video-storage/sources`：容量、有沒有可播放版本、使用它的課程單元（含課程名，一次查詢）。
+- [x] 實作 `GET /api/video-storage/versions?assetId=`。`isActive` 與 `isSuperseded` 是兩個答案，不是反義詞。
 - [ ] 總覽頁：容量與每月費用擺在第一眼，標明是估算且不含操作費用。
 - [ ] 未盤點時顯示「尚未盤點」，不顯示 0。
 - [ ] 原始檔頁：一列一支，使用中的課程單元可以點進去。
 - [ ] 輸出頁：一列一個 encode version，含孤兒分頁。
 - [ ] `safe` 可批次清；`needsJudgement` 逐項確認，確認文字帶影片名稱與後果，沒有全選。
-- [ ] 課程還在用的原始檔不出現在建議裡，刪除端點也拒絕它。
-- [ ] 刪除前重查引用；先出 dry-run 清單。
-- [ ] 測試：使用中的原始檔不被列為候選也不能刪；上傳中的版本不被當成孤兒；總覽不觸發 list 操作。
+- [x] 課程還在用的原始檔不出現在建議裡，刪除端點也拒絕它（刪除時重查引用，清單不是權威）。
+- [x] 刪除前重查引用；先出 dry-run 清單。dry-run 是**同一段程式關掉刪除**，不是另一段。
+      版本的物件超過一次能刪的量時**不刪那一列** —— 留下沒有列指向的物件，就是清理自己製造的孤兒。
+- [x] 測試：使用中的原始檔不被列為候選也不能刪；上傳中的版本不被當成孤兒；總覽不觸發 list 操作。
 
 ## S7：安裝、版本與自動更新
 

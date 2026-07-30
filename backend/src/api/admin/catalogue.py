@@ -9,6 +9,7 @@ let the client keep believing it had been obeyed.
 """
 
 from domain import (
+    cleanup,
     courses,
     inventory,
     offers,
@@ -270,6 +271,65 @@ async def handle(ctx: Ctx):
             )
         except ValueError as error:
             return ctx.error(str(error), 400)
+
+    if path == "/api/video-storage/cleanup" and method == "POST":
+        # One entrance for three kinds of removal, and every one of them takes
+        # `dryRun`. The preview is this code with the deleting turned off — a
+        # preview produced by different code is a preview of something else.
+        # The request is read and checked before anything is attempted, so a
+        # malformed one answers 400 rather than sharing 409 with the refusals
+        # this endpoint exists to make — "this is in use" and "that is not a
+        # number" are not the same answer.
+        try:
+            body = await ctx.json_body()
+            dry_run = bool(body.get("dryRun"))
+            kind = str(body.get("kind") or "")
+            bucket = str(body.get("bucket") or "output")
+            asset_id = str(body.get("assetId") or "").strip()
+            raw_version = body.get("encodeVersion")
+            if kind not in ("orphan", "supersededVersion", "unusedSource"):
+                return ctx.error("不認識的清理類型", 400)
+            if kind == "orphan" and bucket not in storage_scan.BUCKETS:
+                return ctx.error("bucket 必須是 source 或 output", 400)
+            if kind != "orphan" and not asset_id:
+                return ctx.error("缺少 assetId", 400)
+            if kind == "supersededVersion" and (
+                isinstance(raw_version, bool) or not isinstance(raw_version, int) or raw_version < 1
+            ):
+                return ctx.error("encodeVersion 必須是正整數", 400)
+        except (AttributeError, TypeError, ValueError):
+            return ctx.error("Invalid cleanup", 400)
+
+        try:
+            if kind == "orphan":
+                removed = await cleanup.delete_orphans(env, bucket=bucket, dry_run=dry_run)
+            elif kind == "supersededVersion":
+                removed = await cleanup.delete_version(
+                    env,
+                    asset_id=asset_id,
+                    encode_version=int(raw_version),
+                    dry_run=dry_run,
+                    now=video.utc_timestamp(),
+                )
+            else:
+                removed = await cleanup.delete_source(
+                    env, asset_id=asset_id, dry_run=dry_run, now=video.utc_timestamp()
+                )
+            return ctx.json(removed)
+        except LookupError:
+            return ctx.error("Video not found", 404)
+        except video_storage.NotConfigured:
+            return ctx.error("影片儲存空間尚未設定完成", 503)
+        except ValueError as error:
+            # Refusals here are the point of the endpoint: in use, live, or still
+            # inside the rollback window.
+            return ctx.error(str(error) or "Invalid cleanup", 409)
+
+    if path == "/api/video-storage/cleanup-candidates" and method == "GET":
+        # Split by consequence rather than by table. The front end does not
+        # decide what is safe: a screen that mixes "rubbish" with "this video can
+        # never be re-encoded" teaches somebody to click through both.
+        return ctx.json(await cleanup.candidates(env, now=video.utc_timestamp()))
 
     if path == "/api/video-storage/sources" and method == "GET":
         return ctx.json({"sources": await storage_report.sources(env)})

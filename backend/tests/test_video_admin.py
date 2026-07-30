@@ -387,6 +387,138 @@ class TestTheStorageLists:
         assert response.json()["versions"][0]["isActive"] is True
 
 
+class TestWhatMayBeCleaned:
+    def test_the_two_lists_are_separate(self, call):
+        """A screen that mixes "rubbish" with "this video can never be
+        re-encoded" teaches somebody to click through both."""
+
+        response = call(
+            signed_in("/api/video-storage/cleanup-candidates"),
+            {
+                "FROM video_assets assets": [
+                    {
+                        "id": ASSET_ID, "title": "第一課", "status": "ready", "byte_size": 4096,
+                        "active_encode_version": 1, "created_at": 0,
+                        "version_count": 1, "version_bytes": 2048,
+                    }
+                ],
+                "FROM course_lessons lessons": [],
+                "FROM video_encode_versions versions": [],
+            },
+        )
+
+        assert response.status == 200
+        body = response.json()
+        assert body["needsJudgement"][0]["kind"] == "unusedSource"
+        assert "重新轉檔" in body["needsJudgement"][0]["consequence"]
+        assert body["safe"] == []
+
+    def test_a_source_a_lesson_uses_is_not_offered_at_all(self, call):
+        response = call(
+            signed_in("/api/video-storage/cleanup-candidates"),
+            {
+                "FROM video_assets assets": [
+                    {
+                        "id": ASSET_ID, "title": "第一課", "status": "ready", "byte_size": 4096,
+                        "active_encode_version": 1, "created_at": 0,
+                        "version_count": 1, "version_bytes": 2048,
+                    }
+                ],
+                "FROM course_lessons lessons": [
+                    {
+                        "video_asset_id": ASSET_ID, "lesson_id": "l1", "lesson_title": "工具介紹",
+                        "course_id": "c1", "course_title": "水彩入門",
+                    }
+                ],
+            },
+        )
+
+        assert response.json() == {"safe": [], "needsJudgement": [], "scannedAt": None}
+
+
+class TestRunningACleanup:
+    R2_BUCKETS = {"COURSE_SOURCE_BUCKET": "s", "COURSE_VIDEO_BUCKET": "v"}
+
+    class Bucket:
+        def __init__(self, keys=()):
+            self.keys = list(keys)
+            self.deleted: list[str] = []
+
+        async def list(self, *, prefix, limit, cursor=None):
+            objects = [
+                types.SimpleNamespace(key=key, size=1, uploaded=types.SimpleNamespace(getTime=lambda: 0))
+                for key in self.keys
+                if key.startswith(prefix)
+            ]
+            return types.SimpleNamespace(objects=objects, truncated=False, cursor=None)
+
+        async def delete(self, key):
+            self.deleted.append(key)
+
+    def _post(self, call, body, answers=None, bucket=None):
+        return call(
+            JsonRequest(
+                "/api/video-storage/cleanup",
+                "POST",
+                body,
+                {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+            ),
+            answers,
+            bucket=bucket,
+            source_bucket=bucket,
+            env=self.R2_BUCKETS,
+        )
+
+    def test_deleting_a_source_a_lesson_uses_is_refused(self, call):
+        response = self._post(
+            call,
+            {"kind": "unusedSource", "assetId": ASSET_ID},
+            {
+                "SELECT * FROM video_assets": [an_asset(status="ready")],
+                "SELECT id, section_id, title FROM course_lessons": [
+                    {"id": "l1", "section_id": "s1", "title": "工具介紹"}
+                ],
+            },
+            bucket=self.Bucket(),
+        )
+
+        assert response.status == 409
+        assert "工具介紹" in response.json()["error"]
+
+    def test_a_dry_run_says_what_would_go_without_going(self, call):
+        bucket = self.Bucket([f"sources/{ASSET_ID}/1/source.mp4"])
+
+        response = self._post(
+            call,
+            {"kind": "unusedSource", "assetId": ASSET_ID, "dryRun": True},
+            {"SELECT * FROM video_assets": [an_asset(status="ready")]},
+            bucket=bucket,
+        )
+
+        assert response.status == 200
+        assert response.json()["deleted"] == [f"sources/{ASSET_ID}/1/source.mp4"]
+        assert bucket.deleted == []
+
+    def test_an_unknown_kind_is_refused(self, call):
+        assert self._post(call, {"kind": "everything"}, bucket=self.Bucket()).status == 400
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"kind": "supersededVersion", "assetId": ASSET_ID, "encodeVersion": "1"},
+            {"kind": "supersededVersion", "assetId": ASSET_ID, "encodeVersion": 0},
+            {"kind": "supersededVersion", "encodeVersion": 1},
+            {"kind": "orphan", "bucket": "elsewhere"},
+        ],
+    )
+    def test_a_malformed_request_is_a_bad_request_not_a_conflict(self, call, body):
+        """409 is what this endpoint says when it refuses on purpose — in use,
+        live, still inside the rollback window. A body that is wrong is not one
+        of those."""
+
+        assert self._post(call, body, bucket=self.Bucket()).status == 400
+
+
 class TestSweepingForOrphans:
     """The one action that reads the buckets."""
 
