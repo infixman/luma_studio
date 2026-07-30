@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { etagOf, partRanges, remaining } from './sourceUpload'
+import { etagOf, partRanges, remaining, shouldUploadSource } from './sourceUpload'
 
 const MIB = 1024 * 1024
 
@@ -85,5 +85,26 @@ describe('resuming inside a run', () => {
     const ranges = partRanges(10 * MIB, 5 * MIB)
 
     expect(remaining(ranges, new Set())).toHaveLength(2)
+  })
+})
+
+
+describe('whether this run sends the original', () => {
+  test('it does, for a job that started from a file', () => {
+    expect(shouldUploadSource('C:/videos/lesson.mp4', undefined)).toBe(true)
+  })
+
+  test('it does not, when a previous run already sent it', () => {
+    /** The server allows one source session per asset, so trying again is not
+     *  wasted bandwidth — it is refused, and the whole job stops over a step
+     *  that had already succeeded. */
+    expect(shouldUploadSource('C:/videos/lesson.mp4', true)).toBe(false)
+  })
+
+  test('it does not, for a folder of finished output', () => {
+    /** That entrance re-sends an encode somebody already made. There is no
+     *  original in the job. */
+    expect(shouldUploadSource(null, undefined)).toBe(false)
+    expect(shouldUploadSource('', undefined)).toBe(false)
   })
 })

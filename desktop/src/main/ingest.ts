@@ -51,6 +51,10 @@ export async function ingest(
       // encoder. The server divides this into multipart parts, so the encode
       // total here is an upload that fails partway through.
       sourceBytes: statSync(request.source).size,
+      // The file itself goes up too, because a ladder cannot be rebuilt from a
+      // ladder: adding a rung, fixing a bad encode or replacing an object R2
+      // lost all start from the original.
+      sourcePath: request.source,
     },
     onProgress,
   )

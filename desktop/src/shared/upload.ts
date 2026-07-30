@@ -38,6 +38,9 @@ export type UploadPhase =
   | 'writing'
   | 'scanning'
   | 'creating'
+  // The original file, in parts. Its own phase because it is the longest single
+  // transfer in the job and counting objects would say "1 of 1" for an hour.
+  | 'source'
   | 'uploading'
   | 'registering'
   | 'done'

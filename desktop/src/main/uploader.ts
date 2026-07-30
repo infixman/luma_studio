@@ -23,9 +23,11 @@ import {
 } from '../shared/objects'
 import { withRetry, DEFAULT_ATTEMPTS } from '../shared/retry'
 import { jobId } from '../shared/resume'
+import { shouldUploadSource } from '../shared/sourceUpload'
 import { recordedByteSize, type Progress, type ScannedFolder } from '../shared/upload'
 import { requireToken } from './session'
 import * as ledger from './ledger'
+import { uploadSource } from './sourceUploader'
 
 /**
  * Uploading a folder of encoded output.
@@ -97,6 +99,14 @@ export interface FolderUpload {
    * source.
    */
   sourceBytes?: number | null
+  /**
+   * The original file itself, when the job started from one.
+   *
+   * Uploaded before the encode is registered, because the asset has to still be
+   * `uploading` for the server to open a session — after `import` it is `ready`
+   * and the original can never be sent.
+   */
+  sourcePath?: string | null
 }
 
 /**
@@ -133,7 +143,35 @@ export async function upload(request: FolderUpload, onProgress: OnProgress): Pro
     const created = await createAsset(transport, base, token, details)
     assetId = created.assetId
     encodeVersion = created.encodeVersion
-    ledger.write(id, { assetId, encodeVersion, done: [] })
+    ledger.write(id, { assetId, encodeVersion, done: [], sourceDone: false })
+  }
+
+  // The original, before anything registers this asset. `import` moves it to
+  // `ready`, and a `ready` asset cannot be given a source upload session — so
+  // this is the only window there is.
+  let sourceDone = saved?.sourceDone === true
+  if (shouldUploadSource(request.sourcePath, sourceDone)) {
+    try {
+      await uploadSource({
+        transport,
+        base,
+        token,
+        assetId,
+        path: request.sourcePath!,
+        onProgress,
+      })
+    } catch (error) {
+      // The server allows one source upload per asset, so a 409 here means a
+      // previous run already dealt with the original — either it finished, or it
+      // died leaving a session that will expire. Neither is a reason to fail a
+      // job whose remaining work is the encode: the alternative is an asset that
+      // can never be finished by any run, because every retry asks the same
+      // question and gets the same answer.
+      if (!(error instanceof AdminApiError) || error.status !== 409) throw error
+      onProgress({ phase: 'source', assetId, uploaded: 0, total: 0, message: error.message })
+    }
+    sourceDone = true
+    ledger.write(id, { assetId, encodeVersion, done: saved?.done ?? [], sourceDone })
   }
 
   const done = new Set(saved?.done ?? [])
@@ -196,7 +234,7 @@ export async function upload(request: FolderUpload, onProgress: OnProgress): Pro
       uploaded += 1
       // Written per object. The alternative is a crash losing a batch of a
       // hundred, which is the difference between resuming and starting again.
-      ledger.write(id, { assetId, encodeVersion, done: [...done] })
+      ledger.write(id, { assetId, encodeVersion, done: [...done], sourceDone })
       onProgress({ phase: 'uploading', assetId, uploaded, total: scanned.objects.length })
     }
   }
@@ -212,7 +250,7 @@ export async function upload(request: FolderUpload, onProgress: OnProgress): Pro
     // Not an error: the list of what did not arrive. The ledger keeps what did,
     // so pressing upload again sends only the gap.
     for (const path of registered.missing) done.delete(toPosix(path))
-    ledger.write(id, { assetId, encodeVersion, done: [...done] })
+    ledger.write(id, { assetId, encodeVersion, done: [...done], sourceDone })
     return {
       phase: 'failed',
       assetId,

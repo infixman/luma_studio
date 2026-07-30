@@ -12,6 +12,7 @@ const PHASE_LABELS: Record<Progress['phase'], string> = {
   writing: '寫出播放清單',
   scanning: '讀取資料夾',
   creating: '建立影片項目',
+  source: '上傳原始檔',
   uploading: '上傳中',
   registering: '驗證中',
   done: '完成',
@@ -242,7 +243,7 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
           <p>
             {PHASE_LABELS[progress.phase]}
             {progress.rung ? `（${progress.rung}）` : ''}
-            {progress.total > 0 && progress.phase === 'uploading'
+            {progress.total > 0 && (progress.phase === 'uploading' || progress.phase === 'source')
               ? `：${progress.uploaded} / ${progress.total}`
               : ''}
           </p>

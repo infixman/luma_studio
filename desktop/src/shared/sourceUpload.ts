@@ -75,3 +75,23 @@ export function etagOf(headers: { get(name: string): string | null }, partNumber
 export function remaining(ranges: readonly PartRange[], done: ReadonlySet<number>): PartRange[] {
   return ranges.filter((range) => !done.has(range.partNumber))
 }
+
+
+/**
+ * Whether this run should send the original.
+ *
+ * Three answers folded into one function because the wrong one is expensive in
+ * both directions. Sending it again wastes gigabytes *and fails*: the server
+ * allows one source session per asset, so a repeat is refused and the whole job
+ * stops over a step that already succeeded. Not sending it means the video can
+ * never be re-encoded, and nothing notices until somebody tries.
+ */
+export function shouldUploadSource(
+  sourcePath: string | null | undefined,
+  alreadyDone: boolean | undefined,
+): boolean {
+  // The folder-only entrance re-sends an encode somebody already made. There is
+  // no original in that job to send.
+  if (!sourcePath) return false
+  return alreadyDone !== true
+}

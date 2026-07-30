@@ -39,6 +39,17 @@ function stopIfCancelled(): void {
 }
 
 /**
+ * Whether the person asked for this job to stop.
+ *
+ * Exported because cancelling has to reach past the encoder now: sending the
+ * original is a multi-gigabyte transfer, and a cancel that only kills ffmpeg
+ * leaves it running with nothing on screen to say so.
+ */
+export function isCancelled(): boolean {
+  return cancelled
+}
+
+/**
  * Turning one high-quality MP4 into the ladder this shop serves.
  *
  * The decisions are all in `shared/encodePlan.ts`, where they can be tested.

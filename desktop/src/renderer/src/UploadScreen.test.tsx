@@ -157,6 +157,21 @@ test('progress events move the bar', async () => {
   expect(container.textContent).toContain('1 / 4')
 })
 
+test('sending the original is its own phase, and it counts parts', async () => {
+  /** It is the longest single transfer in the job — several gigabytes in one
+   *  object — and a bar with no numbers under it is indistinguishable from a
+   *  bar that has stopped. */
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'source', uploaded: 12, total: 40 })
+  await tick()
+
+  expect(container.textContent).toContain('上傳原始檔')
+  expect(container.textContent).toContain('12 / 40')
+})
+
 test('verification is its own phase, not folded into uploading', async () => {
   /** It is the step that decides whether the video plays. "The upload finished"
    *  and "the video works" are different claims. */

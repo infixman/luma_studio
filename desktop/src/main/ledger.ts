@@ -19,6 +19,14 @@ export interface Record_ {
   assetId: string
   encodeVersion: number
   done: string[]
+  /**
+   * Whether the original file already went up.
+   *
+   * Needed because that upload cannot simply be repeated: the server allows one
+   * source session per asset, so a resumed job that tried again would be refused
+   * and the whole job would stop — over a step that had already succeeded.
+   */
+  sourceDone: boolean
 }
 
 function folder(): string {
@@ -41,6 +49,10 @@ export function read(id: string): Record_ | null {
       assetId: raw.assetId,
       encodeVersion: raw.encodeVersion as number,
       done: raw.done.filter((entry): entry is string => typeof entry === 'string'),
+      // Absent in records written before the source upload existed, and absent
+      // is the safe reading: it means "not known to be done", and the server
+      // refuses a second one anyway.
+      sourceDone: raw.sourceDone === true,
     }
   } catch {
     // No file, a half-written one, or one from an older shape. Every case

@@ -147,19 +147,20 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       complete 收到 `NoSuchUpload` 不當失敗 —— 先 HEAD 那個 key，因為「R2 完成了、回應掉了」
       跟「這個 upload 從來不存在」是同一個答案。為了讓那個判斷有意義，**一個 asset 只允許一個
       沒被取消的 session**：所有 session 寫的是同一個 key，第二個 session 會被第一個的物件冒認。
-- [ ] **先修：`video_assets.byte_size` 目前存的是轉檔輸出的總容量，不是原始檔大小。**
+- [x] **修好：`video_assets.byte_size` 現在存原始檔大小**（`recordedByteSize`）。原本是
       `main/uploader.ts` 建 asset 時送的是 `scan(folder).totalBytes`（幾百個輸出物件的總和）。
       兩個後果：影片庫那欄寫著「原始檔容量」但顯示的是輸出容量；而 multipart 的 partSize／
       partCount 是伺服器**從 `byte_size` 算的**，所以工具照真正的原始檔切段時，段數會跟
       伺服器算的對不上，而且是傳到一半才被拒絕。拖 MP4 進來的那條路知道真正的大小
       （`statSync(request.source).size`），要把它傳下去；只拖資料夾那條路沒有原始檔，
       維持現況（那時 `byte_size` 是輸出容量，而那條路也不會開 source upload）。
-- [ ] 工具上傳原始檔。純邏輯與 API 呼叫做好了（`shared/sourceUpload.ts` 切段與 ETag、
-      `shared/adminApi.ts` 的四支呼叫），**還沒接進 ingest 流程**。接的時候要注意三件事：
-      part URL 只活 15 分鐘而一段最大 64 MiB，所以要**送之前才要那一段的 URL**，不是先要一批；
-      失敗時要呼叫 `abortSourceUpload`，不然 session 會佔著 12 小時（而且同一個 asset
-      在那之前開不了第二個），已傳的分段還在計費；PUT 回 200 但沒有 ETag 要當成可重試
-      （它丟的是普通 Error，沒有 status，`isTransient` 分類不到）。
+- [x] 工具上傳原始檔。`main/sourceUploader.ts`：開 session → 每一段**送之前才要那一段的 URL**
+      → 讀該段 bytes → PUT → 讀 ETag → complete；任何失敗都會 abort session。
+      接在建立 asset 之後、註冊之前 —— 因為 `import` 會把 asset 推到 `ready`，
+      而 `ready` 的 asset 開不了 source session，那是唯一的窗口。
+      ledger 記 `sourceDone`，重跑不會重傳（伺服器也不允許第二個 session）。
+      `start` 收到 409 當成「上一次已經處理過原始檔」，繼續做完 encode ——
+      否則那個 asset 會永遠卡住，因為每次重試都會問到同一個答案。
 - [x] 限制單檔大小、影片長度與同時 session 數。
       大小 20 GiB（`validate_byte_size`）、長度 6 小時（`validate_duration` —— 轉檔是
       每一階近似即時，一支放錯的十二小時檔等於佔住一台機器一天半）、同時 5 個 session
