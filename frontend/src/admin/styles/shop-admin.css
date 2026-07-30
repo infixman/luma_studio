@@ -909,10 +909,10 @@ body.admin .desktop-pairing dd {
   margin: 0;
 }
 
+/* Monospace so the digits are unambiguous, at reading size rather than poster
+   size: it is copied with the button beside it, not read across a room. */
 body.admin .desktop-pairing-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 2rem;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
 body.admin .desktop-pairing dd.copyable {

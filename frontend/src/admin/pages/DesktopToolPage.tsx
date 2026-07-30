@@ -41,11 +41,6 @@ interface PairingCode {
   adminEmail: string
 }
 
-/** `418302` reads badly and `418 302` reads at a glance. */
-function grouped(code: string): string {
-  return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code
-}
-
 /**
  * The pairing code the desktop uploader asks for.
  *
@@ -131,12 +126,15 @@ export function DesktopToolPage() {
               </dd>
               <dt>驗證碼</dt>
               <dd class="copyable">
-                <strong class="desktop-pairing-code" aria-label={`驗證碼 ${pairing.code.split('').join(' ')}`}>
-                  {grouped(pairing.code)}
-                </strong>
-                {/* The digits, not the spaced form. The tool strips separators
-                    anyway, but pasting exactly what the server will accept is
-                    one fewer thing that can be wrong. */}
+                {/* Not grouped and not oversized. It is read once and copied,
+                    not memorised across a room, and the same `code` treatment as
+                    the address above keeps the two rows the same shape. */}
+                <code
+                  class="desktop-pairing-code"
+                  aria-label={`驗證碼 ${pairing.code.split('').join(' ')}`}
+                >
+                  {pairing.code}
+                </code>
                 <CopyButton value={pairing.code} label="複製驗證碼" />
               </dd>
               <dt>剩餘時間</dt>
@@ -150,14 +148,6 @@ export function DesktopToolPage() {
             </p>
           </>
         )}
-      </Panel>
-
-      <Panel title="這個工具做什麼">
-        <p class="muted">
-          課程影片在你的電腦上轉檔，然後直接上傳到 R2。工具本身沒有 R2 金鑰 ——
-          它拿到的是一組只能做影片操作的短效憑證，改不了訂單、會員或課程。
-        </p>
-        <p class="muted">影片的修改與刪除留在後台，因為刪除前要先確認沒有課程單元正在使用。</p>
       </Panel>
     </AdminShell>
   )

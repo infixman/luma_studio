@@ -76,11 +76,13 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-test('it shows the code grouped so it can be read at a glance', async () => {
+test('it shows the code as the digits the tool wants', async () => {
+  /** Not grouped: it is copied with the button beside it rather than read
+   *  across a room, and an ungrouped code is what the server accepts. */
   render(<DesktopToolPage />, container)
   await settle()
 
-  expect(container.querySelector('.desktop-pairing-code')?.textContent).toBe('418 302')
+  expect(container.querySelector('.desktop-pairing-code')?.textContent).toBe('418302')
 })
 
 test('the code is still readable to a screen reader digit by digit', async () => {
@@ -129,7 +131,7 @@ test('it fetches the next code when the window ends rather than computing one', 
   await wait(1200)
 
   expect(calls).toBe(2)
-  expect(container.querySelector('.desktop-pairing-code')?.textContent).toBe('999 111')
+  expect(container.querySelector('.desktop-pairing-code')?.textContent).toBe('999111')
 })
 
 test('an unconfigured worker is explained rather than reported as an error', async () => {
@@ -147,14 +149,6 @@ test('it says not to share the code', async () => {
   await settle()
 
   expect(container.textContent).toContain('螢幕分享')
-})
-
-test('it says the tool holds no R2 key', async () => {
-  /** The one sentence somebody needs before installing it on a laptop. */
-  render(<DesktopToolPage />, container)
-  await settle()
-
-  expect(container.textContent).toContain('沒有 R2 金鑰')
 })
 
 test('the email can be copied rather than retyped', async () => {
