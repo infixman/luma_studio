@@ -1227,3 +1227,19 @@ CSRF 能成立的原因是**瀏覽器會自動附上 cookie**。它附不了 `Au
 → 要 presign 200（URL 帶 X-Amz-Signature）→ 打訂單/顧客/儀表板/課程/影片列表/封存
 一律 403。** 另外釘了兩條：偽造的 token 401，拿 playback token 來當桌面 token 也 401。
 
+
+---
+
+## R2 的 S3 憑證進去了
+
+Admin Worker 上四個名字對上 `video_storage.py` 讀的四個：
+`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` 是 secret，`COURSE_SOURCE_BUCKET`、
+`COURSE_VIDEO_BUCKET`、`R2_S3_ENDPOINT` 是 plaintext。endpoint 留明文是刻意的 ——
+它只是一個網址，裡面的帳號 id 不是憑證，藏它只會讓下次除錯時看不到自己連去哪。
+
+多了一個 `R2_ACCOUNT_ID`，程式沒有讀它（帳號 id 已經在 endpoint 裡）。留著無害。
+
+於是 presign 不再是 503。但**還沒有任何一次真的簽章打到 R2**：測試裡的一致性是
+跟 botocore 對出來的，而 botocore 也只是算同一份數學，它不會告訴你 R2 收不收。
+S1 的驗收條件寫的是「用 Worker 簽出的 URL 真的 PUT 一個物件進去」，那件事要
+一個真的呼叫端 —— 也就是工具。所以 S1 的最後一格和 S3 的實機驗證是同一個動作。
