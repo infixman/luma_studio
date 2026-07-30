@@ -18,6 +18,7 @@ from api.admin import routes as admin_api
 from api.admin import bio_link as bio_link_api
 from api.admin import catalogue as catalogue_admin_api
 from api.admin import customers as customers_admin_api
+from api.admin import desktop as desktop_admin_api
 from api.admin import media as media_admin_api
 from api.admin import orders as orders_admin_api
 from api.admin import pages as pages_admin_api
@@ -69,6 +70,13 @@ async def dispatch(ctx: Ctx):
 
     if path == "/api/dashboard" and method == "GET":
         return ctx.json(await dashboard.summary(ctx.env))
+
+    # Listed one path at a time rather than by prefix. The desktop routes do not
+    # all belong on this side of the gate above — the token exchange cannot,
+    # since a tool has no session yet — so which of them is authenticated has to
+    # be visible here instead of inferred from a prefix.
+    if path == "/api/desktop/pairing-code":
+        return await desktop_admin_api.handle(ctx)
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):
         return await bio_link_api.handle(ctx)

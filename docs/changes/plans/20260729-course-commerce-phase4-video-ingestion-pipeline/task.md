@@ -47,9 +47,9 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：換到 token → 打 presign 通 → 打訂單路由回 403。
 
-- [ ] 建立管理員 TOTP seed 表。
-- [ ] 產生與保存 seed，建立時顯示一次。
-- [ ] 實作 `GET /api/desktop/pairing-code`，需管理員 session。
+- [x] ~~建立管理員 TOTP seed 表。~~ 不需要：seed 由 `DESKTOP_PAIRING_SECRET` 與 email 導出，沒有表。
+- [x] ~~產生與保存 seed，建立時顯示一次。~~ 同上，沒有東西要保存或顯示。
+- [x] 實作 `GET /api/desktop/pairing-code`，需管理員 session。
 - [ ] 後台一頁顯示目前配對碼與剩餘秒數。
 - [ ] 實作 `POST /api/desktop/tokens`：接受目前與前一窗、固定時間比較、用過即失效。
 - [ ] 實作每個 email 的失敗次數上限與鎖定。

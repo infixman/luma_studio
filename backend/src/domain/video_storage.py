@@ -24,7 +24,7 @@ use, and the log outlives the fifteen minutes.
 
 from domain import video
 from shared import sigv4
-from shared.common import env_var, utc_timestamp
+from shared.common import NotConfigured, env_var, utc_timestamp
 
 
 # Long enough for the tool to work through a batch on a slow connection, short
@@ -40,15 +40,6 @@ MAX_URLS = 100
 # object it can read and write, but not the bucket's name, and a presigned URL
 # needs the name — so it comes from configuration.
 BUCKET_VARS = {"source": "COURSE_SOURCE_BUCKET", "output": "COURSE_VIDEO_BUCKET"}
-
-
-class NotConfigured(Exception):
-    """Signing credentials are missing, so nothing can be signed.
-
-    Its own type because it is not the caller's fault and must not be answered
-    like a bad request. Handing back an unsigned URL that looks signed would
-    reach R2, fail there, and leave a log that says nothing about why.
-    """
 
 
 def _credentials(env) -> dict:

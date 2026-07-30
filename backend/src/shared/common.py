@@ -52,6 +52,16 @@ class OAuthError(Exception):
     """Google OAuth failed without exposing OAuth credentials to the user."""
 
 
+class NotConfigured(Exception):
+    """A secret or setting this deployment needs is absent.
+
+    Its own type because it is nobody's fault but ours, and must not be answered
+    like a bad request. The alternative — carrying on with an empty credential —
+    produces a signature nothing accepts or a derived key anybody can compute,
+    and in both cases the failure lands somewhere with no explanation attached.
+    """
+
+
 class MigrationError(Exception):
     """A D1 migration failed, so the request must not touch an unknown schema."""
 

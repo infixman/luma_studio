@@ -30,8 +30,17 @@ Public Worker 只綁 `COURSE_VIDEO`，沒有 S3 credentials，也沒有 source b
 {"code": "418302", "expiresInSeconds": 17}
 ```
 
-TOTP，30 秒週期，6 位數字，每個管理員一組 seed。Seed 存 D1，建立時顯示一次，
-之後只以雜湊或加密形式保存於伺服器端。
+TOTP，30 秒週期，6 位數字，每個管理員一組 seed。
+
+**Seed 不儲存。** 它是 `HMAC(DESKTOP_PAIRING_SECRET, "purpose:email")` 導出的，
+所以沒有表、沒有遷移、沒有「只顯示一次」的流程，D1 被 dump 也不含任何 seed。
+每個管理員的 seed 仍然不同，因為 email 是導出的一部分。
+
+（早一版的規格寫「以雜湊形式保存」，那是錯的：TOTP 驗證需要 seed 原文，
+雜湊過就驗不了。導出比儲存原文更好，所以改成導出。）
+
+撤銷有兩層：換掉 secret 一次撤銷所有配對；把某個 email 移出管理員允許清單，
+他就配對不了 —— 允許清單在驗證時檢查，不只在登入時。
 
 ### `POST /api/desktop/tokens`
 
