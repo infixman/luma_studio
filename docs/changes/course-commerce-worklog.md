@@ -1424,3 +1424,59 @@ poster: exit=0 exists=true
 
 順手拿掉 `ffmpegArgs` 的 `outDir` 參數 —— 它是必填、從來沒被讀過，而且它的存在正好
 暗示「init 的位置由 outDir 決定」，那就是讓這個 bug 通過的認知。
+
+## S4 驗收：拖進 MP4 → ready，跑通了
+
+在你不在的時候用一支無頭 harness 跑的：同一份 `out/main/index.js`、同一組 IPC，
+少的只有拖曳這個動作，而 `upload:start` 不在意路徑怎麼來的。
+
+過程中撞到三件事，兩個是我的 bug，一個是 harness 自己的。
+
+### harness 讀錯 userData
+
+`npx electron <script>` 沒有 package.json 可讀，`app.getName()` 是 `Electron`，
+userData 就變成 `Roaming\Electron` —— 一個空目錄。`npm run dev` 讀得到 package.json，
+所以是 `Roaming\luma-video-uploader`。我一開始以為 token 掉了，其實是問了錯的目錄。
+
+**順帶發現 `npm run smoke` 也是這樣。** 它一直報 `paired=false`，那不是「沒配對」，
+是它看的是另一個空目錄。斷言剛好也是「未配對畫面」，所以一直綠。
+
+另外兩件：`requestSingleInstanceLock` 是以 userData 為鍵，所以你開著的 dev 視窗會讓
+harness 一啟動就 `app.quit()` —— exit 0、零輸出。改成用獨立的 userData，把配對複製進去。
+而複製 `pairing.bin` 不夠：Windows 上 `safeStorage` 不是直接 DPAPI，它產生隨機金鑰存在
+userData 的 `Local State` 裡，只搬密文搬不動金鑰。
+
+### import 永遠不可能成功
+
+`register_verified_asset` 是純 `INSERT`。工具的流程是 create 拿到 id（才能簽上傳網址）
+再 import 同一個 id，所以那一列早就在了 —— 撞主鍵，500。
+
+**而它是在 14 個物件全部上傳完之後才失敗的**，最貴的位置。
+
+`FakeDatabase` 沒有鍵也沒有約束，所以測試一路綠。改成常數 + 真 SQLite 測試，跟
+`CONSUME_SQL` 一樣的做法。假的擋不住這個，也不可能找到它。
+
+`byte_size` 和 `source_key` 刻意不在 update 清單裡：create 知道來源大小、import 不送，
+列上去就是把真數字蓋成 0。
+
+順帶把兩件本來各自是待辦的事一起解掉：重送 import 變成冪等（不是第二列），以及新的
+encode version 會搬動 `active_encode_version`（S8 要的）。
+
+### 傳了封面，資料庫卻說沒有
+
+第一次成功的回報是「已驗證 **13** 個檔案」，但上傳了 14 個。差的那個是 `poster.webp` ——
+沒有任何 playlist 指向它，所以照著 manifest 走永遠走不到。而 `REGISTER_SQL` 把
+`poster_key` 寫成 NULL，於是影片庫會顯示不出縮圖，也沒有人報錯。
+
+`verify_encode` 現在會主動 HEAD 它。找不到**不會**讓 import 失敗 —— 沒有縮圖的影片照樣
+能播，為了一張圖擋掉整個 encode 是把外觀問題升級成上傳失敗。但有找到就會記下來。
+再次 import 沒帶封面時用 `COALESCE` 保住原本記下的那個。
+
+修完再跑一次：`已驗證 14 個檔案`。
+
+### 續傳的 key 太嚴格
+
+第二次跑我傳的是正斜線路徑，ledger 就沒接上，開了第二個 asset 重傳 14 個物件。
+`C:\encodes\a` 和 `C:/encodes/a` 在 Windows 是同一個資料夾，卻是兩個字串。
+`jobId` 現在正規化分隔符並轉小寫，而且搬到 `shared/resume.ts` —— 它本來在
+`main/uploader.ts` 裡，那個檔案 import 了 electron 所以測不到，這是它一直沒有測試的原因。

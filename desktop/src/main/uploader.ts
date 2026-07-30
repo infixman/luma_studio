@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 
@@ -23,6 +22,7 @@ import {
   uploadOrder,
 } from '../shared/objects'
 import { withRetry, DEFAULT_ATTEMPTS } from '../shared/retry'
+import { jobId } from '../shared/resume'
 import type { Progress, ScannedFolder } from '../shared/upload'
 import { requireToken } from './session'
 import * as ledger from './ledger'
@@ -62,25 +62,6 @@ export function scan(folder: string): ScannedFolder {
   return { folder, objects, unexpected, totalBytes }
 }
 
-/**
- * A stable name for "this folder's upload", so a resumed run finds its own
- * ledger — and a *different* name once the folder's contents change.
- *
- * The size and file count go into it, not just the path. Re-encoding into the
- * same folder produces the same relative paths, so a ledger keyed on the path
- * alone would resume against the old asset and skip uploading files that had
- * changed. Nothing would report an error; the video would simply be the old one.
- *
- * Not a hash of the files themselves: reading several hundred of them to decide
- * whether to resume costs more than the re-uploads it would save, and size plus
- * count catches every re-encode that is not a coincidence.
- */
-function jobId(folder: string, objects: number, totalBytes: number): string {
-  return createHash('sha256')
-    .update(`${folder}\0${objects}\0${totalBytes}`)
-    .digest('hex')
-    .slice(0, 16)
-}
 
 async function putObject(url: string, body: Buffer, contentType: string): Promise<void> {
   const response = await fetch(url, {

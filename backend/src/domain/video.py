@@ -458,6 +458,15 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
     missing: list[str] = []
     checked = 0
 
+    # Looked for rather than followed: no playlist refers to the poster, so
+    # walking the manifest never reaches it. Its absence does not fail the import
+    # — a video with no thumbnail plays — but whether it is there decides what
+    # gets recorded, and for a while nothing looked and every import recorded
+    # `poster_key` as NULL.
+    has_poster = await bucket.head(poster_key(asset_id, encode_version)) is not None
+    if has_poster:
+        checked += 1
+
     master = await bucket.get(f"{prefix}master.m3u8")
     if master is None:
         return {"ok": False, "missing": ["master.m3u8"], "objectCount": 0}
@@ -484,7 +493,7 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
                 continue
             checked += 1
 
-    return {"ok": not missing, "missing": missing, "objectCount": checked}
+    return {"ok": not missing, "missing": missing, "objectCount": checked, "hasPoster": has_poster}
 
 
 async def create_asset(
@@ -548,7 +557,7 @@ REGISTER_SQL = (
     "INSERT INTO video_assets (id, title, original_filename, source_key, status, byte_size,"
     " duration_seconds, width, height, active_encode_version, master_key, poster_key,"
     " error_code, error_detail, created_at, updated_at)"
-    " VALUES (?1, ?2, ?3, '', 'ready', 0, ?4, ?5, ?6, ?7, ?8, NULL, NULL, NULL, ?9, ?9)"
+    " VALUES (?1, ?2, ?3, '', 'ready', 0, ?4, ?5, ?6, ?7, ?8, ?10, NULL, NULL, ?9, ?9)"
     " ON CONFLICT(id) DO UPDATE SET"
     " title = excluded.title,"
     " original_filename = CASE WHEN excluded.original_filename != ''"
@@ -559,6 +568,9 @@ REGISTER_SQL = (
     " height = COALESCE(excluded.height, video_assets.height),"
     " active_encode_version = excluded.active_encode_version,"
     " master_key = excluded.master_key,"
+    # Not overwritten with NULL. A re-import of an encode whose poster went
+    # missing should not erase the one already recorded.
+    " poster_key = COALESCE(excluded.poster_key, video_assets.poster_key),"
     # A previously failed attempt has an error recorded against it, and this row
     # is now a working video.
     " error_code = NULL,"
@@ -577,6 +589,7 @@ async def register_verified_asset(
     width: int | None,
     height: int | None,
     encode_version: int,
+    poster: str | None = None,
 ) -> str:
     """Record a ladder that was transcoded and uploaded elsewhere.
 
@@ -597,5 +610,6 @@ async def register_verified_asset(
         encode_version,
         master_key(asset_id, encode_version),
         now,
+        poster,
     ).run()
     return asset_id

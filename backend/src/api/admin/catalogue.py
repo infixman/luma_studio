@@ -308,6 +308,9 @@ async def handle(ctx: Ctx):
             original_filename=filename,
             **measured,
             encode_version=version,
+            # Only if it is actually there. `verify_encode` looked, because no
+            # playlist points at it and walking the manifest never reaches it.
+            poster=video.poster_key(asset_id, version) if verified["hasPoster"] else None,
         )
         return ctx.json({"asset": await video.get_asset(env, created), "objectCount": verified["objectCount"]}, 201)
 

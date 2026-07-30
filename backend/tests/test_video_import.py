@@ -112,6 +112,9 @@ class TestVerifyingWhatWasUploaded:
             "videos/asset-1/1/720p/init.mp4": "",
             "videos/asset-1/1/720p/segment-000001.m4s": "",
             "videos/asset-1/1/720p/segment-000002.m4s": "",
+            # The pipeline always writes one, and no playlist refers to it — which
+            # is why it went unverified and unrecorded for a while.
+            "videos/asset-1/1/poster.webp": "",
         }
         if missing:
             objects.pop(missing)
@@ -123,7 +126,31 @@ class TestVerifyingWhatWasUploaded:
         result = asyncio.run(video.verify_encode(bucket, "asset-1", 1))
 
         assert result["ok"] is True
-        assert result["objectCount"] == 9
+        # Nine the manifest names, plus the poster it does not.
+        assert result["objectCount"] == 10
+
+    def test_the_poster_is_noticed(self, video):
+        """Nothing in the manifest points at it, so it has to be looked for.
+
+        It was not, and `register_verified_asset` wrote `poster_key` as NULL — so
+        an upload that included a poster produced a library entry with no
+        thumbnail, and nothing reported a problem.
+        """
+        bucket = self._bucket()
+
+        result = asyncio.run(video.verify_encode(bucket, "asset-1", 1))
+
+        assert result["hasPoster"] is True
+
+    def test_a_missing_poster_is_reported_without_failing_the_import(self, video):
+        """A video with no thumbnail plays. Refusing the whole encode over one
+        would turn a cosmetic gap into a failed upload."""
+        bucket = self._bucket(missing="videos/asset-1/1/poster.webp")
+
+        result = asyncio.run(video.verify_encode(bucket, "asset-1", 1))
+
+        assert result["ok"] is True
+        assert result["hasPoster"] is False
 
     def test_a_missing_segment_is_named(self, video):
         """A sync that dropped one file is ordinary, and the video plays fine

@@ -655,12 +655,16 @@ class TestRegisteringAVerifiedEncode:
     happily. This is the only place the statement meets one.
     """
 
-    def _register(self, database, *, asset_id: str, title: str, version: int) -> None:
+    def _register(self, database, *, asset_id: str, title: str, version: int, poster: bool = True) -> None:
         # The production statement, imported rather than copied.
         from domain.video import REGISTER_SQL
 
         database.execute(
-            REGISTER_SQL.replace("?1", f"'{asset_id}'")
+            # `?10` first: replacing `?1` before it would turn `?10` into the id
+            # followed by a stray zero, which is a syntax error two tests away
+            # from the thing being tested.
+            REGISTER_SQL.replace("?10", f"'videos/{asset_id}/{version}/poster.webp'" if poster else "NULL")
+            .replace("?1", f"'{asset_id}'")
             .replace("?2", f"'{title}'")
             .replace("?3", "'lesson.mp4'")
             .replace("?4", "8")
@@ -742,3 +746,24 @@ class TestRegisteringAVerifiedEncode:
             "SELECT active_encode_version, master_key FROM video_assets WHERE id = ?", ("a" * 24,)
         ).fetchone()
         assert row == (2, f"videos/{'a' * 24}/2/master.m3u8")
+
+    def test_the_poster_is_recorded_so_the_library_has_a_thumbnail(self, database):
+        self._create(database, "a" * 24)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        assert database.execute(
+            "SELECT poster_key FROM video_assets WHERE id = ?", ("a" * 24,)
+        ).fetchone()[0] == f"videos/{'a' * 24}/1/poster.webp"
+
+    def test_a_re_import_without_a_poster_does_not_erase_the_one_recorded(self, database):
+        """A dropped poster on the second sync should not cost the first one."""
+
+        self._create(database, "a" * 24)
+        self._register(database, asset_id="a" * 24, title="第一課", version=1)
+
+        self._register(database, asset_id="a" * 24, title="第一課", version=1, poster=False)
+
+        assert database.execute(
+            "SELECT poster_key FROM video_assets WHERE id = ?", ("a" * 24,)
+        ).fetchone()[0] == f"videos/{'a' * 24}/1/poster.webp"
