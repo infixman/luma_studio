@@ -3,10 +3,14 @@
   Turn one video file into the HLS ladder this shop serves, and upload it.
 
 .DESCRIPTION
-  There is no transcoder in the deployment, so this is where encoding happens:
-  on whichever machine has the source file and FFmpeg. The output layout is not
-  a preference — the playback gateway builds object keys from it and refuses
-  anything else, so the folder names and file names here have to match
+  Not the normal way in. The desktop tool in `desktop/` is what admins use; this
+  is the same encode by hand, kept for when somebody needs to reproduce an
+  output without it, or to check what the tool should be producing.
+
+  There is no transcoder in the deployment, so encoding happens on whichever
+  machine has the source file and FFmpeg. The output layout is not a preference
+  — the playback gateway builds object keys from it and refuses anything else,
+  so the folder names and file names here have to match
   `backend/src/domain/video.py`.
 
   Nothing is marked playable by this script. It uploads, and then the import

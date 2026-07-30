@@ -327,7 +327,7 @@ parse 得過但其實什麼都沒約束的索引。D1 就是 SQLite，所以這�
 | `COURSE_CATALOG_ENABLED` | 課程在商城的曝光 |
 | `COURSE_CHECKOUT_ENABLED` | 含課程的商品能不能結帳 |
 | `COURSE_LEARNING_ENABLED` | 會員課程中心 |
-| `VIDEO_UPLOAD_ENABLED` | 後台影片上傳 |
+| `VIDEO_UPLOAD_ENABLED` | 影片的 presign、上傳與註冊 |
 
 旗標讀在伺服器（[backend/src/shared/flags.py](backend/src/shared/flags.py)）。前端可以用它決定畫不畫按鈕，
 但擋下請求的是後端 —— 藏起按鈕從來沒有阻止過任何人直接呼叫底下那支 API。
@@ -1101,28 +1101,27 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 
 ### 影片：在本機轉檔，不在 Cloudflare
 
-原計畫是自建轉檔管線（Queue + 跑 FFmpeg 的 Container）。**2026-07-30 決定不用** ——
-不承擔它的持續費用與運維面積。改成在本機轉檔後同步到 R2，再由一支端點驗證後註冊。
+Cloudflare 上沒有便宜的轉檔選項 —— Stream 按觀看分鐘計費，Container 要付常駐費用，
+Worker 不能跑 FFmpeg。所以轉檔跑在管理員的機器上，由 `desktop/` 的桌面工具負責：
 
-```bash
-# 1. 轉檔。畫質階梯由 ffprobe 讀到的實際高度決定，絕不放大來源。
-./scripts/transcode-course-video.ps1 -Source ~/lessons/lesson-01.mp4
+1. 拖進一個高畫質 MP4。工具用 ffprobe 讀真實尺寸，決定不放大來源的畫質階梯。
+2. 本機轉出 fMP4 HLS 與 poster。
+3. 每個物件向 Admin API 換一張短效 presigned PUT URL，直傳 R2。
+4. 呼叫 `POST /api/video-assets/import` 註冊。
 
-# 2. 同步。腳本最後會印出這一行，含實際的 asset id。
-rclone copy <輸出目錄> r2:luma-course-video/videos/<assetId>/1 --progress
-
-# 3. 註冊。這一步才會讓影片變成可播放。
-POST https://admin-api.luma-studio.tw/api/video-assets/import
-```
-
-**第 3 步不是形式。** 它會讀 master playlist、逐一確認每個被引用的物件真的在 R2 上，
-全部齊了才標成 `ready`。手動同步幾百個檔案少傳一個是常態，而少一個分段的影片
-會播到那一段才斷 —— 那是最糟的發現時機。缺漏會一次全部回報，讓你重跑一次同步而不是六次。
+**第 4 步不是形式。** 它會讀 master playlist、逐一確認每個被引用的物件真的在 R2 上，
+全部齊了才標成 `ready`。一支影片幾百個物件，少傳一個是常態，而少一個分段的影片
+會播到那一段才斷 —— 那是最糟的發現時機。缺漏會一次全部回報，讓你補傳一次而不是六次。
 
 輸出路徑帶版本號（`videos/{assetId}/{version}/`），所以重新轉檔可以跟會員正在看的那一版
-並存，等新版驗證通過才切換。要重新轉檔就把 `-EncodeVersion` 加一。
+並存，等新版驗證通過才切換。
 
-**留著原始檔。** 重新轉檔需要它，而階梯沒辦法從階梯重建。
+**R2 的金鑰不進桌面工具。** 工具拿到的是只能做影片操作的短效 token（在後台讀一組
+TOTP 配對碼換來的），簽章一律在 Admin Worker 裡做。工具被拿走的最壞情況是「有人
+可以上傳影片」，不是「有人可以改訂單」。
+
+**留著原始檔。** 重新轉檔需要它，而階梯沒辦法從階梯重建。原始檔走 multipart 上傳，
+一支 4K 課程影片用單一 PUT 傳等於「傳到 87% 斷線就從頭開始」。
 
 ### 幾條值得先知道的規則
 

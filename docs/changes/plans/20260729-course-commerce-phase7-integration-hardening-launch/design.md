@@ -162,9 +162,10 @@ Lesson、影片、觀看進度、訂單或 audit，因此 restore 隨時可行�
 
 | 指標 | 告警方向 |
 | --- | --- |
-| Upload complete failure | 短時間連續失敗 |
-| Transcode queue age | 工作積壓 |
-| Container failure/OOM | 素材或資源設定異常 |
+| Presign 核發失敗 | 憑證過期或設定錯誤 |
+| Import 驗證缺漏 | 上傳不完整 |
+| 卡在 uploading 的 asset 年齡 | 上傳中斷沒人回來收尾 |
+| 桌面工具 token 兌換失敗 | 時鐘偏移，或有人在猜配對碼 |
 | Ready validation failure | R2 寫入不完整 |
 | Playback 5xx | 會員無法觀看 |
 | Playback 401/403 rate | session 或攻擊異常 |
@@ -177,21 +178,23 @@ Lesson、影片、觀看進度、訂單或 audit，因此 restore 隨時可行�
 - 原始影片儲存。
 - HLS 輸出儲存。
 - R2 Class A/B operations。
-- Container CPU/memory/disk。
 - Worker requests。
+
+轉檔的 CPU 落在管理員的機器上，帳單上看不到，也不需要監控。
 
 ## 備份與復原
 
 - D1 備份必須包含 Course、Entitlement、Progress、Video metadata。
 - R2 影片需要獨立備份或明確接受「可由 source 重建」的策略。
 - 若 source 會刪除，HLS output 就不再是可隨時重建，必須有第二份保存或接受遺失風險。
-- Runbook 要能從 D1 asset 記錄定位 R2 keys，但備份檔與 log 不包含 presigned token。
+- Runbook 要能從 D1 asset 記錄定位 R2 keys，但備份檔與 log 不包含 presigned URL 或桌面工具 token。
+- 原始檔留著的話，HLS 輸出可以重建 —— 但重建需要一台裝著桌面工具的機器，不是一個雲端按鈕。復原時間要照這個算。
 
 ## 上線策略
 
 ```mermaid
 flowchart LR
-    A["內部 feature flag"] --> B["測試管理員上傳/建課"]
+    A["內部 feature flag"] --> B["桌面工具上傳、後台建課"]
     B --> C["測試會員購買"]
     C --> D["限定商品 soft launch"]
     D --> E["觀察付款、授權、播放、出貨"]

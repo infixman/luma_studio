@@ -62,10 +62,10 @@
 
 - [ ] 統一 request/job/order correlation id。 未做。
 - [ ] 建立付款後授權延遲指標。 未做。
-- [ ] 建立 transcode queue age、成功率、OOM 與時間指標。 blocker：需 Phase 4 資源。
+- [ ] 建立 import 驗證成功率、缺漏數與卡在 uploading 的 asset 指標。 未做。
+- [ ] 建立 presign 核發失敗與桌面工具 token 兌換失敗指標。 未做。
 - [ ] 建立 playback 5xx、401/403 與 cache hit 指標。 未做。
 - [ ] 建立 R2 source/output bytes 與 operations 報表。 blocker：需資源。
-- [ ] 建立 Container CPU/memory/disk 成本報表。 blocker：需資源。
 - [ ] 設定合理告警門檻。 未做。
 - [x] 驗證 logs 不含 cookie、token、presigned query 或 secrets。
 
@@ -77,7 +77,8 @@
 - [ ] 撰寫付款成功但未授權 runbook。 runbook 未寫。
 - [ ] 撰寫誤撤銷 entitlement 的 restore runbook。 runbook 未寫。
 - [ ] 撰寫 purchase lock 卡住導致無法購買的排除 runbook。 runbook 未寫。
-- [ ] 撰寫影片轉檔卡住 runbook。 runbook 未寫。
+- [ ] 撰寫上傳中斷、import 驗證缺漏的排除 runbook。 runbook 未寫。
+- [ ] 撰寫桌面工具無法驗證或版本被封鎖的排除 runbook。 runbook 未寫。
 - [ ] 撰寫誤封存 Course/Video rollback runbook。 runbook 未寫。
 - [ ] 撰寫 R2 object 遺失的影響判斷與恢復流程。 runbook 未寫。
 - [ ] 撰寫 feature flag 緊急關閉流程。 runbook 未寫。

@@ -126,10 +126,11 @@ AND course fulfillment status != fulfilled
 
 ### Video
 
-- queued/processing 超過 lease。
+- queued/processing 超過合理時間。
+- 卡在 uploading 且沒有進度的 asset。
 - ready 但 active master HEAD 失敗。
-- orphan output version。
-- 過期 multipart session。
+- orphan output version：R2 有物件，D1 沒有對應的 encode version。
+- 過期的原始檔 multipart session。
 
 ### Reference Integrity
 
@@ -168,8 +169,8 @@ VIDEO_UPLOAD_ENABLED
 
 分開限制：
 
-- Upload session/presign。
-- Transcode retry。
+- Presign 核發。
+- 桌面工具 token 兌換（另有每個 email 的失敗次數鎖定）。
 - Playback session 建立。
 - Progress update。
 - Preview playback。
@@ -197,6 +198,7 @@ duration_ms
 - OAuth/session cookie。
 - Playback token。
 - Presigned URL query。
+- 桌面工具的配對碼與 token。
 - R2 secret。
 - 完整付款敏感資料。
 
@@ -204,9 +206,11 @@ Dashboard：
 
 - 付款後授權延遲。
 - 未完成 fulfillment 數。
-- Transcode success/failure/queue age。
+- Import 驗證成功率與缺漏數。
+- 卡在 uploading 的 asset。
 - Playback 5xx 與 cache hit。
-- R2 與 Container 用量。
+- R2 儲存與 Class A/B 用量。
+- 桌面工具的版本分佈。
 
 ## E2E 驗收矩陣
 
@@ -240,13 +244,14 @@ Dashboard：
 - Playback segment cache hit 不查 D1。
 - Progress write 節流有效。
 - 上傳不經 Worker body。
-- 轉檔一次性成本與每小時來源影片輸出容量有實測資料。
+- 每小時來源影片的輸出容量與轉檔時間有實測資料。
 - 設定 R2 lifecycle 前有 dry run/list report。
 
 ## 上線 Gate
 
 - 所有 schema 先於會寫入它的程式部署。
-- 管理端、公開 API、商城與 Media Worker 版本相容。
+- 管理端、公開 API 與商城版本相容。
+- 已發布的桌面工具版本仍高於 `minSupported`，或版本政策已同步更新。
 - 測試商品完成真實付款沙盒或既定測試流程。
 - 管理員可以從訂單追到 entitlement、Course、Lesson、VideoAsset 與實體 fulfillment。
 - 告警、reconciliation、備份、還原與 rollback runbook 可執行。
