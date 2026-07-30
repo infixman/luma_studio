@@ -33,13 +33,13 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 驗收：用 Worker 簽出的 URL，以 curl 真的 PUT 一個物件進 R2。
 
-- [ ] 建立 R2 S3 API token，以 secret 存入 Admin Worker，不進 repo 也不進工具。
-- [ ] 實作 SigV4 presign（限定 bucket、key、method、期限）。
-- [ ] 實作輸出物件的 key 形狀允許清單，越界 key 回 400。
-- [ ] 實作 `POST /api/video-assets`。
-- [ ] 實作 `POST /api/video-assets/{id}/upload-urls`，含單次數量上限。
-- [ ] 對外回應與 log 移除 R2 credentials、secret 與完整 presigned URL。
-- [ ] 測試：presigned URL 不能改 bucket、key 或 method；越界 key 與路徑穿越被拒。
+- [ ] 建立 R2 S3 API token，以 secret 存入 Admin Worker，不進 repo 也不進工具。**需要你操作**，並把 `R2_S3_ENDPOINT` 的帳號 id 填上。填之前 presign 一律 503。
+- [x] 實作 SigV4 presign（限定 bucket、key、method、期限）。與 botocore 對簽，簽章一致。
+- [x] 實作輸出物件的 key 形狀允許清單，越界 key 回 400。（`video.signable_key`；與播放閘道共用同一份清單）
+- [x] 實作 `POST /api/video-assets`。
+- [x] 實作 `POST /api/video-assets/{id}/upload-urls`，含單次數量上限（100；整批驗，一個不合格全批拒絕）。
+- [x] 對外回應與 log 移除 R2 credentials、secret 與完整 presigned URL。
+- [x] 測試：presigned URL 不能改 bucket、key 或 method；越界 key 與路徑穿越被拒。
 
 ## S2：配對碼與範圍 token（純後端）
 
