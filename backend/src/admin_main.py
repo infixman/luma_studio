@@ -94,6 +94,8 @@ async def dispatch(ctx: Ctx):
         or path == "/api/courses"
         or path.startswith("/api/courses/")
         or path.startswith("/api/offers/")
+        or path == "/api/video-assets"
+        or path.startswith("/api/video-assets/")
     ):
         return await catalogue_admin_api.handle(ctx)
 

@@ -313,6 +313,30 @@ schema 定義在 [backend/src/migrations.py](backend/src/migrations.py)，由**�
 
 公開 Worker 不套用任何 migration，`/api/health` 只讀取 `schema_migrations` 回報現況。因此部署順序是管理端先、公開端後；公開端回報的清單短少，代表部署順序出了問題，該被看見而不是被隨手修掉。
 
+migration 除了現有的字串檢查，另外會**用真正的 SQLite 引擎重跑一次**（[backend/tests/test_migrations_sqlite.py](backend/tests/test_migrations_sqlite.py)）。
+只檢查 SQL 字串長得對不對，連「這句話資料庫肯不肯收」都測不出來，也測不出一個
+parse 得過但其實什麼都沒約束的索引。D1 就是 SQLite，所以這是可用的替身 ——
+但它不是 D1 本身，證明不了線上資料庫目前裝著什麼。
+
+### 功能開關
+
+課程相關功能由環境變數控制，**沒設定就是關閉**，而且**只有 `"1"` 算開啟**：
+
+| 變數 | 控制什麼 |
+| --- | --- |
+| `COURSE_CATALOG_ENABLED` | 課程在商城的曝光 |
+| `COURSE_CHECKOUT_ENABLED` | 含課程的商品能不能結帳 |
+| `COURSE_LEARNING_ENABLED` | 會員課程中心 |
+| `VIDEO_UPLOAD_ENABLED` | 後台影片上傳 |
+
+旗標讀在伺服器（[backend/src/shared/flags.py](backend/src/shared/flags.py)）。前端可以用它決定畫不畫按鈕，
+但擋下請求的是後端 —— 藏起按鈕從來沒有阻止過任何人直接呼叫底下那支 API。
+
+`/api/health/reconciliation`（管理端，需登入）會回報目前所有旗標狀態，
+以及「該發生卻沒發生」的事：付了款沒開通的訂單、逾期還佔著庫存的訂單、卡住的轉檔、
+所有來源都撤銷了但權限還在的會員、以及孤兒購買鎖。**它只回報，不修復** ——
+修復留給本來就知道怎麼修的程式碼，同一個修復寫兩遍就會有兩種行為。
+
 ## Cloudflare 初次設定
 
 1. 安裝 [uv](https://docs.astral.sh/uv/)，登入 Cloudflare，並安裝依賴：
@@ -449,6 +473,12 @@ uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_CLIENT_SECRET
 uv --directory backend run pywrangler secret put GOOGLE_CUSTOMER_OAUTH_REDIRECT_URI
 uv --directory backend run pywrangler secret put VISITOR_SALT
 
+# 課程播放授權的簽章金鑰。沒有它，播放 session 端點會回 503 而不是發出
+# 一張沒有簽章的 token。輪替時把舊值放進 PLAYBACK_SECRET_PREVIOUS，
+# 驗證會同時接受兩把、簽發只用新的那把，正在上課的人不會被踢出去。
+uv --directory backend run pywrangler secret put PLAYBACK_SECRET
+uv --directory backend run pywrangler secret put PLAYBACK_SECRET_PREVIOUS
+
 uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID -c wrangler.admin.toml
 uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET -c wrangler.admin.toml
 uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wrangler.admin.toml
@@ -583,6 +613,12 @@ https://admin.luma-studio.tw
 
    ```powershell
    uv --directory backend run pywrangler secret put VISITOR_SALT
+
+# 課程播放授權的簽章金鑰。沒有它，播放 session 端點會回 503 而不是發出
+# 一張沒有簽章的 token。輪替時把舊值放進 PLAYBACK_SECRET_PREVIOUS，
+# 驗證會同時接受兩把、簽發只用新的那把，正在上課的人不會被踢出去。
+uv --directory backend run pywrangler secret put PLAYBACK_SECRET
+uv --directory backend run pywrangler secret put PLAYBACK_SECRET_PREVIOUS
    ```
 
    值填任意隨機字串。**不要**寫進 `wrangler.toml` 的 `[vars]`——那份設定會進版控，鹽值一旦公開，任何人都能從 IP 反推訪客雜湊。未設定時程式會退回每個 isolate 隨機產生的鹽值，雜湊仍然安全，但「同一訪客每日只記一次」的去重只在單一 isolate 內成立。
@@ -722,7 +758,10 @@ prefers-color-scheme: dark   系統偏好，僅在沒有 data-theme 時生效
 
 ## 商城
 
-設計文件在 [docs/superpowers/specs/2026-07-28-shopping-cart-design.md](docs/superpowers/specs/2026-07-28-shopping-cart-design.md)。目前完成的是**目錄、後台管理與前台展示**；購物車、結帳與金流是後續階段。
+設計文件在 [docs/superpowers/specs/2026-07-28-shopping-cart-design.md](docs/superpowers/specs/2026-07-28-shopping-cart-design.md)。
+目錄、購物車、結帳、訂單與履約都已完成；正式金流閘道尚未接上，付款目前只有管理員手動標記與開發用的假付款。
+
+商城同時賣實體商品與線上課程，兩者走同一條購物車與結帳流程 —— 見下方「線上課程」。
 
 | 位置 | 網址 |
 | --- | --- |
@@ -732,10 +771,14 @@ prefers-color-scheme: dark   系統偏好，僅在沒有 data-theme 時生效
 | 購物車 | `luma-studio.tw/cart` |
 | 結帳 | `luma-studio.tw/checkout` |
 | 我的訂單 | `luma-studio.tw/orders` |
+| 我的課程 | `luma-studio.tw/account/courses` |
+| 課程學習頁 | `luma-studio.tw/learn/{slug}` |
 | 商品管理 | `admin.luma-studio.tw/products` |
+| 庫存品 | `admin.luma-studio.tw/inventory` |
+| 線上課程 | `admin.luma-studio.tw/courses` |
 | 運費設定 | `admin.luma-studio.tw/shipping` |
 
-後台可以新增商品、編輯規格與庫存、上傳照片、切換上架狀態，以及設定每種配送方式的運費與免運門檻。
+後台可以新增商品、編輯售價與庫存、上傳照片、切換上架狀態，以及設定每種配送方式的運費與免運門檻。
 
 前台**只看得到 `active` 的商品**。草稿即使有人猜中 slug 也解不開，已下架的則會停止販售——兩者都回 404，因為對顧客而言那就是同一件事。
 
@@ -1030,7 +1073,68 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 
 **商品照片的 key 從資料表查，不從網址組。** `/shop-assets/{file}` 會先在 `product_images` 找到對應的列才去 R2 取物件，所以一個舊連結沒辦法拿來探測 bucket 裡還有什麼。R2 前綴是 `_shop/`，底線讓它落在 `IDENTIFIER_PATTERN` 之外，因此永遠不會被當成 ibon 資料夾，`/images/` 也搆不到。
 
+**四層拆開，沒有「商品類型」欄位。** 商品只管展示，方案（`product_variants`）只管定價，內容（`offer_components`）說明付款後給什麼，交付目標是課程或庫存品。「要不要配送」「有沒有含課程」一律**當下從內容推導**，不存進資料庫，前端提交這些值會被回 400 —— 忽略它會讓呼叫端以為被採納了。存一個會漂移的欄位，代價是把數位商品寄出去或把實體商品搞丟。
+
+**庫存搬到獨立的庫存品。** 一個材料包同時被三個課程方案使用時，數字放在其中一個方案上，對另外兩個就是錯的。舊的 `product_variants.stock` 降級成鏡像，只由 `offers.set_simple_offer_stock` 一處寫入，等 Phase 3 讀取切換完成後刪掉那一行。
+
+**商品編輯頁的庫存欄位只在「唯一且未被共用」時可改。** 其他情況回 409 並導向庫存品管理，因為共用的數量屬於所有使用它的方案。
+
 **沒有用 D1 的 `batch` API。** 這個 codebase 還沒有從 Python 呼叫過它，而一串 prepared statement 要跨進 JavaScript 才到得了那裡。排序寫到一半是外觀問題，下次儲存就會自己修正；在寫入目錄的路徑上賭一個沒驗證過的綁定不值得。真正需要原子性的是之後的庫存扣減，那時會用實際部署驗證過再用。
+
+## 線上課程
+
+實作計畫在 [docs/changes/plans/](docs/changes/plans/)（Phase 0–7），開發過程與所有自行判斷的決定記錄在
+[docs/changes/course-commerce-worklog.md](docs/changes/course-commerce-worklog.md)。
+
+課程與商品分離：課程負責「教什麼」，商品負責「賣多少錢、搭配什麼」。同一門課程可以被多個方案授予
+（例如「線上版」與「課程＋材料包」），而課程內容只有一份。
+
+### 已完成
+
+- 課程、章節、單元；單元可以只有文字、只有影片，或兩者都有
+- 購物車與結帳同時處理實體與課程：**純課程不問配送方式、電話與地址**
+- 訂單寫下不可變的交付快照（課程名稱、觀看期限、貨號、數量）
+- 付款後開通課程，可安全重送；純數位訂單全部開通成功後自動完成
+- 會員的「我的課程」、學習頁與觀看進度
+- 播放授權：短效 HMAC 簽章 cookie + 私有 R2 閘道
+- 對帳查詢與功能開關
+
+### 尚未接上（需要 Cloudflare 資源與部署授權）
+
+影片上傳與轉檔管線。需要兩個 private R2 bucket、一個 TypeScript 媒體 Worker、Queue 與跑 FFmpeg 的
+Container，以及 R2 S3 API 金鑰。資料表、分段大小計算、物件路徑與狀態機都已完成並有測試，
+只是還沒有東西可以上傳。
+
+### 幾條值得先知道的規則
+
+**觀看期限從「第一次觀看」起算，不是從購買日。** 付款時只記天數；`expires_at` 要等會員真的取得
+播放權時，用一個帶條件的 UPDATE（`first_viewed_at IS NULL`）寫入，所以只會成功一次。沒有這個條件，
+每按一次播放都會重設，三十天的課程就變成永久的。文案一律寫「觀看後 N 天」。
+
+**一個會員一門課只有一筆權限，但可以有多個「來源」。** 買兩次同一門課 = 一筆權限 + 兩個來源。
+退掉其中一次只撤銷那個來源；只有在沒有任何未撤銷來源時才收回觀看權。這是退款不會誤傷的關鍵。
+
+**`expires_at` 是 NULL 有兩種意思**：永久，或有期限但還沒開始看。兩種都算有效。
+
+**已擁有的課程不能重複購買。** 購物車會說「你已經擁有」，但購物車是一個畫面不是保證 ——
+兩個分頁都會在訂單成立前通過那個檢查。真正的把關是 `course_offer_purchase_locks`，
+在扣庫存**之前**搶鎖。過期的鎖可以被接管（結帳到一半跑掉不該讓人再也買不了），
+付款後的鎖不再過期（否則十五分鐘後又能買一次）。
+
+**播放權只在發 token 時查一次資料庫。** 一堂課有幾百次分段請求，每次都查的成本高過它保護的東西。
+代價是取消觀看權要等目前 token 過期（約十五分鐘）才生效 —— 這是刻意的取捨。
+Token 寫明它開哪一支影片、哪一個轉檔版本，過期即失效，用常數時間比對，
+換金鑰時驗證接受前一把、簽發只用現在這把。
+
+**這不是 DRM。** 能看的人可以錄下他看到的東西。目標是「不能看的人看不到」，
+以及「脫離情境被分享的網址會很快失效」。
+
+**課程商品由 `COURSE_CHECKOUT_ENABLED` 等旗標控制，預設關閉。**
+旗標讀在**伺服器**：藏起按鈕從來沒有阻止過任何人直接呼叫底下那支 API，而那支 API 才是收錢的。
+只有 `"1"` 算開啟 —— 也接受 `"true"` 會變成兩種拼法，最後有一種在關鍵時刻默默失效。
+
+**HTML 一律在後端清理。** 圖片只接受本站自己的資源路徑（`/media-assets/`、`/shop-assets/`），
+外部連結自動加 `rel="noopener noreferrer"`。編輯器的限制是操作上的方便，不是安全邊界。
 
 ## 名片頁
 

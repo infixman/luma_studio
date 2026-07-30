@@ -395,3 +395,32 @@ class TestAReadingIsStillPartOfACourse:
         )
 
         assert result["courseId"] == "course-1"
+
+
+class TestMediaCaching:
+    """Segments are immutable, so fetching them from R2 twice is waste.
+
+    Authorisation happens before the cache is consulted. A cached segment that
+    could be served without a token would mean the first member to watch a
+    lesson opened it for everybody.
+    """
+
+    def test_a_segment_is_read_from_the_cache_before_r2(self, monkeypatch):
+        from api.front import learning as module
+
+        assert module.CACHEABLE_SUFFIXES == (".m4s", ".mp4", ".webp")
+
+    def test_a_playlist_is_not_cached_at_the_edge(self):
+        """It is what a player re-reads, and a switched encode version has to
+        be picked up without waiting out a long TTL."""
+
+        from api.front import learning as module
+
+        assert not module.is_cacheable("master.m3u8")
+        assert not module.is_cacheable("720p/playlist.m3u8")
+
+    def test_a_segment_is(self):
+        from api.front import learning as module
+
+        assert module.is_cacheable("720p/segment-000001.m4s") is True
+        assert module.is_cacheable("720p/init.mp4") is True

@@ -169,3 +169,52 @@ class TestStockMovement:
 
         statement, _ = database.writes[0]
         assert "enabled" not in statement
+
+
+class TestAdjustmentAudit:
+    """An adjustment is somebody's claim about the physical world.
+
+    Without a record of who said what and when, a count that turns out wrong
+    has no story attached to it, and "stock set to 12" cannot be argued with
+    because it says nothing.
+    """
+
+    def _database(self, stock=5):
+        return FakeDatabase({"SELECT * FROM inventory_items": [{
+            "id": "kit-1", "sku": "", "title": "材料包", "stock": stock,
+            "enabled": 1, "archived_at": None, "created_at": 0, "updated_at": 0,
+        }]})
+
+    def test_an_adjustment_records_who_before_and_after(self, inventory):
+        database = self._database(stock=5)
+
+        asyncio.run(
+            inventory.adjust_stock(make_env(database), "kit-1", 12, actor="owner@example.com", reason="盤點")
+        )
+
+        statement, bindings = next(w for w in database.writes if "INSERT INTO inventory_audit_log" in w[0])
+        assert "owner@example.com" in bindings
+        assert 5 in bindings and 12 in bindings
+        assert "盤點" in bindings
+
+    def test_an_adjustment_that_changes_nothing_is_still_recorded(self, inventory):
+        """"I checked and it was right" is worth knowing, and is exactly what
+        somebody will want to see the day it turns out to be wrong."""
+
+        database = self._database(stock=12)
+
+        asyncio.run(
+            inventory.adjust_stock(make_env(database), "kit-1", 12, actor="owner@example.com", reason="盤點")
+        )
+
+        assert any("INSERT INTO inventory_audit_log" in write[0] for write in database.writes)
+
+    def test_an_order_taking_stock_is_not_an_adjustment(self, inventory):
+        """The system doing its job is not a claim anybody needs to defend, and
+        an audit line per sale would bury the ones that matter."""
+
+        database = FakeDatabase(changes={"UPDATE inventory_items SET stock = stock -": 1})
+
+        asyncio.run(inventory.take_stock(make_env(database), "kit-1", 2))
+
+        assert not any("inventory_audit_log" in write[0] for write in database.writes)

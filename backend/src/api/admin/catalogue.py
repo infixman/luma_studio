@@ -8,7 +8,7 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
-from domain import courses, inventory, offers, shop
+from domain import courses, inventory, offers, shop, video
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
 
@@ -120,6 +120,9 @@ async def handle(ctx: Ctx):
         if action == "references" and method == "GET":
             return ctx.json({"offerIds": await offers.references_of(env, "inventory", item_id)})
 
+        if action == "history" and method == "GET":
+            return ctx.json({"adjustments": await inventory.adjustment_history(env, item_id)})
+
         if not action and method == "PUT":
             try:
                 fields = _item_fields(await ctx.json_body())
@@ -130,6 +133,13 @@ async def handle(ctx: Ctx):
             # The row was read, then written, and the write refuses an item
             # archived in between. Answering 200 with the values that were
             # read would tell the admin their edit landed when it did not.
+            # Stock is a claim about the world, so it goes through the
+            # adjustment path with a name on it rather than being overwritten
+            # silently along with the title.
+            if fields["stock"] != item["stock"]:
+                await inventory.adjust_stock(
+                    env, item_id, fields["stock"], actor=ctx.admin_email, reason="庫存品編輯"
+                )
             if not await inventory.update_item(env, item_id, **fields):
                 return ctx.error("這個庫存品已被封存，請重新整理", 409)
             return ctx.json({"item": await inventory.get_item(env, item_id)})
@@ -152,6 +162,38 @@ async def handle(ctx: Ctx):
             # an item that was already archived is still archived. Reporting
             # a boolean the caller cannot check would be worse than useless.
             return ctx.json({"item": await inventory.get_item(env, item_id)})
+
+        return ctx.error("Not found", 404)
+
+    if path == "/api/video-assets" and method == "GET":
+        return ctx.json(
+            {"assets": await video.list_assets(env, status=(ctx.query.get("status") or [""])[0] or None)}
+        )
+
+    if path.startswith("/api/video-assets/"):
+        tail = path[len("/api/video-assets/") :]
+        asset_id, _, action = tail.partition("/")
+        asset = await video.get_asset(env, asset_id)
+        if asset is None:
+            return ctx.error("Video not found", 404)
+
+        if not action and method == "GET":
+            return ctx.json({"asset": asset})
+
+        if action == "references" and method == "GET":
+            return ctx.json({"lessons": await video.lessons_using(env, asset_id)})
+
+        if action == "archive" and method == "POST":
+            # A published lesson pointing at an archived video surfaces as a
+            # member unable to watch, which is a worse way to find out than an
+            # admin action being refused.
+            lessons = await video.lessons_using(env, asset_id)
+            if lessons:
+                names = "、".join(lesson["title"] for lesson in lessons[:3])
+                return ctx.error(f"這支影片正被單元「{names}」使用，請先替換影片", 409)
+            if not await video.archive_asset(env, asset_id):
+                return ctx.error("這支影片目前的狀態不能封存", 409)
+            return ctx.json({"asset": await video.get_asset(env, asset_id)})
 
         return ctx.error("Not found", 404)
 

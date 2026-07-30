@@ -54,6 +54,21 @@ ALLOWED_TAGS = frozenset(
     }
 )
 
+# Where an image may come from. Both are served by this site's own Workers,
+# so an `img` pointing at either fetches nothing from anywhere else.
+OWN_ASSET_PREFIXES = ("/media-assets/", "/shop-assets/")
+
+
+def _is_own_asset(value: str) -> bool:
+    """Whether this is one of our own asset paths.
+
+    Deliberately not "starts with a slash": `//tracker.example/x.gif` does,
+    and inherits the page's scheme to fetch from somebody else entirely.
+    """
+
+    return value.startswith(OWN_ASSET_PREFIXES) and not value.startswith("//")
+
+
 ALLOWED_ATTRS: dict[str, frozenset[str]] = {
     "a": frozenset({"href", "rel"}),
     "img": frozenset({"src", "alt"}),
@@ -191,17 +206,34 @@ class _Sanitizer(HTMLParser):
                     host = urlparse(trimmed).hostname or ""
                     if host not in SAFE_IFRAME_HOSTS:
                         continue
+                # An image tag is a request to whoever the src names. Left
+                # open, one can point at a host that logs every reader's
+                # address, and the page fetches it faithfully — so images come
+                # from this site's own asset paths and nowhere else.
+                if name == "src" and tag == "img" and not _is_own_asset(trimmed):
+                    continue
                 value = trimmed
+            # A new tab can otherwise reach back into this one through
+            # `window.opener`. Whatever the author wrote is replaced rather
+            # than added to, because the safe value is the one that has to ship.
+            if name == "rel" and tag == "a":
+                continue
             if name == "style":
                 value = _sanitize_style(value)
                 if not value:
                     continue
             safe_attrs.append(f' {name}="{_escape_attr(value)}"')
 
-        if tag in VOID_TAGS:
-            self.parts.append(f"<{tag}{''.join(safe_attrs)}>")
-        else:
-            self.parts.append(f"<{tag}{''.join(safe_attrs)}>")
+        if tag == "a" and any(attr.startswith(' href="') for attr in safe_attrs):
+            href = next(attr for attr in safe_attrs if attr.startswith(' href="'))
+            # Only links that open a page elsewhere. A relative one stays in
+            # this tab, and `noreferrer` on it would hide this site's traffic
+            # from itself for no gain; `mailto:` and `tel:` open no tab at all,
+            # so the attribute would be noise on them.
+            if href.startswith((' href="http://', ' href="https://')):
+                safe_attrs.append(' rel="noopener noreferrer"')
+
+        self.parts.append(f"<{tag}{''.join(safe_attrs)}>")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in OPAQUE_TAGS:

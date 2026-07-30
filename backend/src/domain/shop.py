@@ -423,7 +423,9 @@ async def create_variant(
     return variant_id
 
 
-async def update_variant(env, variant_id: str, *, title: str, sku: str, price: int, stock: int, enabled: bool) -> bool:
+async def update_variant(
+    env, variant_id: str, *, title: str, sku: str, price: int, stock: int, enabled: bool, actor: str = ""
+) -> bool:
     """Save an Offer, including the stock box the product editor still shows.
 
     Stock lives on the InventoryItem now, so writing only the old column would
@@ -439,7 +441,7 @@ async def update_variant(env, variant_id: str, *, title: str, sku: str, price: i
 
     from domain import offers
 
-    await offers.set_simple_offer_stock(env, variant_id, stock)
+    await offers.set_simple_offer_stock(env, variant_id, stock, actor=actor)
     await env.DB.prepare(
         "UPDATE product_variants SET title = ?2, sku = ?3, price = ?4, enabled = ?5 WHERE id = ?1"
     ).bind(variant_id, title, sku, price, 1 if enabled else 0).run()

@@ -280,7 +280,7 @@ async def provision_simple_inventory(env, offer_id: str, *, title: str, sku: str
     return offer_id
 
 
-async def set_simple_offer_stock(env, offer_id: str, stock: int):
+async def set_simple_offer_stock(env, offer_id: str, stock: int, *, actor: str = "", reason: str = ""):
     """Edit the one number the product page means by "stock".
 
     Only valid where the Offer has exactly one InventoryItem and nothing else
@@ -308,7 +308,9 @@ async def set_simple_offer_stock(env, offer_id: str, stock: int):
     if len(await references_of(env, "inventory", item_id)) > 1:
         raise ValueError("這個庫存品被多個方案共用，請到庫存品管理調整")
 
-    change = await inventory.adjust_stock(env, item_id, stock)
+    change = await inventory.adjust_stock(
+        env, item_id, stock, actor=actor, reason=reason or "商品編輯頁調整"
+    )
     if change is None:
         raise ValueError("找不到對應的庫存品")
 

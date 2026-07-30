@@ -1021,6 +1021,29 @@ MIGRATIONS = [
             " ON course_lesson_progress (customer_id, course_id, updated_at DESC)",
         ],
     },
+    {
+        # Deliberate stock changes, and only those. An order taking stock is
+        # the system doing its job; a person typing 12 is a claim about the
+        # physical world, and the day the count turns out wrong that claim is
+        # the only thing there is to go on.
+        #
+        # A line per sale would bury exactly the entries somebody would be
+        # looking for, so `take_stock` writes nothing here.
+        "name": "0033_create_inventory_audit_log",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS inventory_audit_log (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 inventory_item_id TEXT NOT NULL,
+                 actor TEXT NOT NULL,
+                 reason TEXT NOT NULL DEFAULT '',
+                 stock_before INTEGER NOT NULL,
+                 stock_after INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_inventory_audit_log_item"
+            " ON inventory_audit_log (inventory_item_id, created_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

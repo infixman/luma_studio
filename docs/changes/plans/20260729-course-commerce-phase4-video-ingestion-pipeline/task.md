@@ -13,18 +13,18 @@
 
 ## 2. Migration 與 Domain
 
-- [ ] 建立 `video_assets`。
-- [ ] 建立 `video_upload_sessions`。
-- [ ] 建立 `video_transcode_jobs`。
-- [ ] 建立狀態轉移函式與條件 UPDATE。
-- [ ] 建立版本化 source/output key 產生器。
-- [ ] 建立 asset reference 查詢接口。
+- [x] 建立 `video_assets`。
+- [x] 建立 `video_upload_sessions`。
+- [x] 建立 `video_transcode_jobs`。
+- [x] 建立狀態轉移函式與條件 UPDATE。
+- [x] 建立版本化 source/output key 產生器。
+- [x] 建立 asset reference 查詢接口。
 - [ ] 定義 archive、source retention 與舊 encode cleanup 狀態。
 
 ## 3. Multipart 上傳控制
 
 - [ ] 實作建立 multipart upload。
-- [ ] 實作安全 part size 計算。
+- [x] 實作安全 part size 計算。
 - [ ] 實作單一 UploadPart presigned URL。
 - [ ] 實作 CompleteMultipartUpload 與 HEAD 驗證。
 - [ ] 實作 AbortMultipartUpload。
@@ -76,7 +76,7 @@
 
 ## 8. 測試與驗收
 
-- [ ] 單元測試 key、part、狀態與 playlist validator。
+- [x] 單元測試 key、part、狀態與 playlist validator。
 - [ ] 整合測試 multipart create/upload/complete/abort。
 - [ ] 使用短、直式、無音軌、VFR、損壞影片 fixture。
 - [ ] 驗證 Admin API request body 不承載影片。

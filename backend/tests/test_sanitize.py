@@ -27,7 +27,9 @@ def test_keeps_inline_span_for_authored_text_styles():
 
 
 def test_img_keeps_safe_src_strips_handlers():
-    assert sanitize_html('<img src="https://example.com/pic.jpg" onerror="alert(1)">text') == '<img src="https://example.com/pic.jpg">text'
+    # The src is one of this site's own asset paths now: an image pointing
+    # anywhere else is a request to somebody else's server on every read.
+    assert sanitize_html('<img src="/media-assets/pic.jpg" onerror="alert(1)">text') == '<img src="/media-assets/pic.jpg">text'
 
 
 def test_img_strips_unsafe_src():
@@ -44,8 +46,10 @@ def test_iframe_strips_unknown_host():
 
 
 def test_allows_safe_href():
+    # Outward links carry a safe rel, because a new tab can otherwise reach
+    # back into this one.
     raw = '<a href="https://example.com">link</a>'
-    assert sanitize_html(raw) == '<a href="https://example.com">link</a>'
+    assert sanitize_html(raw) == '<a href="https://example.com" rel="noopener noreferrer">link</a>'
 
 
 def test_allows_mailto_href():
@@ -145,8 +149,9 @@ def test_strips_rel_on_non_a():
 
 
 def test_allows_rel_on_a():
+    # Whatever rel the author wrote, the safe value is the one that ships.
     raw = '<a href="https://example.com" rel="noopener">link</a>'
-    assert sanitize_html(raw) == raw
+    assert sanitize_html(raw) == '<a href="https://example.com" rel="noopener noreferrer">link</a>'
 
 
 def test_mixed_xss_payload():
@@ -157,3 +162,59 @@ def test_mixed_xss_payload():
     assert "document.cookie" not in result
     assert "javascript:" not in result
     assert "<p>ok</p>" in result
+
+
+class TestImagesComeFromTheLibrary:
+    """An image tag is a request to somebody else's server.
+
+    Left open, an author — or anybody who gets content past the editor — can
+    point one at a host that logs every reader's address, and the page will
+    fetch it faithfully.
+    """
+
+    def test_an_image_from_the_media_library_survives(self):
+        html = sanitize_html('<p><img src="/media-assets/abc.jpg" alt="圖"></p>')
+
+        assert "/media-assets/abc.jpg" in html
+
+    def test_an_image_from_somewhere_else_is_dropped(self):
+        html = sanitize_html('<p><img src="https://tracker.example/pixel.gif" alt=""></p>')
+
+        assert "tracker.example" not in html
+
+    def test_a_protocol_relative_image_is_dropped(self):
+        """`//host/x.gif` inherits the page's scheme and is easy to miss."""
+
+        html = sanitize_html('<img src="//tracker.example/pixel.gif" alt="">')
+
+        assert "tracker.example" not in html
+
+    def test_a_shop_asset_is_also_allowed(self):
+        html = sanitize_html('<img src="/shop-assets/abc.jpg" alt="">')
+
+        assert "/shop-assets/abc.jpg" in html
+
+
+class TestExternalLinks:
+    def test_a_link_off_site_is_given_a_safe_rel(self):
+        """`noopener` because a new tab can otherwise reach back into this one."""
+
+        html = sanitize_html('<a href="https://example.com">看這裡</a>')
+
+        assert 'rel="noopener noreferrer"' in html
+
+    def test_an_authors_own_rel_is_replaced_not_appended_to(self):
+        """Whatever they wrote, the safe value is the one that ships."""
+
+        html = sanitize_html('<a href="https://example.com" rel="opener">x</a>')
+
+        assert html.count("rel=") == 1
+        assert 'rel="noopener noreferrer"' in html
+
+    def test_a_link_within_the_site_is_left_alone(self):
+        """It opens in this tab, and `noreferrer` would hide our own analytics
+        from ourselves."""
+
+        html = sanitize_html('<a href="/shop">商城</a>')
+
+        assert "rel=" not in html

@@ -271,3 +271,31 @@ async def publish_encode(env, asset_id: str, *, encode_version: int, master: str
         " WHERE id = ?1 AND status = 'processing'"
     ).bind(asset_id, _version(encode_version), master, poster, utc_timestamp()).run()
     return d1_changed(result)
+
+
+async def lessons_using(env, asset_id: str) -> list[dict]:
+    """Which course lessons play this video.
+
+    Asked before archiving. Archiving one a published lesson still uses would
+    leave that lesson pointing at nothing, and the failure would surface as a
+    member unable to watch rather than as an admin action that was refused.
+    """
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT id, section_id, title FROM course_lessons WHERE video_asset_id = ?1"
+        ).bind(asset_id)
+    )
+    return [{"id": row["id"], "sectionId": row["section_id"], "title": row["title"]} for row in rows]
+
+
+async def archive_asset(env, asset_id: str) -> bool:
+    """Retire a video. Only from a state it makes sense to retire from."""
+
+    rows = await d1_rows(env.DB.prepare("SELECT status FROM video_assets WHERE id = ?1").bind(asset_id))
+    if not rows or not can_change(rows[0]["status"], "archived"):
+        return False
+    result = await env.DB.prepare(
+        "UPDATE video_assets SET status = 'archived', updated_at = ?2 WHERE id = ?1 AND status = ?3"
+    ).bind(asset_id, utc_timestamp(), rows[0]["status"]).run()
+    return d1_changed(result)

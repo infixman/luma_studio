@@ -126,14 +126,18 @@ async def archive_item(env, item_id: str) -> bool:
     return d1_changed(result)
 
 
-async def adjust_stock(env, item_id: str, stock: int) -> dict | None:
-    """Set a count deliberately, and report what it was.
+async def adjust_stock(
+    env, item_id: str, stock: int, *, actor: str = "", reason: str = ""
+) -> dict | None:
+    """Set a count deliberately, and record who said so.
 
     Separate from `take_stock` because these are different events. An order
     taking two is the system doing its job; an admin typing 12 is a claim
-    about the physical world that someone may later need to question. Without
-    the previous value the audit line says "stock set to 12", which cannot be
-    argued with because it says nothing.
+    about the physical world that someone may later need to question.
+
+    The audit line is written even when the number does not change: "I checked
+    and it was right" is worth knowing, and is exactly what somebody will want
+    to see the day it turns out not to have been.
 
     Returns None when the item is gone, so the caller can answer 404 rather
     than reporting a successful adjustment of nothing.
@@ -142,10 +146,37 @@ async def adjust_stock(env, item_id: str, stock: int) -> dict | None:
     existing = await get_item(env, item_id)
     if existing is None:
         return None
+    now = utc_timestamp()
     await env.DB.prepare(
         "UPDATE inventory_items SET stock = ?2, updated_at = ?3 WHERE id = ?1"
-    ).bind(item_id, stock, utc_timestamp()).run()
+    ).bind(item_id, stock, now).run()
+    await env.DB.prepare(
+        "INSERT INTO inventory_audit_log"
+        " (inventory_item_id, actor, reason, stock_before, stock_after, created_at)"
+        " VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+    ).bind(item_id, actor or "system", reason, existing["stock"], stock, now).run()
     return {"before": existing["stock"], "after": stock}
+
+
+async def adjustment_history(env, item_id: str) -> list[dict]:
+    """Every deliberate change to this count, newest first."""
+
+    rows = await d1_rows(
+        env.DB.prepare(
+            "SELECT * FROM inventory_audit_log WHERE inventory_item_id = ?1"
+            " ORDER BY created_at DESC LIMIT 100"
+        ).bind(item_id)
+    )
+    return [
+        {
+            "actor": row["actor"],
+            "reason": row["reason"],
+            "before": int(row["stock_before"]),
+            "after": int(row["stock_after"]),
+            "createdAt": int(row["created_at"]),
+        }
+        for row in rows
+    ]
 
 
 async def take_stock(env, item_id: str, quantity: int) -> bool:

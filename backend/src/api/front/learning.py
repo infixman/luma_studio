@@ -22,6 +22,17 @@ from shared.responses import Ctx
 # manifest URL carries none of it and page scripts cannot read it.
 COOKIE_NAME = "luma_playback"
 
+# What is worth keeping at the edge. These are immutable: a re-encode is a new
+# version and therefore a new key, so a hit is always the right bytes.
+#
+# Playlists are left out on purpose. They are what a player re-reads, and a
+# switched encode version has to be picked up without waiting out a TTL.
+CACHEABLE_SUFFIXES = (".m4s", ".mp4", ".webp")
+
+
+def is_cacheable(object_path: str) -> bool:
+    return object_path.endswith(CACHEABLE_SUFFIXES)
+
 
 def _secrets(env) -> tuple[str, str | None]:
     """The signing key, and the one being rotated out if there is one."""
@@ -172,12 +183,69 @@ async def media_response(ctx: Ctx, path: str):
         return ctx.error("Forbidden", 403)
 
     key = f"videos/{asset_id}/{encode_version}/{object_path}"
+
+    # Only after the token has been checked. A cached object that could be
+    # served without one would mean the first member to watch a lesson opened
+    # it for everybody — the cache key deliberately carries no identity, which
+    # is what makes it shareable and also what makes the order matter.
+    cached = await _cached(ctx, key) if is_cacheable(object_path) else None
+    if cached is not None:
+        return ctx.binary(cached, _media_headers(object_path))
+
     stored = await ctx.env.COURSE_VIDEO.get(key)
     if stored is None:
         return ctx.error("Not found", 404)
 
-    body = (await stored.arrayBuffer()).to_py()
-    return ctx.binary(bytes(body), _media_headers(object_path))
+    body = bytes((await stored.arrayBuffer()).to_py())
+    if is_cacheable(object_path):
+        await _remember(ctx, key, body, object_path)
+    return ctx.binary(body, _media_headers(object_path))
+
+
+def _cache_url(key: str) -> str:
+    """A stable, identity-free URL to key the cache on.
+
+    Not the request URL: that would work, but tying the entry to the incoming
+    path means a change to the route invalidates a cache full of bytes that
+    have not changed.
+    """
+
+    return f"https://course-media.internal/{key}"
+
+
+async def _cached(ctx: Ctx, key: str) -> bytes | None:
+    """Whatever the edge already has, or None.
+
+    Every failure is None. A cache that is unavailable, or a runtime without
+    one, must not stop somebody watching a lesson.
+    """
+
+    try:
+        from js import Request, caches
+
+        hit = await caches.default.match(Request.new(_cache_url(key)))
+        if hit is None:
+            return None
+        return bytes((await hit.arrayBuffer()).to_py())
+    except Exception:
+        return None
+
+
+async def _remember(ctx: Ctx, key: str, body: bytes, object_path: str) -> None:
+    """Put an object in the shared cache, or carry on without."""
+
+    try:
+        from js import Request, Response, caches
+        from pyodide.ffi import to_js
+
+        headers = _media_headers(object_path)
+        await caches.default.put(
+            Request.new(_cache_url(key)),
+            Response.new(to_js(body), headers=to_js(headers, dict_converter=__import__("js").Object.fromEntries)),
+        )
+    except Exception:
+        # Failing to cache is not failing to serve.
+        pass
 
 
 def _media_headers(object_path: str) -> dict:

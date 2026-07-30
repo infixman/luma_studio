@@ -253,6 +253,7 @@ async def handle(ctx: Ctx):
                         price=default_fields["price"],
                         stock=default_fields["stock"],
                         enabled=default_fields["enabled"],
+                        actor=getattr(ctx, "admin_email", "") or "admin",
                     )
                 except ValueError as error:
                     # Stock this page cannot own — a shared inventory item, or
@@ -359,7 +360,9 @@ async def handle(ctx: Ctx):
         ):
             return ctx.error("上架商品至少需要一筆啟用的銷售方案", 409)
         try:
-            await shop.update_variant(env, variant_id, **fields, enabled=enabled)
+            await shop.update_variant(
+                env, variant_id, **fields, enabled=enabled, actor=getattr(ctx, "admin_email", "") or "admin"
+            )
         except ValueError as error:
             return ctx.error(str(error), 409)
         return ctx.json(await _detail(ctx, product))
