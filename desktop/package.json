@@ -1,0 +1,31 @@
+{
+  "name": "luma-video-uploader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "苒光繪誌課程影片上傳工具",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "smoke": "electron scripts/smoke.mjs",
+    "build": "npm run typecheck && npm run test && electron-vite build && npm run smoke",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^4.0.1",
+    "happy-dom": "^20.11.1",
+    "preact": "^10.29.7",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,42 @@
+/* Dark by default: this tool is used beside a video editor, and a white window
+   next to one is a flashbang. */
+:root {
+  --bg: #14151a;
+  --panel: #1c1e26;
+  --text: #e8e9ed;
+  --muted: #9a9db0;
+  --accent: #d8a657;
+  --line: #2b2e3a;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  /* Nothing here is a web page, and a text cursor over a button reads as one. */
+  user-select: none;
+}
+
+.shell {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.muted {
+  color: var(--muted);
+}
