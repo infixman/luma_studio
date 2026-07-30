@@ -254,10 +254,16 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 - [x] 實作 `GET /releases/{file}`，檔名走白名單。**改成扁平的**：electron-updater 的
       generic provider 相對 feed 解析安裝檔名字，版本子目錄要自己寫更新邏輯 —— 那是沒有機器
       就測不到的一段。公開路由，套上跟其他公開位元組路由一樣的 rate limit。
-- [ ] electron-builder NSIS 設定，不簽章；README 寫明 SmartScreen 會警告。
-- [ ] 星芒圖示，各尺寸齊全（參照 FotoBuddy）。
+- [x] electron-builder NSIS 設定，不簽章；README 與後台都寫明 SmartScreen 會警告。
+      加上 `publish: generic`，讓打包產生 `latest.yml`。
+- [x] 星芒圖示，各尺寸齊全（`build/icon.ico`，16–256 七個尺寸）。
 - [ ] CI 打包並上傳安裝檔與 updater metadata 到 R2。
-- [ ] electron-updater 指向 releases 路由。
+      工作流程寫好了（`.github/workflows/desktop-release.yml`，手動觸發、Windows runner、
+      `latest.yml` 最後上傳）。**需要你在 GitHub 設好 `CLOUDFLARE_API_TOKEN` 與
+      `CLOUDFLARE_ACCOUNT_ID`（production environment）才會動** —— 我沒辦法設 secret。
+- [x] electron-updater 指向 releases 路由。**feed 用回應版本檢查的那台伺服器回報的網址**，
+      不是打包進 build 的那個 —— 從 staging 裝的工具去看正式環境的 feed，會拿到不屬於它的安裝檔。
+      下載是自動的，**重開安裝不是**：在兩小時的上傳中途重啟，等於丟掉那次上傳。
 - [x] 低於 `minSupported` 或 `blocked` 時工具停止工作並要求更新。
       判斷在伺服器（工具帶自己的版本去問，拿回一個 verdict，不是一份要自己解讀的政策）。
       **問不到不算停用** —— 每一次上傳都走同一個 API，問不到的工具本來就傳不了，

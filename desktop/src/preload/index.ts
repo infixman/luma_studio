@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 import type { PairingInput } from '../shared/pairing'
 import type { VersionState } from '../shared/versionGate'
+import type { UpdateState } from '../shared/updateState'
 import type { SessionStatus } from '../shared/session'
 import type { Progress, ScanResult, StorageListing, UploadRequest, UploadResult } from '../shared/upload'
 
@@ -63,6 +64,12 @@ const api = {
   /** Whether this build may still work, and what to say about it. */
   versionState: (): Promise<{ state: VersionState | null; message: string }> =>
     ipcRenderer.invoke('app:versionState'),
+
+  /** What the updater has managed to do so far. */
+  updateState: (): Promise<UpdateState> => ipcRenderer.invoke('app:updateState'),
+
+  /** Restart into the downloaded build. Never automatic — see `updater.ts`. */
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke('app:installUpdate'),
 
   auth: {
     status: (): Promise<SessionStatus> => ipcRenderer.invoke('auth:status'),

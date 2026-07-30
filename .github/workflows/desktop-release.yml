@@ -1,0 +1,105 @@
+name: Release desktop tool
+
+# Deliberately manual, and deliberately not on a tag push.
+#
+# Publishing a build is one of two halves; the other is changing the version
+# policy in the back office, and the order matters — `minSupported` has to be
+# raised only once the installer somebody would update *to* is actually
+# downloadable. A workflow that fired on every tag would do half of that while
+# nobody was looking.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version being published, for the summary only. package.json is the source of truth.'
+        required: false
+        default: ''
+
+concurrency:
+  group: luma-desktop-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and publish the Windows installer
+    # Windows, because an NSIS installer is built by NSIS. Cross-building it from
+    # Linux is possible with wine and is one more thing to be wrong about the day
+    # the installer misbehaves on somebody's machine.
+    runs-on: windows-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install
+        working-directory: desktop
+        run: npm ci
+
+      # The same command a person runs locally: typecheck, tests, bundle, and the
+      # smoke test that starts a real Electron and calls across the bridge. A
+      # release that skipped it would be the one build nobody ran.
+      - name: Build
+        working-directory: desktop
+        run: npm run build
+
+      - name: Package
+        working-directory: desktop
+        # `--publish never`: electron-builder's own publishing wants a provider
+        # with credentials, and ours is an R2 bucket reached with wrangler. The
+        # files it writes are what gets uploaded below.
+        run: npx electron-builder --win --publish never
+
+      # Uploaded flat, matching what the Worker serves and what
+      # electron-updater's generic provider expects: it reads `{feed}/latest.yml`
+      # and resolves the installer's name relative to the feed. The version is in
+      # the installer's own name.
+      #
+      # `latest.yml` goes last. Until it points at the new installer, nothing
+      # offers an update — and an updater that learned about a version whose
+      # installer had not finished uploading would fail on the download.
+      - name: Upload the installer to R2
+        working-directory: desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in dist/*.exe dist/*.exe.blockmap; do
+            [ -e "$file" ] || continue
+            echo "uploading $(basename "$file")"
+            npx wrangler r2 object put \
+              "luma-desktop-tools/releases/$(basename "$file")" \
+              --file "$file" --remote
+          done
+
+      - name: Upload the update metadata
+        working-directory: desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler r2 object put \
+            luma-desktop-tools/releases/latest.yml \
+            --file dist/latest.yml --content-type text/yaml --remote
+
+      - name: Say what was published
+        working-directory: desktop
+        shell: bash
+        run: |
+          {
+            echo "### 已發佈"
+            echo
+            ls dist/*.exe dist/latest.yml 2>/dev/null | sed 's/^/- /'
+            echo
+            echo "還沒有人會拿到它：到後台的「桌面上傳工具」把「最新版本」改成這一版。"
+            echo "要讓舊版停下來，同時把「最低支援版本」提上去 —— 但只有在上面的安裝檔"
+            echo "真的下載得到之後。"
+          } >> "$GITHUB_STEP_SUMMARY"

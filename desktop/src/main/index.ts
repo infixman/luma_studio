@@ -6,6 +6,7 @@ import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from
 import { AdminApiError, fetchVersionPolicy, listStorage } from '../shared/adminApi'
 import { explain } from '../shared/failures'
 import { mayWork, versionMessage, type VersionState } from '../shared/versionGate'
+import { checkForUpdate, installNow, updateState } from './updater'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
@@ -201,6 +202,12 @@ if (process.argv.includes('--self-check')) {
         const { token, base } = session.requireToken()
         const policy = await fetchVersionPolicy(transport, base, token, app.getVersion())
         versionState = { verdict: policy.verdict, latest: policy.latest, notes: policy.notes }
+        if (policy.verdict?.updateAvailable && policy.feedUrl) {
+          // Pointed at the feed the *answering* server named, not the one baked
+          // into the build: an install from staging that checked the live feed
+          // would offer itself the wrong installer.
+          void checkForUpdate(policy.feedUrl)
+        }
       } catch {
         // Not being able to ask does not stop anything — every upload goes
         // through the same API, so a tool that cannot ask cannot upload either.
@@ -208,6 +215,12 @@ if (process.argv.includes('--self-check')) {
       }
       return { state: versionState, message: versionMessage(versionState) }
     })
+
+    ipcMain.handle('app:updateState', () => updateState())
+
+    // Restarting is a decision. Doing it automatically would end a two-hour
+    // upload to save somebody a click.
+    ipcMain.handle('app:installUpdate', () => installNow())
 
     // Read-only, and the only thing this tool can ask about the bucket. It is
     // how somebody confirms the objects arrived without taking the tool's word

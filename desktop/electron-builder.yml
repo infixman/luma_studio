@@ -41,3 +41,17 @@ nsis:
 # electron-builder tries to reach a code-signing service otherwise, which fails
 # slowly rather than quickly on a machine with no certificate.
 forceCodeSigning: false
+
+# Where the built files are published, and where `latest.yml` says to look.
+#
+# Generic rather than GitHub Releases: the installer is served by our own admin
+# Worker, behind the same rate limit as everything else public, and there is no
+# public repository to attach a release to.
+#
+# The URL here is the production one because a build has to carry something. The
+# running tool overrides it with whatever the server that answered its version
+# check reported — see `src/main/updater.ts`. A staging install that used this
+# value would check the live feed and offer itself the wrong installer.
+publish:
+  - provider: generic
+    url: https://admin-api.luma-studio.tw/releases
