@@ -114,6 +114,139 @@ class TestParityWithBotocore:
         assert signature_of(signed) == expected
 
 
+SOURCE_KEY = "sources/abc123/1/source.mp4"
+UPLOAD_ID = "ABPnzm4-tEXAMPLE_uploadId.with~chars+and/slash=="
+# Written out rather than produced by `sigv4._encode`: handing the oracle the
+# implementation's own encoding would compare the code with itself, which is the
+# one thing this file exists not to do. `~` stays literal, everything else that
+# is not unreserved is percent-encoded with upper-case hex — the AWS rule.
+UPLOAD_ID_ENCODED = "ABPnzm4-tEXAMPLE_uploadId.with~chars%2Band%2Fslash%3D%3D"
+
+
+def multipart(operation: str, *, key: str = SOURCE_KEY, now: int = 1785292800, **extra) -> str:
+    return sigv4.presigned_multipart_url(
+        operation=operation,
+        endpoint=ENDPOINT,
+        bucket="luma-course-source",
+        key=key,
+        access_key_id=ACCESS_KEY_ID,
+        secret_access_key=SECRET,
+        now=now,
+        expires=900,
+        **extra,
+    )
+
+
+class TestMultipartParityWithBotocore:
+    """A source file is gigabytes, so it goes up in parts.
+
+    The canonical request for these is not the one the single-PUT path produces:
+    the operation lives in the query string (`?uploads`, `?uploadId=…&partNumber=…`),
+    and the query string is signed. So each of the four gets its own parity check
+    against botocore rather than an assumption that "it is the same code".
+    """
+
+    def _expected(self, method: str, query: str, *, key: str = SOURCE_KEY) -> tuple[str, str]:
+        # botocore is handed the query exactly as it must be sent; for S3 it signs
+        # the URL as given rather than rebuilding it.
+        return botocore_signature(method, f"{ENDPOINT}/luma-course-source/{key}?{query}", expires=900)
+
+    def test_starting_an_upload_matches(self):
+        amz_date, expected = self._expected("POST", "uploads=")
+
+        assert signature_of(multipart("create", now=instant_of(amz_date))) == expected
+
+    def test_a_part_matches(self):
+        amz_date, expected = self._expected("PUT", f"partNumber=3&uploadId={UPLOAD_ID_ENCODED}")
+
+        signed = multipart("part", now=instant_of(amz_date), upload_id=UPLOAD_ID, part_number=3)
+
+        assert signature_of(signed) == expected
+
+    def test_finishing_an_upload_matches(self):
+        amz_date, expected = self._expected("POST", f"uploadId={UPLOAD_ID_ENCODED}")
+
+        signed = multipart("complete", now=instant_of(amz_date), upload_id=UPLOAD_ID)
+
+        assert signature_of(signed) == expected
+
+    def test_abandoning_an_upload_matches(self):
+        amz_date, expected = self._expected("DELETE", f"uploadId={UPLOAD_ID_ENCODED}")
+
+        signed = multipart("abort", now=instant_of(amz_date), upload_id=UPLOAD_ID)
+
+        assert signature_of(signed) == expected
+
+
+class TestWhatTheMultipartUrlCarries:
+    def test_the_part_url_names_the_part_and_the_upload(self):
+        query = parse_qs(urlparse(multipart("part", upload_id=UPLOAD_ID, part_number=7)).query)
+
+        assert query["partNumber"] == ["7"]
+        assert query["uploadId"] == [UPLOAD_ID]
+
+    def test_starting_an_upload_asks_for_one(self):
+        assert "uploads=" in urlparse(multipart("create")).query
+
+    def test_the_upload_id_is_encoded_in_the_url_not_pasted_in(self):
+        """It is an opaque string from R2 and it does contain `+`, `/` and `=`.
+        Pasted raw, `+` reads as a space at the far end and the signature covers
+        a different value than the one sent."""
+
+        raw_query = urlparse(multipart("part", upload_id=UPLOAD_ID, part_number=1)).query
+
+        assert f"uploadId={UPLOAD_ID_ENCODED}" in raw_query
+
+
+class TestMultipartRefusals:
+    """The reason this is a separate entrance from `presigned_url`.
+
+    `presigned_url` signs GET/HEAD/PUT for one object. Multipart needs POST and
+    DELETE, and a bare presigned DELETE for an object key is object deletion —
+    which belongs in the back office, behind the reference checks. Here DELETE is
+    only ever signed together with an `uploadId`, and the signature covers the
+    query, so the URL cannot be turned into "delete this video".
+    """
+
+    def test_an_unknown_operation_is_refused(self):
+        with pytest.raises(ValueError):
+            multipart("delete-everything")
+
+    @pytest.mark.parametrize("operation", ["part", "complete", "abort"])
+    def test_an_operation_that_needs_an_upload_id_refuses_without_one(self, operation):
+        with pytest.raises(ValueError):
+            multipart(operation, part_number=1)
+
+    def test_starting_an_upload_refuses_an_upload_id(self):
+        """It is the call that produces one. Being handed one means the caller has
+        confused two states, and signing it anyway would produce a URL that does
+        something else."""
+
+        with pytest.raises(ValueError):
+            multipart("create", upload_id=UPLOAD_ID)
+
+    def test_a_part_needs_a_part_number(self):
+        with pytest.raises(ValueError):
+            multipart("part", upload_id=UPLOAD_ID)
+
+    @pytest.mark.parametrize("part_number", [0, -1, 10_001, True, "3", 3.0])
+    def test_an_impossible_part_number_is_refused(self, part_number):
+        with pytest.raises(ValueError):
+            multipart("part", upload_id=UPLOAD_ID, part_number=part_number)
+
+    def test_only_a_part_may_carry_a_part_number(self):
+        with pytest.raises(ValueError):
+            multipart("complete", upload_id=UPLOAD_ID, part_number=1)
+
+    def test_a_traversing_key_is_still_refused(self):
+        with pytest.raises(ValueError):
+            multipart("create", key="sources/abc123/1/../../videos/other/1/master.m3u8")
+
+    def test_an_empty_upload_id_is_refused(self):
+        with pytest.raises(ValueError):
+            multipart("abort", upload_id="")
+
+
 class TestTheUrlItself:
     def test_it_carries_everything_r2_needs_to_verify_it(self):
         url = ours("PUT", "luma-course-video", "videos/abc123/1/master.m3u8", now=1785292800)

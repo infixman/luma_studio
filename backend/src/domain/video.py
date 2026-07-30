@@ -25,13 +25,18 @@ one that works.
 import re
 
 from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
+from shared.sigv4 import MAX_PART_NUMBER
 
 
 MIB = 1024 * 1024
 
 # R2's multipart limits. Both are the service's, not ours.
 MIN_PART_SIZE = 5 * MIB
-MAX_PARTS = 10_000
+# One copy of the ceiling, for the same reason `validate_byte_size` gives for
+# the size one: two would eventually disagree, and the way they disagree is an
+# upload that starts and cannot finish. The signer owns it because it is the
+# side that refuses a part number, and `shared` cannot import `domain`.
+MAX_PARTS = MAX_PART_NUMBER
 
 # Ours: a course lesson beyond this is a mistake or a misuse, and either way
 # the pipeline should say so before the upload rather than during it.

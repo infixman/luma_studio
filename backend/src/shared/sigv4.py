@@ -40,6 +40,28 @@ UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD"
 # job, where the reference checks live.
 METHODS = ("GET", "HEAD", "PUT")
 
+# The four calls a multipart upload is made of, and the method and query each
+# one needs. They live apart from `METHODS` because two of them are POST and one
+# is DELETE, and a presigned DELETE for a bare object key *is* object deletion.
+#
+# What keeps that from being a hole is the query string: the signature covers it,
+# and every entry here that uses DELETE or POST also requires an `uploadId`. A
+# DELETE URL carrying an `uploadId` cancels a pending upload; it cannot remove an
+# object. So the narrow grant is structural rather than a rule someone has to
+# remember.
+MULTIPART_OPERATIONS = {
+    # Ask R2 to start one. `uploads` is a valueless flag, which canonicalises to
+    # `uploads=`.
+    "create": ("POST", False, False),
+    "part": ("PUT", True, True),
+    "complete": ("POST", True, False),
+    "abort": ("DELETE", True, False),
+}
+
+# R2's limit, and the reason `part_size_for` exists in the video domain — which
+# reads it from here rather than keeping a second copy.
+MAX_PART_NUMBER = 10_000
+
 # AWS refuses anything longer. Ours are minutes, but the bound belongs here so
 # a caller's arithmetic mistake fails at the signer rather than at R2.
 MAX_EXPIRES = 7 * 24 * 60 * 60
@@ -94,7 +116,7 @@ def _canonical_path(bucket: str, key: str) -> str:
     return "/".join(_encode(segment) for segment in segments)
 
 
-def presigned_url(
+def _signed(
     *,
     method: str,
     endpoint: str,
@@ -104,16 +126,17 @@ def presigned_url(
     secret_access_key: str,
     now: int,
     expires: int,
-    region: str = REGION,
+    region: str,
+    extra_query: tuple[tuple[str, str], ...] = (),
 ) -> str:
-    """A URL R2 will honour for this one object, method and window.
+    """The signing itself, shared by the single-object and multipart entrances.
 
-    `now` is passed in rather than read from the clock so the result is a
-    function of its arguments — the same reason the playback tokens take it.
+    Everything narrowing *what* may be signed happens in the callers; this part
+    is the arithmetic, and there is only one copy of it because a second one
+    would eventually disagree about a canonicalisation rule and say so only as a
+    403 with nothing in it.
     """
 
-    if method not in METHODS:
-        raise ValueError(f"Cannot presign {method}")
     if not access_key_id or not secret_access_key:
         raise ValueError("R2 signing credentials are not configured")
     if isinstance(expires, bool) or not isinstance(expires, int) or expires < 1 or expires > MAX_EXPIRES:
@@ -148,6 +171,7 @@ def presigned_url(
                 ("X-Amz-Date", amz_date),
                 ("X-Amz-Expires", str(expires)),
                 ("X-Amz-SignedHeaders", SIGNED_HEADERS),
+                *extra_query,
             )
         )
     )
@@ -163,3 +187,120 @@ def presigned_url(
     signature = hmac.new(signing_key, to_sign.encode("utf-8"), sha256).hexdigest()
 
     return f"https://{host}/{path}?{query}&X-Amz-Signature={signature}"
+
+
+def presigned_url(
+    *,
+    method: str,
+    endpoint: str,
+    bucket: str,
+    key: str,
+    access_key_id: str,
+    secret_access_key: str,
+    now: int,
+    expires: int,
+    region: str = REGION,
+) -> str:
+    """A URL R2 will honour for this one object, method and window.
+
+    `now` is passed in rather than read from the clock so the result is a
+    function of its arguments — the same reason the playback tokens take it.
+    """
+
+    if method not in METHODS:
+        raise ValueError(f"Cannot presign {method}")
+    return _signed(
+        method=method,
+        endpoint=endpoint,
+        bucket=bucket,
+        key=key,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        now=now,
+        expires=expires,
+        region=region,
+    )
+
+
+def presigned_multipart_url(
+    *,
+    operation: str,
+    endpoint: str,
+    bucket: str,
+    key: str,
+    access_key_id: str,
+    secret_access_key: str,
+    now: int,
+    expires: int,
+    upload_id: str | None = None,
+    part_number: int | None = None,
+    region: str = REGION,
+) -> str:
+    """A URL for one step of a multipart upload of one object.
+
+    A source file is gigabytes, and a single PUT that dies at 87% starts again
+    from zero. The four steps each need their own canonical request, because the
+    operation is in the query string and the query string is signed.
+
+    Which arguments are required is derived from the operation rather than
+    checked loosely: `create` produces an upload id and so must not be handed
+    one, and the three that act on an existing upload cannot be signed without
+    it. That is what keeps the DELETE here from being a delete-object grant.
+
+    **Only `part` is for the desktop tool.** The other three URLs are for the
+    Worker's own fetch, and the reason is not secrecy — it is that they are the
+    steps with consequences the server has to know about. `create` is where R2
+    issues the upload id, and a client that calls it directly is the only thing
+    that ever sees it, so `video_upload_sessions` cannot record what it is
+    tracking. `complete` and `abort` end the upload, and the spec requires both
+    to be idempotent, which is a property of a route with a session row behind
+    it, not of a URL. `complete`'s body is unsigned as well, so its holder
+    chooses which parts the finished object is made of.
+
+    Nothing here can enforce that — a URL is a URL — so it is written down at
+    the place somebody would go to hand one out.
+    """
+
+    if operation not in MULTIPART_OPERATIONS:
+        raise ValueError(f"Not a multipart operation: {operation}")
+    method, needs_upload_id, needs_part_number = MULTIPART_OPERATIONS[operation]
+
+    if needs_upload_id:
+        if not isinstance(upload_id, str) or not upload_id:
+            raise ValueError(f"{operation} needs the upload id R2 issued")
+    elif upload_id is not None:
+        raise ValueError(f"{operation} is what produces an upload id")
+
+    if needs_part_number:
+        if (
+            isinstance(part_number, bool)
+            or not isinstance(part_number, int)
+            or part_number < 1
+            or part_number > MAX_PART_NUMBER
+        ):
+            raise ValueError(f"Part number must be between 1 and {MAX_PART_NUMBER}")
+    elif part_number is not None:
+        raise ValueError(f"{operation} does not name a part")
+
+    if operation == "create":
+        # A valueless flag. Canonically it is `uploads=`, and R2 reads the query
+        # the same way — sending `?uploads` with no `=` signs one thing and
+        # requests another.
+        extra: tuple[tuple[str, str], ...] = (("uploads", ""),)
+    elif operation == "part":
+        extra = (("partNumber", str(part_number)), ("uploadId", upload_id or ""))
+    else:
+        extra = (("uploadId", upload_id or ""),)
+
+    return _signed(
+        method=method,
+        endpoint=endpoint,
+        bucket=bucket,
+        key=key,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        now=now,
+        expires=expires,
+        region=region,
+        extra_query=extra,
+    )
