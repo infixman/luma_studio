@@ -131,7 +131,22 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 - [ ] 放棄留下的物件是孤兒，但 S6 的盤點判斷是「prefix 有沒有對應的版本列」，
       而原始檔上傳從來不會有版本列。**盤點要把 `aborted`／`archived` 的 asset 的
       key 當成可刪**，不是當成有主。
-- [ ] 實作原始檔 multipart 的 create／part／complete／abort，且 complete 與 abort 冪等。
+- [x] SigV4 能簽 multipart 的四個動作（`shared/sigv4.py`），四個都跟 botocore 對簽。
+      **只有 `part` 是給工具的**：`create` 是 R2 發 uploadId 的地方，直接給工具等於
+      沒有人記得下那個 id；`complete`／`abort` 要冪等，而冪等是「有 session 列的路由」
+      的性質，不是一張 URL 的性質。
+- [x] Worker 自己對 R2 發 create／complete／abort（`shared/r2_s3.py`）。
+      三個坑寫在模組開頭：complete 會回 **200 但 body 是 `<Error>`**；abort 對已經不存在的
+      upload 回 404 而那是成功（但只有 `NoSuchUpload`／空 code 算，`NoSuchBucket` 是設定錯）；
+      **complete 沒辦法在這一層做到冪等** —— 完成後 uploadId 就不存在，所以「已經完成」和
+      「從來不存在」都回 `NoSuchUpload`。`R2Error` 帶 `code`，讓路由層去分辨。
+- [ ] 實作原始檔 multipart 的 create／part／complete／abort 端點，且 complete 與 abort 冪等。
+      **`video_upload_sessions` 現在沒有地方存每個 part 的 ETag**（欄位只有 id／asset_id／
+      upload_id／part_size／status／expires_at／時間戳）。complete 需要那份清單，而如果只靠
+      工具重送，那 complete 的冪等就變成「工具每次送一樣的清單」而不是伺服器的性質。
+      要嘛加一張 part 表，要嘛明講冪等只涵蓋 abort。
+      另外：complete 收到 `NoSuchUpload` 時不能直接當失敗 —— 要先 HEAD 那個 key，
+      因為「R2 完成了、回應掉了」長得一模一樣。
 - [ ] 工具上傳原始檔。
 - [ ] 限制單檔大小、影片長度與同時 session 數。
 - [ ] 實作 `GET /api/video-storage?prefix=`，只回 key／大小／時間，不回簽章 URL。
