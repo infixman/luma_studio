@@ -102,7 +102,10 @@ export function widthFor(rung: Rung, source: Probed): number {
 export function ffmpegArgs(options: {
   source: string
   rung: Rung
-  outDir: string
+  // No `outDir`. There used to be one, required and never read — and it implied
+  // the init segment's location was decided here, which is the belief that let
+  // the separator bug through. Where files land is decided entirely by the two
+  // paths below.
   segmentPattern: string
   playlist: string
   hasAudio: boolean
@@ -115,7 +118,7 @@ export function ffmpegArgs(options: {
     '-progress', 'pipe:1',
     '-nostats',
     '-y',
-    '-i', source,
+    '-i', toFfmpegPath(source),
     '-vf', `scale=-2:${rung.height}`,
     '-c:v', 'libx264',
     '-preset', 'medium',
@@ -137,9 +140,31 @@ export function ffmpegArgs(options: {
     '-hls_playlist_type', 'vod',
     '-hls_segment_type', 'fmp4',
     '-hls_fmp4_init_filename', 'init.mp4',
-    '-hls_segment_filename', segmentPattern,
-    playlist,
+    '-hls_segment_filename', toFfmpegPath(segmentPattern),
+    toFfmpegPath(playlist),
   ]
+}
+
+/**
+ * A path in the form ffmpeg reasons about.
+ *
+ * Windows accepts both separators, and so does ffmpeg — for *opening* a file. It
+ * does not treat `\` as a separator when it needs the directory *out* of a path,
+ * and `-hls_fmp4_init_filename` is exactly that case: the init segment is written
+ * beside `-hls_segment_filename`, found by looking for `/`. Given
+ * `C:\encodes\a\720p\segment-%06d.m4s` it finds none, concludes there is no
+ * directory, and writes `init.mp4` into the working directory instead.
+ *
+ * The result is an encode whose playlist names a file nobody wrote: nothing
+ * plays, and import reports it missing. Confirmed against the real binary — the
+ * same command differing only in separators puts the init segment in two
+ * different places.
+ *
+ * Applied to every path here rather than only to the segment pattern, because
+ * "which arguments need it" is not a thing anybody should have to remember.
+ */
+export function toFfmpegPath(path: string): string {
+  return path.replace(/\\/g, '/')
 }
 
 export function posterArgs(options: { source: string; out: string; atSeconds: number }): string[] {
@@ -149,7 +174,7 @@ export function posterArgs(options: { source: string; out: string; atSeconds: nu
     '-y',
     // Before `-i`, so ffmpeg seeks rather than decoding everything up to it.
     '-ss', String(options.atSeconds),
-    '-i', options.source,
+    '-i', toFfmpegPath(options.source),
     '-frames:v', '1',
     // Named, not inferred. For a `.webp` output ffmpeg selects `libwebp_anim`
     // even with `-frames:v 1` — the animated encoder — and on a real lesson that
@@ -161,7 +186,7 @@ export function posterArgs(options: { source: string; out: string; atSeconds: nu
     // of muxer complaint that need not exist.
     '-an',
     '-vf', 'scale=-2:720',
-    options.out,
+    toFfmpegPath(options.out),
   ]
 }
 

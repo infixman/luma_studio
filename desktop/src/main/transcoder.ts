@@ -112,7 +112,6 @@ async function encodeRung(
     ffmpegArgs({
       source: options.source,
       rung: options.rung,
-      outDir: dir,
       segmentPattern: join(dir, 'segment-%06d.m4s'),
       playlist: join(dir, 'playlist.m3u8'),
       hasAudio: options.probed.hasAudio,

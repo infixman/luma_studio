@@ -1380,3 +1380,47 @@ map 進 webp 是一整類不必存在的 muxer 抱怨）。用同一組參數對
 
 以及：多檔拖曳原本 `const [file] = [...files]` 取第一個、其餘丟掉 ——
 拖五支課會上傳一支而畫面看起來成功。現在明說拒絕。
+
+## 一個 exit code 0 的壞 encode
+
+那個誤入 commit 的 `desktop/init.mp4` 不是垃圾，是證據。1.4 KB、270×480、h264+aac ——
+**fMP4 的 init segment**，時間戳正好是拖影片那一刻。它掉在 `npm run dev` 的工作目錄，
+不在畫質資料夾裡。
+
+去看真正的輸出目錄，三個階梯都是 `playlist.m3u8` + `segment-000000.m4s`，**沒有
+`init.mp4`**。沒有 init segment 的 fMP4 播不了，而 playlist 裡寫著它的名字。
+
+### 為什麼
+
+ffmpeg 決定 init segment 要寫哪裡的方式，是在 `-hls_segment_filename` 裡找 `/`。
+`\` 對它不是分隔符，所以 `C:\encodes\a\720p\segment-%06d.m4s` 被判定為「沒有目錄」，
+init.mp4 就落到工作目錄。
+
+我第一次手動重現時**沒重現出來** —— 因為我在 bash 裡打的是 `/`。同一組參數只把分隔符
+換成 `\`，init.mp4 就從目標資料夾跑到 cwd。這才是關鍵差異。
+
+**而 ffmpeg 的 exit code 是 0。** 每一個階梯都「成功」，encode 是壞的。這就是為什麼它
+一路跑到上傳才被發現。
+
+修法是 `toFfmpegPath()`，套用在每一個路徑參數上而不是只套在 segment pattern —— 「哪些
+參數需要」不該是任何人要記住的事。`-hls_fmp4_init_filename` 保持裸檔名，因為 ffmpeg
+用同一個字串當「寫出的路徑」和「playlist 裡的 URI」，絕對路徑會進 manifest，播放閘道
+會拒絕。
+
+### 驗證方式
+
+單元測試釘住字串。但字串不是出錯的地方 —— 出錯的是 ffmpeg 拿到字串之後的行為。所以另外
+用真 binary、真 Windows 路徑跑了一次完整的三階梯 + 封面：
+
+```
+1080p: exit=0 init=true files=4
+720p:  exit=0 init=true files=4
+480p:  exit=0 init=true files=4
+poster: exit=0 exists=true
+```
+
+突變驗證：把 `toFfmpegPath` 改成原樣回傳，同一支腳本回報三個 `init=false`，exit code
+全部還是 0。
+
+順手拿掉 `ffmpegArgs` 的 `outDir` 參數 —— 它是必填、從來沒被讀過，而且它的存在正好
+暗示「init 的位置由 outDir 決定」，那就是讓這個 bug 通過的認知。

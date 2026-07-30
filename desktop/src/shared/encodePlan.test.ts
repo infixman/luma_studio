@@ -122,7 +122,6 @@ describe('the ffmpeg arguments', () => {
   const args = ffmpegArgs({
     source: 'C:\\videos\\lesson 01.mp4',
     rung: RUNGS[1]!,
-    outDir: 'out/720p',
     segmentPattern: 'out/720p/segment-%06d.m4s',
     playlist: 'out/720p/playlist.m3u8',
     hasAudio: true,
@@ -130,8 +129,10 @@ describe('the ffmpeg arguments', () => {
 
   test('the source is a single argument, not interpolated into one', () => {
     /** Spawned without a shell and passed as argv, so a file called
-     *  `"; rm -rf` is a strange filename rather than a command. */
-    expect(args).toContain('C:\\videos\\lesson 01.mp4')
+     *  `"; rm -rf` is a strange filename rather than a command. The space in the
+     *  name survives; only the separators change, for the reason in
+     *  `toFfmpegPath`. */
+    expect(args).toContain('C:/videos/lesson 01.mp4')
   })
 
   test('keyframes are forced onto segment boundaries', () => {
@@ -166,7 +167,6 @@ describe('the ffmpeg arguments', () => {
     const silent = ffmpegArgs({
       source: 's.mp4',
       rung: RUNGS[2]!,
-      outDir: 'o',
       segmentPattern: 'o/segment-%06d.m4s',
       playlist: 'o/playlist.m3u8',
       hasAudio: false,
@@ -287,5 +287,55 @@ describe('progress', () => {
 
   test('an unknown duration yields nothing rather than a division by zero', () => {
     expect(progressFraction('out_time_us=1000000', 0)).toBeNull()
+  })
+})
+
+describe('paths handed to ffmpeg', () => {
+  // `String.raw` rather than escaped backslashes: this test is *about* separators,
+  // and a doubled backslash that should have been single is exactly the mistake
+  // it exists to catch.
+  const WINDOWS = {
+    source: String.raw`C:\videos\lesson.mp4`,
+    rung: { name: '720p', height: 720, bitrateKbps: 3000, maxrateKbps: 3210, bufsizeKbps: 6000 },
+    segmentPattern: String.raw`C:\encodes\a-1\720p\segment-%06d.m4s`,
+    playlist: String.raw`C:\encodes\a-1\720p\playlist.m3u8`,
+    hasAudio: true,
+  }
+
+  test('separators are forward slashes even on Windows', () => {
+    /** Not cosmetic. ffmpeg decides where to write the fMP4 init segment by
+     *  looking for `/` in `-hls_segment_filename`; backslashes are not
+     *  separators to it, so it finds no directory and writes `init.mp4` into the
+     *  working directory instead. Checked against the real binary: the same
+     *  command with `/` puts it beside the segments, with `\` it lands in cwd.
+     *
+     *  The symptom is an encode with no init segment — a playlist that names a
+     *  file nobody wrote, so nothing plays and import reports it missing. */
+    const args = ffmpegArgs(WINDOWS)
+
+    const pattern = args[args.indexOf('-hls_segment_filename') + 1]!
+    expect(pattern).toBe('C:/encodes/a-1/720p/segment-%06d.m4s')
+    expect(args[args.length - 1]).toBe('C:/encodes/a-1/720p/playlist.m3u8')
+    expect(args.join(' ')).not.toContain('\\')
+  })
+
+  test('the init segment stays a bare name, because the playlist quotes it', () => {
+    /** ffmpeg uses this string both as the file it writes and as the URI in the
+     *  playlist. An absolute path here would put an absolute path in the
+     *  manifest, which the playback gateway refuses as an object key. */
+    const args = ffmpegArgs(WINDOWS)
+
+    expect(args[args.indexOf('-hls_fmp4_init_filename') + 1]).toBe('init.mp4')
+  })
+
+  test('the poster path is converted too', () => {
+    const args = posterArgs({
+      source: String.raw`C:\videos\lesson.mp4`,
+      out: String.raw`C:\encodes\a-1\poster.webp`,
+      atSeconds: 3,
+    })
+
+    expect(args).toContain('C:/encodes/a-1/poster.webp')
+    expect(args).toContain('C:/videos/lesson.mp4')
   })
 })
