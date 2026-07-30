@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import { BrowserWindow, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
+import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
 
 import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
@@ -22,6 +22,19 @@ import * as uploader from './uploader'
  * keeping it out is a preload file.
  */
 
+/**
+ * No menu bar at all.
+ *
+ * `autoHideMenuBar` only hides it until somebody presses Alt, and File/Edit/View
+ * on a tool with one screen and no documents is four menus of nothing.
+ *
+ * On Windows this is safe: Ctrl+C, Ctrl+V and Ctrl+A inside a text field are
+ * handled by Chromium's editor rather than by a menu accelerator. It would not be
+ * safe on macOS, where cut and paste have to be in a menu to work at all — and
+ * there is no macOS build, which is the only reason this is one line.
+ */
+Menu.setApplicationMenu(null)
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1_040,
@@ -29,7 +42,6 @@ function createWindow(): BrowserWindow {
     minWidth: 880,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: true,
     // Set here as well as in the packaging config: electron-builder puts the
     // icon on the executable, which does nothing for `electron-vite dev`, and a
     // default Electron logo in the corner during development is how it ends up

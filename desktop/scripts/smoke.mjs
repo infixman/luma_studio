@@ -19,7 +19,7 @@
  * output at all, which is a memorable half hour.
  */
 
-import { BrowserWindow, app } from 'electron'
+import { BrowserWindow, Menu, app } from 'electron'
 
 const TIMEOUT_MS = 20_000
 
@@ -63,6 +63,11 @@ async function settled(window) {
 }
 
 async function check(window) {
+  // File/Edit/View on a tool with one screen and no documents is four menus of
+  // nothing. Checked here because it comes back by default the moment somebody
+  // removes one line, and nobody notices a menu bar they were not looking for.
+  if (Menu.getApplicationMenu() !== null) throw new Error('the application menu is back')
+
   for (const path of ['window.desktop?.version', 'window.desktop?.auth?.pair']) {
     const bridged = await window.webContents.executeJavaScript(`typeof ${path} === "function"`)
     if (bridged !== true) throw new Error(`${path} is not exposed`)

@@ -132,44 +132,53 @@ export function PairingScreen({
           void pair(code)
         }}
       >
-        <label>
-          <span>管理者信箱</span>
-          <div class="with-action">
-            <input
-              type="email"
-              value={email}
-              autoComplete="off"
-              spellcheck={false}
-              disabled={busy}
-              onInput={(event) => onEmail((event.currentTarget as HTMLInputElement).value)}
-            />
-            <button
-              type="button"
-              class="icon-button"
-              title="貼上"
-              aria-label="貼上信箱"
-              disabled={busy}
-              onClick={() => void pasteInto(onEmail)}
-            >
-              <PasteIcon />
-            </button>
+        {/* A div rather than a label wrapping everything: the checkbox has its
+            own label, and a label inside a label is not valid and makes the
+            click target ambiguous. */}
+        <div class="field">
+          <label for="admin-email">管理者信箱</label>
+          <div class="field-row">
+            <div class="with-action">
+              <input
+                id="admin-email"
+                type="email"
+                value={email}
+                autoComplete="off"
+                spellcheck={false}
+                disabled={busy}
+                onInput={(event) => onEmail((event.currentTarget as HTMLInputElement).value)}
+              />
+              <button
+                type="button"
+                class="icon-button"
+                title="貼上"
+                aria-label="貼上信箱"
+                disabled={busy}
+                onClick={() => void pasteInto(onEmail)}
+              >
+                <PasteIcon />
+              </button>
+            </div>
+            {/* Beside the field it is about, rather than under it where it reads
+                as a separate question. */}
+            <span class="check">
+              <input
+                id="remember-email"
+                type="checkbox"
+                checked={remember}
+                disabled={busy}
+                onChange={(event) => setRemember((event.currentTarget as HTMLInputElement).checked)}
+              />
+              <label for="remember-email">記住信箱</label>
+            </span>
           </div>
-        </label>
+        </div>
 
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={remember}
-            disabled={busy}
-            onChange={(event) => setRemember((event.currentTarget as HTMLInputElement).checked)}
-          />
-          <span>記住信箱</span>
-        </label>
-
-        <label>
-          <span>驗證碼</span>
-          <div class="with-action">
+        <div class="field">
+          <label for="pairing-code">驗證碼</label>
+          <div class="with-action code-field">
             <input
+              id="pairing-code"
               // Not `type="number"`: it strips leading zeros and offers a spinner
               // for something that is not a quantity.
               type="text"
@@ -195,7 +204,7 @@ export function PairingScreen({
               <PasteIcon />
             </button>
           </div>
-        </label>
+        </div>
 
         {problem && (
           <p class="alert" role="alert">
@@ -214,8 +223,6 @@ export function PairingScreen({
           （比把憑證明文寫在硬碟上好。）
         </p>
       )}
-
-      <p class="muted">驗證碼每 30 秒更換，而且用過一次就失效。輸入完六位數字會自動配對。</p>
     </main>
   )
 }
