@@ -130,6 +130,7 @@ async def dispatch(ctx: Ctx):
         or path.startswith("/api/offers/")
         or path == "/api/video-assets"
         or path.startswith("/api/video-assets/")
+        or path == "/api/video-storage"
     ):
         return await catalogue_admin_api.handle(ctx)
 

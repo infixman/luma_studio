@@ -53,7 +53,7 @@ def call(database_of):
     import admin_main
     from shared import migrations
 
-    def run(request, answers=None, changes=None, bucket=None, database=None, env=None):
+    def run(request, answers=None, changes=None, bucket=None, database=None, env=None, source_bucket=None):
         migrations._applied_names = None
         worker = admin_main.Default()
         worker.env = make_env(
@@ -64,6 +64,10 @@ def call(database_of):
         )
         if bucket is not None:
             worker.env.COURSE_VIDEO = bucket
+        # `False` means "a deployment without the binding", which `None` cannot
+        # say — that is the default.
+        if source_bucket is not None:
+            worker.env.COURSE_SOURCE = source_bucket or None
         return asyncio.run(worker.fetch(request))
 
     return run
@@ -230,6 +234,71 @@ class TestAbandoningAnUpload:
         )
 
         assert call(anonymous).status == 401
+
+
+class TestBrowsingTheBuckets:
+    """Read-only, and it exists so somebody can confirm an upload arrived.
+
+    Confirming does not need the ability to read the bytes back, so nothing here
+    signs a URL — the playback gateway is the entrance to those objects and a
+    second one is a second thing to get right.
+    """
+
+    class Bucket:
+        def __init__(self, keys=("sources/asset-000001/1/source.mp4",)):
+            self.keys = keys
+            self.asked: list[dict] = []
+
+        async def list(self, *, prefix, limit, cursor=None):
+            import types
+
+            self.asked.append({"prefix": prefix, "limit": limit, "cursor": cursor})
+            objects = [
+                types.SimpleNamespace(key=key, size=1024, uploaded=types.SimpleNamespace(getTime=lambda: 1785292800000))
+                for key in self.keys
+            ]
+            return types.SimpleNamespace(objects=objects, truncated=False, cursor=None)
+
+    def _call(self, call, query="?prefix=sources/asset-000001/", bucket=None, env=None):
+        return call(
+            signed_in(f"/api/video-storage{query}"),
+            env={**({"VIDEO_UPLOAD_ENABLED": "1"}), **(env or {})},
+            source_bucket=bucket if bucket is not None else self.Bucket(),
+        )
+
+    def test_it_lists_what_is_there(self, call):
+        response = self._call(call)
+
+        assert response.status == 200
+        listed = response.json()["objects"]
+        assert listed[0]["key"] == "sources/asset-000001/1/source.mp4"
+        assert listed[0]["size"] == 1024
+
+    def test_it_hands_out_no_urls(self, call):
+        """A browse that returns signed URLs is a download endpoint wearing a
+        different name."""
+
+        response = self._call(call)
+
+        assert "X-Amz-Signature" not in response.body
+        assert "url" not in response.body
+
+    def test_the_whole_bucket_is_not_a_prefix(self, call):
+        """`list` with no prefix walks everything, one billed page at a time."""
+
+        assert self._call(call, query="?prefix=").status == 400
+
+    @pytest.mark.parametrize("prefix", ["../secrets/", "sources/../videos/", "/sources/"])
+    def test_somewhere_else_entirely_is_refused(self, call, prefix):
+        """R2 keys are literal strings, so `..` in a prefix matches nothing
+        rather than escaping anywhere — but a prefix that looks like a path and
+        is not treated as one is the kind of thing that stops being true when
+        somebody puts a bucket behind a filesystem cache."""
+
+        assert self._call(call, query=f"?prefix={prefix}").status == 400
+
+    def test_a_deployment_with_no_bucket_says_so(self, call):
+        assert self._call(call, bucket=False).status == 503
 
 
 class TestOpeningASourceUpload:

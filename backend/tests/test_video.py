@@ -404,3 +404,30 @@ class TestWhatMayBeSigned:
             video.signable_key(
                 video.master_key("asset-1", 2), asset_id="asset-1", version=2, kind="anything"
             )
+
+
+class TestALengthTheEncoderWillAccept:
+    """The other half of the size ceiling.
+
+    Transcoding is roughly real time per rung on somebody's laptop, so a wrong
+    file that is twelve hours long is a machine occupied for a day and a half —
+    and the way to find that out is not to start.
+    """
+
+    def test_a_lesson_length_is_fine(self, video):
+        assert video.validate_duration(1830) == 1830
+
+    def test_no_duration_stays_no_duration(self, video):
+        """ffprobe not reading one is a normal answer for an odd file, and the
+        ladder does not depend on it."""
+
+        assert video.validate_duration(None) is None
+
+    def test_something_far_too_long_is_refused(self, video):
+        with pytest.raises(ValueError):
+            video.validate_duration(video.MAX_DURATION_SECONDS + 1)
+
+    @pytest.mark.parametrize("value", [-1, True, "1830", 1830.0])
+    def test_a_length_that_is_not_a_whole_number_of_seconds_is_refused(self, video, value):
+        with pytest.raises(ValueError):
+            video.validate_duration(value)

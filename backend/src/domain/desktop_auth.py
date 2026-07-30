@@ -75,6 +75,9 @@ _VIDEO_ROUTES = (
             r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload/[A-Za-z0-9_-]{1,64}/(?:complete|abort)$"
         ),
     ),
+    # Read-only, and the tool's way of confirming the objects arrived. No signed
+    # URLs come back from it, so it grants nothing beyond knowing what is there.
+    ("GET", re.compile(r"^/api/video-storage$")),
     # The FFmpeg mirror. Part of uploading rather than a separate permission: the
     # tool reaches it with an MP4 already dropped on it and no FFmpeg to encode
     # with. The bytes are a published GPL build and not a secret — what the token

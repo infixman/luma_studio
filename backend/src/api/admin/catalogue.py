@@ -67,7 +67,8 @@ def _measurements(body: dict) -> dict:
     """
 
     return {
-        "duration_seconds": _optional_int(body.get("durationSeconds")),
+        # The ceiling lives in the domain, with the size one it belongs beside.
+        "duration_seconds": video.validate_duration(_optional_int(body.get("durationSeconds"))),
         "width": _optional_int(body.get("width")),
         "height": _optional_int(body.get("height")),
     }
@@ -234,6 +235,25 @@ async def handle(ctx: Ctx):
             return ctx.json({"item": await inventory.get_item(env, item_id)})
 
         return ctx.error("Not found", 404)
+
+    if path == "/api/video-storage" and method == "GET":
+        # Read-only, and it answers the tool's one remaining question: did the
+        # objects actually arrive. No signed URLs — confirming an upload does not
+        # need the ability to read the bytes back, and the playback gateway is
+        # the entrance to those objects.
+        try:
+            return ctx.json(
+                await video_storage.list_objects(
+                    env,
+                    kind=(ctx.query.get("kind") or ["source"])[0],
+                    prefix=(ctx.query.get("prefix") or [""])[0],
+                    cursor=(ctx.query.get("cursor") or [""])[0] or None,
+                )
+            )
+        except video_storage.NotConfigured:
+            return ctx.error("影片儲存空間尚未設定完成", 503)
+        except ValueError as error:
+            return ctx.error(str(error) or "Invalid prefix", 400)
 
     if path == "/api/video-assets" and method == "GET":
         return ctx.json(

@@ -42,6 +42,12 @@ MAX_PARTS = MAX_PART_NUMBER
 # the pipeline should say so before the upload rather than during it.
 MAX_UPLOAD_BYTES = 20 * 1024 * MIB
 
+# Also ours, and for the same reason in the other dimension: transcoding runs on
+# somebody's laptop at roughly real time per rung, so a twelve-hour file is a
+# machine occupied for a day and a half. Generous enough that a long workshop
+# recording fits; small enough that a wrong file says so before the encode.
+MAX_DURATION_SECONDS = 6 * 60 * 60
+
 ASSET_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
 OUTPUT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$")
 OUTPUT_SUFFIXES = (".m3u8", ".mp4", ".m4s", ".webp")
@@ -110,6 +116,24 @@ def validate_byte_size(byte_size) -> int:
     if byte_size > MAX_UPLOAD_BYTES:
         raise ValueError(f"單一影片不能超過 {MAX_UPLOAD_BYTES // (1024 * MIB)} GiB")
     return byte_size
+
+
+def validate_duration(duration_seconds):
+    """A length this pipeline will accept, or nothing.
+
+    Absent stays absent — ffprobe not reading a duration is a normal answer for
+    an odd file, and the ladder does not depend on it. What is refused is a
+    number that means the wrong file was dropped in: the encode is real time per
+    rung on somebody's machine, so the cost of finding out later is a day of it.
+    """
+
+    if duration_seconds is None:
+        return None
+    if isinstance(duration_seconds, bool) or not isinstance(duration_seconds, int) or duration_seconds < 0:
+        raise ValueError("影片長度必須是整數秒")
+    if duration_seconds > MAX_DURATION_SECONDS:
+        raise ValueError(f"單一影片不能超過 {MAX_DURATION_SECONDS // 3600} 小時")
+    return duration_seconds
 
 
 def part_size_for(byte_size: int) -> int:

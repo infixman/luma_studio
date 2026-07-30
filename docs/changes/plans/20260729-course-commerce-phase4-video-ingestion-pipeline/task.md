@@ -148,14 +148,22 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       跟「這個 upload 從來不存在」是同一個答案。為了讓那個判斷有意義，**一個 asset 只允許一個
       沒被取消的 session**：所有 session 寫的是同一個 key，第二個 session 會被第一個的物件冒認。
 - [ ] 工具上傳原始檔。
-- [ ] 限制單檔大小、影片長度與同時 session 數。
-- [ ] 實作 `GET /api/video-storage?prefix=`，只回 key／大小／時間，不回簽章 URL。
+- [x] 限制單檔大小、影片長度與同時 session 數。
+      大小 20 GiB（`validate_byte_size`）、長度 6 小時（`validate_duration` —— 轉檔是
+      每一階近似即時，一支放錯的十二小時檔等於佔住一台機器一天半）、同時 5 個 session
+      （跨帳號計數，因為它擋的是 R2 替我們保管的隱形儲存），而且一個 asset 只能有一個
+      沒被取消的 session。
+- [x] 實作 `GET /api/video-storage?prefix=`，只回 key／大小／時間，不回簽章 URL。
+      prefix 必須以 `sources/` 或 `videos/` 開頭 —— 空字串會列整個桶，而 list 是這裡唯一
+      按物件計費的操作。
 - [ ] 工具的 R2 瀏覽畫面：**唯讀**。只是用來確認影片真的傳上去了。
       原本寫的「可新增資料夾與檔案」拿掉了：object key 由伺服器依允許清單產生，
       而播放閘道用**同一份清單**決定哪些 key 可以被讀 —— 為了讓人手動放檔案而放寬那份清單，
       會連帶放寬播放權限。而且它解的問題已經有別的解法：import 會回報缺哪些物件，
       工具自己補傳那幾個，不需要有人手動放。
-- [ ] 測試：import 冪等 —— 同一 asset 與 encode version 重送不建立第二筆。
+- [x] 測試：import 冪等 —— 同一 asset 與 encode version 重送不建立第二筆。
+      在真 SQLite 裡測 `REGISTER_SQL` 與 `RECORD_ENCODE_VERSION_SQL`（`FakeDatabase` 沒有鍵，
+      當初就是它讓撞主鍵那個 bug 一路到正式環境）。
 
 ## S6：容量、費用與清理
 

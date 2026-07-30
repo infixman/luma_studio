@@ -70,6 +70,73 @@ def bucket_for(env, kind: str) -> str:
     return name
 
 
+# One page of a browse, and the reason there is a limit at all: listing is the
+# only operation here that is billed per object rather than per request.
+MAX_LISTED = 200
+
+# What a caller may look under. Not a prefix of their choosing: `list` with an
+# empty prefix walks the whole bucket, and the two prefixes below are the only
+# shapes anything writes.
+LIST_PREFIXES = ("sources/", "videos/")
+
+
+def validate_prefix(prefix) -> str:
+    """The folder to look in, or a refusal.
+
+    A browse is read-only and returns no signed URLs, so the risk is not what it
+    lets somebody take — it is the operation count, and a caller naming `""`
+    listing a bucket of a hundred thousand objects one page at a time.
+    """
+
+    prefix = str(prefix or "").strip()
+    if not prefix.startswith(LIST_PREFIXES):
+        raise ValueError("只能瀏覽 sources/ 或 videos/ 底下的內容")
+    if ".." in prefix.split("/") or prefix.startswith("/"):
+        raise ValueError("路徑格式不正確")
+    return prefix
+
+
+async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None) -> dict:
+    """What is actually in the bucket under this prefix.
+
+    Keys, sizes and times — no signed URLs. This exists so somebody can confirm
+    an upload arrived, and confirming does not require the ability to read the
+    bytes back. Handing out a URL here would also be a second entrance to objects
+    the playback gateway is the entrance to.
+    """
+
+    bucket = _binding(env, kind)
+    listing = await bucket.list(prefix=validate_prefix(prefix), limit=MAX_LISTED, cursor=cursor)
+    return {
+        "objects": [
+            {
+                "key": item.key,
+                "size": int(item.size),
+                # R2 gives a Date; the rest of this API speaks epoch seconds.
+                "uploadedAt": int(item.uploaded.getTime() // 1000) if hasattr(item, "uploaded") else None,
+            }
+            for item in listing.objects
+        ],
+        "truncated": bool(listing.truncated),
+        "cursor": getattr(listing, "cursor", None) if listing.truncated else None,
+    }
+
+
+def _binding(env, kind: str):
+    """The R2 binding for this kind of object.
+
+    Separate from `bucket_for`, which answers with the bucket's *name* for a
+    signature. Both exist because the binding does not know its own name.
+    """
+
+    if kind not in BUCKET_VARS:
+        raise ValueError(f"Unknown object kind: {kind}")
+    binding = getattr(env, "COURSE_SOURCE" if kind == "source" else "COURSE_VIDEO", None)
+    if binding is None:
+        raise NotConfigured("影片儲存空間尚未綁定")
+    return binding
+
+
 def upload_urls(env, *, asset: dict, keys, kind: str, version: int, now: int | None = None) -> list[dict]:
     """One short-lived PUT URL per key, or nothing at all.
 
