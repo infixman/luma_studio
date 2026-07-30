@@ -16,6 +16,16 @@ export interface ScannedFolder {
 }
 
 /**
+ * A scan answers rather than throws.
+ *
+ * An exception crossing IPC reaches the interface as `Error invoking remote
+ * method 'upload:scan': Error: ENOTDIR: not a directory, scandir '...'` — the
+ * channel name and the errno, and no sentence. A refusal is an ordinary outcome
+ * of dropping the wrong thing, so it is a value like any other.
+ */
+export type ScanResult = { ok: true; scanned: ScannedFolder } | { ok: false; message: string }
+
+/**
  * One list rather than two, because from the interface's point of view this is
  * one job with a bar in it. Dropping an MP4 runs the first five; dropping a
  * folder of finished output starts at `scanning`.

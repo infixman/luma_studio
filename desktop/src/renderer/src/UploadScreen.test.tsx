@@ -29,7 +29,7 @@ let emit: ((progress: Progress) => void) | null = null
 
 function bridge(): void {
   cancelUpload = vi.fn(async () => undefined)
-  scan = vi.fn(async () => SCANNED)
+  scan = vi.fn(async () => ({ ok: true, scanned: SCANNED }))
   start = vi.fn(
     async (): Promise<UploadResult> => ({
       ok: true,
@@ -109,7 +109,7 @@ test('dropping a folder scans it and reports what is there', async () => {
 
 test('a folder with no encode in it is explained', async () => {
   /** Rather than an upload button that does nothing. */
-  scan.mockResolvedValue({ ...SCANNED, objects: [], totalBytes: 0 })
+  scan.mockResolvedValue({ ok: true, scanned: { ...SCANNED, objects: [], totalBytes: 0 } })
   await mount()
   drop()
   await tick()
@@ -121,7 +121,7 @@ test('a folder with no encode in it is explained', async () => {
 test('files that will be ignored are named', async () => {
   /** Silence here reads as "it uploaded everything", and the one time that
    *  matters is when somebody dropped the wrong folder. */
-  scan.mockResolvedValue({ ...SCANNED, unexpected: ['notes.txt', 'source.mp4'] })
+  scan.mockResolvedValue({ ok: true, scanned: { ...SCANNED, unexpected: ['notes.txt', 'source.mp4'] } })
   await mount()
   drop()
   await tick()
@@ -269,12 +269,17 @@ test('the bar follows the transcode fraction, since there is nothing to count', 
 })
 
 test('dropping something that is neither says both options', async () => {
-  scan.mockResolvedValue({ folder: 'C:\junk', objects: [], unexpected: [], totalBytes: 0 })
+  scan.mockResolvedValue({
+    ok: true,
+    scanned: { folder: 'D:\\junk', objects: [], unexpected: [], totalBytes: 0 },
+  })
   await mount()
-  drop('C:\junk')
+  drop('D:\\junk')
   await tick()
 
-  expect(container.textContent).toContain('MP4')
+  // The folder it is about, then both ways out of the situation.
+  expect(container.textContent).toContain('junk')
+  expect(container.textContent).toContain('.mp4')
   expect(container.textContent).toContain('master.m3u8')
 })
 
@@ -306,4 +311,22 @@ test('there is nothing to cancel before a job starts', async () => {
     (element) => element.textContent?.trim() === '取消',
   )
   expect(button).toBeUndefined()
+})
+
+test('a refusal from the scan is shown as the sentence it came with', async () => {
+  /** Dropping a PNG used to produce `Error invoking remote method
+   *  'upload:scan': Error: ENOTDIR: not a directory, scandir '...'` -- the
+   *  channel name and an errno. The main process now answers with a sentence,
+   *  and this screen's job is to not decorate it. */
+  scan.mockResolvedValue({
+    ok: false,
+    message: '「car_h64.png」是一個檔案，不是資料夾。',
+  })
+  await mount()
+  drop()
+  await tick()
+
+  expect(container.textContent).toContain('「car_h64.png」是一個檔案')
+  expect(container.textContent).not.toContain('ENOTDIR')
+  expect(container.textContent).not.toContain('remote method')
 })

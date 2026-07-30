@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 
-import { looksLikeSource } from '../../shared/sourceKinds'
+import { lastSegment } from '../../shared/failures'
+import { SOURCE_EXTENSIONS, looksLikeSource } from '../../shared/sourceKinds'
 import type { Progress, ScannedFolder } from '../../shared/upload'
 
 const PHASE_LABELS: Record<Progress['phase'], string> = {
@@ -78,17 +79,22 @@ export function UploadScreen({ adminEmail, onSignOut }: { adminEmail: string; on
       return
     }
 
-    try {
-      const next = await window.desktop.upload.scan(path)
-      setScanned(next)
-      if (next.objects.length === 0) {
-        setProblem(
-          '這裡面找不到轉檔輸出，也不是影片檔。可以拖一個 MP4 進來轉檔，' +
-            '或是拖一個已經有 master.m3u8 的資料夾。',
-        )
-      }
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : '無法讀取這個路徑')
+    // A refusal comes back as a value with a sentence in it — see
+    // `shared/failures.ts`. Dropping the wrong thing is the most likely thing to
+    // happen to a drop target, so it is not an exception.
+    const answer = await window.desktop.upload.scan(path)
+    if (!answer.ok) {
+      setProblem(answer.message)
+      return
+    }
+
+    setScanned(answer.scanned)
+    if (answer.scanned.objects.length === 0) {
+      setProblem(
+        `「${lastSegment(path)}」裡面沒有轉檔輸出。` +
+          `可以拖一支影片（${SOURCE_EXTENSIONS.join('、')}）進來轉檔，` +
+          '或拖一個含有 master.m3u8 的資料夾。',
+      )
     }
   }
 

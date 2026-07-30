@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
 
 import { AdminApiError } from '../shared/adminApi'
+import { explain } from '../shared/failures'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
@@ -35,6 +36,11 @@ import * as uploader from './uploader'
  * there is no macOS build, which is the only reason this is one line.
  */
 Menu.setApplicationMenu(null)
+
+/** Which path a failure was about, for the sentence that explains it. */
+function subject(request: UploadRequest): string | undefined {
+  return request.source ?? request.folder ?? undefined
+}
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -171,7 +177,17 @@ if (process.argv.includes('--self-check')) {
       }
     })
 
-    ipcMain.handle('upload:scan', (_event, folder: string) => uploader.scan(folder))
+    // Answers rather than throws. An exception crossing IPC arrives as
+    // `Error invoking remote method 'upload:scan': Error: ENOTDIR ...`, and
+    // dropping the wrong thing on a drop target is an ordinary outcome, not a
+    // fault to report with a channel name in it.
+    ipcMain.handle('upload:scan', (_event, folder: string) => {
+      try {
+        return { ok: true as const, scanned: uploader.scan(folder) }
+      } catch (error) {
+        return { ok: false as const, message: explain(error, { path: folder }) }
+      }
+    })
     ipcMain.handle('upload:cancel', () => cancel())
 
     // FFmpeg is GPL and this tool distributes a copy of it, so the
@@ -217,12 +233,7 @@ if (process.argv.includes('--self-check')) {
           ok: false as const,
           // A cancellation is not a failure to explain, so it gets its own
           // sentence rather than ffmpeg's exit code.
-          message:
-            error instanceof Cancelled
-              ? '已取消'
-              : error instanceof Error
-                ? error.message
-                : '上傳失敗',
+          message: error instanceof Cancelled ? '已取消' : explain(error, { path: subject(request) }),
           httpStatus: error instanceof AdminApiError ? error.status : null,
         }
       }

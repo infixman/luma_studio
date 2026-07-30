@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 import type { PairingInput } from '../shared/pairing'
 import type { SessionStatus } from '../shared/session'
-import type { Progress, ScannedFolder, UploadRequest, UploadResult } from '../shared/upload'
+import type { Progress, ScanResult, UploadRequest, UploadResult } from '../shared/upload'
 
 /**
  * The only things the interface can ask the operating system for.
@@ -75,7 +75,7 @@ const api = {
   },
 
   upload: {
-    scan: (folder: string): Promise<ScannedFolder> => ipcRenderer.invoke('upload:scan', folder),
+    scan: (folder: string): Promise<ScanResult> => ipcRenderer.invoke('upload:scan', folder),
     start: (request: UploadRequest): Promise<UploadResult> =>
       ipcRenderer.invoke('upload:start', request),
 
