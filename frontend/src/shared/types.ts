@@ -758,3 +758,16 @@ export interface CleanupCandidates {
   }[]
   scannedAt: number | null
 }
+
+
+/** Which builds of the desktop tool may work. One row, edited here. */
+export interface DesktopVersionPolicy {
+  latest: string
+  minSupported: string
+  forceUpdate: boolean
+  blocked: boolean
+  notes: string
+  /** Where an updater looks, built by whichever deployment answered. */
+  feedUrl: string
+  updatedAt: number
+}

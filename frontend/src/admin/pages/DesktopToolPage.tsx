@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { IconButton, Panel, Spinner } from '../components/ui'
-import { ApiError, api } from '../../shared/api'
+import { Button, Checkbox, IconButton, Panel, Spinner, TextField } from '../components/ui'
+import { ApiError, api, apiJson } from '../../shared/api'
+import type { DesktopVersionPolicy } from '../../shared/types'
 import '../styles/shop-admin.css'
 
 /**
@@ -32,6 +33,123 @@ function CopyButton({ value, label }: { value: string; label: string }) {
     >
       {copied ? '✓' : '⧉'}
     </IconButton>
+  )
+}
+
+/**
+ * Which builds of the tool may work.
+ *
+ * The trap this exists for: 1.0.0 installed with a broken updater is a fix
+ * nobody can push. So the two levers are here before the first release, and they
+ * are separate because they answer different questions — `minSupported` retires
+ * versions as they age, `blocked` stops every one of them at once.
+ *
+ * The download link is the feed the server itself reports rather than a URL
+ * typed here. A link that says where the installer *should* be is a link that is
+ * wrong on whichever deployment is not production.
+ */
+function VersionPolicyPanel({ onError }: { onError: (error: unknown) => void }) {
+  const [policy, setPolicy] = useState<DesktopVersionPolicy | null>(null)
+  const [draft, setDraft] = useState<DesktopVersionPolicy | null>(null)
+  const { message, busy, run } = useStatus()
+
+  const load = useCallback(async () => {
+    try {
+      const answer = await api<DesktopVersionPolicy>('/api/desktop/version-policy')
+      setPolicy(answer)
+      setDraft(answer)
+    } catch (error) {
+      onError(error)
+    }
+  }, [onError])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (draft === null) return <Panel title="版本政策"><Spinner /></Panel>
+
+  return (
+    <Panel title="版本政策">
+      <p class="muted">
+        比「最低支援版本」舊的工具會停止上傳並要求更新。「停用」則是**所有**版本立刻停下來 ——
+        那是給一個發壞了的版本用的，不必等每一台機器自己更新。
+      </p>
+
+      <div class="ui-inline-form">
+        <TextField
+          label="最新版本"
+          value={draft.latest}
+          onInput={(event) =>
+            setDraft({ ...draft, latest: (event.currentTarget as HTMLInputElement).value })
+          }
+        />
+        <TextField
+          label="最低支援版本"
+          value={draft.minSupported}
+          onInput={(event) =>
+            setDraft({ ...draft, minSupported: (event.currentTarget as HTMLInputElement).value })
+          }
+        />
+      </div>
+
+      <Checkbox
+        label="必須更新到最新版才能使用"
+        checked={draft.forceUpdate}
+        onChange={(next) => setDraft({ ...draft, forceUpdate: next })}
+      />
+      <Checkbox
+        label="停用所有版本"
+        checked={draft.blocked}
+        onChange={(next) => setDraft({ ...draft, blocked: next })}
+      />
+
+      <TextField
+        label="說明"
+        hint="會顯示在工具裡，說明為什麼要更新"
+        value={draft.notes}
+        maxLength={200}
+        onInput={(event) =>
+          setDraft({ ...draft, notes: (event.currentTarget as HTMLInputElement).value })
+        }
+      />
+
+      <Button
+        tone="primary"
+        busy={busy}
+        onClick={() => {
+          void run(async () => {
+            await apiJson('/api/desktop/version-policy', 'PUT', {
+              latest: draft.latest.trim(),
+              minSupported: draft.minSupported.trim(),
+              forceUpdate: draft.forceUpdate,
+              blocked: draft.blocked,
+              notes: draft.notes,
+            })
+          }, '版本政策已更新。').then((ok) => {
+            if (ok) void load()
+          })
+        }}
+      >
+        儲存
+      </Button>
+
+      {message ? <p class={message.kind === 'error' ? 'alert' : 'muted'}>{message.text}</p> : null}
+
+      <h3>下載</h3>
+      <p class="muted">
+        安裝檔與更新 metadata 都在這個位置底下，由伺服器自己回報 —— 不是這裡打上去的網址。
+      </p>
+      <p>
+        <a href={`${policy?.feedUrl ?? ''}/latest.yml`} rel="noopener noreferrer">
+          {policy?.feedUrl ?? ''}/latest.yml
+        </a>
+      </p>
+      <p class="muted">
+        安裝檔沒有簽章，所以 Windows SmartScreen 會跳警告 —— 選「其他資訊」再「仍要執行」。
+        買一張憑證不在這個專案的預算裡，而這件事寫在 README 與這裡，因為它看起來像出了問題。
+      </p>
+    </Panel>
   )
 }
 
@@ -147,6 +265,8 @@ export function DesktopToolPage() {
           </>
         )}
       </Panel>
+
+      <VersionPolicyPanel onError={showError} />
     </AdminShell>
   )
 }

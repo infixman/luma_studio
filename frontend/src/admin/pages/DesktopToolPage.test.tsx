@@ -23,6 +23,16 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 const pairings: { code: string; expiresInSeconds: number; adminEmail: string }[] = []
 let calls = 0
 let failStatus: number | null = null
+let policy = {
+  latest: '1.2.0',
+  minSupported: '1.0.0',
+  forceUpdate: false,
+  blocked: false,
+  notes: '',
+  feedUrl: 'https://admin-api.example.com/releases',
+  updatedAt: 0,
+}
+const saved: unknown[] = []
 
 // The real ApiError, so the page's `instanceof` check means what it says. Only
 // the fetching is replaced.
@@ -30,10 +40,15 @@ vi.mock('../../shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/api')>()
   return {
     ...actual,
-    api: vi.fn(async () => {
+    api: vi.fn(async (path: string) => {
+      if (path.startsWith('/api/desktop/version-policy')) return policy
       if (failStatus !== null) throw new actual.ApiError('nope', failStatus, {})
       calls += 1
       return pairings[Math.min(calls - 1, pairings.length - 1)]
+    }),
+    apiJson: vi.fn(async (_path: string, _method: string, body: unknown) => {
+      saved.push(body)
+      return policy
     }),
   }
 })
@@ -52,6 +67,16 @@ beforeEach(() => {
   })
   calls = 0
   failStatus = null
+  saved.length = 0
+  policy = {
+    latest: '1.2.0',
+    minSupported: '1.0.0',
+    forceUpdate: false,
+    blocked: false,
+    notes: '',
+    feedUrl: 'https://admin-api.example.com/releases',
+    updatedAt: 0,
+  }
   pairings.length = 0
   pairings.push({ code: '418302', expiresInSeconds: 20, adminEmail: 'owner@example.com' })
   container = document.createElement('div')
@@ -179,4 +204,60 @@ test('copying says so, because otherwise nobody knows it worked', async () => {
   for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
 
   expect(container.querySelector('[aria-label="已複製"]')).not.toBeNull()
+})
+
+
+test('the version policy is shown with the download link the server reports', async () => {
+  /** A link typed here is a link that is wrong on whichever deployment is not
+   *  production, and wrong quietly. */
+  render(<DesktopToolPage />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  // The values live in inputs, not in the page's text.
+  const values = [...container.querySelectorAll('input')].map((input) => input.value)
+  expect(values).toContain('1.0.0')
+  const link = [...container.querySelectorAll('a')].find((element) =>
+    (element.getAttribute('href') ?? '').includes('/releases/latest.yml'),
+  )
+  expect(link).not.toBeUndefined()
+})
+
+test('the unsigned installer is explained rather than left to look broken', async () => {
+  /** SmartScreen's warning is the first thing an admin sees when installing, and
+   *  it reads as "this is malware" rather than "nobody bought a certificate". */
+  render(<DesktopToolPage />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).toContain('SmartScreen')
+})
+
+test('saving sends what the form says, not what was loaded', async () => {
+  /** Asserted after typing, because a form that posts the values it was given
+   *  passes every check made without touching it. */
+  render(<DesktopToolPage />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  const latest = [...container.querySelectorAll('input')].find((input) => input.value === '1.2.0')
+  latest!.value = '1.4.0'
+  latest!.dispatchEvent(new Event('input', { bubbles: true }))
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  const save = [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes('儲存'),
+  )
+  save?.click()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(saved).toEqual([
+    {
+      latest: '1.4.0',
+      minSupported: '1.0.0',
+      forceUpdate: false,
+      blocked: false,
+      notes: '',
+    },
+  ])
 })
