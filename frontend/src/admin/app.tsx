@@ -17,6 +17,7 @@ import { MediaPage } from './pages/MediaPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { OrdersAdminPage } from './pages/OrdersAdminPage'
+import { DesktopToolPage } from './pages/DesktopToolPage'
 import { SitePage } from './features/site/SitePage'
 import { routeForPath, routeParam } from './routes'
 
@@ -55,6 +56,7 @@ function Routed() {
     case 'site': return <SitePage />
     case 'media': return <MediaPage />
     case 'orders': return <OrdersAdminPage />
+    case 'desktopTool': return <DesktopToolPage />
     case 'customers': {
       const id = routeParam(path, 'customers')
       return id ? <CustomerDetailPage id={id} /> : <CustomersPage />

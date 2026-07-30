@@ -50,11 +50,11 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 - [x] ~~建立管理員 TOTP seed 表。~~ 不需要：seed 由 `DESKTOP_PAIRING_SECRET` 與 email 導出，沒有表。
 - [x] ~~產生與保存 seed，建立時顯示一次。~~ 同上，沒有東西要保存或顯示。
 - [x] 實作 `GET /api/desktop/pairing-code`，需管理員 session。
-- [ ] 後台一頁顯示目前配對碼與剩餘秒數。後端 `GET /api/desktop/pairing-code` 已完成，畫面未做。
+- [x] 後台一頁顯示目前配對碼與剩餘秒數。`/desktop-tool`；倒數用伺服器回的剩餘秒數，歸零才重新取，不自己算下一組碼。後端 `GET /api/desktop/pairing-code` 已完成，畫面未做。
 - [x] 實作 `POST /api/desktop/tokens`：接受目前與前一窗、固定時間比較、用過即失效（條件 upsert 記下用掉的時窗；真 SQLite 測試驗那道 WHERE）。
 - [x] 實作每個 email 的失敗次數上限與鎖定。刻意不用 `rate_limit`：它逐 IP 且 binding 缺席時放行，擋不住六位數字。這個在 D1、逐 email、失敗時關閉。
 - [x] 實作影片範圍 token 的簽發與驗證，非影片路由回 403。允許清單只放行建 asset／upload-urls／import。
-- [ ] 提供撤銷單一 token 的方式。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。
+- [ ] 提供撤銷單一 token 的方式。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。目前只能換 `DESKTOP_TOKEN_SECRET`（一次全撤）或把 email 移出管理員允許清單。
 - [ ] 加入 presign 與 token 兌換的 per-IP rate limit。兌換已有逐帳號的鎖定；這一項是額外的濫用防護。
 - [x] 測試：正確、過期、前一窗、重放、次數上限；影片 token 打非影片路由回 403。另有端到端驗收：無 session 換 token → presign 200 → 訂單/顧客/儀表板/課程/列表/封存全部 403。
 

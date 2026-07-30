@@ -1,0 +1,130 @@
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+
+import { AdminShell } from '../components/AdminShell'
+import { useStatus } from '../components/StatusBar'
+import { Panel, Spinner } from '../components/ui'
+import { ApiError, api } from '../../shared/api'
+import '../styles/shop-admin.css'
+
+interface PairingCode {
+  code: string
+  expiresInSeconds: number
+  adminEmail: string
+}
+
+/** `418302` reads badly and `418 302` reads at a glance. */
+function grouped(code: string): string {
+  return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code
+}
+
+/**
+ * The pairing code the desktop uploader asks for.
+ *
+ * This page *is* the authorisation. The code is not secret in any deep sense —
+ * the server both generates and verifies it — so the only thing that makes
+ * showing one meaningful is that a stranger cannot see this screen. Which is
+ * also why it says not to share it: a screenshot in a chat is a paired machine.
+ *
+ * The countdown comes from the server's remaining seconds rather than a local
+ * 30-second timer. A timer started on load drifts out of step with the window
+ * it is describing, and the failure looks like a correct code being rejected.
+ */
+export function DesktopToolPage() {
+  const [pairing, setPairing] = useState<PairingCode | null>(null)
+  const [remaining, setRemaining] = useState(0)
+  const [unconfigured, setUnconfigured] = useState(false)
+  const { message, showError } = useStatus()
+
+  // A load in flight when the page closes must not set state afterwards, and a
+  // slow one must not overwrite a newer code.
+  const generation = useRef(0)
+
+  const load = useCallback(async () => {
+    const mine = ++generation.current
+    try {
+      const next = await api<PairingCode>('/api/desktop/pairing-code')
+      if (mine !== generation.current) return
+      setPairing(next)
+      setRemaining(next.expiresInSeconds)
+      setUnconfigured(false)
+    } catch (error) {
+      if (mine !== generation.current) return
+      // 503 is not a fault to report as one: it means the Worker has no
+      // pairing secret yet, which is a thing to go and do.
+      if (error instanceof ApiError && error.status === 503) {
+        setUnconfigured(true)
+        return
+      }
+      showError(error)
+    }
+  }, [showError])
+
+  useEffect(() => {
+    void load()
+    return () => {
+      // Any answer still in flight belongs to a page that has gone.
+      generation.current++
+    }
+  }, [load])
+
+  useEffect(() => {
+    if (pairing === null || unconfigured) return
+    const tick = setInterval(() => {
+      setRemaining((left) => {
+        if (left > 1) return left - 1
+        // Fetch the next window rather than computing it. The code is derived
+        // from a seed this page does not have.
+        void load()
+        return 0
+      })
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [pairing, unconfigured, load])
+
+  return (
+    <AdminShell current="/desktop-tool" title="桌面上傳工具" message={message} onError={showError}>
+      <Panel title="配對驗證碼">
+        {unconfigured ? (
+          <p class="muted">
+            這個環境還沒有設定 <code>DESKTOP_PAIRING_SECRET</code>，所以無法產生驗證碼。
+            設定之後重新整理即可。
+          </p>
+        ) : pairing === null ? (
+          <Spinner />
+        ) : (
+          <>
+            <p class="muted">在桌面工具的登入畫面輸入這組信箱與驗證碼。</p>
+            <dl class="desktop-pairing">
+              <dt>管理者信箱</dt>
+              <dd>
+                <code>{pairing.adminEmail}</code>
+              </dd>
+              <dt>驗證碼</dt>
+              <dd>
+                <strong class="desktop-pairing-code" aria-label={`驗證碼 ${pairing.code.split('').join(' ')}`}>
+                  {grouped(pairing.code)}
+                </strong>
+              </dd>
+              <dt>剩餘時間</dt>
+              <dd aria-live="polite">{remaining} 秒</dd>
+            </dl>
+            {/* Worth saying out loud: a code on a shared screen is a paired
+                machine, and the page it came from is the only thing protecting
+                it. */}
+            <p class="muted">
+              驗證碼每 30 秒更換，用過一次就失效。<strong>不要</strong>在螢幕分享或截圖中露出它。
+            </p>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="這個工具做什麼">
+        <p class="muted">
+          課程影片在你的電腦上轉檔，然後直接上傳到 R2。工具本身沒有 R2 金鑰 ——
+          它拿到的是一組只能做影片操作的短效憑證，改不了訂單、會員或課程。
+        </p>
+        <p class="muted">影片的修改與刪除留在後台，因為刪除前要先確認沒有課程單元正在使用。</p>
+      </Panel>
+    </AdminShell>
+  )
+}

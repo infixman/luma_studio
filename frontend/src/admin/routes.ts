@@ -12,6 +12,7 @@ export type AdminRouteId =
   | 'media'
   | 'orders'
   | 'customers'
+  | 'desktopTool'
 
 export interface AdminRoute {
   id: AdminRouteId
@@ -34,6 +35,7 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
   { id: 'media', path: '/media', label: '媒體庫', group: 'site' },
   { id: 'orders', path: '/orders', label: '訂單', group: 'shop' },
   { id: 'customers', path: '/customers', label: '會員', group: 'customers' },
+  { id: 'desktopTool', path: '/desktop-tool', label: '桌面上傳工具', group: 'tools' },
 ]
 
 const dynamic = [
