@@ -6,6 +6,7 @@ import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
+import { licencePaths } from './ffmpeg'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
 import * as uploader from './uploader'
@@ -154,6 +155,11 @@ if (process.argv.includes('--self-check')) {
 
     ipcMain.handle('upload:scan', (_event, folder: string) => uploader.scan(folder))
     ipcMain.handle('upload:cancel', () => cancel())
+
+    // FFmpeg is GPL, and this tool distributes a copy of it. The licence and
+    // the corresponding source ship alongside it, and this is how somebody
+    // finds them — an obligation, not a credit.
+    ipcMain.handle('app:licences', () => licencePaths())
 
     ipcMain.handle('upload:start', async (event, request: UploadRequest) => {
       try {

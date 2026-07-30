@@ -34,7 +34,10 @@ function bridge(status: SessionStatus) {
     configurable: true,
     value: {
       version: vi.fn(async () => '1.2.3'),
+      licences: vi.fn(async () => ({ licence: '/tools/LICENSE', source: '/tools/src.tar.xz' })),
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
+      upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
+      pathFor: vi.fn(() => ''),
     },
   })
   return { signOut }

@@ -44,6 +44,15 @@ const api = {
     }
   },
 
+  /**
+   * Where the bundled FFmpeg's licence and source are.
+   *
+   * FFmpeg is GPL and this tool distributes it, so they ship and somebody has
+   * to be able to find them.
+   */
+  licences: (): Promise<{ licence: string; source: string }> =>
+    ipcRenderer.invoke('app:licences'),
+
   auth: {
     status: (): Promise<SessionStatus> => ipcRenderer.invoke('auth:status'),
     pair: (input: PairingInput): Promise<PairResult> => ipcRenderer.invoke('auth:pair', input),

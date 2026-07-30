@@ -194,3 +194,11 @@ footer.shell {
   align-items: center;
   gap: 0.75rem;
 }
+
+.about summary {
+  cursor: pointer;
+}
+
+.about details {
+  margin-top: 0.75rem;
+}
