@@ -493,6 +493,10 @@ uv --directory backend run pywrangler secret put R2_SECRET_ACCESS_KEY -c wrangle
 # 所以**沒有任何 seed 存在資料庫裡** —— 不用遷移、不用「只顯示一次」、
 # D1 被 dump 也拿不到東西。換掉這個值就等於一次撤銷所有已配對的機器。
 uv --directory backend run pywrangler secret put DESKTOP_PAIRING_SECRET -c wrangler.admin.toml
+
+# 桌面工具 token 的簽章金鑰。跟配對碼分開，因為兩者的壽命和撤銷方式不同：
+# 換配對 secret 只是讓新的配對要重做，換這一把是立刻讓所有已發出的 token 失效。
+uv --directory backend run pywrangler secret put DESKTOP_TOKEN_SECRET -c wrangler.admin.toml
 ```
 
 `wrangler.admin.toml` 裡的 `R2_S3_ENDPOINT` 要填成

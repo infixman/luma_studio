@@ -106,6 +106,35 @@ def seconds_left(instant: int) -> int:
     return STEP - instant % STEP
 
 
+def matching_counter(secret, submitted, *, now: int) -> int | None:
+    """Which window this code belongs to, or None.
+
+    The counter is returned rather than a boolean because a caller that wants a
+    code to work only once has to record *which* code was used, and recomputing
+    that outside would mean a second copy of the window arithmetic.
+    """
+
+    raw = _decode(secret)
+    if raw is None:
+        return None
+    # `isascii` is not decoration. `"１２３４５６".isdigit()` is true, and
+    # `compare_digest` raises on a non-ASCII string rather than returning False
+    # — so without this, six full-width digits are a 500 instead of a refusal.
+    if not isinstance(submitted, str) or len(submitted) != DIGITS:
+        return None
+    if not submitted.isascii() or not submitted.isdigit():
+        return None
+
+    counter = now // STEP
+    for step in range(BACKWARD_STEPS + 1):
+        # Constant time. Six digits is a million guesses, and a comparison that
+        # stops at the first wrong one turns that into six times ten — which
+        # would leave the attempt limit as the only thing standing there.
+        if hmac.compare_digest(submitted, _code_for_counter(raw, counter - step)):
+            return counter - step
+    return None
+
+
 def verify(secret, submitted, *, now: int) -> bool:
     """Whether this is the code for now, or for the window just before it.
 
@@ -114,22 +143,4 @@ def verify(secret, submitted, *, now: int) -> bool:
     differently.
     """
 
-    raw = _decode(secret)
-    if raw is None:
-        return False
-    # `isascii` is not decoration. `"１２３４５６".isdigit()` is true, and
-    # `compare_digest` raises on a non-ASCII string rather than returning False
-    # — so without this, six full-width digits are a 500 instead of a refusal.
-    if not isinstance(submitted, str) or len(submitted) != DIGITS:
-        return False
-    if not submitted.isascii() or not submitted.isdigit():
-        return False
-
-    counter = now // STEP
-    for step in range(BACKWARD_STEPS + 1):
-        # Constant time. Six digits is a million guesses, and a comparison that
-        # stops at the first wrong one turns that into six times ten — which
-        # would leave the attempt limit as the only thing standing there.
-        if hmac.compare_digest(submitted, _code_for_counter(raw, counter - step)):
-            return True
-    return False
+    return matching_counter(secret, submitted, now=now) is not None

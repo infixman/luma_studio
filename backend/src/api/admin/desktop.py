@@ -16,6 +16,33 @@ from shared.common import NotConfigured, utc_timestamp
 from shared.responses import Ctx
 
 
+async def handle_public(ctx: Ctx):
+    """The one desktop route that cannot be behind a session.
+
+    A tool starting for the first time has nothing to present, which is the
+    whole point of a pairing code. Everything that makes it survivable is inside
+    `desktop_auth.exchange`: single use, no replaying an older window, and a
+    lock after a handful of wrong codes.
+    """
+
+    if ctx.path == "/api/desktop/tokens" and ctx.method == "POST":
+        try:
+            body = await ctx.json_body()
+        except (AttributeError, TypeError, ValueError):
+            body = {}
+        granted = await desktop_auth.exchange(
+            ctx.env, email=body.get("email"), code=body.get("code"), now=utc_timestamp()
+        )
+        if granted is None:
+            # One answer for every reason. Telling a caller that the account is
+            # locked, or that the code was right but already spent, is telling
+            # them how far along they are.
+            return ctx.error("配對失敗，請重新取得驗證碼", 401)
+        return ctx.json(granted)
+
+    return ctx.error("Not found", 404)
+
+
 async def handle(ctx: Ctx):
     if ctx.path == "/api/desktop/pairing-code" and ctx.method == "GET":
         try:

@@ -17,6 +17,20 @@ ADMIN_HOST = "admin-api.luma-studio.tw"
 OWNER = "chiao7912@gmail.com"
 SIGNED_IN = {"SELECT email FROM admin_sessions": [{"email": OWNER}]}
 PAIRING_SECRET = "a-worker-secret-nobody-else-has"
+ASSET_ID = "asset-000001"
+
+
+class JsonRequest(FakeRequest):
+    def __init__(self, path: str, method: str, body: dict, headers: dict | None = None):
+        super().__init__(
+            path, method,
+            headers or {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"},
+            host=ADMIN_HOST,
+        )
+        self._body = body
+
+    async def json(self):
+        return self._body
 
 
 @pytest.fixture
@@ -194,3 +208,418 @@ class TestThePairingCodeRoute:
         seed = desktop_auth.seed_for(env_with(), OWNER)
 
         assert seed not in call(self._request()).body
+
+
+TOKEN_SECRET = "another-worker-secret"
+
+
+def paired_env(**extra):
+    return make_env(
+        FakeDatabase(SIGNED_IN),
+        origins=ADMIN_ORIGIN,
+        frontend=ADMIN_ORIGIN,
+        DESKTOP_PAIRING_SECRET=PAIRING_SECRET,
+        DESKTOP_TOKEN_SECRET=TOKEN_SECRET,
+        **extra,
+    )
+
+
+class TestExchangingACodeForAToken:
+    """Reached without a session, which is what makes it the exposed surface.
+
+    Six digits is a million guesses. Nothing here relies on the code being hard
+    to find — it relies on a code being spendable once, and on an account being
+    locked after a handful of wrong ones.
+    """
+
+    def _spend(self, desktop_auth, env, *, code=None, now=1785292800, email=OWNER):
+        if code is None:
+            code = desktop_auth.pairing_code(env, email, now=now)["code"]
+        return asyncio.run(desktop_auth.exchange(env, email=email, code=code, now=now))
+
+    def test_the_right_code_yields_a_token(self, desktop_auth):
+        env = paired_env()
+
+        granted = self._spend(desktop_auth, env)
+
+        assert granted["token"]
+        assert granted["scope"] == "video"
+        assert granted["adminEmail"] == OWNER
+        assert granted["expiresAt"] > 1785292800
+
+    def test_the_token_reads_back_as_this_admin(self, desktop_auth):
+        env = paired_env()
+
+        granted = self._spend(desktop_auth, env)
+        claim = desktop_auth.read_token(env, granted["token"], now=1785292800)
+
+        assert claim["adminEmail"] == OWNER
+        assert claim["scope"] == "video"
+
+    def test_a_wrong_code_yields_nothing(self, desktop_auth):
+        env = paired_env()
+
+        assert self._spend(desktop_auth, env, code="000000") is None
+
+    def test_a_code_cannot_be_spent_twice(self, desktop_auth):
+        """Its window is thirty seconds and it is visible on a screen. Without
+        this, one glance at the page is repeatable for half a minute."""
+
+        env = paired_env()
+        code = desktop_auth.pairing_code(env, OWNER, now=1785292800)["code"]
+
+        first = self._spend(desktop_auth, env, code=code)
+        env.DB.answers = {
+            **SIGNED_IN,
+            "SELECT * FROM desktop_pairings": [
+                {"email": OWNER, "used_counter": 1785292800 // 30, "failures": 0,
+                 "locked_until": 0, "updated_at": 0}
+            ],
+        }
+        second = self._spend(desktop_auth, env, code=code)
+
+        assert first is not None
+        assert second is None
+
+    def test_an_older_window_cannot_be_replayed_after_a_newer_one(self, desktop_auth):
+        """Accepting the previous window is for clock skew, not for going
+        backwards past a code that has already been spent."""
+
+        env = paired_env()
+        env.DB.answers = {
+            **SIGNED_IN,
+            "SELECT * FROM desktop_pairings": [
+                {"email": OWNER, "used_counter": 1785292800 // 30, "failures": 0,
+                 "locked_until": 0, "updated_at": 0}
+            ],
+        }
+        earlier = desktop_auth.pairing_code(env, OWNER, now=1785292800 - 30)["code"]
+
+        assert self._spend(desktop_auth, env, code=earlier) is None
+
+    def test_too_many_wrong_codes_locks_the_account(self, desktop_auth):
+        env = paired_env()
+        env.DB.answers = {
+            **SIGNED_IN,
+            "SELECT * FROM desktop_pairings": [
+                {"email": OWNER, "used_counter": None,
+                 "failures": desktop_auth.MAX_FAILURES, "locked_until": 1785292800 + 60,
+                 "updated_at": 0}
+            ],
+        }
+
+        # Even the correct code, because the lock is on the account and not on
+        # the guess.
+        assert self._spend(desktop_auth, env) is None
+
+    def test_a_lock_expires(self, desktop_auth):
+        env = paired_env()
+        env.DB.answers = {
+            **SIGNED_IN,
+            "SELECT * FROM desktop_pairings": [
+                {"email": OWNER, "used_counter": None,
+                 "failures": desktop_auth.MAX_FAILURES, "locked_until": 1785292800 - 1,
+                 "updated_at": 0}
+            ],
+        }
+
+        assert self._spend(desktop_auth, env) is not None
+
+    def test_a_wrong_code_is_recorded(self, desktop_auth):
+        """The limit is only real if failures are counted."""
+
+        env = paired_env()
+
+        self._spend(desktop_auth, env, code="000000")
+
+        assert any("desktop_pairings" in statement for statement, _ in env.DB.writes)
+
+    def test_somebody_who_is_not_an_admin_gets_nothing(self, desktop_auth):
+        env = paired_env()
+
+        assert self._spend(desktop_auth, env, email="stranger@example.com", code="000000") is None
+
+    def test_without_a_token_secret_nothing_is_issued(self, desktop_auth):
+        """An unsigned token that looks signed is worse than a refusal."""
+
+        env = make_env(
+            FakeDatabase(SIGNED_IN),
+            DESKTOP_PAIRING_SECRET=PAIRING_SECRET,
+        )
+        code = desktop_auth.pairing_code(env, OWNER, now=1785292800)["code"]
+
+        assert asyncio.run(
+            desktop_auth.exchange(env, email=OWNER, code=code, now=1785292800)
+        ) is None
+
+
+class TestWhatAVideoTokenMayReach:
+    """The token is not an admin session, and this is where that is true.
+
+    A tool that can create an asset and ask for upload URLs is the whole
+    requirement. Anything beyond it — orders, customers, entitlements — is a
+    403: the identity is real, the permission is not.
+    """
+
+    @pytest.mark.parametrize(
+        "method,path",
+        [
+            ("POST", "/api/video-assets"),
+            ("POST", "/api/video-assets/asset-1/upload-urls"),
+            ("POST", "/api/video-assets/import"),
+        ],
+    )
+    def test_the_upload_routes_are_reachable(self, desktop_auth, method, path):
+        assert desktop_auth.scope_allows("video", method, path) is True
+
+    @pytest.mark.parametrize(
+        "method,path",
+        [
+            ("GET", "/api/orders"),
+            ("POST", "/api/orders/order-1/advance"),
+            ("GET", "/api/customers"),
+            ("POST", "/api/courses"),
+            ("GET", "/api/session"),
+            ("GET", "/api/dashboard"),
+            ("POST", "/api/entitlements/e1/revoke"),
+            ("GET", "/api/desktop/pairing-code"),
+        ],
+    )
+    def test_everything_else_is_not(self, desktop_auth, method, path):
+        assert desktop_auth.scope_allows("video", method, path) is False
+
+    def test_reading_the_library_is_not_part_of_uploading(self, desktop_auth):
+        """Listing is how you find out what other people uploaded. The tool
+        knows the asset it just created."""
+
+        assert desktop_auth.scope_allows("video", "GET", "/api/video-assets") is False
+
+    def test_archiving_is_not_either(self, desktop_auth):
+        """Deletion and archiving live in the back office, where the reference
+        checks are."""
+
+        assert desktop_auth.scope_allows("video", "POST", "/api/video-assets/asset-1/archive") is False
+
+    def test_an_unknown_scope_reaches_nothing(self, desktop_auth):
+        """Not a default. A new scope has to say what it opens."""
+
+        assert desktop_auth.scope_allows("everything", "POST", "/api/video-assets") is False
+
+    def test_a_near_miss_path_is_not_matched_by_prefix(self, desktop_auth):
+        assert desktop_auth.scope_allows("video", "POST", "/api/video-assets-evil") is False
+
+
+class TestTheExchangeRoute:
+    @pytest.fixture
+    def call(self):
+        import admin_main
+        from shared import migrations
+
+        def run(body, env=None, answers=None):
+            migrations._applied_names = None
+            worker = admin_main.Default()
+            worker.env = make_env(
+                FakeDatabase({**SIGNED_IN, **(answers or {})}),
+                origins=ADMIN_ORIGIN,
+                frontend=ADMIN_ORIGIN,
+                **({"DESKTOP_PAIRING_SECRET": PAIRING_SECRET,
+                    "DESKTOP_TOKEN_SECRET": TOKEN_SECRET} if env is None else env),
+            )
+            request = JsonRequest("/api/desktop/tokens", "POST", body)
+            return asyncio.run(worker.fetch(request))
+
+        return run
+
+    def test_it_needs_no_session(self, call, desktop_auth):
+        """A tool has none. If this needed one there would be nothing to pair."""
+
+        from shared.common import utc_timestamp
+
+        # The route reads the clock, so the code has to be for now rather than
+        # for a fixed instant.
+        code = desktop_auth.pairing_code(paired_env(), OWNER, now=utc_timestamp())["code"]
+
+        response = call({"email": OWNER, "code": code})
+
+        assert response.status == 200
+        assert response.json()["scope"] == "video"
+
+    def test_a_wrong_code_is_refused_without_saying_why(self, call):
+        """"Not an admin", "wrong code" and "locked" are one answer. The
+        difference belongs in a log."""
+
+        response = call({"email": OWNER, "code": "000000"})
+
+        assert response.status == 401
+        assert "lock" not in response.body.lower()
+
+    def test_a_malformed_body_is_refused(self, call):
+        assert call({}).status == 401
+
+    def test_the_pairing_secret_never_reaches_the_response(self, call, desktop_auth):
+        from shared.common import utc_timestamp
+
+        code = desktop_auth.pairing_code(paired_env(), OWNER, now=utc_timestamp())["code"]
+
+        body = call({"email": OWNER, "code": code}).body
+
+        assert PAIRING_SECRET not in body
+        assert TOKEN_SECRET not in body
+
+
+class TestPairedToolEndToEnd:
+    """The acceptance test for the whole scheme.
+
+    A tool with no session pairs, and then the token it got is worth exactly
+    the upload routes and nothing else. Every part of this is checked
+    individually elsewhere; this is here because the parts are in three
+    different modules and the gate that joins them is one `if`.
+    """
+
+    R2 = {
+        "R2_S3_ENDPOINT": "https://acct.r2.cloudflarestorage.com",
+        "R2_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+        "R2_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "COURSE_SOURCE_BUCKET": "luma-course-source",
+        "COURSE_VIDEO_BUCKET": "luma-course-video",
+        "VIDEO_UPLOAD_ENABLED": "1",
+        "DESKTOP_PAIRING_SECRET": PAIRING_SECRET,
+        "DESKTOP_TOKEN_SECRET": TOKEN_SECRET,
+    }
+
+    @pytest.fixture
+    def worker(self):
+        import admin_main
+        from shared import migrations
+
+        def run(request, answers=None):
+            migrations._applied_names = None
+            instance = admin_main.Default()
+            # No admin_sessions row on purpose: the tool has no session, and a
+            # test that quietly had one would prove nothing about the token.
+            instance.env = make_env(
+                FakeDatabase(answers or {}),
+                origins=ADMIN_ORIGIN,
+                frontend=ADMIN_ORIGIN,
+                **self.R2,
+            )
+            return asyncio.run(instance.fetch(request))
+
+        return run
+
+    def _pair(self, worker) -> str:
+        from domain import desktop_auth
+        from shared.common import utc_timestamp
+
+        code = desktop_auth.pairing_code(paired_env(), OWNER, now=utc_timestamp())["code"]
+        response = worker(JsonRequest("/api/desktop/tokens", "POST", {"email": OWNER, "code": code}))
+
+        assert response.status == 200, response.body
+        return response.json()["token"]
+
+    def _with_token(self, path: str, method: str, body: dict, token: str) -> JsonRequest:
+        return JsonRequest(
+            path, method, body,
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Authorization": f"Bearer {token}"},
+        )
+
+    def test_a_paired_tool_can_create_an_asset(self, worker):
+        token = self._pair(worker)
+
+        response = worker(
+            self._with_token("/api/video-assets", "POST", {"title": "第一課", "byteSize": 1_000_000}, token)
+        )
+
+        assert response.status == 201
+
+    def test_a_paired_tool_can_get_upload_urls(self, worker):
+        token = self._pair(worker)
+        uploading = {
+            "SELECT * FROM video_assets": [{
+                "id": ASSET_ID, "title": "第一課", "original_filename": "a.mp4",
+                "source_key": "", "status": "uploading", "byte_size": 1,
+                "duration_seconds": None, "width": None, "height": None,
+                "active_encode_version": None, "master_key": None, "poster_key": None,
+                "error_code": None, "error_detail": None, "created_at": 0, "updated_at": 0,
+            }]
+        }
+
+        response = worker(
+            self._with_token(
+                f"/api/video-assets/{ASSET_ID}/upload-urls", "POST",
+                {"kind": "output", "keys": [f"videos/{ASSET_ID}/1/master.m3u8"]}, token,
+            ),
+            answers=uploading,
+        )
+
+        assert response.status == 200
+        assert "X-Amz-Signature=" in response.json()["urls"][0]["url"]
+
+    @pytest.mark.parametrize(
+        "method,path",
+        [
+            ("GET", "/api/orders"),
+            ("GET", "/api/customers"),
+            ("GET", "/api/dashboard"),
+            ("GET", "/api/session"),
+            ("POST", "/api/courses"),
+            ("GET", "/api/video-assets"),
+            ("POST", f"/api/video-assets/{ASSET_ID}/archive"),
+            ("GET", "/api/desktop/pairing-code"),
+        ],
+    )
+    def test_the_same_token_reaches_nothing_else(self, worker, method, path):
+        """The point of the scope. Losing the tool must not be losing the shop."""
+
+        token = self._pair(worker)
+
+        response = worker(self._with_token(path, method, {}, token))
+
+        assert response.status == 403
+
+    def test_a_forged_token_is_not_admitted(self, worker):
+        response = worker(
+            self._with_token("/api/video-assets", "POST", {"title": "x", "byteSize": 1}, "dv1.x.y")
+        )
+
+        assert response.status == 401
+
+    def test_a_playback_token_is_not_a_desktop_token(self, worker):
+        """Different prefix and different secret, so it is refused before any
+        comparison — but worth pinning, because both are HMAC bearer tokens
+        built by the same code."""
+
+        from domain import playback
+        from shared.common import utc_timestamp
+
+        borrowed = playback.issue(
+            {"assetId": "asset-1", "encodeVersion": 1}, secret=TOKEN_SECRET, now=utc_timestamp()
+        )
+
+        response = worker(
+            self._with_token("/api/video-assets", "POST", {"title": "x", "byteSize": 1}, borrowed)
+        )
+
+        assert response.status == 401
+
+    def test_a_spent_code_does_not_pair_a_second_machine(self, worker):
+        from domain import desktop_auth
+        from shared.common import utc_timestamp
+
+        now = utc_timestamp()
+        code = desktop_auth.pairing_code(paired_env(), OWNER, now=now)["code"]
+
+        first = worker(JsonRequest("/api/desktop/tokens", "POST", {"email": OWNER, "code": code}))
+        already_used = {
+            "SELECT * FROM desktop_pairings": [
+                {"email": OWNER, "used_counter": now // 30, "failures": 0,
+                 "locked_until": 0, "updated_at": now}
+            ]
+        }
+        second = worker(
+            JsonRequest("/api/desktop/tokens", "POST", {"email": OWNER, "code": code}),
+            answers=already_used,
+        )
+
+        assert first.status == 200
+        assert second.status == 401

@@ -25,9 +25,9 @@ from api.admin import pages as pages_admin_api
 from api.admin import shop as shop_admin_api
 from api.admin import site as site_admin_api
 import auth_admin
-from domain import dashboard
+from domain import dashboard, desktop_auth
 from shared import rate_limit, router
-from shared.common import OAuthError
+from shared.common import OAuthError, utc_timestamp
 from shared.migrations import apply_migrations
 from shared.responses import Ctx
 
@@ -56,10 +56,36 @@ async def dispatch(ctx: Ctx):
     if path == "/auth/logout" and method == "POST":
         return await auth_admin.logout(ctx)
 
+    # A tool pairing for the first time has nothing to present, so this cannot
+    # be behind the gate below. It is the only such route.
+    if path == "/api/desktop/tokens":
+        return await desktop_admin_api.handle_public(ctx)
+
     # Past this line every route is administration, so the check happens once.
+    #
+    # Two kinds of credential arrive here. A browser session is the ordinary
+    # one and carries every permission. A desktop token is a real identity with
+    # a deliberately small one, so it is admitted the same way and then held to
+    # an allowlist of the routes its scope covers.
     email = await auth_admin.get_admin_email(ctx.env, ctx.request)
+    scope = None
+    if not email:
+        claim = desktop_auth.read_token(
+            ctx.env, desktop_auth.bearer_token(ctx.request), now=utc_timestamp()
+        )
+        if claim:
+            email, scope = claim["adminEmail"], claim["scope"]
     if not email:
         return ctx.error("Authentication required", 401)
+
+    # 403 rather than 401: the identity is real, the permission is not, and
+    # telling a paired tool to authenticate again would send it round a loop it
+    # cannot get out of.
+    #
+    # Without this line a video token reads orders, customers and the dashboard,
+    # all answering 200 — checked by removing it and watching them.
+    if scope is not None and not desktop_auth.scope_allows(scope, method, path):
+        return ctx.error("這個 token 沒有這項權限", 403)
 
     # Who is signed in, for the handlers that record who did what. Set once,
     # here, rather than re-read by each of them.

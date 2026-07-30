@@ -574,3 +574,70 @@ class TestDefaultOfferBackfill:
             assert marked == {"v1"}
         finally:
             connection.close()
+
+
+class TestSpendingAPairingCodeOnce:
+    """The upsert that makes a pairing code single-use.
+
+    `desktop_auth` checks the read row first, the way everything else in this
+    codebase does — but that check loses a race, and the WHERE clause on the
+    conflict is what survives one. A fake database cannot evaluate a WHERE
+    clause, so this is the only place the guard is actually exercised.
+    """
+
+    def _spend(self, database, counter: int) -> int:
+        # The production statement, imported rather than copied: a copy would
+        # keep passing after the real one changed.
+        from domain.desktop_auth import CONSUME_SQL
+
+        cursor = database.execute(
+            CONSUME_SQL.replace("?1", "'owner@example.com'").replace("?2", str(counter)).replace("?3", "0")
+        )
+        return cursor.rowcount
+
+    def test_the_first_spend_takes_it(self, database):
+        assert self._spend(database, 100) == 1
+
+    def test_the_same_window_cannot_be_spent_twice(self, database):
+        self._spend(database, 100)
+
+        assert self._spend(database, 100) == 0
+
+    def test_an_earlier_window_cannot_be_spent_afterwards(self, database):
+        """Accepting the previous window is for clock skew, not for going
+        backwards past something already used."""
+
+        self._spend(database, 100)
+
+        assert self._spend(database, 99) == 0
+
+    def test_the_next_window_can_be(self, database):
+        """A tool pairing again tomorrow is normal and must not be locked out by
+        yesterday's row."""
+
+        self._spend(database, 100)
+
+        assert self._spend(database, 101) == 1
+
+    def test_spending_clears_a_lock_and_the_failure_count(self, database):
+        """A correct code is the end of that episode. Leaving the count where it
+        was would lock the admin out on their next typo."""
+
+        database.execute(
+            "INSERT INTO desktop_pairings (email, used_counter, failures, locked_until, updated_at)"
+            " VALUES ('owner@example.com', NULL, 4, 0, 0)"
+        )
+
+        self._spend(database, 100)
+
+        row = database.execute(
+            "SELECT failures, locked_until FROM desktop_pairings WHERE email = 'owner@example.com'"
+        ).fetchone()
+        assert row == (0, 0)
+
+    def test_one_row_per_admin(self, database):
+        self._spend(database, 100)
+        self._spend(database, 101)
+
+        count = database.execute("SELECT COUNT(*) FROM desktop_pairings").fetchone()[0]
+        assert count == 1

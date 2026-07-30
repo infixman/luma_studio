@@ -1044,6 +1044,31 @@ MIGRATIONS = [
             " ON inventory_audit_log (inventory_item_id, created_at DESC)",
         ],
     },
+    {
+        "name": "0034_create_desktop_pairings",
+        "statements": [
+            # One row per admin, and it holds the two things a six-digit code
+            # cannot defend itself with.
+            #
+            # `used_counter` is which TOTP window was last spent. A code is good
+            # once: without this, one observed code works for its whole window
+            # and can be exchanged repeatedly. Stored as the counter rather than
+            # the code so nothing here is worth reading.
+            #
+            # `failures` and `locked_until` are the attempt limit. The per-IP
+            # rate limiter cannot do this job — it is advisory, it fails open
+            # when the binding is absent, and rotating addresses defeats it.
+            # A million guesses needs a limit that fails closed and counts per
+            # account.
+            """CREATE TABLE IF NOT EXISTS desktop_pairings (
+                 email TEXT PRIMARY KEY NOT NULL,
+                 used_counter INTEGER,
+                 failures INTEGER NOT NULL DEFAULT 0,
+                 locked_until INTEGER NOT NULL DEFAULT 0,
+                 updated_at INTEGER NOT NULL
+               )""",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()
