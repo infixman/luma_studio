@@ -249,6 +249,67 @@ class TestGatewayRoutes:
 
         assert response.status == 403
 
+    def test_an_unauthorised_request_reads_neither_the_cache_nor_r2(self, call, monkeypatch):
+        """The class below says authorisation comes first; this is what says it.
+
+        The cache key deliberately carries no identity, which is what makes it
+        shareable between members — and also what would make one unauthorised
+        hit serve a lesson to everybody. Nothing may be read before the token.
+        """
+
+        from api.front import learning as module
+
+        looked_up: list[str] = []
+
+        class RecordingBucket:
+            async def get(self, key):
+                looked_up.append(key)
+                return None
+
+        async def _never(ctx, key):
+            looked_up.append(f"cache:{key}")
+            return None
+
+        monkeypatch.setattr(module, "_cached", _never)
+
+        response = call(
+            self._request("/course-media/asset-1/1/720p/segment-000001.m4s"),
+            PLAYBACK_SECRET="s",
+            COURSE_VIDEO=RecordingBucket(),
+        )
+
+        assert response.status == 403
+        assert looked_up == []
+
+    def test_the_object_read_is_the_one_the_key_helper_builds(self, call):
+        """Pins the key. It used to be assembled by hand from a URL segment,
+        which was safe only because R2 reads a key as a literal string."""
+
+        from domain import playback, video
+        from shared.common import utc_timestamp
+
+        token = playback.issue(
+            {"assetId": "asset-1", "encodeVersion": 1}, secret="s", now=utc_timestamp()
+        )
+        looked_up: list[str] = []
+
+        class RecordingBucket:
+            async def get(self, key):
+                looked_up.append(key)
+                return None
+
+        response = call(
+            self._request(
+                "/course-media/asset-1/1/720p/segment-000001.m4s",
+                Cookie=f"luma_playback={token}",
+            ),
+            PLAYBACK_SECRET="s",
+            COURSE_VIDEO=RecordingBucket(),
+        )
+
+        assert response.status == 404
+        assert looked_up == [f"{video.encode_prefix('asset-1', 1)}720p/segment-000001.m4s"]
+
     def test_the_learning_routes_need_a_session(self, call):
         assert call(self._request("/api/learning/courses")).status == 401
 

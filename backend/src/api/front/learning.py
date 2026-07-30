@@ -168,10 +168,14 @@ async def media_response(ctx: Ctx, path: str):
         return ctx.error("Not found", 404)
     asset_id, raw_version, object_path = parts
 
-    if not playback.allowed_object(object_path):
+    if not video.allowed_object(object_path):
         return ctx.error("Not found", 404)
     try:
         encode_version = int(raw_version)
+        # Built through the key helper, which validates both parts. The id here
+        # arrives in the URL, and a key assembled from it by hand was correct
+        # only because R2 treats a key as a literal string rather than a path.
+        key = f"{video.encode_prefix(asset_id, encode_version)}{object_path}"
     except ValueError:
         return ctx.error("Not found", 404)
 
@@ -181,8 +185,6 @@ async def media_response(ctx: Ctx, path: str):
         # One answer for expired, forged, missing and for-something-else. The
         # difference is useful in a log and useful to an attacker.
         return ctx.error("Forbidden", 403)
-
-    key = f"videos/{asset_id}/{encode_version}/{object_path}"
 
     # Only after the token has been checked. A cached object that could be
     # served without one would mean the first member to watch a lesson opened

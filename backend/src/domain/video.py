@@ -45,6 +45,28 @@ OUTPUT_SUFFIXES = (".m3u8", ".mp4", ".m4s", ".webp")
 # encoder; what matters here is the names, because they are in object keys.
 RENDITIONS = (("1080p", 1080), ("720p", 720), ("480p", 480))
 RENDITION_NAMES = tuple(name for name, _ in RENDITIONS)
+_RENDITIONS = "|".join(RENDITION_NAMES)
+
+# Exactly the objects an encode consists of, relative to its own folder.
+#
+# Two things with opposite failure modes read this list: the signer decides
+# what the desktop tool may write, the gateway decides what a member may read.
+# A second copy would drift, and on the day it drifted one side would accept
+# an object the other refuses.
+#
+# An allowlist of shapes rather than a denylist of traversal tricks. Every list
+# of tricks is missing one, and these names are entirely predictable.
+OBJECT_PATTERNS = (
+    re.compile(r"^master\.m3u8$"),
+    re.compile(r"^poster\.webp$"),
+    re.compile(rf"^(?:{_RENDITIONS})/playlist\.m3u8$"),
+    re.compile(rf"^(?:{_RENDITIONS})/init\.mp4$"),
+    re.compile(rf"^(?:{_RENDITIONS})/segment-\d{{6}}\.m4s$"),
+)
+
+# Which bucket a key belongs to. Not a default anywhere: adding a third means
+# deciding what may be written to it.
+KINDS = ("source", "output")
 
 STATUSES = ("uploading", "uploaded", "queued", "processing", "ready", "failed", "aborted", "archived")
 
@@ -114,23 +136,38 @@ def _version(version) -> int:
     return version
 
 
-def source_key(asset_id: str, upload_version: int) -> str:
-    """Where the original lands.
+def source_prefix(asset_id: str, upload_version: int) -> str:
+    """Where an original lands.
 
-    Named after the asset, not the file. `../../` in a filename is a real
-    thing people send, and a key built from one is a write to somewhere the
-    uploader chose.
+    Named after the asset, not the file. `../../` in a filename is a real thing
+    people send, and a key built from one is a write to wherever the uploader
+    chose.
     """
 
-    return f"sources/{_asset_id(asset_id)}/{_version(upload_version)}/source.mp4"
+    return f"sources/{_asset_id(asset_id)}/{_version(upload_version)}/"
+
+
+def encode_prefix(asset_id: str, encode_version: int) -> str:
+    """Where one encode's objects live.
+
+    Every key, the verifier and the playback gateway derive from this, so the
+    asset id and version are validated once, here, rather than in five places
+    that could disagree.
+    """
+
+    return f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/"
+
+
+def source_key(asset_id: str, upload_version: int) -> str:
+    return f"{source_prefix(asset_id, upload_version)}source.mp4"
 
 
 def master_key(asset_id: str, encode_version: int) -> str:
-    return f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/master.m3u8"
+    return f"{encode_prefix(asset_id, encode_version)}master.m3u8"
 
 
 def poster_key(asset_id: str, encode_version: int) -> str:
-    return f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/poster.webp"
+    return f"{encode_prefix(asset_id, encode_version)}poster.webp"
 
 
 def rendition_key(asset_id: str, encode_version: int, rendition: str, name: str) -> str:
@@ -140,7 +177,50 @@ def rendition_key(asset_id: str, encode_version: int, rendition: str, name: str)
         raise ValueError("Invalid output name")
     if not name.endswith(OUTPUT_SUFFIXES):
         raise ValueError("Invalid output type")
-    return f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/{rendition}/{name}"
+    return f"{encode_prefix(asset_id, encode_version)}{rendition}/{name}"
+
+
+def allowed_object(path: str) -> bool:
+    """Whether this is an object an encode actually contains.
+
+    Consulted by the signer before writing and by the gateway before reading.
+    """
+
+    if not isinstance(path, str) or not path:
+        return False
+    return any(pattern.fullmatch(path) for pattern in OBJECT_PATTERNS)
+
+
+def signable_key(key: str, *, asset_id: str, version: int, kind: str) -> str:
+    """The key, if it is one this asset and version may be handed a URL for.
+
+    A presigned URL is the entirety of what the desktop tool can do to a
+    bucket, so this is where "one object, this asset, this version" is decided.
+    Two refusals matter more than the rest: another asset's prefix, which would
+    let one upload write into somebody else's video, and another version of
+    this asset, which would let a caller claiming to upload a new encode write
+    into the one members are watching.
+
+    Raises rather than returning False. A caller who forgets to check a boolean
+    signs whatever they were given, and there is no safe default to fall back
+    on here.
+    """
+
+    if kind not in KINDS:
+        raise ValueError(f"Unknown object kind: {kind}")
+    if not isinstance(key, str) or not key:
+        raise ValueError("Object key is required")
+
+    if kind == "source":
+        # One object, and its name is not up for discussion.
+        if key != source_key(asset_id, version):
+            raise ValueError("This key is not this asset's original")
+        return key
+
+    prefix = encode_prefix(asset_id, version)
+    if not key.startswith(prefix) or not allowed_object(key[len(prefix) :]):
+        raise ValueError("This key is not part of this encode")
+    return key
 
 
 def can_change(before: str, after: str) -> bool:
@@ -362,7 +442,7 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
     re-running one sync is a better afternoon than an admin re-running six.
     """
 
-    prefix = f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/"
+    prefix = encode_prefix(asset_id, encode_version)
     missing: list[str] = []
     checked = 0
 

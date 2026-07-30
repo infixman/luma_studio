@@ -239,3 +239,168 @@ class TestAssetLifecycle:
 
         statement, _ = database.writes[0]
         assert "error_code = NULL" in statement
+
+
+class TestTheEncodePrefix:
+    """One place that says where an encode's objects live.
+
+    It had five: three key builders, the verifier, and the playback gateway —
+    and the gateway built its copy out of an asset id that came from the URL.
+    Nothing was exploitable, but only because R2 treats a key as a literal
+    string and would not resolve the `..` somebody could have put there.
+    """
+
+    def test_it_is_where_the_key_builders_put_things(self, video):
+        prefix = video.encode_prefix("asset-1", 2)
+
+        assert video.master_key("asset-1", 2).startswith(prefix)
+        assert video.poster_key("asset-1", 2).startswith(prefix)
+        assert video.rendition_key("asset-1", 2, "720p", "init.mp4").startswith(prefix)
+
+    def test_it_validates_the_asset_id(self, video):
+        with pytest.raises(ValueError):
+            video.encode_prefix("..", 1)
+
+    def test_it_validates_the_version(self, video):
+        with pytest.raises(ValueError):
+            video.encode_prefix("asset-1", 0)
+
+    def test_the_source_prefix_is_where_the_original_goes(self, video):
+        assert video.source_key("asset-1", 1).startswith(video.source_prefix("asset-1", 1))
+
+
+class TestWhichObjectsExist:
+    """The shapes the encoder writes, and nothing else.
+
+    This list is consulted by two things with opposite failure modes: the
+    signer decides what may be written, the gateway decides what may be read.
+    Two copies of it would drift, and the day they drifted the signer would
+    accept an object the gateway refuses to serve.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        ["master.m3u8", "poster.webp", "720p/playlist.m3u8", "720p/init.mp4", "1080p/segment-000001.m4s"],
+    )
+    def test_what_the_encoder_produces_is_allowed(self, video, path):
+        assert video.allowed_object(path) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "",
+            "source.mp4",
+            "720p/notes.txt",
+            "999p/playlist.m3u8",
+            "master.m3u8/../../x",
+            "../master.m3u8",
+            "/master.m3u8",
+            "/etc/passwd",
+            "../../sources/asset-1/1/source.mp4",
+            "720p/../../other/master.m3u8",
+            # Encoded and backslash forms, because a check written against `/`
+            # alone reads these as ordinary names.
+            "..%2Fsource.mp4",
+            r"720p\..\master.m3u8",
+        ],
+    )
+    def test_anything_else_is_refused(self, video, path):
+        assert video.allowed_object(path) is False
+
+    def test_every_rung_of_the_ladder_is_allowed(self, video):
+        """The patterns are built from `RENDITIONS` rather than repeating it.
+
+        They used to be a separate hardcoded list, so adding a rung would have
+        produced output the signer accepts and the gateway then refuses to
+        serve — an asset that verifies and does not play.
+        """
+
+        for rendition in video.RENDITION_NAMES:
+            assert video.allowed_object(f"{rendition}/playlist.m3u8") is True
+            assert video.allowed_object(f"{rendition}/init.mp4") is True
+            assert video.allowed_object(f"{rendition}/segment-000001.m4s") is True
+
+
+class TestWhatMayBeSigned:
+    """A presigned URL is the only thing the desktop tool can do to a bucket,
+    so this is where "one object, this asset, this version" is enforced.
+
+    Refusals raise rather than return False: a caller that forgets to check a
+    boolean signs whatever it was given, and there is no safe default here.
+    """
+
+    def test_an_output_object_of_this_encode_is_signable(self, video):
+        key = "videos/asset-1/2/1080p/segment-000123.m4s"
+
+        assert video.signable_key(key, asset_id="asset-1", version=2, kind="output") == key
+
+    def test_the_master_and_poster_are_signable(self, video):
+        for key in (video.master_key("asset-1", 2), video.poster_key("asset-1", 2)):
+            assert video.signable_key(key, asset_id="asset-1", version=2, kind="output") == key
+
+    def test_the_original_is_signable_as_a_source(self, video):
+        key = video.source_key("asset-1", 1)
+
+        assert video.signable_key(key, asset_id="asset-1", version=1, kind="source") == key
+
+    def test_another_assets_object_is_refused(self, video):
+        """The one refusal that matters most: the token names an asset, and a
+        caller must not be able to write into somebody else's."""
+
+        with pytest.raises(ValueError):
+            video.signable_key(
+                "videos/asset-2/2/master.m3u8", asset_id="asset-1", version=2, kind="output"
+            )
+
+    def test_another_version_of_this_asset_is_refused(self, video):
+        """Writing into the version members are watching, while claiming to
+        upload a new one."""
+
+        with pytest.raises(ValueError):
+            video.signable_key(
+                "videos/asset-1/1/master.m3u8", asset_id="asset-1", version=2, kind="output"
+            )
+
+    def test_a_source_key_cannot_be_signed_as_an_output(self, video):
+        """`kind` picks the bucket, so a key of the wrong shape for it would be
+        a write into the other bucket's namespace."""
+
+        with pytest.raises(ValueError):
+            video.signable_key(
+                video.source_key("asset-1", 1), asset_id="asset-1", version=1, kind="output"
+            )
+
+    def test_an_output_key_cannot_be_signed_as_a_source(self, video):
+        with pytest.raises(ValueError):
+            video.signable_key(
+                video.master_key("asset-1", 1), asset_id="asset-1", version=1, kind="source"
+            )
+
+    def test_a_file_the_pipeline_never_writes_is_refused(self, video):
+        with pytest.raises(ValueError):
+            video.signable_key(
+                "videos/asset-1/2/1080p/notes.txt", asset_id="asset-1", version=2, kind="output"
+            )
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "videos/asset-1/2/../../sources/asset-1/1/source.mp4",
+            "videos/asset-1/2/720p/../../../other/master.m3u8",
+            "/videos/asset-1/2/master.m3u8",
+            "videos/asset-1/2/",
+            "videos/asset-1/2",
+            "",
+        ],
+    )
+    def test_anything_reaching_outside_the_prefix_is_refused(self, video, key):
+        with pytest.raises(ValueError):
+            video.signable_key(key, asset_id="asset-1", version=2, kind="output")
+
+    def test_an_unknown_kind_is_refused(self, video):
+        """Not a default — a new bucket must be added here deliberately."""
+
+        with pytest.raises(ValueError):
+            video.signable_key(
+                video.master_key("asset-1", 2), asset_id="asset-1", version=2, kind="anything"
+            )

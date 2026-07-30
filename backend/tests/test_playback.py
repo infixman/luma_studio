@@ -134,36 +134,6 @@ class TestWhatATokenIsFor:
         assert playback.covers(claim, asset_id="asset-1", encode_version=2) is False
 
 
-class TestObjectPaths:
-    """What a gateway request is allowed to ask for."""
-
-    @pytest.mark.parametrize(
-        "path",
-        ["master.m3u8", "720p/playlist.m3u8", "720p/init.mp4", "720p/segment-000001.m4s", "poster.webp"],
-    )
-    def test_the_shapes_the_encoder_produces_are_allowed(self, playback, path):
-        assert playback.allowed_object(path) is True
-
-    @pytest.mark.parametrize(
-        "path",
-        [
-            "../../sources/asset-1/1/source.mp4",
-            "..%2Fsource.mp4",
-            r"720p\\..\\master.m3u8",
-            "720p/../../other/master.m3u8",
-            "source.mp4",
-            "master.m3u8/../../x",
-            "",
-            "/etc/passwd",
-        ],
-    )
-    def test_anything_that_could_reach_elsewhere_is_refused(self, playback, path):
-        assert playback.allowed_object(path) is False
-
-    def test_a_file_type_the_pipeline_never_writes_is_refused(self, playback):
-        assert playback.allowed_object("720p/notes.txt") is False
-
-
 class TestStartingTheClock:
     """A timed grant starts counting at the first watch, not at payment."""
 

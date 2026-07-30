@@ -19,7 +19,6 @@ context stops working quickly.
 import base64
 import hmac
 import json
-import re
 from hashlib import sha256
 
 
@@ -37,15 +36,11 @@ CLOCK_SKEW = 60
 
 SECONDS_PER_DAY = 86400
 
-# Exactly the shapes the encoder writes. Anything else is either an attempt to
-# reach a different object or a bug that would 404 anyway.
-OBJECT_PATTERNS = (
-    re.compile(r"^master\.m3u8$"),
-    re.compile(r"^poster\.webp$"),
-    re.compile(r"^(?:1080p|720p|480p)/playlist\.m3u8$"),
-    re.compile(r"^(?:1080p|720p|480p)/init\.mp4$"),
-    re.compile(r"^(?:1080p|720p|480p)/segment-\d{6}\.m4s$"),
-)
+# What the gateway may serve is `video.allowed_object`, which is the same list
+# the signer uses to decide what may be written. It lives there because an
+# object's name is a property of the encode, not of the token that opens it —
+# and a second copy here would be one edit away from the gateway refusing to
+# serve something the pipeline was allowed to upload.
 
 
 def _b64(raw: bytes) -> str:
@@ -131,19 +126,6 @@ def covers(claim: dict | None, *, asset_id: str, encode_version: int) -> bool:
     if not claim:
         return False
     return claim.get("assetId") == asset_id and claim.get("encodeVersion") == encode_version
-
-
-def allowed_object(path: str) -> bool:
-    """Whether the gateway will serve this path at all.
-
-    An allowlist of the shapes the encoder writes, not a denylist of traversal
-    tricks. Every list of tricks is missing one, and the object names here are
-    entirely predictable, so there is no reason to accept anything else.
-    """
-
-    if not isinstance(path, str) or not path:
-        return False
-    return any(pattern.fullmatch(path) for pattern in OBJECT_PATTERNS)
 
 
 def expiry_for(*, access_days: int | None, first_viewed_at: int | None, now: int) -> dict | None:
