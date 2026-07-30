@@ -91,32 +91,19 @@ h1 {
   gap: 0.5rem;
 }
 
-.code-slot {
-  width: 2.4rem;
-  padding: 0.2rem 0;
-  background: transparent;
-  border: none;
-  /* An underline rather than a box. Six boxes is a lot of furniture for six
-     characters. */
-  border-bottom: 2px solid var(--line);
-  border-radius: 0;
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 1.5rem;
-  text-align: center;
-  user-select: text;
-}
-
-.code-slot:focus-visible {
-  outline: none;
-  border-bottom-color: var(--accent);
-}
-
 /* Beside the slots rather than inside a field, so it needs no absolute
-   positioning to be centred. */
+   positioning. It does need `align-self`: the generic `button` rule says
+   `flex-start`, which parks it at the top of the row while the underlines sit at
+   the bottom of theirs — a button floating above what it belongs to.
+
+   `flex-end` rather than `center`: a slot is a tall empty box with a line under
+   it, so its centre is well above the line, and a button centred on the box
+   still reads as unanchored. Sitting it on the same baseline as the underlines
+   is what makes it look attached to them. */
 .icon-button.static {
   position: static;
   transform: none;
+  align-self: flex-end;
 }
 
 input[type='text'],
@@ -135,6 +122,31 @@ input[type='email'] {
 input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Underlines, not boxes. Six boxes is a lot of furniture for six characters.
+   `input.code-slot` and after the generic rules, both deliberately: a bare
+   `.code-slot` scores 0-1-0 against `input[type='text']`'s 0-1-1 and loses the
+   border outright, and matching the score still loses to whichever comes last.
+   The symptom is a box drawn around the underline. */
+input.code-slot {
+  width: 2.4rem;
+  padding: 0.2rem 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--line);
+  border-radius: 0;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.5rem;
+  text-align: center;
+  user-select: text;
+}
+
+input.code-slot:focus-visible {
+  /* The ring would trace the box that is not there. */
+  outline: none;
+  border-bottom-color: var(--accent);
 }
 
 /* An input with a button sitting inside its right edge. */
@@ -311,10 +323,51 @@ footer.shell {
   padding-top: 1.5rem;
 }
 
-.about summary {
-  cursor: pointer;
+.about button {
+  margin-top: 0.5rem;
 }
 
-.about details {
-  margin-top: 0.75rem;
+/* Over the page rather than inside the footer: the licence is thousands of
+   words, and a footer that expands to thousands of words has moved the whole
+   interface to make room for something nobody was reading. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: rgb(20 18 15 / 45%);
+  z-index: 10;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(46rem, 100%);
+  /* Never taller than the window. The scrolling belongs to the text below, not
+     to the page behind it. */
+  max-height: 100%;
+  padding: 1.25rem 1.5rem;
+  background: var(--panel);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgb(20 18 15 / 25%);
+}
+
+.licence {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  background: var(--sunken);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  /* Licence text is hard-wrapped already; re-wrapping it reads worse than a
+     horizontal scrollbar on the few lines that are long. */
+  white-space: pre;
+  /* The one thing here somebody might genuinely want to copy. */
+  user-select: text;
 }

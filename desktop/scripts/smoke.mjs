@@ -87,6 +87,37 @@ async function check(window) {
   }
 
   const heading = await settled(window)
+
+  // The code slots are underlines. They were boxes for a while without anybody
+  // editing them, because `.code-slot` scores 0-1-0 and `input[type='text']`
+  // scores 0-1-1, so the generic rule kept the border. A unit test cannot catch
+  // it — the stylesheet is not loaded in the DOM tests, and specificity is
+  // exactly the thing that needs a real cascade to be wrong in.
+  if (!status.paired) {
+    const border = await window.webContents.executeJavaScript(`(() => {
+      const slot = document.querySelector('.code-slot')
+      if (!slot) return 'no slot rendered'
+      const style = getComputedStyle(slot)
+      return [style.borderTopWidth, style.borderLeftWidth, style.borderBottomWidth].join(' ')
+    })()`)
+    if (border !== '0px 0px 2px') throw new Error(`the code slots are boxed: ${border}`)
+
+    // And the paste button sits on the same line as they do. It did not: the
+    // generic `button` rule sets `align-self: flex-start`, so it parked at the
+    // top of the row while the underlines sat at the bottom of theirs.
+    //
+    // Bottoms rather than centres. A slot is a tall box with a line under it, so
+    // matching centres still leaves the button floating above the line — which
+    // was the first attempt at this, and it looked no better.
+    const drift = await window.webContents.executeJavaScript(`(() => {
+      const slots = document.querySelector('.code-slots')
+      const button = document.querySelector('.icon-button.static')
+      if (!slots || !button) return 999
+      return Math.abs(slots.getBoundingClientRect().bottom - button.getBoundingClientRect().bottom)
+    })()`)
+    if (drift > 2) throw new Error(`the paste button sits ${drift}px off the slots' line`)
+  }
+
   // With no pairing stored — which is the state on any machine running this
   // check — the tool opens on the pairing screen.
   const expected = status.paired ? '影片上傳工具' : '連結管理後台'
