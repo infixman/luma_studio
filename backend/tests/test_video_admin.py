@@ -5,6 +5,7 @@ transcoding need R2, a queue and a container, and are not here.
 """
 
 import asyncio
+import types
 
 import pytest
 
@@ -154,9 +155,14 @@ class TestArchiving:
 class TestImporting:
     """Registering a ladder that was transcoded and uploaded elsewhere."""
 
+    # What each stand-in object claims to weigh. Distinct numbers so a total
+    # that double-counts or skips one is a different number, not the same one.
+    HEAD_BYTES = 1_000_000
+
     class Bucket:
-        def __init__(self, complete: bool = True):
+        def __init__(self, complete: bool = True, head_bytes: int = 1_000_000):
             self.complete = complete
+            self.head_bytes = head_bytes
 
         async def get(self, key: str):
             if not key.endswith(".m3u8"):
@@ -167,15 +173,19 @@ class TestImporting:
                 body = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\nsegment-000001.m4s\n'
 
             class Stored:
+                size = len(body)
+
                 async def text(self_inner):
                     return body
 
             return Stored()
 
         async def head(self, key: str):
-            return object() if self.complete else None
+            if not self.complete:
+                return None
+            return types.SimpleNamespace(size=self.head_bytes)
 
-    def _call(self, call, body: dict, *, complete: bool = True, answers: dict | None = None):
+    def _call(self, call, body: dict, *, complete: bool = True, answers: dict | None = None, database=None):
         return call(
             JsonRequest(
                 "/api/video-assets/import",
@@ -185,6 +195,7 @@ class TestImporting:
             ),
             answers,
             bucket=self.Bucket(complete),
+            database=database,
             # Registering is part of uploading, and the same switch gates it.
             env={"VIDEO_UPLOAD_ENABLED": "1"},
         )
@@ -221,6 +232,67 @@ class TestImporting:
         response = self._call(call, {**self._call_body(), "width": width})
 
         assert response.status == 400
+
+    def test_the_verified_version_is_recorded_with_what_it_occupies(self, call, database_of):
+        """Asserted on the write, not on the asset the route reads back: the
+        fake answers reads from the test's own fixture, so a read-back assertion
+        would pass with no INSERT at all. This project has made that mistake
+        four times.
+        """
+
+        database = database_of({"SELECT * FROM video_assets": [an_asset()]})
+
+        self._call(call, self._call_body(), database=database)
+
+        recorded = [
+            bindings for sql, bindings in database.writes if "INSERT INTO video_encode_versions" in sql
+        ]
+        assert recorded, "a verified encode has to leave a row the storage page can add up"
+        asset_id, version, objects, byte_size, has_poster, *_ = recorded[0]
+        assert version == 1
+        # master + 720p playlist walked, then init, segment and the poster HEADed.
+        assert objects == 5
+        # Three HEADed objects at a megabyte each, plus the two playlists whose
+        # bodies were read: the playlists count too, they are objects in the bucket.
+        assert byte_size == 3 * self.HEAD_BYTES + 27 + 53
+        assert has_poster == 1
+        assert isinstance(asset_id, str) and asset_id
+
+    def test_the_version_is_recorded_before_the_asset_goes_live(self, call, database_of):
+        """Two statements with no transaction between them, so the order decides
+        what a failure between them leaves behind.
+
+        Asset first: a `ready` asset whose `active_encode_version` names a version
+        no row describes — which is exactly what the orphan scan will read as
+        "these objects belong to nobody", about objects a member is watching.
+
+        Version first: a row nothing live points at, which overstates a storage
+        total by one encode until the next import fixes it. That is the direction
+        to fail in.
+        """
+
+        database = database_of({"SELECT * FROM video_assets": [an_asset()]})
+
+        self._call(call, self._call_body(), database=database)
+
+        order = [
+            sql
+            for sql, _ in database.writes
+            if sql.startswith("INSERT INTO video_encode_versions")
+            or sql.startswith("INSERT INTO video_assets")
+        ]
+        assert order and order[0].startswith("INSERT INTO video_encode_versions")
+
+    def test_an_incomplete_upload_records_no_version(self, call, database_of):
+        """A version row is the claim "this encode is complete". Writing one for
+        a ladder that is missing objects would make it invisible to the orphan
+        scan while it is still broken."""
+
+        database = database_of()
+
+        self._call(call, self._call_body(), complete=False, database=database)
+
+        assert not [sql for sql, _ in database.writes if "INSERT INTO video_encode_versions" in sql]
 
     def test_a_measurement_may_be_absent(self, call):
         """A source with no readable duration is still worth registering."""

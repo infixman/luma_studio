@@ -301,6 +301,21 @@ async def handle(ctx: Ctx):
                 409,
             )
 
+        # Before the asset row, and the order matters because these are two
+        # statements with nothing joining them. If the second one fails, this
+        # order leaves a version row that nothing live points at — a storage
+        # total overstated by one encode, corrected by the next import. The other
+        # order leaves a `ready` asset whose active version no row describes,
+        # which is precisely what the orphan scan reads as "these objects belong
+        # to nobody" — about objects a member is watching.
+        await video.record_encode_version(
+            env,
+            asset_id=asset_id,
+            encode_version=version,
+            object_count=verified["objectCount"],
+            byte_size=verified["byteSize"],
+            has_poster=verified["hasPoster"],
+        )
         created = await video.register_verified_asset(
             env,
             asset_id=asset_id,

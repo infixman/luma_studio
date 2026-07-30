@@ -109,8 +109,12 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
 
 ## S5：影片庫與原始檔上傳
 
-- [ ] 建立 `video_encode_versions` 表（物件數、位元組、驗證時間、active）。
-- [ ] `verify_encode` HEAD 物件時一併記下總量與物件數，寫入該版本一列。
+- [x] 建立 `video_encode_versions` 表（物件數、位元組、有沒有封面、驗證時間）。
+      **不存 active** —— `video_assets.active_encode_version` 已經是那個答案，第二份會漂移。
+- [x] `verify_encode` HEAD 物件時一併記下總量與物件數，寫入該版本一列。
+      版本那一列**先寫、asset 後寫**：中間失敗時寧可多一列沒人指向的版本（總量高估一個 encode，
+      下次 import 就修正），不要一個 `ready` 的 asset 指向沒有列的版本（那正是孤兒盤點會判定
+      「這些物件沒人要」的形狀，而它們是會員正在看的）。
 - [ ] 建立 Video Library 頁；列表、詳情、references 與封存 API 已完成。
 - [ ] 頁面開著時每三秒輪詢，離開停止。
 - [ ] failed 顯示可讀錯誤。

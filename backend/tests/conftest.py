@@ -162,6 +162,37 @@ class FakeDatabase:
         return 1
 
 
+def bind_literals(sql: str, *values) -> str:
+    """A production statement with its `?N` placeholders filled in, for the
+    tests that run one against a real SQLite engine.
+
+    `sqlite3` binds parameters happily, but these tests exist to run the *exact*
+    string production sends, imported rather than copied — and the statements
+    reuse placeholders (`?6` three times, `?9` twice), which positional binding
+    cannot express.
+
+    Highest number first, which is the whole reason this is one function. A
+    left-to-right pass replaces `?1` inside `?10` and leaves a stray digit
+    behind: a syntax error two tests away from the thing being tested, which
+    already happened once and needed a comment to warn the next person.
+
+    Strings are quoted, `None` becomes NULL, numbers go in bare.
+    """
+
+    def literal(value) -> str:
+        if value is None:
+            return "NULL"
+        if isinstance(value, bool):
+            return "1" if value else "0"
+        if isinstance(value, (int, float)):
+            return str(value)
+        return "'" + str(value).replace("'", "''") + "'"
+
+    for index in sorted(range(1, len(values) + 1), reverse=True):
+        sql = sql.replace(f"?{index}", literal(values[index - 1]))
+    return sql
+
+
 class FakeBucket:
     def __init__(self, objects: dict | None = None):
         self.objects = objects or {}

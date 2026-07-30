@@ -1069,6 +1069,46 @@ MIGRATIONS = [
                )""",
         ],
     },
+    {
+        # Phase 4: give the output versions names.
+        #
+        # A version used to be implicit — `video_assets.active_encode_version` is
+        # one number, so a superseded version left no trace at all. Three
+        # questions need the versions to exist as rows: how much the output
+        # bucket holds, which old versions may be deleted, and whether a
+        # `videos/{id}/{v}/` prefix in R2 is an orphan or something in flight.
+        #
+        # `byte_size` is filled in during `verify_encode`, which HEADs every
+        # object anyway. Adding it up by listing the bucket would be a Class B
+        # operation per key, a few hundred per asset, every time the overview
+        # page was opened.
+        #
+        # There is deliberately no `active` column. `video_assets
+        # .active_encode_version` already answers it, and a second copy is a
+        # field that drifts — the same reason this codebase derives "requires
+        # shipping" from an order's contents rather than storing it. When this
+        # one drifted the back office would offer to delete the version members
+        # are watching.
+        "name": "0035_create_video_encode_versions",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS video_encode_versions (
+                 asset_id TEXT NOT NULL,
+                 encode_version INTEGER NOT NULL,
+                 object_count INTEGER NOT NULL DEFAULT 0,
+                 byte_size INTEGER NOT NULL DEFAULT 0,
+                 has_poster INTEGER NOT NULL DEFAULT 0,
+                 verified_at INTEGER NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL,
+                 PRIMARY KEY (asset_id, encode_version)
+               )""",
+            # The storage overview sums this table; the orphan scan reads it one
+            # asset at a time. Both walk it by asset, which the primary key
+            # already orders — this index is for the "newest first" listing.
+            "CREATE INDEX IF NOT EXISTS idx_video_encode_versions_verified"
+            " ON video_encode_versions (verified_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

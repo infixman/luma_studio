@@ -15,6 +15,8 @@ import sqlite3
 
 import pytest
 
+from conftest import bind_literals
+
 
 @pytest.fixture
 def migrations():
@@ -590,9 +592,7 @@ class TestSpendingAPairingCodeOnce:
         # keep passing after the real one changed.
         from domain.desktop_auth import CONSUME_SQL
 
-        cursor = database.execute(
-            CONSUME_SQL.replace("?1", "'owner@example.com'").replace("?2", str(counter)).replace("?3", "0")
-        )
+        cursor = database.execute(bind_literals(CONSUME_SQL, "owner@example.com", counter, 0))
         return cursor.rowcount
 
     def test_the_first_spend_takes_it(self, database):
@@ -660,19 +660,19 @@ class TestRegisteringAVerifiedEncode:
         from domain.video import REGISTER_SQL
 
         database.execute(
-            # `?10` first: replacing `?1` before it would turn `?10` into the id
-            # followed by a stray zero, which is a syntax error two tests away
-            # from the thing being tested.
-            REGISTER_SQL.replace("?10", f"'videos/{asset_id}/{version}/poster.webp'" if poster else "NULL")
-            .replace("?1", f"'{asset_id}'")
-            .replace("?2", f"'{title}'")
-            .replace("?3", "'lesson.mp4'")
-            .replace("?4", "8")
-            .replace("?5", "1920")
-            .replace("?6", "1080")
-            .replace("?7", str(version))
-            .replace("?8", f"'videos/{asset_id}/{version}/master.m3u8'")
-            .replace("?9", "1700000000")
+            bind_literals(
+                REGISTER_SQL,
+                asset_id,
+                title,
+                "lesson.mp4",
+                8,
+                1920,
+                1080,
+                version,
+                f"videos/{asset_id}/{version}/master.m3u8",
+                1_700_000_000,
+                f"videos/{asset_id}/{version}/poster.webp" if poster else None,
+            )
         )
 
     def _create(self, database, asset_id: str) -> None:
@@ -767,3 +767,100 @@ class TestRegisteringAVerifiedEncode:
         assert database.execute(
             "SELECT poster_key FROM video_assets WHERE id = ?", ("a" * 24,)
         ).fetchone()[0] == f"videos/{'a' * 24}/1/poster.webp"
+
+
+class TestRecordingAnEncodeVersion:
+    """One row per output version, written when the version verifies.
+
+    Versions were implicit: `video_assets.active_encode_version` is a single
+    number, so a superseded version left no trace in D1 at all. Storage totals,
+    "which old versions may be deleted" and "is this prefix an orphan" all need
+    the versions to have names.
+
+    The byte total is taken while `verify_encode` HEADs every object, because it
+    already HEADs every object. Listing the bucket to add up a few hundred keys
+    per asset would be the same number for a Class B operation per key.
+    """
+
+    def _record(self, database, *, asset_id="a" * 24, version=1, objects=14, byte_size=1_500_000,
+                poster=1, at=1_700_000_000) -> int:
+        # The production statement, imported rather than copied: a copy keeps
+        # passing after the real one changes.
+        from domain.video import RECORD_ENCODE_VERSION_SQL
+
+        cursor = database.execute(
+            bind_literals(RECORD_ENCODE_VERSION_SQL, asset_id, version, objects, byte_size, poster, at)
+        )
+        return cursor.rowcount
+
+    def test_a_verified_version_is_recorded(self, database):
+        self._record(database)
+
+        row = database.execute(
+            "SELECT asset_id, encode_version, object_count, byte_size, has_poster, verified_at"
+            " FROM video_encode_versions"
+        ).fetchone()
+        assert row == ("a" * 24, 1, 14, 1_500_000, 1, 1_700_000_000)
+
+    def test_two_versions_of_one_asset_are_recorded_separately(self, database):
+        """A re-encode must be visible beside the version members are watching:
+        that is what makes "this old one can go" a question anyone can answer."""
+
+        self._record(database, version=1, byte_size=1_000)
+        self._record(database, version=2, byte_size=2_000)
+
+        rows = database.execute(
+            "SELECT encode_version, byte_size FROM video_encode_versions ORDER BY encode_version"
+        ).fetchall()
+        assert rows == [(1, 1_000), (2, 2_000)]
+
+    def test_re_verifying_a_version_updates_it_rather_than_adding_a_row(self, database):
+        """Re-importing after a dropped object is the ordinary path, and it must
+        not turn one version into two rows that each claim its bytes — the
+        storage total is a SUM over this table."""
+
+        self._record(database, objects=13, byte_size=1_000, poster=0)
+
+        self._record(database, objects=14, byte_size=1_500, poster=1, at=1_700_000_900)
+
+        rows = database.execute(
+            "SELECT object_count, byte_size, has_poster, verified_at FROM video_encode_versions"
+        ).fetchall()
+        assert rows == [(14, 1_500, 1, 1_700_000_900)]
+
+    def test_the_first_verification_time_is_kept(self, database):
+        """`verified_at` says when this version was last confirmed; `created_at`
+        says when it first appeared. Overwriting the second loses the only
+        record of when this encode entered the bucket, which is what the orphan
+        age threshold and the rollback window are measured from."""
+
+        self._record(database, at=1_700_000_000)
+
+        self._record(database, at=1_700_009_999)
+
+        row = database.execute("SELECT created_at, verified_at FROM video_encode_versions").fetchone()
+        assert row == (1_700_000_000, 1_700_009_999)
+
+    def test_which_version_is_live_is_not_copied_into_this_table(self, database):
+        """`video_assets.active_encode_version` already answers it, and a second
+        copy is a field that drifts. When it drifts the back office offers to
+        delete the version members are watching."""
+
+        columns = {row[1] for row in database.execute("PRAGMA table_info(video_encode_versions)")}
+
+        assert "active" not in columns
+        assert {"asset_id", "encode_version", "object_count", "byte_size", "verified_at"} <= columns
+
+    def test_the_same_version_cannot_be_written_twice_by_a_plain_insert(self, database):
+        """The upsert above relies on a key being there. Without one, two
+        concurrent imports of one version each add a row and the totals double."""
+
+        self._record(database)
+
+        with pytest.raises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO video_encode_versions (asset_id, encode_version, object_count,"
+                " byte_size, has_poster, verified_at, created_at, updated_at)"
+                " VALUES (?, 1, 14, 1500000, 1, 0, 0, 0)",
+                ("a" * 24,),
+            )

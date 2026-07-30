@@ -442,6 +442,23 @@ def _safe_relative(path: str) -> bool:
     return bool(path) and ".." not in path.split("/") and not path.startswith("/")
 
 
+def _object_bytes(stored) -> int:
+    """What R2 says this object weighs, and zero if it will not say.
+
+    Tolerant on purpose. The object count decides whether the video plays; the
+    byte total is for the storage page, which exists so somebody remembers to
+    clean up. Refusing an encode because one HEAD came back without a usable
+    size would turn a reporting gap into a failed upload — and the values come
+    back through the JS boundary, where an absent field is not a Python `None`.
+    """
+
+    try:
+        size = int(getattr(stored, "size", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(size, 0)
+
+
 async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
     """Check that everything the playlists refer to is actually there.
 
@@ -452,35 +469,62 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
 
     Returns what is missing rather than the first thing missing: an admin
     re-running one sync is a better afternoon than an admin re-running six.
+
+    Also adds up what the encode occupies while it is here. R2 reports a size on
+    every object this already asks about, so the total is free — whereas getting
+    it later means listing a few hundred keys per asset, which is what the
+    storage overview must not do on every page view.
     """
 
     prefix = encode_prefix(asset_id, encode_version)
     missing: list[str] = []
     checked = 0
+    total = 0
+    # Which objects have already been counted. The playlists are files the tool
+    # wrote, so a name can appear twice in them — and counting one object twice
+    # inflates a byte total that is now stored and summed, rather than a number
+    # nobody read.
+    counted: set[str] = set()
+
+    def count(relative: str, stored) -> None:
+        nonlocal checked, total
+        if relative in counted:
+            return
+        counted.add(relative)
+        checked += 1
+        total += _object_bytes(stored)
 
     # Looked for rather than followed: no playlist refers to the poster, so
     # walking the manifest never reaches it. Its absence does not fail the import
     # — a video with no thumbnail plays — but whether it is there decides what
     # gets recorded, and for a while nothing looked and every import recorded
     # `poster_key` as NULL.
-    has_poster = await bucket.head(poster_key(asset_id, encode_version)) is not None
+    poster = await bucket.head(poster_key(asset_id, encode_version))
+    has_poster = poster is not None
     if has_poster:
-        checked += 1
+        count("poster.webp", poster)
 
     master = await bucket.get(f"{prefix}master.m3u8")
     if master is None:
-        return {"ok": False, "missing": ["master.m3u8"], "objectCount": 0}
-    checked += 1
+        return {"ok": False, "missing": ["master.m3u8"], "objectCount": 0, "byteSize": 0}
+    count("master.m3u8", master)
 
     for rendition in renditions_in(await master.text()):
         if not _safe_relative(rendition):
             missing.append(rendition)
             continue
+        if rendition in counted:
+            # Named twice in the master. `count` would refuse to count it twice
+            # anyway; this is about the round trips — walking it again asks R2
+            # for every one of its segments a second time, and the file saying
+            # so was uploaded rather than written here. A master naming one
+            # rendition a thousand times would otherwise be a thousand walks.
+            continue
         playlist = await bucket.get(f"{prefix}{rendition}")
         if playlist is None:
             missing.append(rendition)
             continue
-        checked += 1
+        count(rendition, playlist)
 
         folder = rendition.rsplit("/", 1)[0] if "/" in rendition else ""
         for segment in segments_in(await playlist.text()):
@@ -488,12 +532,23 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
                 missing.append(segment)
                 continue
             relative = f"{folder}/{segment}" if folder else segment
-            if await bucket.head(f"{prefix}{relative}") is None:
+            if relative in counted:
+                # Same reason as above: the count is safe either way, the HEAD
+                # request is what this avoids.
+                continue
+            stored = await bucket.head(f"{prefix}{relative}")
+            if stored is None:
                 missing.append(relative)
                 continue
-            checked += 1
+            count(relative, stored)
 
-    return {"ok": not missing, "missing": missing, "objectCount": checked, "hasPoster": has_poster}
+    return {
+        "ok": not missing,
+        "missing": missing,
+        "objectCount": checked,
+        "byteSize": total,
+        "hasPoster": has_poster,
+    }
 
 
 async def create_asset(
@@ -613,3 +668,60 @@ async def register_verified_asset(
         poster,
     ).run()
     return asset_id
+
+
+# One row per verified output version, and an upsert for the same reason
+# `REGISTER_SQL` is one: re-importing after a dropped object is the ordinary
+# path, and two rows for one version would each claim its bytes in a total that
+# is a SUM over this table.
+#
+# `created_at` is absent from the update. It says when this encode first
+# appeared, which is what the orphan age threshold and the rollback window are
+# measured from; `verified_at` is the one that moves.
+#
+# The three measurements *are* overwritten, deliberately, and this is the
+# opposite of what `REGISTER_SQL` does with `poster_key` — worth saying why the
+# two differ. `poster_key` is a claim that survives its evidence: a thumbnail
+# recorded once still displays, so losing it to one unlucky HEAD is a regression
+# for nothing. These columns are a measurement of what is in the bucket right
+# now. A measurement that only ever moves upwards is not a measurement, and the
+# storage page exists to tell somebody what is actually there.
+RECORD_ENCODE_VERSION_SQL = (
+    "INSERT INTO video_encode_versions (asset_id, encode_version, object_count, byte_size,"
+    " has_poster, verified_at, created_at, updated_at)"
+    " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?6)"
+    " ON CONFLICT(asset_id, encode_version) DO UPDATE SET"
+    " object_count = excluded.object_count,"
+    " byte_size = excluded.byte_size,"
+    " has_poster = excluded.has_poster,"
+    " verified_at = excluded.verified_at,"
+    " updated_at = excluded.updated_at"
+)
+
+
+async def record_encode_version(
+    env,
+    *,
+    asset_id: str,
+    encode_version: int,
+    object_count: int,
+    byte_size: int,
+    has_poster: bool,
+) -> None:
+    """Note that this version exists, and what it holds.
+
+    Written only for a version that verified. The row is the claim "this encode
+    is complete", and it is also what tells an orphan scan that the objects
+    under this prefix belong to something — writing one for a half-uploaded
+    ladder would hide it from the scan while it was still broken.
+    """
+
+    now = utc_timestamp()
+    await env.DB.prepare(RECORD_ENCODE_VERSION_SQL).bind(
+        _asset_id(asset_id),
+        _version(encode_version),
+        max(int(object_count), 0),
+        max(int(byte_size), 0),
+        1 if has_poster else 0,
+        now,
+    ).run()
