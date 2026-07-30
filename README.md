@@ -482,7 +482,17 @@ uv --directory backend run pywrangler secret put PLAYBACK_SECRET_PREVIOUS
 uv --directory backend run pywrangler secret put GOOGLE_CLIENT_ID -c wrangler.admin.toml
 uv --directory backend run pywrangler secret put GOOGLE_CLIENT_SECRET -c wrangler.admin.toml
 uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wrangler.admin.toml
+
+# R2 的 S3 API 金鑰，用來簽出上傳影片的短效 URL。只有管理 Worker 有它 ——
+# 公開 Worker 不簽任何東西，桌面工具拿到的是簽好的 URL 而不是金鑰。
+# 缺它的時候 presign 會回 503，而不是發出一張到了 R2 才失敗的 URL。
+uv --directory backend run pywrangler secret put R2_ACCESS_KEY_ID -c wrangler.admin.toml
+uv --directory backend run pywrangler secret put R2_SECRET_ACCESS_KEY -c wrangler.admin.toml
 ```
+
+`wrangler.admin.toml` 裡的 `R2_S3_ENDPOINT` 要填成
+`https://<account-id>.r2.cloudflarestorage.com`。它不是秘密（每張簽好的 URL 裡都有），
+但是帳號專屬的，所以放設定而不是程式。留空的話 presign 一律 503。
 
 管理 Worker **不需要** `VISITOR_SALT`（只有 `bio_link.record_event` 讀它，而記錄瀏覽是公開端的事），也不需要任何 `IBON_*`（後台只讀 D1 的列印設定，不跑上傳流程）。
 

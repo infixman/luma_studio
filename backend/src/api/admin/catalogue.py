@@ -8,7 +8,7 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
-from domain import courses, inventory, offers, shop, video
+from domain import courses, inventory, offers, shop, video, video_storage
 from shared import flags, sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
@@ -17,6 +17,11 @@ from shared.responses import Ctx
 # Fields the server derives. Present in a request, they are a caller trying to
 # decide something that is not theirs to decide.
 DERIVED_FIELDS = ("requiresShipping", "containsCourse", "digitalOnly", "isBundle")
+
+# Re-encoding an asset a thousand times is not a workflow. The bound is here so
+# a version number arriving in a request cannot become an unbounded integer in
+# an object key.
+MAX_VERSION = 999
 
 
 def _optional_int(value) -> int | None:
@@ -35,6 +40,21 @@ def _optional_int(value) -> int | None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("影片長度與尺寸必須是整數")
+    return value
+
+
+def _upload_version(body: dict, kind) -> int:
+    """Which version the keys in this request must sit under.
+
+    An original has one version and the encodes have many, so they are named
+    separately — a request that says `encodeVersion` while uploading a source
+    is describing something that does not exist.
+    """
+
+    field = "uploadVersion" if kind == "source" else "encodeVersion"
+    value = body.get(field, 1)
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_VERSION:
+        raise ValueError(f"{field} 必須是 1 到 {MAX_VERSION} 之間的整數")
     return value
 
 
@@ -303,6 +323,40 @@ async def handle(ctx: Ctx):
 
         if action == "references" and method == "GET":
             return ctx.json({"lessons": await video.lessons_using(env, asset_id)})
+
+        if action == "upload-urls" and method == "POST":
+            if not flags.enabled(env, flags.VIDEO_UPLOAD):
+                return ctx.error("影片上傳尚未開放", 403)
+            # Before anything is signed, and with its own status, because "this
+            # video is finished" is a different answer from "your request was
+            # malformed". `upload_urls` refuses it too; that copy is the domain
+            # keeping its own invariant, this one is for the status code.
+            if asset["status"] != "uploading":
+                return ctx.error("這支影片已經不在上傳中", 409)
+            try:
+                body = await ctx.json_body()
+                kind = body.get("kind")
+                # The version the keys must sit under. Taken from the request
+                # because a re-upload and a re-encode both name their own, and
+                # bounded rather than trusted — the keys are then checked
+                # against exactly this number, so the worst a wrong one does is
+                # write into an unused corner of the caller's own asset.
+                version = _upload_version(body, kind)
+                granted = video_storage.upload_urls(
+                    env, asset=asset, keys=body.get("keys"), kind=kind, version=version
+                )
+            except video_storage.NotConfigured:
+                # Not the caller's fault, and not something to paper over with
+                # an unsigned URL that looks signed.
+                return ctx.error("影片上傳尚未設定完成", 503)
+            except ValueError as error:
+                # Never the URL, and never the key that was refused: an error
+                # body is the one place nobody reads carefully.
+                return ctx.error(str(error) or "Invalid upload request", 400)
+            except (AttributeError, TypeError):
+                return ctx.error("Invalid upload request", 400)
+
+            return ctx.json({"urls": granted})
 
         if action == "archive" and method == "POST":
             # A published lesson pointing at an archived video surfaces as a

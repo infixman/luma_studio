@@ -367,3 +367,285 @@ class TestCreatingAnAsset:
                         env={"VIDEO_UPLOAD_ENABLED": "1"})
 
         assert response.status == 401
+
+
+R2_CONFIG = {
+    "VIDEO_UPLOAD_ENABLED": "1",
+    "R2_S3_ENDPOINT": "https://acct.r2.cloudflarestorage.com",
+    "R2_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+    "R2_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "COURSE_SOURCE_BUCKET": "luma-course-source",
+    "COURSE_VIDEO_BUCKET": "luma-course-video",
+}
+
+
+def without(*names: str) -> dict:
+    return {key: value for key, value in R2_CONFIG.items() if key not in names}
+
+
+class TestHandingOutUploadUrls:
+    """The only thing the desktop tool can do to a bucket.
+
+    It holds no R2 key, so every write it makes is a URL granted here. Which
+    makes this route the place where "one object, this asset, this version" is
+    enforced, and a mistake in it is not a bug in a feature — it is the
+    boundary being absent.
+    """
+
+    def _request(self, body: dict, asset_id: str = ASSET_ID) -> JsonRequest:
+        return JsonRequest(
+            f"/api/video-assets/{asset_id}/upload-urls", "POST", body,
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+        )
+
+    def _uploading(self) -> dict:
+        return {
+            "SELECT * FROM video_assets": [
+                an_asset(status="uploading", active_encode_version=None)
+            ]
+        }
+
+    def _outputs(self, *names: str) -> list[str]:
+        return [f"videos/{ASSET_ID}/1/{name}" for name in names]
+
+    def _segments(self, count: int) -> list[str]:
+        return self._outputs(*[f"720p/segment-{index:06d}.m4s" for index in range(count)])
+
+    def test_each_key_comes_back_with_a_signed_url(self, call):
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8", "720p/init.mp4")}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 200
+        urls = response.json()["urls"]
+        assert [entry["key"] for entry in urls] == self._outputs("master.m3u8", "720p/init.mp4")
+        assert all("X-Amz-Signature=" in entry["url"] for entry in urls)
+        assert all(entry["expiresAt"] > 0 for entry in urls)
+
+    def test_an_output_url_points_at_the_output_bucket(self, call):
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert "/luma-course-video/" in response.json()["urls"][0]["url"]
+
+    def test_a_source_url_points_at_the_source_bucket(self, call):
+        """`kind` picks the bucket. Getting it wrong would put an original in
+        the bucket the playback gateway reads from."""
+
+        from domain import video
+
+        response = call(
+            self._request({"kind": "source", "keys": [video.source_key(ASSET_ID, 1)]}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert "/luma-course-source/" in response.json()["urls"][0]["url"]
+
+    def test_the_url_is_signed_for_a_put_and_nothing_else(self, call):
+        """A GET signed here would hand out the ability to read originals, which
+        is a different grant and belongs to re-encoding.
+
+        The method is part of the signature, so the only way to check is to
+        re-sign the same request and compare.
+        """
+
+        from shared import sigv4
+        from urllib.parse import parse_qs, urlparse
+
+        key = self._outputs("master.m3u8")[0]
+        response = call(
+            self._request({"kind": "output", "keys": [key]}), self._uploading(), env=R2_CONFIG
+        )
+        granted = urlparse(response.json()["urls"][0]["url"])
+        signature = parse_qs(granted.query)["X-Amz-Signature"][0]
+        instant = int(
+            __import__("datetime").datetime.strptime(
+                parse_qs(granted.query)["X-Amz-Date"][0], "%Y%m%dT%H%M%SZ"
+            ).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
+        )
+        expires = int(parse_qs(granted.query)["X-Amz-Expires"][0])
+
+        def resign(method: str) -> str:
+            url = sigv4.presigned_url(
+                method=method,
+                endpoint=R2_CONFIG["R2_S3_ENDPOINT"],
+                bucket="luma-course-video",
+                key=key,
+                access_key_id=R2_CONFIG["R2_ACCESS_KEY_ID"],
+                secret_access_key=R2_CONFIG["R2_SECRET_ACCESS_KEY"],
+                now=instant,
+                expires=expires,
+            )
+            return parse_qs(urlparse(url).query)["X-Amz-Signature"][0]
+
+        assert signature == resign("PUT")
+        assert signature != resign("GET")
+
+    def test_a_key_belonging_to_another_asset_is_refused(self, call):
+        """The refusal that matters most: one upload writing into another
+        video."""
+
+        response = call(
+            self._request({"kind": "output", "keys": ["videos/asset-999999/1/master.m3u8"]}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 400
+
+    def test_a_key_for_another_version_is_refused(self, call):
+        """Claiming to upload a new encode while writing into the one members
+        are watching."""
+
+        response = call(
+            self._request({"kind": "output", "encodeVersion": 2, "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 400
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "videos/asset-000001/1/../../sources/asset-000001/1/source.mp4",
+            "videos/asset-000001/1/notes.txt",
+            "sources/asset-000001/1/source.mp4",
+            "/videos/asset-000001/1/master.m3u8",
+            "videos/asset-000001/1/",
+            "",
+        ],
+    )
+    def test_anything_that_is_not_part_of_this_encode_is_refused(self, call, key):
+        response = call(
+            self._request({"kind": "output", "keys": [key]}), self._uploading(), env=R2_CONFIG
+        )
+
+        assert response.status == 400
+
+    def test_one_bad_key_refuses_the_whole_batch(self, call):
+        """Signing the good ones would leave the tool believing it had URLs for
+        everything it asked about."""
+
+        keys = [*self._outputs("master.m3u8"), "videos/asset-999999/1/master.m3u8"]
+
+        response = call(self._request({"kind": "output", "keys": keys}), self._uploading(), env=R2_CONFIG)
+
+        assert response.status == 400
+
+    def test_an_unknown_kind_is_refused(self, call):
+        response = call(
+            self._request({"kind": "anything", "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 400
+
+    def test_asking_for_no_keys_is_refused(self, call):
+        response = call(self._request({"kind": "output", "keys": []}), self._uploading(), env=R2_CONFIG)
+
+        assert response.status == 400
+
+    def test_asking_for_too_many_at_once_is_refused(self, call):
+        """One request must not turn into thousands of live credentials."""
+
+        from domain import video_storage
+
+        response = call(
+            self._request({"kind": "output", "keys": self._segments(video_storage.MAX_URLS + 1)}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 400
+
+    def test_a_batch_at_the_limit_is_allowed(self, call):
+        from domain import video_storage
+
+        response = call(
+            self._request({"kind": "output", "keys": self._segments(video_storage.MAX_URLS)}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 200
+
+    def test_an_asset_that_does_not_exist_is_not_found(self, call):
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}), env=R2_CONFIG
+        )
+
+        assert response.status == 404
+
+    def test_an_asset_that_is_no_longer_uploading_is_refused(self, call):
+        """A ready asset's objects are what members are watching. Handing out
+        write URLs for them would let a stray retry overwrite a live encode."""
+
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}),
+            {"SELECT * FROM video_assets": [an_asset(status="ready")]},
+            env=R2_CONFIG,
+        )
+
+        assert response.status == 409
+
+    def test_nothing_is_signed_while_uploading_is_switched_off(self, call):
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=without("VIDEO_UPLOAD_ENABLED"),
+        )
+
+        assert response.status == 403
+
+    def test_an_anonymous_caller_gets_no_url(self, call):
+        request = JsonRequest(
+            f"/api/video-assets/{ASSET_ID}/upload-urls", "POST",
+            {"kind": "output", "keys": self._outputs("master.m3u8")},
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"},
+        )
+
+        response = call(request, answers={"SELECT email FROM admin_sessions": []}, env=R2_CONFIG)
+
+        assert response.status == 401
+
+    @pytest.mark.parametrize("missing", ["R2_S3_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"])
+    def test_an_unconfigured_worker_says_so_rather_than_signing_nothing(self, call, missing):
+        """An unsigned URL that looks signed reaches R2, fails there, and the
+        log says nothing about why. 503 rather than 400: the caller did nothing
+        wrong."""
+
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=without(missing),
+        )
+
+        assert response.status == 503
+
+    def test_the_response_never_carries_the_secret(self, call):
+        response = call(
+            self._request({"kind": "output", "keys": self._outputs("master.m3u8")}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert R2_CONFIG["R2_SECRET_ACCESS_KEY"] not in response.body
+
+    def test_a_refusal_does_not_echo_a_signed_url(self, call):
+        """Error paths are where credentials leak, because nobody reads them."""
+
+        response = call(
+            self._request({"kind": "output", "keys": ["videos/asset-999999/1/master.m3u8"]}),
+            self._uploading(),
+            env=R2_CONFIG,
+        )
+
+        assert "X-Amz-Signature" not in response.body

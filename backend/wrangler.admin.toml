@@ -62,3 +62,26 @@ FRONTEND_ORIGIN = "https://admin.luma-studio.tw"
 # Unset is off. A Worker that has not been told to accept uploads will refuse
 # them, which is why this line has to exist rather than being assumed.
 VIDEO_UPLOAD_ENABLED = "1"
+
+# A presigned URL needs the bucket's name in the path. The R2 binding above
+# gives this Worker an object it can read and write, but not what the bucket is
+# called, so the names appear twice on purpose.
+COURSE_SOURCE_BUCKET = "luma-course-source"
+COURSE_VIDEO_BUCKET = "luma-course-video"
+
+# The S3-compatible endpoint for this account, from R2's settings. Not a
+# secret — it is in every signed URL — but it is account-specific, so it lives
+# here rather than in the code.
+#
+# Fill in the account id before deploying. Left blank, every presign answers
+# 503 rather than handing out a URL that only fails once it reaches R2.
+R2_S3_ENDPOINT = ""
+
+# R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are secrets and are deliberately
+# absent from this file:
+#
+#   npx wrangler secret put R2_ACCESS_KEY_ID --config wrangler.admin.toml
+#   npx wrangler secret put R2_SECRET_ACCESS_KEY --config wrangler.admin.toml
+#
+# Only this Worker has them. The public Worker signs nothing, and the desktop
+# tool is given short-lived URLs rather than a key of its own.

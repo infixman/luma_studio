@@ -783,3 +783,74 @@ client 以為被遵守了」。而且 `isinstance(True, int)` 是 `True`，所�
 `width: true` 會存成寬度 1。
 
 抽成 `_measurements(body)`，兩條路徑共用，壞值一律 400。這是行為改變，補了測試。
+
+## S1.4：發上傳 URL
+
+`domain/video_storage.py` + `POST /api/video-assets/{id}/upload-urls`。
+S1 的最後一步，也是這個階段真正的邊界 —— 工具沒有 R2 金鑰，所以它寫進 bucket 的
+每一個 byte 都是這裡准的。
+
+### 三個拒絕，順序不能換
+
+1. **asset 必須還在 `uploading`。** 一支 `ready` 的影片，它的物件就是會員正在看的
+   東西；發一張寫入 URL 給它，等於讓一次落後的重試蓋掉一個上線中的 encode。
+2. **每個 key 都要屬於這個 asset 和這個版本。** 由 `video.signable_key` 回答，
+   所以這裡不解析 key。
+3. **一批不能太大。** 一個請求不可以變成幾千張有效憑證，因為 presigned URL 是
+   bearer token，發出去就收不回來。上限 100，工具分批要。
+
+### 整批驗，不是逐個發
+
+一開始我寫成「能簽的簽、不能簽的跳過」。**那是錯的**：工具會以為它拿到了它問的
+每一個檔案的 URL，然後在一次長上傳的最後才發現少了幾個 —— 最貴的時機。
+一個 key 不合格，整批 400。有測試釘住。
+
+### 沒設定的時候不要假裝簽好了
+
+`NotConfigured` 是自己的例外型別，不是 `ValueError`，因為它不是呼叫端的錯，
+不能用 400 回答。更重要的是：**發一張沒有簽章但長得像簽好的 URL**，會一路跑到 R2
+才失敗，而那時候的 log 什麼都不會說。所以缺 endpoint 或缺金鑰一律 503。
+
+三個設定各缺一個都有測試。
+
+### bucket 名稱要寫兩次
+
+R2 binding 給的是「一個可以讀寫的物件」，**不給 bucket 叫什麼名字**，而 presigned
+URL 的路徑裡需要名字。所以 `wrangler.admin.toml` 裡 bucket 名稱出現兩次
+（binding 一次、vars 一次），這是故意的，加了註解說明。
+
+`R2_S3_ENDPOINT` 留空，因為我不知道帳號 id。留空的行為是 503，不是簽出一張壞的 URL。
+
+### 驗「這是 PUT」要重新簽一次
+
+method 是簽章的一部分，不會出現在 URL 的可讀欄位裡。所以測試的做法是：拿回應裡的
+`X-Amz-Date` 和 `X-Amz-Expires`，用同樣的參數重簽一次 PUT 和一次 GET，
+斷言 signature 等於 PUT 的、不等於 GET 的。
+
+這件事值得測，因為 presigned GET 是「下載原始檔」的能力，屬於 S8 的重新轉檔，
+不該從上傳路由漏出來。
+
+### 重構審查：這次我決定不抽
+
+flag 的檢查現在有三份（建立、import、presign），每份兩行。抽成一個
+「回傳 response 或 None」的 guard 是可行的，但這個 codebase 沒有這種模式，
+為了三份兩行的東西發明一個新模式更糟。而且哪些路由被閘門管著，明寫在路由裡比
+藏在 helper 裡清楚。
+
+真正會痛的重複是「必須互相同意的邏輯」，這個不是 —— 它是一次 flag 讀取。
+到 S5 加了原始檔 multipart（四個子動作）再回來看。
+
+### 已知的、刻意留著的
+
+- **版本號從請求來。** 沒有 per-version 的表可以查（那是 S5 的
+  `video_encode_versions`），所以 `encodeVersion` 是請求帶的，只做範圍檢查（1–999）。
+  安全性由「key 一定要在那個版本的 prefix 底下」撐著，所以最壞情況是呼叫者在
+  自己 asset 的一個沒人用的角落寫東西。
+- **還沒有 rate limit。** 目前呼叫者是完整的管理員 session，`MAX_URLS` 限制了單次
+  但沒限制頻率。跟 token 兌換的限流一起做（S2）。
+
+### S1 完成
+
+程式部分做完了。剩下的是你的動作：建 R2 的 S3 API token、把
+`R2_S3_ENDPOINT` 的帳號 id 填上。填之前 presign 一律 503 —— 不會有「看起來成功
+但其實壞掉」的中間狀態。
