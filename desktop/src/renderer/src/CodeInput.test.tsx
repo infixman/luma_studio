@@ -114,6 +114,21 @@ test('a value with a space in it still lines up one digit per slot', async () =>
   expect(slots().map((field) => field.value)).toEqual(['4', '1', '8', '3', '0', '2'])
 })
 
+test('a value with letters in it shows nothing rather than the letters', () => {
+  /** `pasteInto` hands the clipboard straight to the model, so a URL pasted into
+   *  the wrong field arrived here intact and was rendered one character per slot
+   *  -- `h t t p s :` in boxes meant for digits. */
+  render(<CodeInput value="https://transitions.dev" onChange={vi.fn()} />, container)
+
+  expect(slots().map((field) => field.value)).toEqual(['', '', '', '', '', ''])
+})
+
+test('and digits mixed in with them still line up', () => {
+  render(<CodeInput value="a4b1c8d3e0f2" onChange={vi.fn()} />, container)
+
+  expect(slots().map((field) => field.value)).toEqual(['4', '1', '8', '3', '0', '2'])
+})
+
 test('backspace clears the slot it is in', async () => {
   const onChange = vi.fn()
   render(<CodeInput value="418302" onChange={onChange} />, container)

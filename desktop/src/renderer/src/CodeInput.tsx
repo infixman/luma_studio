@@ -33,7 +33,14 @@ export function CodeInput({
 }) {
   const slots = useRef<(HTMLInputElement | null)[]>([])
 
-  const digits = normaliseCode(value).slice(0, CODE_LENGTH).split('')
+  // Digits only, not merely separator-stripped. The paste button hands the
+  // clipboard straight to the model, so a URL pasted into the wrong field used
+  // to arrive here whole and get drawn one character per slot — `h t t p s :` in
+  // six boxes meant for numbers.
+  const digits = normaliseCode(value)
+    .replace(/[^0-9]/g, '')
+    .slice(0, CODE_LENGTH)
+    .split('')
   const at = (index: number): string => digits[index] ?? ''
 
   function focusSlot(index: number): void {

@@ -37,15 +37,15 @@ describe('what can be submitted', () => {
   })
 
   test('a missing email is named', () => {
-    expect(problemWith({ email: '  ', code: '418302' })).toContain('信箱')
+    expect(problemWith({ email: '  ', code: '418302' })?.message).toContain('信箱')
   })
 
   test('something that is not an address is named', () => {
-    expect(problemWith({ email: 'owner', code: '418302' })).toContain('信箱')
+    expect(problemWith({ email: 'owner', code: '418302' })?.message).toContain('信箱')
   })
 
   test('a missing code is named', () => {
-    expect(problemWith({ email: 'owner@example.com', code: '' })).toContain('驗證碼')
+    expect(problemWith({ email: 'owner@example.com', code: '' })?.message).toContain('驗證碼')
   })
 
   test.each(['12345', '1234567', 'abcdef', '４１８３０２'])(
@@ -55,7 +55,7 @@ describe('what can be submitted', () => {
        *  spend an attempt against the lockout for something the tool could see
        *  was wrong. Full-width digits included: they are digits to a naive
        *  check and the server refuses them. */
-      expect(problemWith({ email: 'owner@example.com', code })).toContain('6 位數字')
+      expect(problemWith({ email: 'owner@example.com', code })?.message).toContain('6 位數字')
     },
   )
 
@@ -65,4 +65,14 @@ describe('what can be submitted', () => {
       code: '418302',
     })
   })
+})
+
+test('it says which field the problem is in', () => {
+  /** The interface marks the field rather than printing a sentence, so the
+   *  field is part of the answer -- not something the caller re-derives by
+   *  matching on the message text. */
+  expect(problemWith({ email: '', code: '418302' })?.field).toBe('email')
+  expect(problemWith({ email: 'owner', code: '418302' })?.field).toBe('email')
+  expect(problemWith({ email: 'owner@example.com', code: '' })?.field).toBe('code')
+  expect(problemWith({ email: 'owner@example.com', code: '41' })?.field).toBe('code')
 })

@@ -170,6 +170,70 @@ test('a refusal is shown and the code is cleared', async () => {
   expect(codeValue()).toBe('')
 })
 
+test('a refused field is marked and shaken, not captioned in a pink box', async () => {
+  /** The message used to be a filled alert under the form, which is the loudest
+   *  thing on a screen whose job is to be typed into twice. */
+  await mount()
+  await fill('', '418302')
+  submit()
+  await flush()
+
+  const wrap = container.querySelector('.t-input-wrap.is-error')
+
+  expect(wrap?.querySelector('#admin-email')).not.toBeNull()
+  expect(wrap?.querySelector('.t-input.is-shaking')).not.toBeNull()
+  expect(container.querySelector('.alert')).toBeNull()
+})
+
+test('and the sentence is still there for anybody who cannot see it move', async () => {
+  /** A shake is nothing to a screen reader. */
+  await mount()
+  await fill('', '418302')
+  submit()
+  await flush()
+
+  const message = container.querySelector('.t-error-msg[role="alert"]')
+
+  expect(message?.textContent).toContain('請輸入管理者信箱')
+})
+
+test('the same refusal twice shakes twice', async () => {
+  /** Without a counter behind it, the second attempt leaves the error state
+   *  exactly as it was, the effect never re-runs, and the field sits still while
+   *  somebody presses the button again wondering what happened. */
+  await mount()
+  await fill('', '418302')
+  submit()
+  await flush()
+  container.querySelector('.t-input.is-shaking')?.classList.remove('is-shaking')
+
+  submit()
+  await flush()
+
+  expect(container.querySelector('.t-input.is-shaking')).not.toBeNull()
+})
+
+test('a refused code marks the code, not the address', async () => {
+  await mount()
+  await fill('owner@example.com', '41')
+  submit()
+  await flush()
+
+  const wrap = container.querySelector('.t-input-wrap.is-error')
+
+  expect(wrap?.querySelector('.code-slots')).not.toBeNull()
+  expect(wrap?.textContent).toContain('驗證碼是 6 位數字')
+})
+
+test('the browser is not left to draw its own validation bubble', async () => {
+  /** `type="email"` submitted through a form pops a native yellow tooltip in the
+   *  OS font, over whatever is beneath it, saying 「未包含『@』」 — beside this
+   *  screen's own message for the same thing. */
+  await mount()
+
+  expect(container.querySelector('form')?.noValidate).toBe(true)
+})
+
 test('a machine that cannot remember the pairing is told so', async () => {
   /** Rather than left to discover that pairing does not stick. Nothing is
    *  written in the clear — see main/store.ts. */
