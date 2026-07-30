@@ -31,6 +31,14 @@ database_id = "07d2f14a-1cb8-4b0e-bdb7-db76e3ffc98b"
 binding = "IBON_IMAGES"
 bucket_name = "luma-ibon-images"
 
+[[r2_buckets]]
+binding = "COURSE_SOURCE"
+bucket_name = "luma-course-source"
+
+[[r2_buckets]]
+binding = "COURSE_VIDEO"
+bucket_name = "luma-course-video"
+
 # Every attempt writes an oauth state row before the visitor has proved
 # anything, and the D1 write quota is shared with the session table: hammering
 # this endpoint is how you lock the owner out of their own back office.

@@ -17,6 +17,10 @@ database_id = "07d2f14a-1cb8-4b0e-bdb7-db76e3ffc98b"
 binding = "IBON_IMAGES"
 bucket_name = "luma-ibon-images"
 
+[[r2_buckets]]
+binding = "COURSE_VIDEO"
+bucket_name = "luma-course-video"
+
 # Per-IP limits on the routes an outsider can reach. Budgets are generous
 # enough that a person clicking around never notices, and small enough that a
 # script cannot spend the shared D1 write quota or the ibon upload path.

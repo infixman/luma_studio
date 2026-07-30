@@ -186,6 +186,54 @@ async def handle(ctx: Ctx):
             {"assets": await video.list_assets(env, status=(ctx.query.get("status") or [""])[0] or None)}
         )
 
+    if path == "/api/video-assets/import" and method == "POST":
+        # Without a transcoder of our own, the ladder arrives by whatever means
+        # the admin used to upload it — usually a sync of a few hundred files.
+        # One dropped file is ordinary, and the video plays fine until it
+        # reaches that file, so nothing is taken on trust here.
+        try:
+            body = await ctx.json_body()
+            title = validate_text(body.get("title"), 200, "影片名稱")
+            filename = validate_text(body.get("originalFilename") or "", 200, "原始檔名", required=False)
+            version = int(body.get("encodeVersion") or 1)
+            duration = body.get("durationSeconds")
+            width, height = body.get("width"), body.get("height")
+        except (ValueError, AttributeError, TypeError) as error:
+            return ctx.error(str(error) or "Invalid import", 400)
+
+        asset_id = str(body.get("assetId") or "").strip()
+        if asset_id:
+            # Re-verifying an upload that was fixed and synced again.
+            if await video.get_asset(env, asset_id) is None:
+                return ctx.error("Video not found", 404)
+        else:
+            asset_id = video.urlsafe_token(18)
+
+        verified = await video.verify_encode(env.COURSE_VIDEO, asset_id, version)
+        if not verified["ok"]:
+            # Everything missing, not the first thing: re-running one sync is a
+            # better afternoon than re-running six.
+            return ctx.json(
+                {
+                    "error": f"這個版本還缺 {len(verified['missing'])} 個檔案",
+                    "missing": verified["missing"][:20],
+                    "assetId": asset_id,
+                },
+                409,
+            )
+
+        created = await video.register_verified_asset(
+            env,
+            asset_id=asset_id,
+            title=title,
+            original_filename=filename,
+            duration_seconds=duration if isinstance(duration, int) else None,
+            width=width if isinstance(width, int) else None,
+            height=height if isinstance(height, int) else None,
+            encode_version=version,
+        )
+        return ctx.json({"asset": await video.get_asset(env, created), "objectCount": verified["objectCount"]}, 201)
+
     if path.startswith("/api/video-assets/"):
         tail = path[len("/api/video-assets/") :]
         asset_id, _, action = tail.partition("/")

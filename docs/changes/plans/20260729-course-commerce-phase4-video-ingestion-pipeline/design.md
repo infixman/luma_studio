@@ -2,6 +2,29 @@
 
 日期：2026-07-29
 
+> **2026-07-30 決策：不使用 Cloudflare Container。**
+>
+> 本文件其餘部分描述的自建轉檔管線（Media Control Worker + Queue + FFmpeg
+> Container）**沒有實作**。owner 決定不承擔 Container 的持續費用與運維面積。
+>
+> 實際採用的做法：**在本機轉檔，同步到 R2，再由一支端點驗證後註冊。**
+>
+> | 原設計 | 實際 |
+> | --- | --- |
+> | Container 跑 FFmpeg | `scripts/transcode-course-video.ps1` 在本機跑 |
+> | Queue 排程與重試 | 不需要；轉檔失敗就在本機重跑 |
+> | 瀏覽器 multipart 直傳 source | rclone 同步輸出到 `luma-course-video` |
+> | Container 驗證 playlist 引用 | `POST /api/video-assets/import` 驗證後才標 ready |
+> | Media Control Worker（TypeScript） | 不需要；沒有 SigV4 簽章的需求 |
+>
+> **驗證這件事變得更重要，不是更不重要。** 手動同步幾百個檔案，少傳一個是
+> 常態，而少一個分段的影片會播到那一段才斷。所以 `video.verify_encode` 會讀
+> master playlist、逐一確認每個被引用的物件都存在，並一次回報所有缺漏 ——
+> 讓管理員重跑一次同步，而不是重跑六次。
+>
+> 資料表、物件路徑、狀態機、畫質階梯與播放閘道都照原設計實作，沒有改動。
+> 如果日後要自動化轉檔，那些都還在，只需要補上排程與執行環境。
+
 ## 原始需求
 
 - 管理員能在 Luma Studio Web 上傳課程影片。

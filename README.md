@@ -1099,11 +1099,30 @@ UPDATE product_variants SET stock = stock - ?2 WHERE id = ?1 AND stock >= ?2
 - 播放授權：短效 HMAC 簽章 cookie + 私有 R2 閘道
 - 對帳查詢與功能開關
 
-### 尚未接上（需要 Cloudflare 資源與部署授權）
+### 影片：在本機轉檔，不在 Cloudflare
 
-影片上傳與轉檔管線。需要兩個 private R2 bucket、一個 TypeScript 媒體 Worker、Queue 與跑 FFmpeg 的
-Container，以及 R2 S3 API 金鑰。資料表、分段大小計算、物件路徑與狀態機都已完成並有測試，
-只是還沒有東西可以上傳。
+原計畫是自建轉檔管線（Queue + 跑 FFmpeg 的 Container）。**2026-07-30 決定不用** ——
+不承擔它的持續費用與運維面積。改成在本機轉檔後同步到 R2，再由一支端點驗證後註冊。
+
+```bash
+# 1. 轉檔。畫質階梯由 ffprobe 讀到的實際高度決定，絕不放大來源。
+./scripts/transcode-course-video.ps1 -Source ~/lessons/lesson-01.mp4
+
+# 2. 同步。腳本最後會印出這一行，含實際的 asset id。
+rclone copy <輸出目錄> r2:luma-course-video/videos/<assetId>/1 --progress
+
+# 3. 註冊。這一步才會讓影片變成可播放。
+POST https://admin-api.luma-studio.tw/api/video-assets/import
+```
+
+**第 3 步不是形式。** 它會讀 master playlist、逐一確認每個被引用的物件真的在 R2 上，
+全部齊了才標成 `ready`。手動同步幾百個檔案少傳一個是常態，而少一個分段的影片
+會播到那一段才斷 —— 那是最糟的發現時機。缺漏會一次全部回報，讓你重跑一次同步而不是六次。
+
+輸出路徑帶版本號（`videos/{assetId}/{version}/`），所以重新轉檔可以跟會員正在看的那一版
+並存，等新版驗證通過才切換。要重新轉檔就把 `-EncodeVersion` 加一。
+
+**留著原始檔。** 重新轉檔需要它，而階梯沒辦法從階梯重建。
 
 ### 幾條值得先知道的規則
 

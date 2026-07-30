@@ -24,7 +24,7 @@ one that works.
 
 import re
 
-from shared.common import d1_changed, d1_rows, utc_timestamp
+from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp
 
 
 MIB = 1024 * 1024
@@ -299,3 +299,136 @@ async def archive_asset(env, asset_id: str) -> bool:
         "UPDATE video_assets SET status = 'archived', updated_at = ?2 WHERE id = ?1 AND status = ?3"
     ).bind(asset_id, utc_timestamp(), rows[0]["status"]).run()
     return d1_changed(result)
+
+
+def _playlist_entries(text: str) -> list[str]:
+    """The non-comment lines of a playlist.
+
+    A playlist is a file somebody uploaded, so nothing here trusts its shape.
+    Blank lines and tags are skipped; everything else is treated as a path the
+    caller will try to fetch, which is why the caller has to check it.
+    """
+
+    if not isinstance(text, str) or not text.lstrip().startswith("#EXTM3U"):
+        # Not a playlist. Returning its lines would hand the caller a list of
+        # paths made of whatever the file happened to contain.
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+
+
+def renditions_in(master: str) -> list[str]:
+    """The rendition playlists a master refers to."""
+
+    return _playlist_entries(master)
+
+
+def segments_in(playlist: str) -> list[str]:
+    """Everything a rendition playlist needs, including the init segment.
+
+    The init segment lives in an `EXT-X-MAP` tag rather than on a line of its
+    own, and a player that has every segment without it can decode none of
+    them — so it is easy to leave out of a check and expensive to.
+    """
+
+    found = _playlist_entries(playlist)
+    for line in playlist.splitlines():
+        if line.startswith("#EXT-X-MAP:"):
+            _, _, rest = line.partition("URI=")
+            uri = rest.strip().strip('"').split(",")[0].strip('"')
+            if uri:
+                found.insert(0, uri)
+    return found
+
+
+def _safe_relative(path: str) -> bool:
+    """Whether a playlist entry stays inside its own encode.
+
+    Following `../` out of one would let an uploaded file point the verifier —
+    and later anything reading from it — at any object in the bucket.
+    """
+
+    return bool(path) and ".." not in path.split("/") and not path.startswith("/")
+
+
+async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
+    """Check that everything the playlists refer to is actually there.
+
+    Nothing is taken on trust, because the ladder arrives by whatever means the
+    admin used to upload it. A sync that dropped one file out of a few hundred
+    is an ordinary occurrence, and the video plays perfectly until it reaches
+    that file — which is the worst possible time to find out.
+
+    Returns what is missing rather than the first thing missing: an admin
+    re-running one sync is a better afternoon than an admin re-running six.
+    """
+
+    prefix = f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/"
+    missing: list[str] = []
+    checked = 0
+
+    master = await bucket.get(f"{prefix}master.m3u8")
+    if master is None:
+        return {"ok": False, "missing": ["master.m3u8"], "objectCount": 0}
+    checked += 1
+
+    for rendition in renditions_in(await master.text()):
+        if not _safe_relative(rendition):
+            missing.append(rendition)
+            continue
+        playlist = await bucket.get(f"{prefix}{rendition}")
+        if playlist is None:
+            missing.append(rendition)
+            continue
+        checked += 1
+
+        folder = rendition.rsplit("/", 1)[0] if "/" in rendition else ""
+        for segment in segments_in(await playlist.text()):
+            if not _safe_relative(segment):
+                missing.append(segment)
+                continue
+            relative = f"{folder}/{segment}" if folder else segment
+            if await bucket.head(f"{prefix}{relative}") is None:
+                missing.append(relative)
+                continue
+            checked += 1
+
+    return {"ok": not missing, "missing": missing, "objectCount": checked}
+
+
+async def register_verified_asset(
+    env,
+    *,
+    asset_id: str,
+    title: str,
+    original_filename: str,
+    duration_seconds: int | None,
+    width: int | None,
+    height: int | None,
+    encode_version: int,
+) -> str:
+    """Record a ladder that was transcoded and uploaded elsewhere.
+
+    Written straight to `ready`, which is the one place the state machine is
+    bypassed — and only after `verify_encode` has confirmed every object the
+    playlists refer to actually exists. There was no upload session and no
+    transcode job for this asset, so there is no earlier state to come from.
+    """
+
+    now = utc_timestamp()
+    await env.DB.prepare(
+        "INSERT INTO video_assets (id, title, original_filename, source_key, status, byte_size,"
+        " duration_seconds, width, height, active_encode_version, master_key, poster_key,"
+        " error_code, error_detail, created_at, updated_at)"
+        " VALUES (?1, ?2, ?3, '', 'ready', 0, ?4, ?5, ?6, ?7, ?8, NULL, NULL, NULL, ?9, ?9)"
+    ).bind(
+        asset_id,
+        title,
+        original_filename,
+        duration_seconds,
+        width,
+        height,
+        encode_version,
+        master_key(asset_id, encode_version),
+        now,
+    ).run()
+    return asset_id

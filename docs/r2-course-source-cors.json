@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://admin.luma-studio.tw",
+      "http://localhost:5174"
+    ],
+    "AllowedMethods": ["PUT", "HEAD"],
+    "AllowedHeaders": ["content-type", "content-md5"],
+    "ExposeHeaders": ["etag"],
+    "MaxAgeSeconds": 3600
+  }
+]

@@ -28,19 +28,31 @@ def an_asset(**extra) -> dict:
     }
 
 
+class JsonRequest(FakeRequest):
+    def __init__(self, path: str, method: str, body: dict, headers: dict | None = None):
+        super().__init__(path, method, headers, host=ADMIN_HOST)
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
 @pytest.fixture
 def call():
     import admin_main
     from shared import migrations
 
-    def run(request, answers=None, changes=None):
+    def run(request, answers=None, changes=None, bucket=None):
         migrations._applied_names = None
         worker = admin_main.Default()
-        worker.env = make_env(
+        env = make_env(
             FakeDatabase({**SIGNED_IN, **(answers or {})}, changes=changes),
             origins=ADMIN_ORIGIN,
             frontend=ADMIN_ORIGIN,
         )
+        if bucket is not None:
+            env.COURSE_VIDEO = bucket
+        worker.env = env
         return asyncio.run(worker.fetch(request))
 
     return run
@@ -127,3 +139,72 @@ class TestArchiving:
 
         assert response.status == 200
         assert response.json()["lessons"][0]["title"] == "工具介紹"
+
+
+class TestImporting:
+    """Registering a ladder that was transcoded and uploaded elsewhere."""
+
+    class Bucket:
+        def __init__(self, complete: bool = True):
+            self.complete = complete
+
+        async def get(self, key: str):
+            if not key.endswith(".m3u8"):
+                return None
+            if key.endswith("master.m3u8"):
+                body = "#EXTM3U\n720p/playlist.m3u8\n"
+            else:
+                body = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\nsegment-000001.m4s\n'
+
+            class Stored:
+                async def text(self_inner):
+                    return body
+
+            return Stored()
+
+        async def head(self, key: str):
+            return object() if self.complete else None
+
+    def _call(self, call, body: dict, *, complete: bool = True, answers: dict | None = None):
+        return call(
+            JsonRequest(
+                "/api/video-assets/import",
+                "POST",
+                body,
+                {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+            ),
+            answers,
+            bucket=self.Bucket(complete),
+        )
+
+    def test_a_complete_upload_becomes_playable(self, call):
+        # The route reads the asset back before returning it.
+        response = self._call(
+            call, self._call_body(), answers={"SELECT * FROM video_assets": [an_asset()]}
+        )
+
+        assert response.status == 201
+        assert response.json()["asset"]["status"] == "ready"
+
+    def test_an_incomplete_upload_is_refused_and_says_what_is_missing(self, call):
+        """The whole point of this endpoint. A ladder short one segment plays
+        until it reaches it."""
+
+        response = self._call(call, self._call_body(), complete=False)
+
+        assert response.status == 409
+        assert response.json()["missing"]
+
+    def test_an_import_needs_a_title(self, call):
+        response = self._call(call, {**self._call_body(), "title": "  "})
+
+        assert response.status == 400
+
+    def _call_body(self) -> dict:
+        return {
+            "title": "第一課",
+            "originalFilename": "lesson-01.mp4",
+            "durationSeconds": 600,
+            "width": 1920,
+            "height": 1080,
+        }
