@@ -147,6 +147,13 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
       complete 收到 `NoSuchUpload` 不當失敗 —— 先 HEAD 那個 key，因為「R2 完成了、回應掉了」
       跟「這個 upload 從來不存在」是同一個答案。為了讓那個判斷有意義，**一個 asset 只允許一個
       沒被取消的 session**：所有 session 寫的是同一個 key，第二個 session 會被第一個的物件冒認。
+- [ ] **先修：`video_assets.byte_size` 目前存的是轉檔輸出的總容量，不是原始檔大小。**
+      `main/uploader.ts` 建 asset 時送的是 `scan(folder).totalBytes`（幾百個輸出物件的總和）。
+      兩個後果：影片庫那欄寫著「原始檔容量」但顯示的是輸出容量；而 multipart 的 partSize／
+      partCount 是伺服器**從 `byte_size` 算的**，所以工具照真正的原始檔切段時，段數會跟
+      伺服器算的對不上，而且是傳到一半才被拒絕。拖 MP4 進來的那條路知道真正的大小
+      （`statSync(request.source).size`），要把它傳下去；只拖資料夾那條路沒有原始檔，
+      維持現況（那時 `byte_size` 是輸出容量，而那條路也不會開 source upload）。
 - [ ] 工具上傳原始檔。純邏輯與 API 呼叫做好了（`shared/sourceUpload.ts` 切段與 ETag、
       `shared/adminApi.ts` 的四支呼叫），**還沒接進 ingest 流程**。接的時候要注意三件事：
       part URL 只活 15 分鐘而一段最大 64 MiB，所以要**送之前才要那一段的 URL**，不是先要一批；
