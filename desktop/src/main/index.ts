@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { BrowserWindow, Menu, app, clipboard, ipcMain, safeStorage, shell } from 'electron'
@@ -6,7 +7,7 @@ import { AdminApiError } from '../shared/adminApi'
 import type { PairingInput } from '../shared/pairing'
 import type { UploadRequest } from '../shared/upload'
 import { ingest } from './ingest'
-import { licencePaths } from './ffmpeg'
+import { licencePaths, licenceText } from './ffmpeg'
 import * as prefs from './prefs'
 import { Cancelled, cancel } from './transcoder'
 import * as session from './session'
@@ -103,7 +104,7 @@ function createWindow(): BrowserWindow {
  * looked over the shoulder of: run it with this and send the file.
  */
 async function selfCheck(): Promise<void> {
-  const { existsSync, writeFileSync } = await import('node:fs')
+  const { writeFileSync } = await import('node:fs')
 
   const preload = join(import.meta.dirname, '../preload/index.cjs')
   const renderer = join(import.meta.dirname, '../renderer/index.html')
@@ -174,9 +175,18 @@ if (process.argv.includes('--self-check')) {
     ipcMain.handle('upload:cancel', () => cancel())
 
     // FFmpeg is GPL, and this tool distributes a copy of it. The licence and
-    // the corresponding source ship alongside it, and this is how somebody
-    // finds them — an obligation, not a credit.
-    ipcMain.handle('app:licences', () => licencePaths())
+    // the corresponding source ship alongside it, and these two are how
+    // somebody reaches them — an obligation, not a credit.
+    ipcMain.handle('app:licenceText', () => licenceText())
+    ipcMain.handle('app:revealSource', () => {
+      const { source } = licencePaths()
+      if (!existsSync(source)) return false
+      // `showItemInFolder` rather than `openPath`: opening a .tar.xz hands it to
+      // whatever is registered for the extension, which on a clean Windows is
+      // nothing, and the button appears to do nothing.
+      shell.showItemInFolder(source)
+      return true
+    })
 
     // Read here rather than in the renderer. `navigator.clipboard.readText` in a
     // sandboxed renderer depends on focus and permission state, and the failure

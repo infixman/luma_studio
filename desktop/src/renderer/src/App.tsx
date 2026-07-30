@@ -27,18 +27,21 @@ export function App() {
     )
   }
 
-  if (!status.paired) {
-    return <PairingScreen status={status} onPaired={setStatus} />
-  }
-
+  // `About` on both screens, not only after pairing. It carries the licence of a
+  // GPL binary this tool ships, and somebody who cannot pair — wrong code, no
+  // back office to hand — would never reach it otherwise.
   return (
     <>
-      <UploadScreen
-        adminEmail={status.adminEmail ?? ''}
-        onSignOut={() => {
-          void window.desktop.auth.signOut().then(setStatus)
-        }}
-      />
+      {status.paired ? (
+        <UploadScreen
+          adminEmail={status.adminEmail ?? ''}
+          onSignOut={() => {
+            void window.desktop.auth.signOut().then(setStatus)
+          }}
+        />
+      ) : (
+        <PairingScreen status={status} onPaired={setStatus} />
+      )}
       <About />
     </>
   )

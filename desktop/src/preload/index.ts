@@ -45,13 +45,23 @@ const api = {
   },
 
   /**
-   * Where the bundled FFmpeg's licence and source are.
+   * The bundled FFmpeg's licence, as text. `null` when FFmpeg has not been
+   * fetched yet, which is true of every machine before its first transcode.
    *
-   * FFmpeg is GPL and this tool distributes it, so they ship and somebody has
-   * to be able to find them.
+   * The text rather than its path: FFmpeg is GPL and this tool distributes it,
+   * so the licence has to be readable, and an absolute path in a footer is not
+   * reading it.
    */
-  licences: (): Promise<{ licence: string; source: string }> =>
-    ipcRenderer.invoke('app:licences'),
+  licenceText: (): Promise<string | null> => ipcRenderer.invoke('app:licenceText'),
+
+  /**
+   * Show the corresponding source in the file manager.
+   *
+   * The other half of the same obligation, and the reason the path can stay off
+   * the screen: a button that opens the folder is access, a path somebody has to
+   * retype is not. `false` if the archive is not there yet.
+   */
+  revealSource: (): Promise<boolean> => ipcRenderer.invoke('app:revealSource'),
 
   /**
    * What is on the clipboard.

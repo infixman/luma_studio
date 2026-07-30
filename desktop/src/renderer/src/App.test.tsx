@@ -34,7 +34,8 @@ function bridge(status: SessionStatus) {
     configurable: true,
     value: {
       version: vi.fn(async () => '1.2.3'),
-      licences: vi.fn(async () => ({ licence: '/tools/LICENSE', source: '/tools/src.tar.xz' })),
+      licenceText: vi.fn(async () => 'GNU GENERAL PUBLIC LICENSE'),
+      revealSource: vi.fn(async () => true),
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
       upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
       clipboard: vi.fn(async () => ''),
@@ -80,13 +81,32 @@ test('with a pairing it says who it is connected as', async () => {
   expect(container.textContent).toContain('owner@example.com')
 })
 
-test('it says the tool holds no R2 key', async () => {
-  /** The sentence somebody needs before installing this on a laptop. */
+test('the licence is reachable from the screen people actually sit on', async () => {
+  /** Not a detail of the About component: the GPL obligation is only met if
+   *  the way in is present on the screen the tool spends its life showing. */
   bridge(PAIRED)
   render(<App />, container)
   await settle()
 
-  expect(container.textContent).toContain('沒有 R2 金鑰')
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('授權條款'),
+  )
+
+  expect(button).toBeDefined()
+})
+
+test('and it is there before pairing too', async () => {
+  /** Somebody who cannot pair -- wrong code, no back office to hand -- would
+   *  never reach the licence of a GPL binary this tool already shipped them. */
+  bridge(UNPAIRED)
+  render(<App />, container)
+  await settle()
+
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('授權條款'),
+  )
+
+  expect(button).toBeDefined()
 })
 
 test('logging out returns to the pairing screen', async () => {
