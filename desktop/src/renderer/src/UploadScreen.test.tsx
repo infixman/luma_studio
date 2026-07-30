@@ -1,0 +1,214 @@
+// @vitest-environment happy-dom
+
+/**
+ * The upload screen.
+ *
+ * What is worth pinning is what it tells somebody when things are not fine: a
+ * folder with no encode in it, files it is going to ignore, and a registration
+ * that came back short. The happy path is one button.
+ */
+
+import { render } from 'preact'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+
+import { UploadScreen } from './UploadScreen'
+import type { Progress, ScannedFolder, UploadResult } from '../../shared/upload'
+
+const SCANNED: ScannedFolder = {
+  folder: 'C:\\encodes\\asset-1\\1',
+  objects: ['720p/init.mp4', '720p/segment-000001.m4s', 'master.m3u8'],
+  unexpected: [],
+  totalBytes: 5_242_880,
+}
+
+let container: HTMLDivElement
+let scan: ReturnType<typeof vi.fn>
+let start: ReturnType<typeof vi.fn>
+let emit: ((progress: Progress) => void) | null = null
+
+function bridge(): void {
+  scan = vi.fn(async () => SCANNED)
+  start = vi.fn(
+    async (): Promise<UploadResult> => ({
+      ok: true,
+      result: { phase: 'done', uploaded: 3, total: 3, message: '已驗證 3 個檔案' },
+    }),
+  )
+  Object.defineProperty(window, 'desktop', {
+    configurable: true,
+    value: {
+      version: vi.fn(async () => '1.2.3'),
+      pathFor: vi.fn(() => SCANNED.folder),
+      auth: { status: vi.fn(), pair: vi.fn(), signOut: vi.fn() },
+      upload: {
+        scan,
+        start,
+        onProgress: (listener: (progress: Progress) => void) => {
+          emit = listener
+          return () => {
+            emit = null
+          }
+        },
+      },
+    },
+  })
+}
+
+beforeEach(() => {
+  emit = null
+  bridge()
+  container = document.createElement('div')
+  document.body.append(container)
+})
+
+afterEach(() => {
+  render(null, container)
+  container.remove()
+})
+
+async function tick(): Promise<void> {
+  for (let count = 0; count < 20; count++) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function drop(): void {
+  const zone = container.querySelector('.drop')!
+  const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+  Object.defineProperty(event, 'dataTransfer', { value: { files: [new File([], 'x')] } })
+  zone.dispatchEvent(event)
+}
+
+/**
+ * Awaited, because the drop listeners are attached in an effect and Preact runs
+ * effects asynchronously. Mounting and dropping in one tick drops onto an
+ * element with no listener yet, which looks exactly like a broken handler.
+ */
+async function mount(): Promise<void> {
+  render(<UploadScreen adminEmail="owner@example.com" onSignOut={vi.fn()} />, container)
+  await tick()
+}
+
+test('it says who it is connected as', async () => {
+  await mount()
+
+  expect(container.textContent).toContain('owner@example.com')
+})
+
+test('dropping a folder scans it and reports what is there', async () => {
+  await mount()
+  drop()
+  await tick()
+
+  expect(scan).toHaveBeenCalledWith(SCANNED.folder)
+  expect(container.textContent).toContain('3')
+  expect(container.textContent).toContain('5.0 MB')
+})
+
+test('a folder with no encode in it is explained', async () => {
+  /** Rather than an upload button that does nothing. */
+  scan.mockResolvedValue({ ...SCANNED, objects: [], totalBytes: 0 })
+  await mount()
+  drop()
+  await tick()
+
+  expect(container.textContent).toContain('master.m3u8')
+  expect(container.querySelector('.alert')).not.toBeNull()
+})
+
+test('files that will be ignored are named', async () => {
+  /** Silence here reads as "it uploaded everything", and the one time that
+   *  matters is when somebody dropped the wrong folder. */
+  scan.mockResolvedValue({ ...SCANNED, unexpected: ['notes.txt', 'source.mp4'] })
+  await mount()
+  drop()
+  await tick()
+
+  expect(container.textContent).toContain('notes.txt')
+  expect(container.textContent).toContain('略過')
+})
+
+test('starting an upload sends the folder', async () => {
+  await mount()
+  drop()
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('開始上傳'),
+  )
+  button?.click()
+  await tick()
+
+  expect(start).toHaveBeenCalledWith({ folder: SCANNED.folder, title: '' })
+})
+
+test('progress events move the bar', async () => {
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'uploading', uploaded: 1, total: 4 })
+  await tick()
+
+  expect(container.querySelector<HTMLElement>('.bar div')?.style.width).toBe('25%')
+  expect(container.textContent).toContain('1 / 4')
+})
+
+test('verification is its own phase, not folded into uploading', async () => {
+  /** It is the step that decides whether the video plays. "The upload finished"
+   *  and "the video works" are different claims. */
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'registering', uploaded: 4, total: 4 })
+  await tick()
+
+  expect(container.textContent).toContain('驗證中')
+})
+
+test('a short registration lists what is missing', async () => {
+  /** The most useful thing this screen can show: what to upload again. */
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({
+    phase: 'failed',
+    uploaded: 4,
+    total: 6,
+    message: '還缺 2 個檔案，再按一次上傳只會補這些',
+    missing: ['720p/segment-000004.m4s', 'poster.webp'],
+  })
+  await tick()
+
+  expect(container.textContent).toContain('720p/segment-000004.m4s')
+  expect(container.textContent).toContain('poster.webp')
+})
+
+test('a failure from the main process is shown rather than swallowed', async () => {
+  start.mockResolvedValue({ ok: false, message: '配對已過期，請重新配對', httpStatus: 401 })
+  await mount()
+  drop()
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('開始上傳'),
+  )
+  button?.click()
+  await tick()
+
+  expect(container.textContent).toContain('配對已過期')
+})
+
+test('the upload button is disabled while it runs', async () => {
+  await mount()
+  drop()
+  await tick()
+
+  emit?.({ phase: 'uploading', uploaded: 1, total: 4 })
+  await tick()
+
+  const button = [...container.querySelectorAll('button')].find((element) =>
+    element.textContent?.includes('上傳中'),
+  )
+  expect(button?.disabled).toBe(true)
+})

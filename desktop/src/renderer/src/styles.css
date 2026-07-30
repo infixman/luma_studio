@@ -107,3 +107,84 @@ button:disabled {
   margin: 0;
   padding: 0.6rem 0.8rem;
 }
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* Big enough to be an obvious target for a folder, without pushing the rest of
+   the screen below the fold. */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  margin: 1.5rem 0;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.drop.over {
+  border-color: var(--accent);
+  background: #1f2029;
+}
+
+.drop p {
+  margin: 0.3rem 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 1.5rem;
+  margin: 0 0 1.5rem;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  /* A path is worth selecting to paste somewhere. */
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  margin: 1.5rem 0;
+}
+
+.bar {
+  background: var(--panel);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.bar div {
+  background: var(--accent);
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+.missing {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  user-select: text;
+}
+
+footer.shell {
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  padding-top: 1.5rem;
+}

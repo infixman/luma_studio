@@ -2,8 +2,11 @@ import { describe, expect, test, vi } from 'vitest'
 
 import {
   AdminApiError,
+  createAsset,
   exchangePairing,
   isTransient,
+  registerEncode,
+  uploadUrls,
   type HttpResponse,
   type Transport,
 } from './adminApi'
@@ -126,5 +129,129 @@ describe('which failures are worth trying again', () => {
     /** 401 especially: retrying spends attempts against the pairing lockout, so
      *  a retry loop would lock the admin out of their own tool. */
     expect(isTransient(status)).toBe(false)
+  })
+})
+
+describe('creating the asset an upload is scoped to', () => {
+  const DETAILS = { title: '第一課', byteSize: 4_000_000_000 }
+
+  test('it returns the id and both version numbers', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(201, { asset: { id: 'asset-1' }, uploadVersion: 1, encodeVersion: 1 }),
+    )
+
+    await expect(createAsset(transport, BASE, 'tok', DETAILS)).resolves.toEqual({
+      assetId: 'asset-1',
+      uploadVersion: 1,
+      encodeVersion: 1,
+    })
+  })
+
+  test('it presents the token as a bearer', async () => {
+    const transport = vi.fn<Transport>(async () =>
+      responding(201, { asset: { id: 'asset-1' }, uploadVersion: 1, encodeVersion: 1 }),
+    )
+
+    await createAsset(transport, BASE, 'tok', DETAILS)
+
+    expect(transport.mock.calls[0]![1].headers).toMatchObject({ Authorization: 'Bearer tok' })
+  })
+
+  test('a response with no id is refused rather than used', async () => {
+    /** Carrying on would build keys like `videos//1/master.m3u8`, which the
+     *  server refuses one object at a time instead of once. */
+    const transport = vi.fn<Transport>(async () => responding(201, { asset: {}, uploadVersion: 1, encodeVersion: 1 }))
+
+    await expect(createAsset(transport, BASE, 'tok', DETAILS)).rejects.toThrow('影片編號')
+  })
+
+  test('a 403 from the switch being off is passed through', async () => {
+    const transport = vi.fn<Transport>(async () => responding(403, { error: '影片上傳尚未開放' }))
+
+    await expect(createAsset(transport, BASE, 'tok', DETAILS)).rejects.toMatchObject({ status: 403 })
+  })
+})
+
+describe('asking for upload URLs', () => {
+  const KEYS = ['videos/asset-1/1/master.m3u8', 'videos/asset-1/1/720p/init.mp4']
+
+  function granting(keys: readonly string[]) {
+    return responding(200, {
+      urls: keys.map((key) => ({ key, url: `https://r2.example/${key}?X-Amz-Signature=x`, expiresAt: 1 })),
+    })
+  }
+
+  test('it asks for the output bucket and the right version', async () => {
+    const transport = vi.fn<Transport>(async () => granting(KEYS))
+
+    await uploadUrls(transport, BASE, 'tok', { assetId: 'asset-1', encodeVersion: 2, keys: KEYS })
+
+    const body = JSON.parse(String(transport.mock.calls[0]![1].body))
+    expect(body).toEqual({ kind: 'output', encodeVersion: 2, keys: KEYS })
+  })
+
+  test('the asset id is encoded into the path', async () => {
+    const transport = vi.fn<Transport>(async () => granting(KEYS))
+
+    await uploadUrls(transport, BASE, 'tok', { assetId: 'a/b', encodeVersion: 1, keys: KEYS })
+
+    expect(transport.mock.calls[0]![0]).toBe(`${BASE}/api/video-assets/a%2Fb/upload-urls`)
+  })
+
+  test('a short answer is refused rather than partially used', async () => {
+    /** The server grants a batch or refuses it, so fewer URLs than keys means
+     *  something changed under us — not that some keys were skipped. */
+    const transport = vi.fn<Transport>(async () => granting(KEYS.slice(0, 1)))
+
+    await expect(
+      uploadUrls(transport, BASE, 'tok', { assetId: 'asset-1', encodeVersion: 1, keys: KEYS }),
+    ).rejects.toThrow('數量不符')
+  })
+
+  test('a refused key surfaces the server reason', async () => {
+    const transport = vi.fn<Transport>(async () => responding(400, { error: 'This key is not part of this encode' }))
+
+    await expect(
+      uploadUrls(transport, BASE, 'tok', { assetId: 'asset-1', encodeVersion: 1, keys: KEYS }),
+    ).rejects.toThrow('not part of this encode')
+  })
+})
+
+describe('registering a finished encode', () => {
+  const DETAILS = { assetId: 'asset-1', encodeVersion: 1, title: '第一課', byteSize: 1 }
+
+  test('a complete encode reports how many objects were verified', async () => {
+    const transport = vi.fn<Transport>(async () => responding(201, { asset: {}, objectCount: 347 }))
+
+    await expect(registerEncode(transport, BASE, 'tok', DETAILS)).resolves.toEqual({
+      ok: true,
+      missing: [],
+      objectCount: 347,
+    })
+  })
+
+  test('an incomplete one comes back as a list, not an exception', async () => {
+    /** It is the most useful thing this call produces: what to upload again. */
+    const transport = vi.fn<Transport>(async () =>
+      responding(409, { error: '這個版本還缺 2 個檔案', missing: ['720p/segment-000004.m4s', 'poster.webp'] }),
+    )
+
+    await expect(registerEncode(transport, BASE, 'tok', DETAILS)).resolves.toEqual({
+      ok: false,
+      missing: ['720p/segment-000004.m4s', 'poster.webp'],
+      objectCount: 0,
+    })
+  })
+
+  test('any other failure is an error', async () => {
+    const transport = vi.fn<Transport>(async () => responding(404, { error: 'Video not found' }))
+
+    await expect(registerEncode(transport, BASE, 'tok', DETAILS)).rejects.toBeInstanceOf(AdminApiError)
+  })
+
+  test('a 409 with no list still reads as incomplete', async () => {
+    const transport = vi.fn<Transport>(async () => responding(409, { error: 'x' }))
+
+    await expect(registerEncode(transport, BASE, 'tok', DETAILS)).resolves.toMatchObject({ ok: false })
   })
 })

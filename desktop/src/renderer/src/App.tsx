@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 
 import { PairingScreen } from './PairingScreen'
+import { UploadScreen } from './UploadScreen'
 import type { SessionStatus } from '../../shared/session'
 
 /**
@@ -35,21 +36,17 @@ export function App() {
   }
 
   return (
-    <main class="shell">
-      <h1>苒光繪誌 影片上傳工具</h1>
-      <p class="muted">
-        已連結 {status.adminEmail}。這個工具沒有 R2 金鑰 —— 它拿到的是一組只能做影片操作的
-        短效憑證。
-      </p>
-      <p class="muted">上傳畫面還沒做。版本 {version || '讀取中'}</p>
-      <button
-        type="button"
-        onClick={() => {
+    <>
+      <UploadScreen
+        adminEmail={status.adminEmail ?? ''}
+        onSignOut={() => {
           void window.desktop.auth.signOut().then(setStatus)
         }}
-      >
-        取消連結
-      </button>
-    </main>
+      />
+      <footer class="shell muted">
+        版本 {version || '讀取中'}。這個工具沒有 R2 金鑰 —— 它拿到的是一組只能做影片操作的
+        短效憑證。
+      </footer>
+    </>
   )
 }
