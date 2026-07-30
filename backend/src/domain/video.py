@@ -87,6 +87,21 @@ TRANSITIONS = {
 }
 
 
+def validate_byte_size(byte_size) -> int:
+    """A size this pipeline will accept, refused before the upload rather than
+    during it.
+
+    One copy of the ceiling. Two would eventually disagree, and the way they
+    would disagree is an upload that starts and cannot finish.
+    """
+
+    if not isinstance(byte_size, int) or isinstance(byte_size, bool) or byte_size <= 0:
+        raise ValueError("影片大小必須是正整數")
+    if byte_size > MAX_UPLOAD_BYTES:
+        raise ValueError(f"單一影片不能超過 {MAX_UPLOAD_BYTES // (1024 * MIB)} GiB")
+    return byte_size
+
+
 def part_size_for(byte_size: int) -> int:
     """The part size this upload should use.
 
@@ -95,10 +110,7 @@ def part_size_for(byte_size: int) -> int:
     entire upload.
     """
 
-    if not isinstance(byte_size, int) or isinstance(byte_size, bool) or byte_size <= 0:
-        raise ValueError("影片大小必須是正整數")
-    if byte_size > MAX_UPLOAD_BYTES:
-        raise ValueError(f"單一影片不能超過 {MAX_UPLOAD_BYTES // (1024 * MIB)} GiB")
+    byte_size = validate_byte_size(byte_size)
 
     # Smallest legal part that still fits the file into the part limit.
     needed = -(-byte_size // MAX_PARTS)
@@ -473,6 +485,51 @@ async def verify_encode(bucket, asset_id: str, encode_version: int) -> dict:
             checked += 1
 
     return {"ok": not missing, "missing": missing, "objectCount": checked}
+
+
+async def create_asset(
+    env,
+    *,
+    title: str,
+    original_filename: str,
+    byte_size: int,
+    duration_seconds: int | None,
+    width: int | None,
+    height: int | None,
+    upload_version: int = 1,
+) -> str:
+    """An asset for something that has not been uploaded yet.
+
+    The row comes first because every presigned URL is scoped to an asset and a
+    version, so there has to be an asset to scope one to. It starts at
+    `uploading`, and the only thing that can move it to `ready` is the import
+    route, after it has confirmed every object exists.
+
+    The dimensions come from the tool's ffprobe and are for display. Nothing
+    about whether the encode is playable is decided from them.
+    """
+
+    asset_id = urlsafe_token(18)
+    now = utc_timestamp()
+    await env.DB.prepare(
+        "INSERT INTO video_assets (id, title, original_filename, source_key, status, byte_size,"
+        " duration_seconds, width, height, active_encode_version, master_key, poster_key,"
+        " error_code, error_detail, created_at, updated_at)"
+        " VALUES (?1, ?2, ?3, ?4, 'uploading', ?5, ?6, ?7, ?8, NULL, NULL, NULL, NULL, NULL, ?9, ?9)"
+    ).bind(
+        asset_id,
+        title,
+        original_filename,
+        # Derived from the id, never from the filename. `../../` in a filename
+        # is a real thing people send.
+        source_key(asset_id, upload_version),
+        validate_byte_size(byte_size),
+        duration_seconds,
+        width,
+        height,
+        now,
+    ).run()
+    return asset_id
 
 
 async def register_verified_asset(

@@ -728,3 +728,58 @@ botocore 在開發環境有，這比背一串 hex 常數可靠得多 —— 它�
   明確加上，不會靜靜落到某一邊。
 - 拒絕裡最重要的兩條：**別的 asset 的 prefix**（一次上傳寫進別人的影片），
   以及**同一個 asset 的別的版本**（宣稱要上傳新 encode，實際寫進會員正在看的那版）。
+
+## S1.3：`POST /api/video-assets`
+
+一列還沒有任何 bytes 的 asset。它得先存在，因為每一張 presigned URL 都綁定
+一個 asset 和一個版本 —— 沒有 asset 就沒有東西可以綁。
+
+起始狀態 `uploading`，而且只有 import 端點能把它推到 `ready`。
+
+### 一個定義了但沒人用的開關
+
+`VIDEO_UPLOAD_ENABLED` 在 `flags.py` 裡躺著，**沒有任何一行程式在檢查它**。
+文件寫它要管 presign、上傳與註冊。
+
+所以這一步順手把它接上：新的建立路由，以及既有的 import 路由。這會改變 import
+的行為（沒設變數就 403），所以同時在 `wrangler.admin.toml` 補上 `= "1"` —— 部署後
+行為不變，但現在有一個不需要重新部署就能關掉的開關。
+
+它預設是「開」而不是「關」，理由跟課程結帳那個開關不同：這是後台能力，不是在賣的東西。
+開關存在是為了出事時能立刻關掉。
+
+### 對抗性審查：又一個「斷言在錯的地方」
+
+三個測試我第一版是這樣寫的：
+
+```python
+assert response.json()["asset"]["status"] == "uploading"
+```
+
+**這什麼都沒驗。** 路由建立完會把 asset 讀回來，而假資料庫會用測試自己宣告的那一列
+回答那個讀取 —— 所以我斷言的是 fixture，不是 insert。
+
+改成從 `database.writes` 找出那一筆 `INSERT INTO video_assets`，驗語句裡有
+`'uploading'`、驗寫進去的 id 過得了 `ASSET_ID_PATTERN`（因為那個 id 之後要進 object key，
+產生一個 key builder 不接受的 id 會在第一次 presign 才炸）、驗 source key 是從 id 推的
+而不是從檔名。
+
+這是這個專案第四次同一個錯。共同點永遠是**斷言的地方不是變化發生的地方**。
+
+### 重構審查抓到兩處重複
+
+**上限有兩份。** `part_size_for` 裡有一次「不能超過 20 GiB」的檢查，新的建立路由
+也需要同一個檢查。抽成 `validate_byte_size`，`part_size_for` 改成呼叫它。
+兩份上限最後一定會不一致，而不一致的表現方式是「上傳開始了但傳不完」。
+
+**同三個測量欄位有兩種處理方式。** import 路由本來是這樣寫的：
+
+```python
+duration_seconds=duration if isinstance(duration, int) else None,
+```
+
+也就是**壞值靜靜變成 None**。這跟這個檔案開頭自己寫的原則相反 ——「忽略它等於讓
+client 以為被遵守了」。而且 `isinstance(True, int)` 是 `True`，所以送
+`width: true` 會存成寬度 1。
+
+抽成 `_measurements(body)`，兩條路徑共用，壞值一律 400。這是行為改變，補了測試。

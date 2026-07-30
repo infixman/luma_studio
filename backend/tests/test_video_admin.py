@@ -38,21 +38,31 @@ class JsonRequest(FakeRequest):
 
 
 @pytest.fixture
-def call():
+def database_of():
+    """A database a test can inspect after the request, not only answer with."""
+
+    def build(answers=None, changes=None) -> FakeDatabase:
+        return FakeDatabase({**SIGNED_IN, **(answers or {})}, changes=changes)
+
+    return build
+
+
+@pytest.fixture
+def call(database_of):
     import admin_main
     from shared import migrations
 
-    def run(request, answers=None, changes=None, bucket=None):
+    def run(request, answers=None, changes=None, bucket=None, database=None, env=None):
         migrations._applied_names = None
         worker = admin_main.Default()
-        env = make_env(
-            FakeDatabase({**SIGNED_IN, **(answers or {})}, changes=changes),
+        worker.env = make_env(
+            database if database is not None else database_of(answers, changes),
             origins=ADMIN_ORIGIN,
             frontend=ADMIN_ORIGIN,
+            **(env or {}),
         )
         if bucket is not None:
-            env.COURSE_VIDEO = bucket
-        worker.env = env
+            worker.env.COURSE_VIDEO = bucket
         return asyncio.run(worker.fetch(request))
 
     return run
@@ -175,6 +185,8 @@ class TestImporting:
             ),
             answers,
             bucket=self.Bucket(complete),
+            # Registering is part of uploading, and the same switch gates it.
+            env={"VIDEO_UPLOAD_ENABLED": "1"},
         )
 
     def test_a_complete_upload_becomes_playable(self, call):
@@ -200,6 +212,27 @@ class TestImporting:
 
         assert response.status == 400
 
+    @pytest.mark.parametrize("width", ["1920", 1920.0, True, []])
+    def test_a_measurement_that_is_not_a_number_is_refused_not_dropped(self, call, width):
+        """It used to be silently coerced to None. Discarding what a caller
+        sent leaves them believing it was recorded — and `isinstance(True, int)`
+        is true, so a naive check stored a width of 1."""
+
+        response = self._call(call, {**self._call_body(), "width": width})
+
+        assert response.status == 400
+
+    def test_a_measurement_may_be_absent(self, call):
+        """A source with no readable duration is still worth registering."""
+
+        response = self._call(
+            call,
+            {"title": "第一課"},
+            answers={"SELECT * FROM video_assets": [an_asset()]},
+        )
+
+        assert response.status == 201
+
     def _call_body(self) -> dict:
         return {
             "title": "第一課",
@@ -208,3 +241,129 @@ class TestImporting:
             "width": 1920,
             "height": 1080,
         }
+
+
+class TestCreatingAnAsset:
+    """The row the desktop tool uploads into.
+
+    It exists before any bytes do, because every presigned URL is scoped to an
+    asset and a version — so there has to be an asset to scope them to. The row
+    starts at `uploading` and only the import route can move it to `ready`.
+    """
+
+    def _request(self, body: dict) -> JsonRequest:
+        return JsonRequest(
+            "/api/video-assets", "POST", body,
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1", "Cookie": "luma_admin_session=" + "a" * 40},
+        )
+
+    def _body(self, **extra) -> dict:
+        return {
+            "title": "第一課 起稿",
+            "originalFilename": "lesson-01.mp4",
+            "byteSize": 4_000_000_000,
+            "durationSeconds": 1830,
+            "width": 3840,
+            "height": 2160,
+            **extra,
+        }
+
+    def _insert(self, database) -> tuple[str, tuple]:
+        """The row that was written.
+
+        Asserted against rather than the response body, because the route reads
+        the asset back and a fake database answers that read with whatever the
+        test declared — so a response assertion here would be checking the
+        fixture, not the insert.
+        """
+
+        writes = [pair for pair in database.writes if "INSERT INTO video_assets" in pair[0]]
+        assert len(writes) == 1, database.writes
+        return writes[0]
+
+    def test_it_starts_at_uploading(self, call, database_of):
+        database = database_of()
+
+        response = call(self._request(self._body()), database=database, env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        assert response.status == 201
+        statement, _ = self._insert(database)
+        assert "'uploading'" in statement
+
+    def test_it_writes_an_id_of_the_shape_object_keys_accept(self, call, database_of):
+        """The id ends up in object keys, so a key builder has to accept it.
+        A generated id that ASSET_ID_PATTERN rejects would fail at the first
+        presign rather than here."""
+
+        from domain import video
+
+        database = database_of()
+        call(self._request(self._body()), database=database, env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        _, bindings = self._insert(database)
+        assert video.ASSET_ID_PATTERN.fullmatch(bindings[0])
+
+    def test_it_reports_the_versions_the_tool_builds_keys_from(self, call):
+        """Otherwise the tool has to know that a first upload is version 1."""
+
+        body = call(self._request(self._body()), env={"VIDEO_UPLOAD_ENABLED": "1"}).json()
+
+        assert body["uploadVersion"] == 1
+        assert body["encodeVersion"] == 1
+
+    def test_the_original_lands_under_the_asset_not_the_filename(self, call, database_of):
+        """A filename is attacker-controlled and occasionally an attempt to
+        write somewhere else."""
+
+        from domain import video
+
+        database = database_of()
+        call(self._request(self._body(originalFilename="../../etc/passwd")), database=database,
+             env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        _, bindings = self._insert(database)
+        assert video.source_key(bindings[0], 1) in bindings
+        assert not any("etc/passwd" in str(value) for value in bindings if value != "../../etc/passwd")
+
+    def test_a_title_is_required(self, call):
+        response = call(self._request(self._body(title="  ")), env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        assert response.status == 400
+
+    @pytest.mark.parametrize("size", [0, -1, "big", None, 21 * 1024 * 1024 * 1024 * 1024])
+    def test_an_impossible_size_is_refused(self, call, size):
+        """The ceiling is checked before the upload rather than during it."""
+
+        response = call(self._request(self._body(byteSize=size)), env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        assert response.status == 400
+
+    def test_the_dimensions_the_tool_reports_are_optional(self, call):
+        """They come from the tool's ffprobe and are for display. Whether the
+        encode is playable is decided by verifying objects, not by these."""
+
+        response = call(
+            self._request({"title": "第一課", "byteSize": 1_000_000}),
+            env={"VIDEO_UPLOAD_ENABLED": "1"},
+        )
+
+        assert response.status == 201
+
+    def test_nobody_creates_an_asset_while_uploading_is_switched_off(self, call):
+        """Unset is off, and the switch is here rather than only in the front
+        end — hiding a button leaves the endpoint open."""
+
+        response = call(self._request(self._body()))
+
+        assert response.status == 403
+
+    def test_an_anonymous_caller_cannot_create_one(self, call):
+        request = JsonRequest(
+            "/api/video-assets", "POST", self._body(),
+            {"Origin": ADMIN_ORIGIN, "x-luma-app": "1"},
+        )
+
+        response = call(request, answers={"SELECT email FROM admin_sessions": []},
+                        env={"VIDEO_UPLOAD_ENABLED": "1"})
+
+        assert response.status == 401

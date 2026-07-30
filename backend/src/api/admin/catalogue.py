@@ -9,7 +9,7 @@ let the client keep believing it had been obeyed.
 """
 
 from domain import courses, inventory, offers, shop, video
-from shared import sanitize
+from shared import flags, sanitize
 from shared.common import validate_choice, validate_text
 from shared.responses import Ctx
 
@@ -17,6 +17,40 @@ from shared.responses import Ctx
 # Fields the server derives. Present in a request, they are a caller trying to
 # decide something that is not theirs to decide.
 DERIVED_FIELDS = ("requiresShipping", "containsCourse", "digitalOnly", "isBundle")
+
+
+def _optional_int(value) -> int | None:
+    """A number the tool measured, or nothing.
+
+    Absent is normal — a source with no readable duration is still a file worth
+    uploading. Present but not a number is a bug in the caller, and refusing it
+    beats storing a string in an integer column or, worse, dropping it and
+    letting the caller believe it was recorded.
+
+    `bool` is excluded on purpose: `isinstance(True, int)` is true, so a naive
+    check stores `width=True` as a width of 1.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("影片長度與尺寸必須是整數")
+    return value
+
+
+def _measurements(body: dict) -> dict:
+    """What ffprobe read from the source.
+
+    For display and for choosing the ladder. Nothing about whether an encode is
+    playable is decided from these — that is settled by verifying objects — so
+    they are all optional.
+    """
+
+    return {
+        "duration_seconds": _optional_int(body.get("durationSeconds")),
+        "width": _optional_int(body.get("width")),
+        "height": _optional_int(body.get("height")),
+    }
 
 
 def _item_fields(body: dict) -> dict:
@@ -186,18 +220,43 @@ async def handle(ctx: Ctx):
             {"assets": await video.list_assets(env, status=(ctx.query.get("status") or [""])[0] or None)}
         )
 
+    if path == "/api/video-assets" and method == "POST":
+        if not flags.enabled(env, flags.VIDEO_UPLOAD):
+            return ctx.error("影片上傳尚未開放", 403)
+        try:
+            body = await ctx.json_body()
+            asset_id = await video.create_asset(
+                env,
+                title=validate_text(body.get("title"), 200, "影片名稱"),
+                original_filename=validate_text(
+                    body.get("originalFilename") or "", 200, "原始檔名", required=False
+                ),
+                # The ceiling is checked inside `create_asset`, which owns it.
+                byte_size=body.get("byteSize"),
+                **_measurements(body),
+            )
+        except (ValueError, AttributeError, TypeError) as error:
+            return ctx.error(str(error) or "Invalid video", 400)
+
+        # The version numbers are the tool's next question, and it would
+        # otherwise have to know that a first upload is version 1.
+        return ctx.json(
+            {"asset": await video.get_asset(env, asset_id), "uploadVersion": 1, "encodeVersion": 1},
+            201,
+        )
+
     if path == "/api/video-assets/import" and method == "POST":
-        # Without a transcoder of our own, the ladder arrives by whatever means
-        # the admin used to upload it — usually a sync of a few hundred files.
-        # One dropped file is ordinary, and the video plays fine until it
-        # reaches that file, so nothing is taken on trust here.
+        if not flags.enabled(env, flags.VIDEO_UPLOAD):
+            return ctx.error("影片上傳尚未開放", 403)
+        # The ladder is transcoded and uploaded elsewhere, so nothing about it
+        # is taken on trust here. One dropped object out of several hundred is
+        # ordinary, and the video plays fine until it reaches that object.
         try:
             body = await ctx.json_body()
             title = validate_text(body.get("title"), 200, "影片名稱")
             filename = validate_text(body.get("originalFilename") or "", 200, "原始檔名", required=False)
             version = int(body.get("encodeVersion") or 1)
-            duration = body.get("durationSeconds")
-            width, height = body.get("width"), body.get("height")
+            measured = _measurements(body)
         except (ValueError, AttributeError, TypeError) as error:
             return ctx.error(str(error) or "Invalid import", 400)
 
@@ -227,9 +286,7 @@ async def handle(ctx: Ctx):
             asset_id=asset_id,
             title=title,
             original_filename=filename,
-            duration_seconds=duration if isinstance(duration, int) else None,
-            width=width if isinstance(width, int) else None,
-            height=height if isinstance(height, int) else None,
+            **measured,
             encode_version=version,
         )
         return ctx.json({"asset": await video.get_asset(env, created), "objectCount": verified["objectCount"]}, 201)

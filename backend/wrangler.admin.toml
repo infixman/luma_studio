@@ -53,3 +53,12 @@ simple = { limit = 10, period = 60 }
 # sending a credentialed request here.
 ALLOWED_ORIGINS = "https://admin.luma-studio.tw"
 FRONTEND_ORIGIN = "https://admin.luma-studio.tw"
+
+# Getting a video in: creating an asset, handing out presigned URLs, and
+# registering a verified encode. On because this is a back-office capability
+# rather than something being sold — it is here so it can be turned off during
+# an incident without a deploy, not because it is unfinished.
+#
+# Unset is off. A Worker that has not been told to accept uploads will refuse
+# them, which is why this line has to exist rather than being assumed.
+VIDEO_UPLOAD_ENABLED = "1"
