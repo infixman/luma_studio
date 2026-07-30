@@ -1170,6 +1170,30 @@ MIGRATIONS = [
             " ON video_storage_orphans (scan_id, bucket)",
         ],
     },
+    {
+        # Phase 4 S7: which builds of the desktop tool may work.
+        #
+        # One row, always id = 1. There is one answer to "is this version still
+        # allowed", and a second row would be a second answer.
+        #
+        # It exists before the first release rather than after, because of the
+        # trap the plan names: 1.0.0 installed with a broken updater is a fix
+        # nobody can push. `min_supported` retires versions as they age;
+        # `blocked` stops every one of them at once, which is what a bad release
+        # needs — it does not wait for each machine to update itself.
+        "name": "0038_create_desktop_version_policy",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS desktop_version_policy (
+                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                 latest TEXT NOT NULL DEFAULT '0.1.0',
+                 min_supported TEXT NOT NULL DEFAULT '0.1.0',
+                 force_update INTEGER NOT NULL DEFAULT 0,
+                 blocked INTEGER NOT NULL DEFAULT 0,
+                 notes TEXT NOT NULL DEFAULT '',
+                 updated_at INTEGER NOT NULL
+               )""",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

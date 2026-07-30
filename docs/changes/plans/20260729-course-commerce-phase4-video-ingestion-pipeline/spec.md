@@ -231,10 +231,23 @@ Import 必須冪等。重送同一 asset 與 encode version 時重新驗證並�
 存在 D1 一列，後台可讀可改。低於 `minSupported` 的工具停止工作並要求更新；
 `blocked` 讓一個壞版本立刻停下來，不必等每台機器自己更新。
 
-### `GET /releases/{version}/{file}`
+`feedUrl` 由**回應這個請求的那個部署**自己組出來，不是設定值：寫死的 host 會在
+「不是正式環境的那個部署」上是錯的，而且錯得很安靜 —— staging 的 build 會去看正式環境的 feed。
 
-從 R2 串出安裝檔與 electron-updater 需要的 metadata。`version` 以正規表示式限制，
-`file` 走檔名白名單，兩者都不接受路徑分隔字元。這是唯一公開的影片無關路由。
+工具帶 `?version=` 問，伺服器回一個 `verdict`（allowed／mustUpdate／updateAvailable）。
+判斷寫在伺服器，因為兩份「我是不是太舊了」遲早會不一致。
+
+### `GET /releases/{file}`
+
+從 R2 串出安裝檔與 electron-updater 需要的 metadata。這是唯一公開的影片無關路由。
+
+**扁平，不是一個版本一個資料夾**（原本規劃 `/releases/{version}/{file}`，實作時改了）。
+electron-updater 的 generic provider 讀 `{feed}/latest.yml`，然後**相對於 feed** 解析
+安裝檔的名字 —— 版本子目錄等於要自己寫更新邏輯，而那正是沒有機器就測不到的那一段。
+版本本來就在安裝檔的檔名裡。
+
+`file` 走檔名白名單（`latest.yml`、`*.exe`、`*.exe.blockmap`），不接受路徑分隔字元。
+`latest.yml` 只快取 60 秒（它就是用來發現有新版的那個檔案），安裝檔則是 immutable。
 
 ## D1 狀態規格
 

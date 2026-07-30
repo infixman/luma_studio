@@ -75,6 +75,10 @@ _VIDEO_ROUTES = (
             r"^/api/video-assets/[A-Za-z0-9_-]{1,64}/source-upload/[A-Za-z0-9_-]{1,64}/(?:complete|abort)$"
         ),
     ),
+    # "May I work?" — asked at startup, before anything is uploaded. A tool that
+    # cannot ask has to assume the answer is yes, which is the one thing the
+    # version policy exists to prevent.
+    ("GET", re.compile(r"^/api/desktop/version-policy$")),
     # Read-only, and the tool's way of confirming the objects arrived. No signed
     # URLs come back from it, so it grants nothing beyond knowing what is there.
     ("GET", re.compile(r"^/api/video-storage$")),

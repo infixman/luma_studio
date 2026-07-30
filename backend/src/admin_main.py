@@ -61,6 +61,13 @@ async def dispatch(ctx: Ctx):
     if path == "/api/desktop/tokens":
         return await desktop_admin_api.handle_public(ctx)
 
+    # The installer and its update metadata. Public because an updater checks for
+    # a new build before anybody signs into anything, and because what is served
+    # is a build we published rather than anything private. The names are an
+    # allowlist — see `desktop_release.release_key`.
+    if path.startswith("/releases/") and method == "GET":
+        return await desktop_admin_api.serve_release(ctx, path[len("/releases/") :])
+
     # Past this line every route is administration, so the check happens once.
     #
     # Two kinds of credential arrive here. A browser session is the ordinary
@@ -101,7 +108,11 @@ async def dispatch(ctx: Ctx):
     # all belong on this side of the gate above — the token exchange cannot,
     # since a tool has no session yet — so which of them is authenticated has to
     # be visible here instead of inferred from a prefix.
-    if path == "/api/desktop/pairing-code" or path.startswith("/tools/ffmpeg/"):
+    if (
+        path == "/api/desktop/pairing-code"
+        or path == "/api/desktop/version-policy"
+        or path.startswith("/tools/ffmpeg/")
+    ):
         return await desktop_admin_api.handle(ctx)
 
     if path == "/api/bio-link" or path.startswith("/api/bio-link/"):

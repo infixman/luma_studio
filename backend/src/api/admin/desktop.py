@@ -9,13 +9,34 @@ visible to somebody already signed in, which is what makes showing one an act of
 authorisation. Nothing else about it is secret — the server generates and
 verifies it — so if it could be read without a session it would be worth
 nothing.
+
+Two handlers here sit on different sides of that gate, and it is worth saying so
+where somebody adding a third will read it. `serve_mirror` is authenticated: the
+FFmpeg archive is not secret, but the bandwidth is ours. `serve_release` is
+public, because an updater checks for a new build before anybody has signed into
+anything — `admin_main` routes to it before the gate, deliberately.
 """
 
-from domain import desktop_auth, desktop_tools
+from domain import desktop_auth, desktop_release, desktop_tools
+from shared import rate_limit
 from shared.common import NotConfigured, utc_timestamp
 from shared.responses import Ctx
 
 MIRROR_BINDING = "DESKTOP_TOOLS"
+
+
+def _request_origin(ctx: Ctx) -> str:
+    """The scheme and host this request arrived on.
+
+    Read from the request rather than configured. A hard-coded feed URL is wrong
+    on whichever deployment is not the production one, and wrong silently: a
+    staging build would check the live feed and offer itself the wrong installer.
+    """
+
+    url = str(ctx.request.url)
+    scheme, _, rest = url.partition("://")
+    host = rest.split("/", 1)[0]
+    return f"{scheme}://{host}" if host else ""
 
 
 async def handle_public(ctx: Ctx):
@@ -45,6 +66,35 @@ async def handle_public(ctx: Ctx):
     return ctx.error("Not found", 404)
 
 
+async def _stream_from_tools(ctx: Ctx, key: str, *, content_type: str, cache: str):
+    """Hand over one object from the tools bucket, or say why not.
+
+    Streamed rather than read. `serve_r2_object` buffers, which costs two copies
+    of the whole object — R2's ArrayBuffer and the Python `bytes` built from it —
+    and a Worker has 128 MB. The FFmpeg archive alone is 74 MB.
+    """
+
+    bucket = getattr(ctx.env, MIRROR_BINDING, None)
+    if bucket is None:
+        # Said outright rather than answered as a missing file: an unconfigured
+        # deployment and an empty bucket look identical from outside, and only
+        # one of them is fixed by uploading something.
+        return ctx.error(f"工具檔案尚未設定（缺少 {MIRROR_BINDING} binding）", 503)
+
+    stored = await bucket.get(key)
+    if stored is None:
+        return ctx.error("Not found", 404)
+
+    return ctx.stream(
+        stored.body,
+        {
+            "content-type": content_type,
+            "cache-control": cache,
+            "x-content-type-options": "nosniff",
+        },
+    )
+
+
 async def serve_mirror(ctx: Ctx, name: str):
     """Hand over the pinned FFmpeg, or its corresponding source.
 
@@ -66,32 +116,94 @@ async def serve_mirror(ctx: Ctx, name: str):
         # useful to somebody probing.
         return ctx.error("Not found", 404)
 
-    bucket = getattr(ctx.env, MIRROR_BINDING, None)
-    if bucket is None:
-        # Said outright rather than answered as a missing file: an unconfigured
-        # deployment and an empty mirror look identical from the tool, and only
-        # one of them is fixed by uploading something.
-        return ctx.error(f"工具鏡像尚未設定（缺少 {MIRROR_BINDING} binding）", 503)
-
-    stored = await bucket.get(key)
-    if stored is None:
-        return ctx.error("Not found", 404)
-
     # Immutable because the name carries the version and the tool checks a digest
     # before unpacking: a stale copy cannot be a wrong copy.
-    return ctx.stream(
-        stored.body,
-        {
-            "content-type": "application/octet-stream",
-            "cache-control": f"public, max-age={desktop_tools.CACHE_SECONDS}, immutable",
-            "x-content-type-options": "nosniff",
-        },
+    return await _stream_from_tools(
+        ctx,
+        key,
+        content_type="application/octet-stream",
+        cache=f"public, max-age={desktop_tools.CACHE_SECONDS}, immutable",
+    )
+
+
+async def serve_release(ctx: Ctx, name: str):
+    """The installer and the metadata electron-updater reads.
+
+    Public, and the only route on this Worker that is not about video. An updater
+    checks for a new build before anybody has signed into anything, and the two
+    admins who install it are not going to paste a token into a Windows updater.
+
+    What is published here is a build we made, so nothing about it is secret —
+    and the bytes are the same ones an installed tool already has. The narrowing
+    is the name.
+    """
+
+    if not await rate_limit.allows(ctx.env, rate_limit.ASSET, ctx.request, "release"):
+        # Unauthenticated and tens of megabytes an answer. The limiter is
+        # advisory — it fails open when its binding is absent — but a public
+        # route that hands out installers should at least be behind the same
+        # thing every other public byte-serving route is.
+        return ctx.too_many_requests()
+
+    key = desktop_release.release_key(name)
+    if key is None:
+        return ctx.error("Not found", 404)
+
+    # `latest.yml` is deliberately not immutable — it is the file an updater
+    # re-reads to find out a new version exists, and a cached one is an update
+    # nobody is offered. The installer carries its version in its own name, so it
+    # can be cached hard.
+    metadata = name.endswith(".yml")
+    return await _stream_from_tools(
+        ctx,
+        key,
+        content_type="text/yaml" if metadata else "application/octet-stream",
+        cache="public, max-age=60"
+        if metadata
+        else f"public, max-age={desktop_tools.CACHE_SECONDS}, immutable",
     )
 
 
 async def handle(ctx: Ctx):
     if ctx.path.startswith("/tools/ffmpeg/") and ctx.method == "GET":
         return await serve_mirror(ctx, ctx.path[len("/tools/ffmpeg/") :])
+
+    if ctx.path == "/api/desktop/version-policy" and ctx.method == "GET":
+        # Readable by the tool as well as the back office: it is the answer to
+        # "may I work", and a tool that cannot ask has to assume yes.
+        policy = await desktop_release.read_policy(ctx.env)
+        asked = (ctx.query.get("version") or [""])[0].strip()
+        return ctx.json(
+            {
+                **policy,
+                # Built from whichever deployment answered rather than
+                # configured: a hard-coded host is wrong on the deployment that
+                # is not production, and wrong silently.
+                "feedUrl": desktop_release.feed_url(_request_origin(ctx)),
+                "verdict": desktop_release.verdict(policy, asked) if asked else None,
+            }
+        )
+
+    if ctx.path == "/api/desktop/version-policy" and ctx.method == "PUT":
+        try:
+            body = await ctx.json_body()
+            return ctx.json(
+                await desktop_release.save_policy(
+                    ctx.env,
+                    latest=str(body.get("latest") or ""),
+                    min_supported=str(body.get("minSupported") or ""),
+                    # Only a real boolean. `"false"` is truthy in Python, and
+                    # this is the field that stops every installed tool.
+                    force_update=body.get("forceUpdate") is True,
+                    blocked=body.get("blocked") is True,
+                    notes=str(body.get("notes") or ""),
+                    now=utc_timestamp(),
+                )
+            )
+        except ValueError as error:
+            return ctx.error(str(error) or "Invalid policy", 400)
+        except (AttributeError, TypeError):
+            return ctx.error("Invalid policy", 400)
 
     if ctx.path == "/api/desktop/pairing-code" and ctx.method == "GET":
         try:

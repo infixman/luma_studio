@@ -247,16 +247,20 @@ S1–S4 是不能砍的最小集合；S4 結束就是第一個能用的版本。
    written offer。依賴版本是推測的，嚴格說不完全合規。
 3. **自己編 FFmpeg** —— 完全合規，成本是一條 build pipeline。
 
-- [ ] 建立桌面工具版本政策表。
-- [ ] 實作 `GET /api/desktop/version-policy`。
-- [ ] 實作 `GET /releases/{version}/{file}`，version 走正規表示式、file 走白名單。
+- [x] 建立桌面工具版本政策表（`desktop_version_policy`，一列，id = 1）。
+- [x] 實作 `GET /api/desktop/version-policy`（工具的 token 讀得到 —— 問不到的工具只能假設可以用）
+      與 `PUT`（只有管理員）。`feedUrl` 由回應的那個部署組出來。`blocked` 只認真正的布林值：
+      `"false"` 在 Python 是 truthy，而那是會停掉所有工具的欄位。
+- [x] 實作 `GET /releases/{file}`，檔名走白名單。**改成扁平的**：electron-updater 的
+      generic provider 相對 feed 解析安裝檔名字，版本子目錄要自己寫更新邏輯 —— 那是沒有機器
+      就測不到的一段。公開路由，套上跟其他公開位元組路由一樣的 rate limit。
 - [ ] electron-builder NSIS 設定，不簽章；README 寫明 SmartScreen 會警告。
 - [ ] 星芒圖示，各尺寸齊全（參照 FotoBuddy）。
 - [ ] CI 打包並上傳安裝檔與 updater metadata 到 R2。
 - [ ] electron-updater 指向 releases 路由。
 - [ ] 低於 `minSupported` 或 `blocked` 時工具停止工作並要求更新。
 - [ ] 後台桌面工具版本區：顯示政策、下載連結，可修改政策。
-- [ ] 測試：releases 路由拒絕路徑穿越與非白名單檔名；min/force/blocked 判斷。
+- [x] 測試：releases 路由拒絕路徑穿越與非白名單檔名；min/force/blocked 判斷。
 - [ ] 在實際機器上裝一次、更新一次。**需要你的機器，我做不完這一項。**
 
 ## S8：從 R2 重新轉檔
