@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import type { ComponentChildren, JSX } from 'preact'
 
 import { read, write } from '../lib/storage'
-import { routeById, routeForPath } from '../routes'
+import { ADMIN_ROUTES, routeById, routeForPath, type AdminRouteId } from '../routes'
 import '../styles/admin-nav.css'
 
 /**
@@ -133,6 +133,37 @@ const icons = {
       <path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6" />
     </svg>
   ),
+  layers: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+      <path d="m3 13 9 5 9-5" />
+    </svg>
+  ),
+  book: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z" />
+      <path d="M8 7h7" />
+    </svg>
+  ),
+  film: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="m10 9 5 3-5 3V9Z" />
+    </svg>
+  ),
+  database: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
+      <path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </svg>
+  ),
+  monitor: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </svg>
+  ),
   chevron: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="m9 6 6 6-6 6" />
@@ -155,44 +186,70 @@ export interface NavGroup {
   items?: NavItem[]
 }
 
+/**
+ * Which icon a page gets. One entry per route, so a new route with no icon is a
+ * type error rather than a row with a hole in it.
+ */
+const ICONS: Record<AdminRouteId, JSX.Element> = {
+  dashboard: icons.overview,
+  pages: icons.page,
+  site: icons.chrome,
+  media: icons.image,
+  orders: icons.receipt,
+  products: icons.box,
+  categories: icons.tag,
+  inventory: icons.layers,
+  courses: icons.book,
+  videos: icons.film,
+  storage: icons.database,
+  shipping: icons.truck,
+  customers: icons.people,
+  ibon: icons.printer,
+  card: icons.link,
+  desktopTool: icons.monitor,
+}
+
+const GROUP_LABELS: Record<string, string> = {
+  site: '官網',
+  shop: '商城',
+  tools: '工具',
+}
+
+function itemsOf(group: string): NavItem[] {
+  return ADMIN_ROUTES.filter((route) => route.group === group).map((route) => ({
+    href: route.path,
+    label: route.label,
+    icon: ICONS[route.id],
+  }))
+}
+
+/**
+ * The sidebar, derived from the routing table rather than written out beside it.
+ *
+ * It used to be its own list, and five pages ended up reachable only by typing
+ * their URL — adding a route and adding a link were two acts, and nothing
+ * noticed when only one of them happened. Now a route with a group is in the
+ * sidebar by construction, and `AdminNav.test.tsx` fails if one is not.
+ *
+ * 會員 is a row rather than a group because it has one page. 總覽 is the same,
+ * and is the only route allowed to have no group at all.
+ */
 export const groups: NavGroup[] = [
   {
     id: 'dashboard',
     label: routeById('dashboard').label,
-    icon: icons.overview,
+    icon: ICONS.dashboard,
     href: routeById('dashboard').path,
   },
+  { id: 'site', label: GROUP_LABELS.site!, icon: icons.globe, items: itemsOf('site') },
+  { id: 'shop', label: GROUP_LABELS.shop!, icon: icons.cart, items: itemsOf('shop') },
   {
-    id: 'site',
-    label: '官網',
-    icon: icons.globe,
-    items: [
-      { href: routeById('pages').path, label: routeById('pages').label, icon: icons.page },
-      { href: routeById('site').path, label: routeById('site').label, icon: icons.chrome },
-      { href: routeById('media').path, label: routeById('media').label, icon: icons.image },
-    ],
+    id: 'customers',
+    label: routeById('customers').label,
+    icon: ICONS.customers,
+    href: routeById('customers').path,
   },
-  {
-    id: 'shop',
-    label: '商城',
-    icon: icons.cart,
-    items: [
-      { href: routeById('orders').path, label: routeById('orders').label, icon: icons.receipt },
-      { href: routeById('products').path, label: routeById('products').label, icon: icons.box },
-      { href: routeById('categories').path, label: routeById('categories').label, icon: icons.tag },
-      { href: routeById('shipping').path, label: routeById('shipping').label, icon: icons.truck },
-    ],
-  },
-  { id: 'customers', label: routeById('customers').label, icon: icons.people, href: routeById('customers').path },
-  {
-    id: 'tools',
-    label: '工具',
-    icon: icons.wrench,
-    items: [
-      { href: routeById('ibon').path, label: routeById('ibon').label, icon: icons.printer },
-      { href: routeById('card').path, label: routeById('card').label, icon: icons.link },
-    ],
-  },
+  { id: 'tools', label: GROUP_LABELS.tools!, icon: icons.wrench, items: itemsOf('tools') },
 ]
 
 /** Which navigation row or group owns a page. */
