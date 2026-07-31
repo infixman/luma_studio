@@ -949,3 +949,27 @@ body.admin .ui-tabs {
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
+
+/* A fixed box rather than the image's own size: the rows are a list to scan,
+   and a column that changes width per thumbnail is not scannable. */
+body.admin .video-thumb {
+  display: block;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+}
+
+body.admin .video-thumb-empty {
+  border: 1px dashed var(--border);
+}
+
+/* The preview fills the dialog. Capped by height as well, or a portrait upload
+   pushes the dialog past the bottom of the window. */
+body.admin .video-preview {
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
+  border-radius: var(--radius-sm);
+}

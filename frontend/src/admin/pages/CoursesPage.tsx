@@ -95,7 +95,7 @@ export function CoursesPage() {
 
   return (
     <AdminShell current="/courses" message={message} onError={showError}>
-      <Panel title="線上課程">
+      <Panel title="所有課程">
         <p class="muted">
           課程只負責「教什麼」，售價與方案在商品那邊設定。課程要先發布，包含它的銷售方案才能上架。
         </p>

@@ -20,7 +20,7 @@ export interface AdminRoute {
   id: AdminRouteId
   path: string
   label: string
-  group: 'site' | 'shop' | 'customers' | 'tools' | null
+  group: 'site' | 'course' | 'shop' | 'customers' | 'tools' | null
 }
 
 export const ADMIN_ROUTES: readonly AdminRoute[] = [
@@ -30,20 +30,21 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
   { id: 'products', path: '/products', label: '商品', group: 'shop' },
   { id: 'categories', path: '/categories', label: '商品分類', group: 'shop' },
   { id: 'inventory', path: '/inventory', label: '庫存品', group: 'shop' },
-  { id: 'courses', path: '/courses', label: '線上課程', group: 'shop' },
-  // Beside the courses rather than under tools: it is the other half of building
-  // one, and the tool that fills it is already listed separately.
-  { id: 'videos', path: '/videos', label: '影片庫', group: 'shop' },
-  // Its own page rather than a panel on the library: the library is about one
-  // video at a time, and this is about the bill.
-  { id: 'storage', path: '/storage', label: '影片儲存空間', group: 'shop' },
+  // Their own group rather than four rows inside 商城. Making a course is a
+  // different job from selling one — different day, different person — and the
+  // four pages here are used together and almost never with the shop's.
+  { id: 'courses', path: '/courses', label: '課程', group: 'course' },
+  { id: 'videos', path: '/videos', label: '影片', group: 'course' },
+  { id: 'storage', path: '/storage', label: '儲存空間', group: 'course' },
   { id: 'shipping', path: '/shipping', label: '運費', group: 'shop' },
   { id: 'pages', path: '/pages', label: '頁面', group: 'site' },
   { id: 'site', path: '/site', label: '頁首/頁尾', group: 'site' },
   { id: 'media', path: '/media', label: '媒體庫', group: 'site' },
   { id: 'orders', path: '/orders', label: '訂單', group: 'shop' },
   { id: 'customers', path: '/customers', label: '會員', group: 'customers' },
-  { id: 'desktopTool', path: '/desktop-tool', label: '桌面上傳工具', group: 'tools' },
+  // With the course pages, not with ibon and the business card: it is how a
+  // video gets into the library, which is the job the group above is.
+  { id: 'desktopTool', path: '/desktop-tool', label: '桌面工具', group: 'course' },
 ]
 
 const dynamic = [

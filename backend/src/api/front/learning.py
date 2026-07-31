@@ -13,31 +13,10 @@ did all of the above. The token's life is the bound on how stale that decision
 can be.
 """
 
-from domain import entitlements, learning, playback, video
-from shared.common import env_var, utc_timestamp
+from api import media_gateway
+from domain import entitlements, learning
+from shared.common import utc_timestamp
 from shared.responses import Ctx
-
-
-# The cookie is scoped to the media path and marked HttpOnly, so a shared
-# manifest URL carries none of it and page scripts cannot read it.
-COOKIE_NAME = "luma_playback"
-
-# What is worth keeping at the edge. These are immutable: a re-encode is a new
-# version and therefore a new key, so a hit is always the right bytes.
-#
-# Playlists are left out on purpose. They are what a player re-reads, and a
-# switched encode version has to be picked up without waiting out a TTL.
-CACHEABLE_SUFFIXES = (".m4s", ".mp4", ".webp")
-
-
-def is_cacheable(object_path: str) -> bool:
-    return object_path.endswith(CACHEABLE_SUFFIXES)
-
-
-def _secrets(env) -> tuple[str, str | None]:
-    """The signing key, and the one being rotated out if there is one."""
-
-    return env_var(env, "PLAYBACK_SECRET"), env_var(env, "PLAYBACK_SECRET_PREVIOUS") or None
 
 
 def _refusal(ctx: Ctx, reason: str):
@@ -69,10 +48,11 @@ async def course_response(ctx: Ctx, customer: dict, slug: str):
 async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: str):
     """Check once, then hand out a token that says exactly what it opens."""
 
-    secret, _ = _secrets(ctx.env)
+    # Asked before the entitlement work rather than left to the mint below:
+    # starting somebody's viewing window and then refusing to issue the token
+    # would spend a day of their access on a lesson they never saw.
+    secret, _ = media_gateway.signing_secrets(ctx.env)
     if not secret:
-        # Without a key nothing can be signed, and issuing an unsigned token
-        # would be worse than refusing.
         return ctx.error("播放服務尚未設定", 503)
 
     decision = await learning.playable(
@@ -93,7 +73,8 @@ async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: 
             now=now,
         )
 
-    token = playback.issue(
+    return media_gateway.session_response(
+        ctx,
         {
             "customerId": customer["id"] if customer else None,
             "courseId": decision["courseId"],
@@ -102,18 +83,9 @@ async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: 
             "encodeVersion": decision["encodeVersion"],
             "scope": decision["scope"],
         },
-        secret=secret,
+        asset_id=decision["assetId"],
+        encode_version=decision["encodeVersion"],
         now=now,
-    )
-    path_prefix = f"/course-media/{decision['assetId']}/{decision['encodeVersion']}/"
-    return ctx.json(
-        {"playbackUrl": f"{path_prefix}master.m3u8", "expiresAt": now + playback.DEFAULT_TTL},
-        extra_headers={
-            "Set-Cookie": (
-                f"{COOKIE_NAME}={token}; Path={path_prefix}; Max-Age={playback.DEFAULT_TTL};"
-                " Secure; HttpOnly; SameSite=Lax"
-            )
-        },
     )
 
 
@@ -146,133 +118,9 @@ async def progress_response(ctx: Ctx, customer: dict, lesson_id: str):
     return ctx.json({"saved": True})
 
 
-def _cookie_token(request) -> str:
-    raw = request.headers.get("Cookie") or ""
-    for part in raw.split(";"):
-        name, _, value = part.strip().partition("=")
-        if name == COOKIE_NAME:
-            return value
-    return ""
-
-
-async def media_response(ctx: Ctx, path: str):
-    """Serve one HLS object, if the caller's token says it may.
-
-    No database call. That is the whole point of the token: this runs
-    hundreds of times per lesson, and the check it replaces already happened
-    when the session was created.
-    """
-
-    parts = path.split("/", 2)
-    if len(parts) != 3:
-        return ctx.error("Not found", 404)
-    asset_id, raw_version, object_path = parts
-
-    if not video.allowed_object(object_path):
-        return ctx.error("Not found", 404)
-    try:
-        encode_version = int(raw_version)
-        # Built through the key helper, which validates both parts. The id here
-        # arrives in the URL, and a key assembled from it by hand was correct
-        # only because R2 treats a key as a literal string rather than a path.
-        key = f"{video.encode_prefix(asset_id, encode_version)}{object_path}"
-    except ValueError:
-        return ctx.error("Not found", 404)
-
-    secret, previous = _secrets(ctx.env)
-    claim = playback.verify(_cookie_token(ctx.request), secret=secret, now=utc_timestamp(), previous_secret=previous)
-    if not playback.covers(claim, asset_id=asset_id, encode_version=encode_version):
-        # One answer for expired, forged, missing and for-something-else. The
-        # difference is useful in a log and useful to an attacker.
-        return ctx.error("Forbidden", 403)
-
-    # Only after the token has been checked. A cached object that could be
-    # served without one would mean the first member to watch a lesson opened
-    # it for everybody — the cache key deliberately carries no identity, which
-    # is what makes it shareable and also what makes the order matter.
-    cached = await _cached(ctx, key) if is_cacheable(object_path) else None
-    if cached is not None:
-        return ctx.binary(cached, _media_headers(object_path))
-
-    stored = await ctx.env.COURSE_VIDEO.get(key)
-    if stored is None:
-        return ctx.error("Not found", 404)
-
-    body = bytes((await stored.arrayBuffer()).to_py())
-    if is_cacheable(object_path):
-        await _remember(ctx, key, body, object_path)
-    return ctx.binary(body, _media_headers(object_path))
-
-
-def _cache_url(key: str) -> str:
-    """A stable, identity-free URL to key the cache on.
-
-    Not the request URL: that would work, but tying the entry to the incoming
-    path means a change to the route invalidates a cache full of bytes that
-    have not changed.
-    """
-
-    return f"https://course-media.internal/{key}"
-
-
-async def _cached(ctx: Ctx, key: str) -> bytes | None:
-    """Whatever the edge already has, or None.
-
-    Every failure is None. A cache that is unavailable, or a runtime without
-    one, must not stop somebody watching a lesson.
-    """
-
-    try:
-        from js import Request, caches
-
-        hit = await caches.default.match(Request.new(_cache_url(key)))
-        if hit is None:
-            return None
-        return bytes((await hit.arrayBuffer()).to_py())
-    except Exception:
-        return None
-
-
-async def _remember(ctx: Ctx, key: str, body: bytes, object_path: str) -> None:
-    """Put an object in the shared cache, or carry on without."""
-
-    try:
-        from js import Request, Response, caches
-        from pyodide.ffi import to_js
-
-        headers = _media_headers(object_path)
-        await caches.default.put(
-            Request.new(_cache_url(key)),
-            Response.new(to_js(body), headers=to_js(headers, dict_converter=__import__("js").Object.fromEntries)),
-        )
-    except Exception:
-        # Failing to cache is not failing to serve.
-        pass
-
-
-def _media_headers(object_path: str) -> dict:
-    """Content type and caching, decided by what the pipeline writes.
-
-    Segments are immutable — a new encode is a new version and therefore a new
-    URL — so they can be cached hard. A playlist is cached briefly: it is the
-    thing a player re-reads, and the short window is what lets a switched
-    encode version be picked up without waiting out a long TTL.
-    """
-
-    if object_path.endswith(".m3u8"):
-        return {"Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "private, max-age=60"}
-    if object_path.endswith(".webp"):
-        return {"Content-Type": "image/webp", "Cache-Control": "private, max-age=3600"}
-    if object_path.endswith(".mp4") or object_path.endswith(".m4s"):
-        return {"Content-Type": "video/mp4", "Cache-Control": "private, max-age=31536000, immutable"}
-    return {"Content-Type": "application/octet-stream", "Cache-Control": "private, no-store"}
-
-
 __all__ = [
-    "COOKIE_NAME",
-    "media_response",
+    "course_response",
     "my_courses_response",
     "playback_session_response",
     "progress_response",
-    "video",
 ]

@@ -39,6 +39,11 @@ const stroke = {
    is inside them is left doing the telling-apart at 18px. */
 
 const icons = {
+  cap: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
+      <path d="M12 4 2 9l10 5 10-5-10-5zM6 11.5V16c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4.5" />
+    </svg>
+  ),
   overview: (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...stroke}>
       <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
@@ -211,6 +216,7 @@ const ICONS: Record<AdminRouteId, JSX.Element> = {
 
 const GROUP_LABELS: Record<string, string> = {
   site: '官網',
+  course: '線上課程',
   shop: '商城',
   tools: '工具',
 }
@@ -242,6 +248,9 @@ export const groups: NavGroup[] = [
     href: routeById('dashboard').path,
   },
   { id: 'site', label: GROUP_LABELS.site!, icon: icons.globe, items: itemsOf('site') },
+  // Above 商城: a course is made before it is sold, and the making is where
+  // somebody spends an afternoon.
+  { id: 'course', label: GROUP_LABELS.course!, icon: icons.cap, items: itemsOf('course') },
   { id: 'shop', label: GROUP_LABELS.shop!, icon: icons.cart, items: itemsOf('shop') },
   {
     id: 'customers',

@@ -100,6 +100,19 @@ export function canAbort(asset: VideoAsset): boolean {
 }
 
 /**
+ * Whether there is anything to watch.
+ *
+ * Beside `canArchive` for the same reason it exists: the server answers 409
+ * when there is no active encode, so offering the action would produce nothing
+ * but an error. An archived asset keeps its version and is deliberately still
+ * previewable — being able to look at what was retired is the point of keeping
+ * the objects around until the sweep takes them.
+ */
+export function canPreview(asset: VideoAsset): boolean {
+  return asset.encodeVersion !== null
+}
+
+/**
  * Why this video will not play, if that is where it is.
  *
  * Only for a failed asset. Reaching `ready` clears the recorded error on the

@@ -2117,3 +2117,80 @@ updateAvailable），不是一份要自己解讀的政策。兩份「我是不�
 CI 的工作流程寫好了（手動觸發、Windows runner、`latest.yml` 最後上傳），但要你在 GitHub
 設 `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID` 才會動。而「在實際機器上裝一次、
 更新一次」需要你的機器 —— 自動更新只能靠「發 1.0.0 再發 1.0.1」驗證。
+
+## 後台看得到影片，也放得出來（縮圖 + 預覽）
+
+上線前的清單裡有一項「把輸出播一次，當作轉檔品質驗收」。這件事沒有別的辦法確認：
+物件都在、manifest 也 parse 得過，畫面爛掉也是這個結果。
+
+### 為什麼不是簽一張 URL 給後台
+
+原本影片庫刻意沒有縮圖，理由寫在檔頭：對私有 bucket 簽一張 URL，等於發出一張比它
+所在的那個頁面活得更久的通行證，而那是為了裝飾。
+
+改法不是取消那個理由，而是換一條路：縮圖的位元組從 Worker 出去（`/api/video-assets/
+{id}/poster`），權限是後台的 session，什麼都沒有被交出去。播放則直接用會員在用的那個
+gateway，token 一樣只開一支影片的一版、一樣會過期。新的不是「多一個入口」，是「多一種
+session 可以換到 token」。
+
+### 一個 module，兩個 Worker
+
+`media_response` 本來住在 `api/front/learning.py`。後台也要回答 `/course-media/` 之後，
+把它抽成 `api/media_gateway.py` —— 同一個問題（這張 token 蓋不蓋得住這個物件）在兩個
+Worker 各寫一份，就是同一件關於私有 bucket 的事要對兩次。
+
+管理 Worker 上這條路由放在登入閘門「之前」。token 本身就是憑證，而一堂課是好幾百個
+segment 請求，每一個都去查 session 比它保護的東西還貴。
+
+### 抽壞了，而且全部測試都是綠的
+
+`_secrets` 搬去 `media_gateway` 之後，`learning.py` 還在呼叫它 —— 每一個會員按下播放
+都會 `NameError`，變成 500。三個審查 agent 全部指到同一行。
+
+真正的問題不是那一行，是**那條路由從來沒有測試**：gateway（驗 token 的那半）有測試，
+發 token 的那半沒有。所以先補測試，看它紅在正確的地方，再修。順手把「URL 形狀、
+expiresAt、cookie」三件必須跟 `media_response` 對得起來的事收進 `session_response`，
+兩個 Worker 都從那裡回答。
+
+### 順手抓到的：會員那邊的播放其實一直是壞的
+
+伺服器回的 `playbackUrl` 是相對路徑。前台把它原封不動交給播放器，於是它相對「頁面的
+origin」解析 —— 而 luma-studio.tw 上不認得的路徑會被 storefront Worker 回一份 SPA
+的 HTML。播放器拿到一份 HTML 當 manifest，安靜地死掉。cookie 也不會送過去（它是設在
+api 那台、Path 綁死在 /course-media/…）。
+
+補了 `LearnPage` 的第一個測試就是釘這件事。後台那邊同理，只是要指向管理 API 那台，
+所以 `urls.ts` 多了 `ownApiUrl`：`apiUrl` 是公開 API，兩個 build 的值不一樣。
+
+### 快取一年的東西，網址裡要有版本
+
+縮圖回 `private, max-age=31536000, immutable`，理由是「重新轉檔會換版本、換 key」。
+key 會換，**網址不會** —— `/poster` 沒有版本。所以前端補上 `?v={encodeVersion}`，
+不然重新轉檔之後那張一年前的圖沒有任何辦法失效。
+
+### 縮圖壞掉不要留給瀏覽器畫
+
+`poster_key` 是「可以比證據活得久」的欄位（re-import 沒有 poster 時 `COALESCE` 會留住
+舊值）。所以 `hasPoster` 只決定要不要去看，真正送出去的一律是現用版本自己的物件，
+沒有就 404。前端 `onError` 換回灰盒子 —— 瀏覽器的破圖 icon 看起來像整頁壞掉。
+
+### 播放失敗要講話
+
+hls.js 放棄的時候是安靜的，而狀態列已經說了「已取得播放權限」—— 那句沒有錯，錯的是
+後來放不出來。所以 dialog 裡的播放器接了 `onError`。
+
+### 選單：線上課程獨立成一組
+
+課程／影片／儲存空間／桌面工具本來塞在「商城」底下。做一門課跟賣一門課是兩件事、
+常常也不是同一天做的，所以它們自成一組「線上課程」，放在商城上面。
+
+側邊欄的清單本來是手寫的（這就是為什麼「影片庫」做完之後在畫面上找不到），現在從
+`ADMIN_ROUTES` 推導，並且有測試盯著：有 group 的路由一定會出現在側邊欄。順帶把
+`AdminShell` 的 h1 跟選單名字對齊 —— 同一個畫面在兩個地方叫不同名字，就是找不到它的
+開始。
+
+### 還需要你做的一件事
+
+管理 Worker 要有自己的 `PLAYBACK_SECRET`。secret 是綁 Worker 的，公開 Worker 那把不會
+自動出現在這裡；沒有它，預覽會回 503（這是刻意的：發一張沒簽章的 token 更糟）。兩把
+不需要一樣 —— 後台的 token 是後台自己發、自己驗的。

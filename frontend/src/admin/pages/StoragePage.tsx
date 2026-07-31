@@ -215,7 +215,7 @@ export function StoragePage() {
     <AdminShell current="/storage" message={message} onError={showError}>
       {dialog}
 
-      <Panel title="影片儲存空間">
+      <Panel title="空間用量">
         <nav class="ui-tabs" role="tablist" aria-label="影片儲存空間">
           {TABS.map((entry) => (
             <Button

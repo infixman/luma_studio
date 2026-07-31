@@ -489,6 +489,11 @@ uv --directory backend run pywrangler secret put GOOGLE_OAUTH_REDIRECT_URI -c wr
 uv --directory backend run pywrangler secret put R2_ACCESS_KEY_ID -c wrangler.admin.toml
 uv --directory backend run pywrangler secret put R2_SECRET_ACCESS_KEY -c wrangler.admin.toml
 
+# 後台預覽轉檔結果時，用的是跟會員同一套播放 token。secret 是綁 Worker 的，公開
+# Worker 那一把不會出現在這裡，缺它預覽會回 503。兩把不需要一樣：後台的 token
+# 由後台自己簽、自己驗。
+uv --directory backend run pywrangler secret put PLAYBACK_SECRET -c wrangler.admin.toml
+
 # 桌面工具配對碼的來源。每個管理者的 TOTP seed 是這個值和他的 email 導出的，
 # 所以**沒有任何 seed 存在資料庫裡** —— 不用遷移、不用「只顯示一次」、
 # D1 被 dump 也拿不到東西。換掉這個值就等於一次撤銷所有已配對的機器。

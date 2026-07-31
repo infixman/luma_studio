@@ -8,11 +8,13 @@ a fact it does not own, and is rejected rather than ignored. Ignoring it would
 let the client keep believing it had been obeyed.
 """
 
+from api import media_gateway
 from domain import (
     cleanup,
     courses,
     inventory,
     offers,
+    playback,
     shop,
     source_upload,
     storage_report,
@@ -21,8 +23,8 @@ from domain import (
     video_storage,
 )
 from shared import flags, r2_s3, sanitize
-from shared.common import validate_choice, validate_text
-from shared.responses import Ctx
+from shared.common import CACHE_PRIVATE_VERSIONED, env_var, validate_choice, validate_text
+from shared.responses import Ctx, serve_r2_object
 
 
 # Fields the server derives. Present in a request, they are a caller trying to
@@ -496,6 +498,54 @@ async def handle(ctx: Ctx):
 
         if action == "references" and method == "GET":
             return ctx.json({"lessons": await video.lessons_using(env, asset_id)})
+
+        if action == "poster" and method == "GET":
+            # Through the Worker rather than as a signed URL. A URL for a private
+            # object is a capability that outlives the page it was put on, and a
+            # thumbnail is not worth minting one for.
+            #
+            # `hasPoster` is the row's claim and the row is allowed to outlive
+            # its evidence — a re-import without a poster keeps the old
+            # `poster_key` — so it decides only whether to look. What is served
+            # is always the active version's own object, or a 404.
+            if not asset["hasPoster"] or asset["encodeVersion"] is None:
+                return ctx.error("Not found", 404)
+            return await serve_r2_object(
+                ctx,
+                env.COURSE_VIDEO,
+                video.poster_key(asset_id, asset["encodeVersion"]),
+                {".webp": "image/webp"},
+                CACHE_PRIVATE_VERSIONED,
+            )
+
+        if action == "playback-preview" and method == "POST":
+            # The pre-launch list wants the output played once, as quality
+            # acceptance. Nothing else can tell you the ladder is right: the
+            # objects all exist and the manifest parses whether or not the
+            # picture is a mess.
+            #
+            # The same gateway members use, through the same kind of token —
+            # one asset, one encode version, short-lived. What is new is who may
+            # be issued one, not what one opens.
+            if asset["encodeVersion"] is None:
+                return ctx.error("這支影片還沒有可播放的版本", 409)
+            return media_gateway.session_response(
+                ctx,
+                {
+                    # No customer, course or lesson behind this one. The shape is
+                    # kept so both kinds of claim read the same, and `scope` is
+                    # what says which kind it is.
+                    "customerId": None,
+                    "courseId": None,
+                    "lessonId": None,
+                    "assetId": asset_id,
+                    "encodeVersion": asset["encodeVersion"],
+                    "scope": "admin",
+                },
+                asset_id=asset_id,
+                encode_version=asset["encodeVersion"],
+                now=video.utc_timestamp(),
+            )
 
         # The original file's own upload. A pending multipart upload is state R2
         # holds for us — parts already sent are billed and invisible in a listing

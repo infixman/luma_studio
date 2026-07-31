@@ -48,12 +48,33 @@ vi.mock('../../shared/api', async (importOriginal) => {
     apiJson: vi.fn(async (path: string, method: string, body: unknown) => {
       posted.push({ path, method, body })
       if (archiveFailure) throw new actual.ApiError(archiveFailure.message, archiveFailure.status, {})
+      if (path.endsWith('/playback-preview')) {
+        return { playbackUrl: '/course-media/asset-1/1/master.m3u8', expiresAt: 1_700_000_900 }
+      }
       return { asset: assets[0] }
     }),
   }
 })
 
 vi.mock('../lib/session', () => ({ signedInEmail: () => 'owner@example.com' }))
+
+// The player itself is not what these tests are about, and the real one pulls
+// hls.js into happy-dom and then sets `src` from inside it — where the URL this
+// page chose is no longer visible. A stub keeps that URL assertable.
+let breakThePlayer: (() => void) | null = null
+
+vi.mock('../../shared/components/HlsVideo', () => ({
+  HlsVideo: ({ src, onError }: { src: string; onError?: () => void }) => {
+    breakThePlayer = onError ?? null
+    return <video data-src={src} />
+  },
+}))
+
+/** What a fatal hls.js error does, without hls.js. */
+function failThePlayer(): void {
+  if (!breakThePlayer) throw new Error('no player is mounted')
+  breakThePlayer()
+}
 
 import { VideoLibraryPage } from './VideoLibraryPage'
 
@@ -375,4 +396,101 @@ test('a session that has gone stops the refresh at once', async () => {
   await flush()
 
   expect(listCalls).toBe(afterFirstFailure)
+})
+
+test('a video with a poster shows it, through the worker rather than a signed URL', async () => {
+  /** A signed URL is a capability that outlives the page it was put on, and a
+   *  thumbnail is not worth minting one for. */
+  assets = [aVideoAsset()]
+
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  const thumbnail = container.querySelector('table img')
+  expect(thumbnail?.getAttribute('src')).toContain('/api/video-assets/asset-1/poster')
+  expect(thumbnail?.getAttribute('src')).not.toContain('X-Amz-Signature')
+})
+
+test('a video with no poster is not given a broken image', async () => {
+  /** An <img> at a 404 draws the browser's own broken-image icon, which reads
+   *  as a page that is failing rather than an encode without a thumbnail. */
+  assets = [aVideoAsset({ hasPoster: false })]
+
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  expect(container.querySelector('table img')).toBeNull()
+})
+
+test('previewing plays the version the server hands back', async () => {
+  /** The whole point of the preview is to see the actual output, so playing
+   *  anything other than what the server named would defeat it. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+  buttonFor('預覽')?.click()
+  await flush()
+
+  expect(posted).toEqual([
+    { path: '/api/video-assets/asset-1/playback-preview', method: 'POST', body: {} },
+  ])
+  expect(container.querySelector('video')?.getAttribute('data-src')).toContain(
+    '/course-media/asset-1/1/master.m3u8',
+  )
+})
+
+test('a video with nothing playable is not offered a preview', async () => {
+  /** A player pointed at a missing manifest looks like a broken video, and the
+   *  server refuses anyway — offering the action only produces an error. */
+  assets = [aVideoAsset({ status: 'processing', encodeVersion: null, hasPoster: false })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+
+  expect(buttonFor('預覽')).toBeUndefined()
+})
+
+test('a thumbnail whose object has gone falls back to the empty box', async () => {
+  /** The row's claim can outlive its evidence — a re-import without a poster
+   *  keeps the old flag — and the browser's broken-image icon reads as a page
+   *  that is failing rather than an encode without a thumbnail. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  container.querySelector('table img')?.dispatchEvent(new Event('error'))
+  await flush()
+
+  expect(container.querySelector('table img')).toBeNull()
+  expect(container.querySelector('.video-thumb-empty')).not.toBeNull()
+})
+
+test('the thumbnail URL names the encode version it belongs to', async () => {
+  /** It is cached for a year. Without the version in the URL, a re-encode
+   *  leaves the old picture in place with no way to revalidate it. */
+  assets = [aVideoAsset({ encodeVersion: 3 })]
+
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  expect(container.querySelector('table img')?.getAttribute('src')).toContain('v=3')
+})
+
+test('a preview that will not play says so', async () => {
+  /** hls.js gives up quietly, and the status bar has already reported that the
+   *  permission was granted — which it was. What failed is the playing. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openRowMenu()
+  buttonFor('預覽')?.click()
+  await flush()
+
+  failThePlayer()
+  await flush()
+
+  expect(container.querySelector('[role="dialog"]')?.textContent).toContain('播放失敗')
 })

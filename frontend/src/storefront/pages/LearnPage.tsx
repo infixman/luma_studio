@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { HlsVideo } from '../components/HlsVideo'
-import { api, apiJson } from '../../shared/api'
+import { HlsVideo } from '../../shared/components/HlsVideo'
+import { api, apiJson, apiUrl } from '../../shared/api'
 import { renewDelay, requestSession, shouldSaveProgress, worthRetrying } from '../lib/playback'
 import type { PlaybackRefusal } from '../../shared/types'
 import '../styles/shop.css'
@@ -146,7 +146,7 @@ export function LearnPage({ slug }: { slug: string }) {
 
               {playbackUrl && (
                 <HlsVideo
-                  src={playbackUrl}
+                  src={apiUrl(playbackUrl)}
                   onPosition={(seconds) => record(seconds, false)}
                   onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
                   onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}

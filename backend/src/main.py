@@ -8,6 +8,7 @@ route selection, authentication boundaries, and Worker lifecycle hooks.
 
 import auth_customer
 from domain import bio_link, customer_activity, media, orders, pages, shipping, shop, site_chrome
+from api import media_gateway
 from api.front import learning as learning_api
 from api.front import routes as front_api
 import mail
@@ -140,7 +141,7 @@ async def dispatch(ctx: Ctx):
     # signed token rather than a session, and runs hundreds of times per
     # lesson. A database lookup here would cost more than it protects.
     if path.startswith("/course-media/") and method == "GET":
-        return await learning_api.media_response(ctx, path.removeprefix("/course-media/"))
+        return await media_gateway.media_response(ctx, path.removeprefix("/course-media/"))
 
     if path == "/api/cart/validate" and method == "POST":
         if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "shop"):

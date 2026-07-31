@@ -195,6 +195,120 @@ class TestProgress:
         assert "COALESCE(course_lesson_progress.completed_at" in statement
 
 
+class TestStartingALesson:
+    """The route that hands out the token everything else depends on.
+
+    It had no test at all until the byte-serving was split into its own module
+    and this route was left calling a helper that had moved — a `NameError` on
+    every member pressing play, with the whole suite green. The gateway half was
+    covered; the half that mints what the gateway checks was not.
+    """
+
+    @pytest.fixture
+    def call(self):
+        import main
+        from shared import migrations
+
+        def run(database, **extra):
+            migrations._applied_names = None
+            worker = main.Default()
+            worker.env = make_env(database, **extra)
+            from conftest import FakeRequest, STOREFRONT_ORIGIN
+
+            return asyncio.run(
+                worker.fetch(
+                    FakeRequest(
+                        "/api/learning/lessons/lesson-1/playback-session",
+                        "POST",
+                        {
+                            "Origin": STOREFRONT_ORIGIN,
+                            "x-luma-app": "1",
+                            "Cookie": "luma_customer_session=" + "a" * 40,
+                        },
+                    )
+                )
+            )
+
+        return run
+
+    def _database(self) -> FakeDatabase:
+        member = TestReachingALesson()._database()
+        member.answers["FROM customer_sessions s JOIN customers c"] = [
+            {
+                "id": "cust-1", "google_sub": "g-1", "email": "a@example.com",
+                "display_name": "王小明", "default_recipient_name": "王小明",
+                "default_recipient_phone": "0912345678", "default_address": "台北市",
+                "blocked": 0, "account_blocked": 0, "anonymized_at": None,
+                "created_at": 0, "updated_at": 0,
+            }
+        ]
+        return member
+
+    def test_a_member_who_owns_the_course_is_told_where_to_point_the_player(self, call):
+        response = call(self._database(), PLAYBACK_SECRET="a-signing-key")
+
+        assert response.status == 200
+        assert response.json()["playbackUrl"] == "/course-media/asset-1/1/master.m3u8"
+        assert "Path=/course-media/asset-1/1/" in response.headers["set-cookie"]
+
+    def test_it_says_when_the_session_runs_out(self, call):
+        """The page renews on this. An expiry already in the past is a page
+        that renews in a loop; one too far out is a player refused mid-lesson
+        with nothing scheduled to fix it."""
+
+        from domain import playback
+        from shared.common import utc_timestamp
+
+        response = call(self._database(), PLAYBACK_SECRET="a-signing-key")
+
+        # A second of slack: the timestamp is taken inside the request.
+        assert abs(response.json()["expiresAt"] - (utc_timestamp() + playback.DEFAULT_TTL)) <= 1
+
+    def test_the_cookie_it_hands_back_opens_that_lesson(self, call):
+        """The two halves pass separately while naming different things, which
+        would be a session that mints a perfectly good token and then refuses
+        it. Only using one proves they agree."""
+
+        import main
+        from conftest import FakeRequest, STOREFRONT_ORIGIN
+        from shared import migrations
+
+        minted = call(self._database(), PLAYBACK_SECRET="a-signing-key")
+        cookie = minted.headers["set-cookie"].split(";")[0]
+
+        class Bucket:
+            def __init__(self):
+                self.asked: list[str] = []
+
+            async def get(self, key):
+                self.asked.append(key)
+                return None
+
+        bucket = Bucket()
+        migrations._applied_names = None
+        worker = main.Default()
+        worker.env = make_env(
+            self._database(), PLAYBACK_SECRET="a-signing-key", COURSE_VIDEO=bucket
+        )
+        played = asyncio.run(
+            worker.fetch(
+                FakeRequest(
+                    "/course-media/asset-1/1/master.m3u8",
+                    "GET",
+                    {"Origin": STOREFRONT_ORIGIN, "x-luma-app": "1", "Cookie": cookie},
+                )
+            )
+        )
+
+        # 404 because the fake bucket holds nothing; what matters is that the
+        # token got past the gateway to be told so.
+        assert played.status == 404
+        assert bucket.asked == ["videos/asset-1/1/master.m3u8"]
+
+    def test_a_worker_with_no_signing_key_refuses_rather_than_issuing_an_unsigned_token(self, call):
+        assert call(self._database()).status == 503
+
+
 class TestGatewayRoutes:
     """The gateway trusts a signed cookie and nothing else."""
 
@@ -257,8 +371,6 @@ class TestGatewayRoutes:
         hit serve a lesson to everybody. Nothing may be read before the token.
         """
 
-        from api.front import learning as module
-
         looked_up: list[str] = []
 
         class RecordingBucket:
@@ -270,7 +382,12 @@ class TestGatewayRoutes:
             looked_up.append(f"cache:{key}")
             return None
 
-        monkeypatch.setattr(module, "_cached", _never)
+        # The byte-serving lives in `api.media_gateway` now: two Workers answer
+        # this route, and one copy of "does this token cover this object" is the
+        # point of the module.
+        from api import media_gateway
+
+        monkeypatch.setattr(media_gateway, "_cached", _never)
 
         response = call(
             self._request("/course-media/asset-1/1/720p/segment-000001.m4s"),
@@ -467,7 +584,7 @@ class TestMediaCaching:
     """
 
     def test_a_segment_is_read_from_the_cache_before_r2(self, monkeypatch):
-        from api.front import learning as module
+        from api import media_gateway as module
 
         assert module.CACHEABLE_SUFFIXES == (".m4s", ".mp4", ".webp")
 
@@ -475,13 +592,13 @@ class TestMediaCaching:
         """It is what a player re-reads, and a switched encode version has to
         be picked up without waiting out a long TTL."""
 
-        from api.front import learning as module
+        from api import media_gateway
 
-        assert not module.is_cacheable("master.m3u8")
-        assert not module.is_cacheable("720p/playlist.m3u8")
+        assert not media_gateway.is_cacheable("master.m3u8")
+        assert not media_gateway.is_cacheable("720p/playlist.m3u8")
 
     def test_a_segment_is(self):
-        from api.front import learning as module
+        from api import media_gateway
 
-        assert module.is_cacheable("720p/segment-000001.m4s") is True
-        assert module.is_cacheable("720p/init.mp4") is True
+        assert media_gateway.is_cacheable("720p/segment-000001.m4s") is True
+        assert media_gateway.is_cacheable("720p/init.mp4") is True

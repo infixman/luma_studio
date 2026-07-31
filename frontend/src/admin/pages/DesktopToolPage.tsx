@@ -228,7 +228,7 @@ export function DesktopToolPage() {
   }, [pairing, unconfigured, load])
 
   return (
-    <AdminShell current="/desktop-tool" title="桌面上傳工具" message={message} onError={showError}>
+    <AdminShell current="/desktop-tool" message={message} onError={showError}>
       <Panel title="配對驗證碼">
         {unconfigured ? (
           <p class="muted">

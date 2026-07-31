@@ -7,15 +7,25 @@ import {
   DataTable,
   EmptyState,
   MenuItem,
+  Modal,
   Panel,
   Spinner,
   useConfirm,
 } from '../components/ui'
 import type { Column } from '../components/ui'
-import { ApiError, api, apiJson } from '../../shared/api'
+import { ApiError, api, apiJson, ownApiUrl } from '../../shared/api'
 import { dateTime } from '../../shared/dates'
 import { fileSize } from '../lib/bytes'
-import { canAbort, canArchive, runtime, videoFailure, videoStatusLabel, videoStatusTone } from '../lib/videoFacts'
+import {
+  canAbort,
+  canArchive,
+  canPreview,
+  runtime,
+  videoFailure,
+  videoStatusLabel,
+  videoStatusTone,
+} from '../lib/videoFacts'
+import { HlsVideo } from '../../shared/components/HlsVideo'
 import type { VideoAsset } from '../../shared/types'
 import '../styles/shop-admin.css'
 
@@ -51,13 +61,22 @@ const MAX_POLL_FAILURES = 3
  * seconds. Instead it gives up after a few tries and says so in the panel,
  * where it stays put.
  *
- * No thumbnails, though the assets have posters. Showing one means signing a URL
- * for a private bucket, and the playback gateway signs URLs for members watching
- * a lesson they bought — pointing it at the back office is a second entrance to
- * the same objects for a decoration.
+ * The thumbnails come through the Worker rather than from a signed URL. A URL for
+ * a private object is a capability that outlives the page it was put on, and a
+ * thumbnail is not worth minting one for.
+ *
+ * Playing one is the same gateway members use, with a token this page asks for.
+ * Not a second way into the bucket: the token names one asset and one encode
+ * version, expires, and is the only way past the gateway either way. What is new
+ * is who may be issued one — and the reason to allow it is that nothing else can
+ * tell you a transcode came out right. Every object exists and the manifest
+ * parses whether or not the picture is a mess.
  */
 export function VideoLibraryPage() {
   const [assets, setAssets] = useState<VideoAsset[] | null>(null)
+  const [watching, setWatching] = useState<{ asset: VideoAsset; url: string } | null>(null)
+  const [playerFailed, setPlayerFailed] = useState(false)
+  const [missingPosters, setMissingPosters] = useState<Set<string>>(new Set())
   const [stalled, setStalled] = useState(false)
   const { message, showError, run } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -187,7 +206,47 @@ export function VideoLibraryPage() {
     await load()
   }
 
+  async function preview(asset: VideoAsset) {
+    // The cookie comes back on this response and is scoped to the objects it
+    // opens, so the player needs nothing but the URL.
+    await run(async () => {
+      const session = await apiJson<{ playbackUrl: string }>(
+        `/api/video-assets/${encodeURIComponent(asset.id)}/playback-preview`,
+        'POST',
+        {},
+      )
+      setPlayerFailed(false)
+      setWatching({ asset, url: session.playbackUrl })
+    }, '已取得播放權限。')
+  }
+
   const columns: Column<VideoAsset>[] = [
+    {
+      key: 'poster',
+      label: '',
+      render: (asset) =>
+        asset.hasPoster && !missingPosters.has(asset.id) ? (
+          <img
+            class="video-thumb"
+            // The version is in the URL so the answer can be cached for a year:
+            // a re-encode is a new version, and without it a year-old thumbnail
+            // would outlive the video it describes.
+            src={ownApiUrl(
+              `/api/video-assets/${encodeURIComponent(asset.id)}/poster?v=${asset.encodeVersion}`,
+            )}
+            alt=""
+            loading="lazy"
+            // The row's claim can outlive the object: a re-import without a
+            // poster keeps the old flag. Falling back to the empty box beats the
+            // browser's broken-image icon, which reads as a page that is failing.
+            onError={() => setMissingPosters((known) => new Set(known).add(asset.id))}
+          />
+        ) : (
+          // A grey box rather than nothing: the column stays the same width, and
+          // "no thumbnail" is a fact about the encode worth seeing at a glance.
+          <span class="video-thumb video-thumb-empty" aria-hidden="true" />
+        ),
+    },
     {
       key: 'title',
       label: '影片',
@@ -231,7 +290,7 @@ export function VideoLibraryPage() {
     <AdminShell current="/videos" message={message} onError={showError}>
       {dialog}
 
-      <Panel title="影片庫">
+      <Panel title="所有影片">
         <p class="muted">
           影片由桌面上傳工具轉檔並上傳，這裡看得到結果。列表每三秒自動更新，所以轉檔中的影片會自己變成可播放。
         </p>
@@ -249,6 +308,9 @@ export function VideoLibraryPage() {
             rowKey={(asset) => asset.id}
             menu={(asset) => (
               <>
+                {canPreview(asset) ? (
+                  <MenuItem onClick={() => void preview(asset)}>預覽播放</MenuItem>
+                ) : null}
                 {canArchive(asset) ? (
                   <MenuItem tone="danger" onClick={() => void retire(asset, 'archive')}>
                     封存
@@ -270,6 +332,32 @@ export function VideoLibraryPage() {
           />
         )}
       </Panel>
+
+      <Modal
+        title={watching ? `預覽：${watching.asset.title || '未命名'}` : ''}
+        open={watching !== null}
+        onClose={() => setWatching(null)}
+        width="lg"
+      >
+        {watching ? (
+          <>
+            <HlsVideo
+              src={ownApiUrl(watching.url)}
+              class="video-preview"
+              // Otherwise a failure is a black rectangle: hls.js gives up
+              // quietly, and the status bar has already said the permission was
+              // granted — which it was. What failed is the playing.
+              onError={() => setPlayerFailed(true)}
+            />
+            {playerFailed ? (
+              <p class="muted">播放失敗。通行證會過期，關掉再開一次就會重新取得。</p>
+            ) : null}
+            <p class="muted">
+              這是轉檔品質的驗收，不是會員入口 —— 這張通行證只開這一支影片的這一版，而且很快就失效。
+            </p>
+          </>
+        ) : null}
+      </Modal>
     </AdminShell>
   )
 }

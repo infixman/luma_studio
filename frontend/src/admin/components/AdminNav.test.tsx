@@ -4,9 +4,11 @@
  * The sidebar, and the one thing it has to be: complete.
  *
  * It used to carry its own list of pages, written out by hand beside the routing
- * table. Five pages ended up reachable only by typing their URL — 線上課程,
- * 庫存品, 影片庫, 影片儲存空間 and 桌面上傳工具 — because adding a route and adding
- * a link were two separate acts and nothing noticed when only one happened.
+ * table. Five of them ended up reachable only by typing their URL, because
+ * adding a route and adding a link were two separate acts and nothing noticed
+ * when only one happened. The names are deliberately not repeated here: they
+ * live in the routing table, and a test that copies them is the same mistake
+ * one level down.
  *
  * So the list is derived, and this is the test that says so. A page that belongs
  * to a group and is not in the sidebar is a page nobody can find.

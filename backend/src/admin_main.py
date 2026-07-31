@@ -14,6 +14,7 @@ This Worker owns the D1 schema. See `router.serve`.
 
 from workers import WorkerEntrypoint
 
+from api import media_gateway
 from api.admin import routes as admin_api
 from api.admin import bio_link as bio_link_api
 from api.admin import catalogue as catalogue_admin_api
@@ -67,6 +68,15 @@ async def dispatch(ctx: Ctx):
     # allowlist — see `desktop_release.release_key`.
     if path.startswith("/releases/") and method == "GET":
         return await desktop_admin_api.serve_release(ctx, path[len("/releases/") :])
+
+    # The same gateway the storefront serves members from, answered here for an
+    # admin previewing an encode. Before the session gate on purpose, and for the
+    # reason the token exists at all: a lesson is hundreds of segment requests,
+    # and checking a session in D1 on each of them is the cost this design was
+    # built to avoid. The playback cookie is the credential, it names one asset
+    # and one encode version, and minting one still requires an admin session.
+    if path.startswith("/course-media/") and method == "GET":
+        return await media_gateway.media_response(ctx, path.removeprefix("/course-media/"))
 
     # Past this line every route is administration, so the check happens once.
     #

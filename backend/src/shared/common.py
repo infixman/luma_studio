@@ -28,6 +28,11 @@ OAUTH_STATE_TTL_SECONDS = 10 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
 CACHE_1H = "public, max-age=3600"
 CACHE_1D = "public, max-age=86400"
+# For an object only the signed-in admin may see, at a URL that carries the
+# encode version. Private because a shared cache holding it would be holding
+# something from a bucket that is not public; immutable because a re-encode
+# changes the version and therefore the URL.
+CACHE_PRIVATE_VERSIONED = "private, max-age=31536000, immutable"
 ALLOWED_ADMIN_EMAILS = frozenset({"chiao7912@gmail.com", "infixman@gmail.com"})
 DEFAULT_PRINT_SELECT_TYPE = "FA4CN1"
 PRESET_PRINT_SELECT_TYPES = frozenset(

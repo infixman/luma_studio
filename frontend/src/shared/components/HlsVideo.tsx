@@ -15,11 +15,14 @@ import { useEffect, useRef } from 'preact/hooks'
  */
 export function HlsVideo({
   src,
+  class: className = 'learn-video',
   onError,
   onPosition,
   onEnded,
 }: {
   src: string
+  /** Named by the caller: the storefront and the back office style it apart. */
+  class?: string
   onError?: () => void
   /** Called as playback proceeds, throttled by the caller, not here. */
   onPosition?: (seconds: number) => void
@@ -74,7 +77,7 @@ export function HlsVideo({
   return (
     <video
       ref={video}
-      class="learn-video"
+      class={className}
       controls
       crossOrigin="use-credentials"
       onTimeUpdate={(event) => onPosition?.(Math.floor((event.currentTarget as HTMLVideoElement).currentTime))}

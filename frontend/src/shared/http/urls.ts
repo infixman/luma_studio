@@ -26,6 +26,19 @@ export function apiUrl(path: string): string {
   return `${PUBLIC_API_BASE}${path}`
 }
 
+/**
+ * A path on whichever API this build talks to.
+ *
+ * Separate from `apiUrl` because the back office is served by a different
+ * Worker on a different host, and a path that needs the admin session has to go
+ * to the one holding it. On the storefront build the two are the same origin;
+ * on the admin build they are not, and getting it wrong means a request that
+ * arrives without credentials.
+ */
+export function ownApiUrl(path: string): string {
+  return `${API_BASE}${path}`
+}
+
 export function bioLinkRedirectUrl(itemId: string): string {
   return `${PUBLIC_API_BASE}/r/${encodeURIComponent(itemId)}`
 }
