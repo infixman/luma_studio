@@ -223,3 +223,28 @@ test('picking a cover shows that picture rather than waiting for a save', async 
     '/media-assets/picked.webp',
   )
 })
+
+test('publishing is refused while there are unsaved edits, and says why', async () => {
+  /** Publishing reads the server. With unsaved edits it publishes the last
+   *  saved version — and refuses on fields the author has already filled in,
+   *  which is how "請填寫課程簡介" appeared next to a filled-in 課程簡介. The
+   *  block editor's publish button has disabled itself on this rule for as long
+   *  as it has existed; this page never learned it. */
+  course = aCourse({ status: 'draft', summary: '' })
+
+  render(<CourseEditPage id="c1" />, container)
+  await settle()
+
+  const summary = [...container.querySelectorAll('label')]
+    .find((label) => (label.textContent ?? '').includes('課程簡介'))
+    ?.parentElement?.querySelector('input') as HTMLInputElement
+  summary.value = '來畫夜光海浪'
+  summary.dispatchEvent(new Event('input', { bubbles: true }))
+  await settle()
+
+  const publish = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (element) => element.textContent?.trim() === '發布',
+  )
+  expect(publish?.disabled).toBe(true)
+  expect(publish?.title).toContain('儲存')
+})

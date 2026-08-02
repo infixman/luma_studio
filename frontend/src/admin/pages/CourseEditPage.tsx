@@ -171,7 +171,18 @@ export function CourseEditPage({ id }: { id: string }) {
         <>
           <Badge tone={STATUS_TONES[course.status]}>{STATUS_LABELS[course.status]}</Badge>
           {dirty && <span class="muted">未儲存</span>}
-          <Button size="sm" busy={busy} onClick={() => void publish()}>
+          {/* Publishing reads the server, so unsaved edits would go live as
+              whatever was last saved — and would be judged on that too: a
+              summary typed but not saved is refused as missing, next to the box
+              it was typed into. The block editor's publish button has worked
+              this way since it existed. */}
+          <Button
+            size="sm"
+            busy={busy}
+            disabled={dirty}
+            title={dirty ? '先儲存，發布看的是伺服器上的版本' : undefined}
+            onClick={() => void publish()}
+          >
             發布
           </Button>
           <Button type="submit" form="course-form" size="sm" tone="primary" busy={busy} disabled={!dirty}>
