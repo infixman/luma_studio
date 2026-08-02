@@ -17,6 +17,11 @@ import { type Plugin, defineConfig, loadEnv } from 'vite'
  *   static.cloudflareinsights.com — Cloudflare injects its analytics beacon
  *     into pages on this zone.
  */
+/** The distinct origins among these, in the order given. */
+function origins(...values: string[]): string {
+  return [...new Set(values)].join(' ')
+}
+
 export function contentSecurityPolicy(
   apiOrigin: string,
   imageOrigin: string,
@@ -26,10 +31,18 @@ export function contentSecurityPolicy(
     "default-src 'self'",
     "script-src 'self' https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline'",
-    // Product photos and bio-link avatars are served by the public API for
-    // both sites, so this one does not vary.
-    `img-src 'self' ${imageOrigin} data:`,
+    // Product photos and bio-link avatars come from the public API on both
+    // sites; the back office also draws video thumbnails through its own
+    // Worker, because a signed URL for a private object is a capability that
+    // outlives the page it was put on. `origins` collapses the two when they
+    // are the same host, which is the storefront's case.
+    `img-src ${origins("'self'", imageOrigin, apiOrigin)} data:`,
     `connect-src 'self' ${apiOrigin} https://static.cloudflareinsights.com`,
+    // Lessons. hls.js feeds the video element through MSE, whose object URLs
+    // are `blob:`; Safari plays the manifest URL itself, which is on the API
+    // host. Neither is covered by default-src, and the failure is a black
+    // rectangle — the player reports nothing a viewer can read.
+    `media-src 'self' ${apiOrigin} blob:`,
     "font-src 'self'",
     // Only the back office frames anything, and only the storefront's preview
     // route. Without this the admin's own default-src refuses the iframe —

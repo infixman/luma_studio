@@ -40,6 +40,28 @@ describe('content security policy', () => {
     }
   })
 
+  it('lets each site show images served by its own API', () => {
+    /** The back office draws video thumbnails through the admin Worker, because
+     *  a signed URL for a private object is a capability that outlives the page
+     *  it was put on. Without this the browser blocks the request before it is
+     *  made, and the page shows the fallback for "this encode has no poster" —
+     *  a wrong answer that looks like a right one. */
+    expect(directive(contentSecurityPolicy(ADMIN_API, PUBLIC_API), 'img-src')).toContain(ADMIN_API)
+  })
+
+  it('lets the player play what the gateway serves', () => {
+    /** Two separate needs. hls.js feeds the video element through MSE, whose
+     *  object URLs are `blob:`; Safari plays the manifest URL directly, which
+     *  is on the API host. Neither is covered by default-src 'self', and the
+     *  failure is a black rectangle with nothing in the console but a CSP
+     *  line nobody was looking at. */
+    for (const api of [PUBLIC_API, ADMIN_API]) {
+      const media = directive(contentSecurityPolicy(api, PUBLIC_API), 'media-src')
+      expect(media).toContain(api)
+      expect(media).toContain('blob:')
+    }
+  })
+
   it('keeps the directives that have no reason to vary', () => {
     const policy = contentSecurityPolicy(ADMIN_API, PUBLIC_API)
     expect(policy).toContain("object-src 'none'")
