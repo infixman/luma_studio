@@ -261,3 +261,13 @@ test('saving sends what the form says, not what was loaded', async () => {
     },
   ])
 })
+
+test('the copy is HTML, not markdown source', async () => {
+  /** `**所有**` renders as four asterisks on screen. Nothing in this page is
+   *  run through a markdown renderer — a paragraph written as if it were is a
+   *  page that looks unfinished. */
+  render(<DesktopToolPage />, container)
+  await settle()
+
+  expect(container.textContent).not.toContain('**')
+})

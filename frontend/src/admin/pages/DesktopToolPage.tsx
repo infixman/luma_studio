@@ -72,7 +72,7 @@ function VersionPolicyPanel({ onError }: { onError: (error: unknown) => void }) 
   return (
     <Panel title="版本政策">
       <p class="muted">
-        比「最低支援版本」舊的工具會停止上傳並要求更新。「停用」則是**所有**版本立刻停下來 ——
+        比「最低支援版本」舊的工具會停止上傳並要求更新。「停用」則是<strong>所有</strong>版本立刻停下來 ——
         那是給一個發壞了的版本用的，不必等每一台機器自己更新。
       </p>
 

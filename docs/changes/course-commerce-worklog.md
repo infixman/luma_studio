@@ -2254,3 +2254,45 @@ regex 只有一份（Python 那份），設定從另一邊讀進來。改名字�
 
 為此在 backend 的 dev 相依加了 pyyaml。它不會進 Worker 的執行環境，而這兩條規則檢查的
 正是「各自都對、合起來錯」那一類 —— 跟隔壁那個讀 `electron-builder.yml` 檢查檔名的測試同一種。
+
+## 五分鐘的排程，一整天沒跑過
+
+追一個「按下去就 500」的按鈕時，順著 Cloudflare 的日誌看到另一件更嚴重的事：公開 Worker
+的 cron 每五分鐘失敗一次，整天。
+
+```
+"*/5 * * * *" - Exception Thrown
+TypeError: Default.scheduled() takes 2 positional arguments but 4 were given
+```
+
+執行環境現在用 `scheduled(event, env, ctx)` 呼叫；我們的簽章寫的是 `(self, event)`，
+所以**在函式第一行之前就死掉**。沒有任何畫面會顯示這件事，代價是三件沒發生的事：未付款
+訂單沒過期、過期 session 沒清、以及最貴的那個 —— **待寄的信一封都沒送出去**。
+
+測試是照平台的方式呼叫它：四個位置參數。寫完之後它紅得跟正式環境一模一樣，這是這個測試
+唯一有意義的寫法 —— 用我們自己的方式呼叫，它永遠是綠的。
+
+順帶記一個更一般的教訓：**「沒有人回報問題」不等於「沒有問題」**。這個東西壞了整天，
+唯一的痕跡是一小時十二根紅柱，在一個沒事不會有人打開的儀表板上。
+
+## 管理 Worker 的並發，被一個卡住的請求毒死
+
+原始症狀是桌面工具按「確認檔案在儲存空間」回 `Unexpected Worker failure`。日誌說的是
+另一回事：
+
+```
+RuntimeError: Cannot enter into task <PyodideTask ... coro=<wrapper_func() running at introspection.py:76>>
+while another task <PyodideTask ... coro=<wrapper_func() running at introspection.py:88>> is being executed.
+The Workers runtime canceled this request because it detected that your Worker's code had hung.
+```
+
+兩個 task 都是 SDK 自己的請求包裝器。已經確定的：
+
+- **SDK 能並發** —— 重新部署換掉所有 isolate 之後，24 個並發請求 0 錯誤。
+- **一個永遠不結束的 task 會毒死整個 isolate** —— 生產環境那個 `Task-4` 卡了至少五分鐘，
+  期間每個並發請求都被 runtime 取消。
+- `/api/session` 是受害者不是兇手：它只有一行 `ctx.json`，不可能卡住。
+
+兇手的 URL **不會出現在日誌裡**，因為它從來沒有完成。所以寫了 `scripts/preview-probe.py`：
+用命令列把整個預覽流程跑兩遍、每一步計時，卡住的那一步會自己說出名字。第二遍特別重要 ——
+它走的是共享快取，而那段程式碼今天才第一次在正式環境真的被執行（先前播放被 CSP 擋著）。

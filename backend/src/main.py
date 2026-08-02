@@ -254,7 +254,17 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await router.serve(self.env, request, dispatch, owns_schema=False)
 
-    async def scheduled(self, event):
+    async def scheduled(self, event, env=None, ctx=None):
+        """The five-minute job.
+
+        `env` and `ctx` are accepted and unused: the runtime passes the event,
+        the environment and the execution context positionally, and a handler
+        that took only the event died with a `TypeError` before its first line —
+        every five minutes, for a day, while nothing on screen said so. The
+        environment is read from `self` as it always was, so this stays right
+        whichever way it is called.
+        """
+
         await orders.expire_unpaid(self.env)
         await mail.send_pending(self.env)
         await auth_customer.purge_expired(self.env)
