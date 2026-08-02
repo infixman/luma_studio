@@ -16,16 +16,19 @@ name: Release desktop tool
 #
 # The tag names the component as well as the version — `desktop-v0.1.0` — since
 # the backend and the two sites live in this repository too, and `v0.1.0` alone
-# would not say what it is a version of.
+# would not say what it is a version of. It is also where the version *comes
+# from*: the tag is stamped into package.json here, and the committed value is
+# `0.0.0` on purpose. A number kept in the file is a number somebody has to
+# remember to change, and the day it is not changed the release is named after
+# one version and ships another.
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'For the summary only. desktop/package.json is the source of truth.'
-        required: false
-        default: ''
+        description: 'The version to publish, e.g. 0.1.0. Required for a manual run.'
+        required: true
 
 concurrency:
   group: luma-desktop-release
@@ -58,29 +61,38 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
-      # The tag is what a person will quote; package.json is what ends up in the
-      # installer's name and in `latest.yml`. When they disagree the release is
-      # named after a version nobody can download, and nothing downstream would
-      # ever notice — the updater compares against `latest.yml`, not the tag.
-      - name: Check the tag against package.json
-        if: github.event_name == 'release'
-        working-directory: desktop
+      # One place decides the version, and it is the thing a person actually
+      # typed. Refused rather than defaulted when it does not look like a
+      # version: `desktop-latest` would otherwise publish an installer called
+      # `latest`, which `latest.yml` would then point at for ever.
+      - name: Work out the version
         shell: bash
         run: |
           set -euo pipefail
-          tagged="${TAG#desktop-v}"
-          packaged="$(node -p "require('./package.json').version")"
-          if [ "$tagged" != "$packaged" ]; then
-            echo "::error::release $TAG would publish $packaged. Set desktop/package.json to $tagged, or retag."
+          version="${TAG#desktop-v}"
+          version="${version:-$MANUAL}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$version' is not a version. Tag a release desktop-vX.Y.Z."
             exit 1
           fi
-          echo "publishing $packaged"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "publishing $version"
         env:
           TAG: ${{ github.event.release.tag_name }}
+          MANUAL: ${{ inputs.version }}
 
       - name: Install
         working-directory: desktop
         run: npm ci
+
+      # After `npm ci`, which checks package.json against the lockfile and would
+      # refuse a version the lockfile has never seen. Before everything else,
+      # because this is the number that names the installer, goes into
+      # `latest.yml`, and comes back from `app.getVersion()` on the installed
+      # machine — the value the version policy is compared against.
+      - name: Stamp the version in
+        working-directory: desktop
+        run: npm pkg set version="$VERSION"
 
       # The same command a person runs locally: typecheck, tests, bundle, and the
       # smoke test that starts a real Electron and calls across the bridge. A
@@ -131,7 +143,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### 已發佈"
+            echo "### 已發佈 $VERSION"
             echo
             ls dist/*.exe dist/latest.yml 2>/dev/null | sed 's/^/- /'
             echo

@@ -1155,9 +1155,15 @@ Actions 會在 Windows runner 上跑完整的 `npm run build`（typecheck、測�
 `latest.yml` **最後**上傳：在它指向新安裝檔之前沒有人會知道有更新，反過來則是讓大家去
 下載一個還沒傳完的檔案。
 
-`desktop/package.json` 的 `version` 是唯一的真相來源 —— 安裝檔的檔名和 `latest.yml`
-都從它來。workflow 會比對 tag 與它，不一致就直接失敗：否則 release 會叫一個沒有人
-下載得到的版本，而下游沒有任何東西會發現（更新程式比對的是 `latest.yml`，不是 tag）。
+**版本只寫在 tag 上。** `desktop/package.json` 裡的 `0.0.0` 是佔位符，workflow 會把 tag
+的版本壓進去再打包。留在檔案裡的版本是一個要有人記得改的數字，而沒改的那天，release
+會叫一個版本、送出另一個版本，下游沒有任何東西會發現 —— 更新程式比對的是 `latest.yml`。
+手動觸發時要自己填版本，格式不對（例如 `desktop-latest`）會直接失敗而不是猜一個。
+
+安裝檔的名字也是釘死的（`electron-builder.yml` 的 `artifactName`）。electron-builder
+預設會產生 `Luma Video Uploader Setup 0.1.0.exe` —— 有空格，而 `/releases/{檔名}` 的
+白名單只收 `[A-Za-z0-9._-]`，等於傳上去一個永遠 404 的檔案，而 `latest.yml` 正好指著它。
+`test_desktop_release.py` 會讀那個設定檔來檢查，改名字就會紅。
 
 上傳完**還沒有人拿得到**。到後台 → 線上課程 → 桌面工具 → 版本政策把「最新版本」改成
 這一版；要讓舊版停下來才把「最低支援版本」也提上去，而且只能在安裝檔真的下載得到之後。

@@ -12,6 +12,8 @@ that it is out of date.
 
 import asyncio
 
+import pathlib
+
 import pytest
 
 from conftest import FakeDatabase, make_env
@@ -179,6 +181,32 @@ class TestTheReleaseFileNames:
     )
     def test_what_an_updater_asks_for_is_allowed(self, release, file):
         assert release.release_key(file) == f"releases/{file}"
+
+    def test_the_name_the_build_actually_produces_is_allowed(self, release):
+        """The two halves of this are written in different languages, in
+        different directories, by people thinking about different things — and
+        each is correct on its own. electron-builder's default artifact name is
+        `${productName} Setup ${version}.exe`, which has spaces in it; this
+        allowlist has never accepted a space. The result was an installer
+        uploaded to a key the Worker answers 404 for, named by a `latest.yml`
+        that pointed straight at it.
+
+        Read from the packaging config rather than repeated here, so the day
+        somebody renames the installer this fails instead of production.
+        """
+
+        import re
+
+        config = (
+            pathlib.Path(__file__).resolve().parents[2] / "desktop" / "electron-builder.yml"
+        ).read_text(encoding="utf8")
+        template = re.search(r"^\s*artifactName:\s*(\S+)\s*$", config, re.MULTILINE)
+        assert template, "electron-builder has no artifactName, so it will use its own"
+
+        name = template.group(1).replace("${version}", "1.2.0").replace("${ext}", "exe")
+
+        assert release.release_key(name) == f"releases/{name}"
+        assert release.release_key(f"{name}.blockmap") == f"releases/{name}.blockmap"
 
     @pytest.mark.parametrize(
         "file",

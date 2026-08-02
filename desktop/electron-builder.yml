@@ -32,6 +32,12 @@ win:
         - x64
 
 nsis:
+  # Named by hand because the default is `${productName} Setup ${version}.exe`,
+  # which contains spaces — and the route that serves it accepts
+  # `[A-Za-z0-9._-]` only, so the default name is a file the Worker will always
+  # answer 404 for. `latest.yml` points at whatever this produces, so the
+  # updater would ask for exactly the name that cannot be served.
+  artifactName: luma-video-uploader-${version}-setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   # Per-user, so installing needs no administrator prompt. The tool writes only

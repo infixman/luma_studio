@@ -2220,3 +2220,20 @@ typecheck 過、打包也過。只有 smoke test（真的啟動一次 Electron�
 
 如果先送出 release 才發現，拿到的會是一個紅色的 job；如果 smoke test 不存在，拿到的會是
 一個裝得起來、打不開的工具。
+
+### 版本改成從 tag 壓進去，順便發現安裝檔的名字是壞的
+
+`package.json` 的版本改成 `0.0.0` 佔位，由 workflow 從 tag 壓進去。理由跟原本那個「比對
+tag 與 package.json」的檢查是同一個，只是更徹底：留在檔案裡的數字是要有人記得改的數字。
+
+真正的收穫是在本機**實際打包一次**才看到的：electron-builder 的預設檔名是
+`Luma Video Uploader Setup 0.1.0.exe`，**有空格**，而 `/releases/{檔名}` 的白名單從來只收
+`[A-Za-z0-9._-]`。兩邊各自都是對的：白名單擋路徑穿越、預設檔名對人類友善。合起來是一個
+上傳成功、但 Worker 永遠回 404 的安裝檔，而 `latest.yml` 正好指著它 —— 更新程式會去要
+那個唯一要不到的名字。
+
+而且測試檔裡早就寫著 `luma-video-uploader-1.2.0-setup.exe`，那是一個當時沒有任何東西
+會產生的名字。測試在驗一個假設，不是在驗行為。
+
+修法是在 `electron-builder.yml` 釘死 `artifactName`，並讓後端的測試**去讀那個 yml**：
+regex 只有一份（Python 那份），設定從另一邊讀進來。改名字就會紅。
