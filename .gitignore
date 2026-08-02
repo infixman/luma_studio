@@ -14,3 +14,7 @@ upload_ibon/
 
 # Agent worktrees, created per task and removed with them.
 .claude/worktrees/
+# Where `npx skills add` links the skills it installed. The skill itself is
+# versioned under .agents/; this is a per-machine link, and on a checkout with
+# core.symlinks off git records it as a second copy of the same file.
+.claude/skills/
