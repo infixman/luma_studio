@@ -965,9 +965,11 @@
   stroke: none;
 }
 
+/* Against the viewport, not the trigger: as an absolutely-positioned child it
+   was clipped by the table's own `overflow-x`, which cut the last column's menu
+   in half. The component measures the trigger and sets top/right. */
 .ui-menu {
-  position: absolute;
-  top: calc(100% + var(--space-1));
+  position: fixed;
   z-index: 30;
   min-width: 12rem;
   padding: var(--space-1);

@@ -494,3 +494,33 @@ test('a preview that will not play says so', async () => {
 
   expect(container.querySelector('[role="dialog"]')?.textContent).toContain('播放失敗')
 })
+
+test('clicking the thumbnail plays it, without going through the menu', async () => {
+  /** The picture of a video is the thing a hand goes to. Making it decoration
+   *  and putting the action two clicks away behind ⋯ is the back office being
+   *  arranged for the people who wrote it. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  const play = container.querySelector<HTMLElement>('table img')?.closest('button')
+  // Named, because a list of a dozen rows is otherwise a list of a dozen
+  // buttons all called the same thing.
+  expect(play?.getAttribute('aria-label')).toBe('預覽播放 第一課：工具介紹')
+
+  play?.click()
+  await flush()
+
+  expect(posted.map((call) => call.path)).toEqual(['/api/video-assets/asset-1/playback-preview'])
+  expect(container.querySelector('video')).not.toBeNull()
+})
+
+test('a thumbnail with nothing playable behind it is not a button', async () => {
+  /** Nothing happens on click, and a control that does nothing reads as broken.
+   *  Same rule as the menu item. */
+  assets = [aVideoAsset({ status: 'processing', encodeVersion: null })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  expect(container.querySelector('table img')?.closest('button')).toBeFalsy()
+})

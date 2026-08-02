@@ -965,6 +965,47 @@ body.admin .video-thumb-empty {
   border: 1px dashed var(--border);
 }
 
+/* The thumbnail is the play button. The mark only appears under the pointer or
+   a focus ring: on a list of a dozen rows, a play triangle on every one is a
+   dozen things asking to be pressed. */
+body.admin .video-thumb-play {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+body.admin .video-thumb-play:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+body.admin .video-thumb-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 35%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+body.admin .video-thumb-play:hover .video-thumb-mark,
+body.admin .video-thumb-play:focus-visible .video-thumb-mark {
+  opacity: 1;
+}
+
+body.admin .video-thumb-mark svg {
+  width: 22px;
+  height: 22px;
+  fill: #fff;
+}
+
 /* The preview fills the dialog. Capped by height as well, or a portrait upload
    pushes the dialog past the bottom of the window. */
 body.admin .video-preview {

@@ -224,8 +224,14 @@ export function VideoLibraryPage() {
     {
       key: 'poster',
       label: '',
-      render: (asset) =>
-        asset.hasPoster && !missingPosters.has(asset.id) ? (
+      render: (asset) => {
+        const missing = !asset.hasPoster || missingPosters.has(asset.id)
+        // A grey box rather than nothing when there is no picture: the column
+        // stays the same width, and "no thumbnail" is a fact about the encode
+        // worth seeing at a glance.
+        const thumbnail = missing ? (
+          <span class="video-thumb video-thumb-empty" aria-hidden="true" />
+        ) : (
           <img
             class="video-thumb"
             // The version is in the URL so the answer can be cached for a year:
@@ -241,11 +247,29 @@ export function VideoLibraryPage() {
             // browser's broken-image icon, which reads as a page that is failing.
             onError={() => setMissingPosters((known) => new Set(known).add(asset.id))}
           />
+        )
+
+        // The picture of a video is what a hand goes to, so it is the play
+        // button. The menu keeps the same action for the keyboard and for rows
+        // whose thumbnail never arrived.
+        return canPreview(asset) ? (
+          <button
+            type="button"
+            class="video-thumb-play"
+            aria-label={`預覽播放 ${asset.title || '未命名'}`}
+            onClick={() => void preview(asset)}
+          >
+            {thumbnail}
+            <span class="video-thumb-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M8 5.5v13l11-6.5z" />
+              </svg>
+            </span>
+          </button>
         ) : (
-          // A grey box rather than nothing: the column stays the same width, and
-          // "no thumbnail" is a fact about the encode worth seeing at a glance.
-          <span class="video-thumb video-thumb-empty" aria-hidden="true" />
-        ),
+          thumbnail
+        )
+      },
     },
     {
       key: 'title',

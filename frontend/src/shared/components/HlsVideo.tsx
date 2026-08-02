@@ -30,6 +30,13 @@ export function HlsVideo({
 }) {
   const video = useRef<HTMLVideoElement>(null)
 
+  // Through a ref, and not in the dependency list below. Both pages that use
+  // this re-render on a timer and pass freshly-created callbacks each time; as
+  // dependencies they tore the player down and rebuilt it on every tick, which
+  // looks like a video that loads, vanishes, loads, vanishes.
+  const handlers = useRef({ onError, onPosition, onEnded })
+  handlers.current = { onError, onPosition, onEnded }
+
   useEffect(() => {
     const element = video.current
     if (!element) return
@@ -47,7 +54,7 @@ export function HlsVideo({
     void import('hls.js').then(({ default: Hls }) => {
       if (cancelled || !video.current) return
       if (!Hls.isSupported()) {
-        onError?.()
+        handlers.current.onError?.()
         return
       }
       const hls = new Hls({
@@ -62,7 +69,7 @@ export function HlsVideo({
         // Only fatal ones. hls.js recovers from a good deal on its own, and
         // reporting the recoverable ones would show an error over a video
         // that is playing perfectly well.
-        if (data.fatal) onError?.()
+        if (data.fatal) handlers.current.onError?.()
       })
       hls.loadSource(src)
       hls.attachMedia(video.current)
@@ -72,7 +79,7 @@ export function HlsVideo({
       cancelled = true
       instance?.destroy()
     }
-  }, [src, onError])
+  }, [src])
 
   return (
     <video
@@ -80,8 +87,10 @@ export function HlsVideo({
       class={className}
       controls
       crossOrigin="use-credentials"
-      onTimeUpdate={(event) => onPosition?.(Math.floor((event.currentTarget as HTMLVideoElement).currentTime))}
-      onEnded={() => onEnded?.()}
+      onTimeUpdate={(event) =>
+        handlers.current.onPosition?.(Math.floor((event.currentTarget as HTMLVideoElement).currentTime))
+      }
+      onEnded={() => handlers.current.onEnded?.()}
     />
   )
 }
