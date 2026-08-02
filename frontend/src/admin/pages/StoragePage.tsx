@@ -7,7 +7,7 @@ import type { Column } from '../components/ui'
 import { api, apiJson } from '../../shared/api'
 import { dateTime } from '../../shared/dates'
 import { fileSize } from '../lib/bytes'
-import { videoStatusLabel, videoStatusTone } from '../lib/videoFacts'
+import { canAbort, videoStatusLabel, videoStatusTone } from '../lib/videoFacts'
 import type {
   CleanupCandidates,
   StorageOrphan,
@@ -55,6 +55,11 @@ const TABS: { id: Tab; label: string }[] = [
  * afternoon, and the whole value of the confirmation is that it names which of
  * the three this one is.
  */
+/** What names one running action. Two removals differ by asset, not only kind. */
+function busyKey(entry: Removal): string {
+  return `${entry.kind}:${entry.assetId}`
+}
+
 function removalCopy(entry: Removal): {
   summary: string
   label: string
@@ -125,6 +130,11 @@ function removalCopy(entry: Removal): {
  */
 export function StoragePage() {
   const [tab, setTab] = useState<Tab>('overview')
+  // Which action is running, not merely that one is. `busy` from useStatus is
+  // one flag for the page, so binding every button to it made pressing one
+  // removal spin the sweep, the bulk clear and every other removal — four
+  // things claiming to be happening, one of which is.
+  const [running, setRunning] = useState<string | null>(null)
   const [summary, setSummary] = useState<StorageSummary | null>(null)
   const [candidates, setCandidates] = useState<StorageCandidates | null>(null)
   const [sources, setSources] = useState<StorageSource[] | null>(null)
@@ -232,6 +242,7 @@ export function StoragePage() {
   }
 
   async function remove(entry: Removal) {
+    setRunning(busyKey(entry))
     // Named, and with the consequence in the dialog. No select-all exists for
     // this list: every one of these is a different video and a different loss.
     const copy = removalCopy(entry)
@@ -242,10 +253,49 @@ export function StoragePage() {
     })
     if (!confirmed) return
 
-    await run(async () => {
-      await apiJson('/api/video-storage/cleanup', 'POST', { kind: entry.kind, assetId: entry.assetId })
-    }, copy.done)
-    await load()
+    try {
+      await run(async () => {
+        await apiJson('/api/video-storage/cleanup', 'POST', { kind: entry.kind, assetId: entry.assetId })
+      }, copy.done)
+      await load()
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  /** What this row may be offered, in the server's own order of preference.
+   *
+   * A copy of the rule `cleanup.candidates` applies, for the same reason
+   * `canArchive` copies the state table: it decides what to offer, never what
+   * is allowed. The server refuses all three again.
+   */
+  function removalsFor(row: StorageSource): Removal[] {
+    // In use by a lesson: no entry of any kind. Not a warning and not a
+    // disabled button — nothing to consider.
+    if (row.lessons.length > 0) return []
+    if (canAbort(row)) {
+      return [
+        {
+          kind: 'unfinishedUpload',
+          assetId: row.assetId,
+          title: row.title,
+          bytes: row.bytes,
+          consequence: '已經送到 R2 的分段會一起刪掉',
+        },
+      ]
+    }
+    // Mid-transcode: a container may still be writing its objects, so it has to
+    // finish or fail before anybody decides anything.
+    if (row.status === 'processing') return []
+    return [
+      {
+        kind: 'entireVideo',
+        assetId: row.assetId,
+        title: row.title,
+        bytes: row.bytes + row.versionBytes,
+        consequence: '整支影片、所有畫質版本與這筆紀錄都會刪除，無法復原',
+      },
+    ]
   }
 
   const sourceColumns: Column<StorageSource>[] = [
@@ -290,6 +340,29 @@ export function StoragePage() {
         ),
     },
     { key: 'createdAt', label: '上傳時間', render: (row) => dateTime(row.createdAt) },
+    {
+      key: 'remove',
+      label: '',
+      // Beside the row rather than only under 總覽. Somebody looking for the
+      // video they want gone looks at the list of videos, and finding nothing
+      // there reads as "this cannot be deleted".
+      render: (row) => (
+        <>
+          {removalsFor(row).map((entry) => (
+            <Button
+              key={entry.kind}
+              tone="ghost"
+              size="sm"
+              busy={running === busyKey(entry)}
+              disabled={busy && running !== busyKey(entry)}
+              onClick={() => void remove(entry)}
+            >
+              {removalCopy(entry).label}
+            </Button>
+          ))}
+        </>
+      ),
+    },
   ]
 
   return (
@@ -357,7 +430,12 @@ export function StoragePage() {
               </dd>
             </dl>
 
-            <Button tone="ghost" busy={busy} onClick={() => void sweep()}>
+            <Button
+              tone="ghost"
+              busy={running === 'sweep'}
+              disabled={busy && running !== 'sweep'}
+              onClick={() => void sweep()}
+            >
               重新盤點
             </Button>
 
@@ -374,7 +452,12 @@ export function StoragePage() {
                     </li>
                   ))}
                 </ul>
-                <Button tone="danger" busy={busy} onClick={() => void clearSafe()}>
+                <Button
+                  tone="danger"
+                  busy={running === 'clear'}
+                  disabled={busy && running !== 'clear'}
+                  onClick={() => void clearSafe()}
+                >
                   全部清除
                 </Button>
               </>
@@ -395,7 +478,12 @@ export function StoragePage() {
                       {/* No "0 B". These rows are exactly the ones whose objects
                           are already gone, and a size is not why they go. */}
                       {entry.bytes > 0 ? ` ${fileSize(entry.bytes)}` : ''} —— {entry.consequence}
-                      <Button tone="ghost" busy={busy} onClick={() => void remove(entry)}>
+                      <Button
+                        tone="ghost"
+                        busy={running === busyKey(entry)}
+                        disabled={busy && running !== busyKey(entry)}
+                        onClick={() => void remove(entry)}
+                      >
                         {copy.label}
                       </Button>
                     </li>

@@ -23,6 +23,8 @@ let sources: StorageSource[]
 const posted: { path: string; body: unknown }[] = []
 let failing: string | null = null
 let refuseFirstCleanup = false
+/** Set to hold a cleanup request open, so mid-flight state can be looked at. */
+let holdCleanup: (() => void) | null = null
 
 vi.mock('../../shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/api')>()
@@ -41,6 +43,7 @@ vi.mock('../../shared/api', async (importOriginal) => {
       if (refuseFirstCleanup && posted.length === 1) {
         throw new actual.ApiError('這支影片正被單元使用', 409, {})
       }
+      if (holdCleanup) await new Promise<void>((resolve) => (holdCleanup = () => resolve()))
       return {}
     }),
   }
@@ -401,4 +404,126 @@ test('a source in use lists the lessons rather than a count', async () => {
     (element.textContent ?? '').includes('水彩入門'),
   )
   expect(link?.getAttribute('href')).toBe('/courses/c1')
+})
+
+function aSource(overrides: Partial<StorageSource> = {}): StorageSource {
+  return {
+    assetId: 'asset-1',
+    title: '驗證用—可刪除',
+    status: 'ready',
+    bytes: 0,
+    hasPlayableVersion: true,
+    activeEncodeVersion: 1,
+    versionCount: 0,
+    versionBytes: 0,
+    lessons: [],
+    createdAt: 1785292800,
+    ...overrides,
+  }
+}
+
+async function openSources(rows: StorageSource[]): Promise<void> {
+  sources = rows
+  render(<StoragePage />, container)
+  await settle()
+  buttonFor('原始檔')?.click()
+  await flush()
+}
+
+function rowButton(label: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('table button')].find((element) =>
+    (element.textContent ?? '').includes(label),
+  )
+}
+
+test('a video nothing uses can be removed from the list it is listed in', async () => {
+  /** The removals lived only under 總覽 → 要判斷的. Somebody looking for the
+   *  video they want gone looks at the list of videos, and finding nothing
+   *  there reads as "this cannot be deleted". */
+  await openSources([aSource()])
+
+  expect(rowButton('刪除整支影片')).toBeTruthy()
+})
+
+test('a video a lesson plays is offered nothing at all', async () => {
+  /** Not a warning, not a disabled button — no button. The server refuses it
+   *  too; this is about not asking somebody to consider it. */
+  await openSources([
+    aSource({
+      lessons: [{ lessonId: 'l1', lessonTitle: '畫就對了', courseId: 'c1', courseTitle: '夜光海浪' }],
+    }),
+  ])
+
+  expect(rowButton('刪除')).toBeUndefined()
+})
+
+test('an upload that never finished is deleted as the upload it is', async () => {
+  await openSources([aSource({ status: 'uploading', hasPlayableVersion: false, activeEncodeVersion: null })])
+
+  expect(rowButton('刪除這筆上傳')).toBeTruthy()
+  expect(rowButton('刪除整支影片')).toBeUndefined()
+})
+
+test('a video mid-transcode is left alone', async () => {
+  /** A container may still be writing its objects. It has to finish or fail
+   *  before anybody can decide anything about it. */
+  await openSources([aSource({ status: 'processing', hasPlayableVersion: false })])
+
+  expect(rowButton('刪除')).toBeUndefined()
+})
+
+test('deleting from the row asks first, and names the video', async () => {
+  await openSources([aSource()])
+
+  rowButton('刪除整支影片')?.click()
+  await flush()
+
+  expect(container.querySelector('[role="dialog"]')?.textContent).toContain('驗證用—可刪除')
+  expect(posted).toEqual([])
+})
+
+test('confirming from the row deletes the objects and the record', async () => {
+  await openSources([aSource()])
+
+  rowButton('刪除整支影片')?.click()
+  await flush()
+  container.querySelector<HTMLButtonElement>('[role="dialog"] .ui-button.tone-danger')?.click()
+  await flush()
+
+  expect(posted).toEqual([
+    { path: '/api/video-storage/cleanup', body: { kind: 'entireVideo', assetId: 'asset-1' } },
+  ])
+})
+
+test('only the button that was pressed spins', async () => {
+  /** `busy` from useStatus is one flag for the page, so binding every button to
+   *  it made pressing one removal spin the sweep, the bulk clear and every
+   *  other removal — four things claiming to be happening, one of which is. */
+  candidates = {
+    safe: [{ kind: 'orphan', bucket: 'output', keys: 42, bytes: 2_500_000 }],
+    needsJudgement: [
+      { kind: 'entireVideo', assetId: 'asset-1', title: '第一支', bytes: 0, consequence: '整支影片會不見' },
+      { kind: 'entireVideo', assetId: 'asset-2', title: '第二支', bytes: 0, consequence: '整支影片會不見' },
+    ],
+    scannedAt: 1785292800,
+  }
+  render(<StoragePage />, container)
+  await settle()
+
+  const removals = [...container.querySelectorAll<HTMLButtonElement>('button')].filter((element) =>
+    (element.textContent ?? '').includes('刪除整支影片'),
+  )
+  removals[0]?.click()
+  await flush()
+  holdCleanup = () => {}
+  container.querySelector<HTMLButtonElement>('[role="dialog"] .ui-button.tone-danger')?.click()
+  await flush()
+
+  // Mid-flight: the request has been sent and has not come back.
+  expect(removals[0]?.getAttribute('aria-busy')).toBe('true')
+  expect(removals[1]?.getAttribute('aria-busy')).toBeNull()
+
+  holdCleanup?.()
+  holdCleanup = null
+  await flush()
 })

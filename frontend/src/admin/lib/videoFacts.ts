@@ -94,8 +94,12 @@ export function canArchive(asset: VideoAsset): boolean {
  * `aborted`. `processing` does not — a transcode that died leaves a row nothing
  * can retire, which is recorded in task.md rather than papered over with a
  * button that 409s.
+ *
+ * Takes a status rather than a whole asset: the storage page asks the same
+ * question about a row that describes an asset without being one, and the
+ * answer must not differ between the two screens.
  */
-export function canAbort(asset: VideoAsset): boolean {
+export function canAbort(asset: { status: VideoAssetStatus }): boolean {
   return asset.status === 'uploading' || asset.status === 'uploaded' || asset.status === 'queued'
 }
 
