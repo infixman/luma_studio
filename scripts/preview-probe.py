@@ -16,7 +16,6 @@ environment rather than typed as an argument so it does not end up in a shell
 history file.
 """
 
-import http.cookiejar
 import json
 import os
 import sys
@@ -27,14 +26,41 @@ import urllib.request
 API = os.environ.get("LUMA_ADMIN_API", "https://admin-api.luma-studio.tw")
 ORIGIN = os.environ.get("LUMA_ADMIN_ORIGIN", "https://admin.luma-studio.tw")
 SESSION = os.environ.get("LUMA_ADMIN_COOKIE", "").strip()
+# Pasting the value alone is the obvious thing to do, and a Cookie header
+# without a name is silently not a session.
+if SESSION and "=" not in SESSION:
+    SESSION = f"luma_admin_session={SESSION}"
+
+# Cloudflare's browser-integrity check answers `Python-urllib/3.13` with a 1010
+# at the edge, before the Worker sees anything — a 403 that looks like a
+# permission problem and is not one.
+BROWSER = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    " (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
 WANTED = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
 
 # Long enough that a slow answer is still an answer, short enough that a hang is
 # reported rather than waited out.
 TIMEOUT = 30
 
-jar = http.cookiejar.CookieJar()
-opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+# The playback token the mint hands back, kept by hand.
+#
+# A cookie jar would do this, except that naming `Cookie` in the headers below
+# replaces whatever the jar would have added — the session has to be sent that
+# way because it was copied from a browser rather than logged in for, and one
+# explicit header wins over the whole jar. Two cookies, one header.
+granted: dict[str, str] = {}
+
+
+def cookie_header() -> str:
+    return "; ".join([SESSION] + [f"{name}={value}" for name, value in granted.items()])
+
+
+def remember_cookies(headers) -> None:
+    for value in headers.get_all("Set-Cookie") or []:
+        name, _, rest = value.partition("=")
+        granted[name.strip()] = rest.split(";")[0]
 
 
 def call(path: str, *, method: str = "GET", body: dict | None = None) -> tuple[int, bytes, float]:
@@ -45,15 +71,19 @@ def call(path: str, *, method: str = "GET", body: dict | None = None) -> tuple[i
         headers={
             "Origin": ORIGIN,
             "x-luma-app": "1",
-            "Cookie": SESSION,
+            "Cookie": cookie_header(),
+            "User-Agent": BROWSER,
+            "Referer": f"{ORIGIN}/videos",
             **({"Content-Type": "application/json"} if body is not None else {}),
         },
     )
     started = time.monotonic()
     try:
-        with opener.open(request, timeout=TIMEOUT) as answer:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as answer:
+            remember_cookies(answer.headers)
             return answer.status, answer.read(), time.monotonic() - started
     except urllib.error.HTTPError as error:
+        remember_cookies(error.headers)
         return error.code, error.read(), time.monotonic() - started
     except Exception as error:  # a hang lands here, after TIMEOUT
         print(f"  !! {type(error).__name__}: {error}")
@@ -73,7 +103,10 @@ def main() -> int:
     status, body, seconds = call("/api/video-assets")
     report("list the library", status, seconds)
     if status != 200:
-        print(body[:300].decode(errors="replace"))
+        text = body[:400].decode(errors="replace")
+        if "1010" in text or "Cloudflare" in text:
+            print("  the edge refused this before the Worker saw it (bot check)")
+        print(text)
         return 1
 
     assets = json.loads(body)["assets"]

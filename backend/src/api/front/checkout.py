@@ -134,12 +134,32 @@ async def checkout_response(ctx: Ctx, customer: dict):
     )
 
 
+async def _own_order(ctx: Ctx, order_id: str, customer: dict) -> list:
+    """The order, if it belongs to this member.
+
+    The database decides. `orders.order_row` is the member's view of their own
+    order and has never carried a customer id — asking it who owns the order
+    compares against `None`, which is how test payment answered "Order not
+    found" for the very person looking at it.
+
+    404 rather than 403, here and at both call sites: whether an order id
+    exists is not something a stranger should be able to establish by watching
+    which error comes back.
+    """
+
+    return await d1_rows(
+        ctx.env.DB.prepare("SELECT * FROM orders WHERE id = ?1 AND customer_id = ?2").bind(
+            order_id, customer["id"]
+        )
+    )
+
+
 async def order_response(ctx: Ctx, customer: dict, order_id: str):
     try:
         order_id = orders.validate_order_id(order_id)
     except orders.OrderError as error:
         return ctx.error(str(error), 400)
-    rows = await d1_rows(ctx.env.DB.prepare("SELECT * FROM orders WHERE id = ?1 AND customer_id = ?2").bind(order_id, customer["id"]))
+    rows = await _own_order(ctx, order_id, customer)
     if not rows:
         return ctx.error("Order not found", 404)
     order = orders.order_row(rows[0])
@@ -161,8 +181,7 @@ async def fake_payment_response(ctx: Ctx, customer: dict, order_id: str):
         order_id = orders.validate_order_id(order_id)
     except orders.OrderError as error:
         return ctx.error(str(error), 400)
-    order = await orders.get_order(ctx.env, order_id)
-    if order is None or order.get("customerId") != customer["id"]:
+    if not await _own_order(ctx, order_id, customer):
         return ctx.error("Order not found", 404)
     if not await orders.mark_paid(ctx.env, order_id, f"fake-payment:{customer['id']}", detail="no gateway involved"):
         return ctx.error("這筆訂單不在等待付款的狀態", 409)

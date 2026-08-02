@@ -1008,10 +1008,12 @@ body.admin .video-thumb-mark svg {
 
 /* The preview fills the dialog. Capped by height as well, or a portrait upload
    pushes the dialog past the bottom of the window. */
+/* Same rounding seam as the storefront player, same reason for no background:
+   see `.learn-video` in shop.css. */
 body.admin .video-preview {
+  display: block;
   width: 100%;
   max-height: 60vh;
-  background: #000;
   border-radius: var(--radius-sm);
 }
 

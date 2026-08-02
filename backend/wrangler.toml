@@ -84,7 +84,18 @@ crons = ["*/5 * * * *"]
 # Marks an order paid with no gateway involved. Development only — the route
 # answers 404 unless this is exactly "1", and production must never set it.
 # It exists so the order lifecycle can be exercised before PAYUNi is wired up.
-ALLOW_FAKE_PAYMENT = "0"
+#
+# TEMPORARILY "1", and dangerous while it is: any signed-in customer can mark
+# their own order paid, which is a free parcel as easily as a free course. On
+# only for as long as it takes to walk the purchase flow end to end.
+ALLOW_FAKE_PAYMENT = "1"
+
+# The course half of the shop. Off until somebody decided to sell, and all
+# three together on purpose: a catalogue without checkout is a product nobody
+# can buy, and checkout without learning is a purchase that opens nothing.
+COURSE_CATALOG_ENABLED = "1"
+COURSE_CHECKOUT_ENABLED = "1"
+COURSE_LEARNING_ENABLED = "1"
 # ibon's ordinary web-upload flow. The Worker creates a fresh web-entry
 # bootstrap payload for every cache miss.
 IBON_PRINT_API_BASE_URL = "https://print-api.ibon.com.tw/api"

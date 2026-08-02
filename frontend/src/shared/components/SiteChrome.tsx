@@ -190,6 +190,11 @@ export function SiteHeader({
               <details class="account-menu">
                 <summary class="action" aria-label="開啟個人選單">帳戶</summary>
                 <div class="account-popover">
+                  {/* Above the orders: what somebody comes back for is the
+                      course, not the receipt. Buying one used to say 已開通 on
+                      the order and then offer nowhere to go — the page existed
+                      and nothing linked to it. */}
+                  <a href="/account/courses">我的課程</a>
                   <a href="/orders">我的訂單</a>
                   <button
                     type="button"

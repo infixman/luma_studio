@@ -1340,9 +1340,18 @@ main.order .totals {
   gap: 1.5rem;
 }
 
+/* Block, not inline: as a replaced inline element it sits on a text baseline,
+   which adds a gap underneath nobody asked for.
+
+   No painted background. The element's box is a rounded number of pixels and
+   the frame inside it is not, so `object-fit: contain` leaves a sub-pixel seam
+   at one edge — with black behind it that seam is a dark line at 100% zoom and
+   gone at 110%. Letterboxing a portrait video now shows the page colour
+   instead, which is the lesser of the two. */
 .learn-video {
+  display: block;
   width: 100%;
-  background: #000;
+  height: auto;
   border-radius: 0.5rem;
 }
 
