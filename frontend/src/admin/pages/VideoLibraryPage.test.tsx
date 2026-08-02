@@ -60,20 +60,51 @@ vi.mock('../lib/session', () => ({ signedInEmail: () => 'owner@example.com' }))
 
 // The player itself is not what these tests are about, and the real one pulls
 // hls.js into happy-dom and then sets `src` from inside it — where the URL this
-// page chose is no longer visible. A stub keeps that URL assertable.
-let breakThePlayer: (() => void) | null = null
+// page chose is no longer visible. A stub keeps that URL assertable, and lets a
+// test say what hls.js found in the manifest.
+interface PlayerProps {
+  src: string
+  level?: number
+  onError?: () => void
+  onRenditions?: (renditions: { index: number; height: number }[]) => void
+  onPlayingRendition?: (height: number | null) => void
+}
 
-vi.mock('../../shared/components/HlsVideo', () => ({
-  HlsVideo: ({ src, onError }: { src: string; onError?: () => void }) => {
-    breakThePlayer = onError ?? null
-    return <video data-src={src} />
+let mounted: PlayerProps | null = null
+
+// Only the component is replaced. AUTO_LEVEL comes from the module itself, so a
+// stub cannot quietly disagree with it about what "automatic" means.
+vi.mock('../../shared/components/HlsVideo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../shared/components/HlsVideo')>()),
+  HlsVideo: (props: PlayerProps) => {
+    mounted = props
+    return <video data-src={props.src} />
   },
 }))
 
+function thePlayer(): PlayerProps {
+  if (!mounted) throw new Error('no player is mounted')
+  return mounted
+}
+
 /** What a fatal hls.js error does, without hls.js. */
 function failThePlayer(): void {
-  if (!breakThePlayer) throw new Error('no player is mounted')
-  breakThePlayer()
+  thePlayer().onError?.()
+}
+
+/**
+ * What hls.js reports once it has read the master playlist. Lowest first, as
+ * hls.js orders them.
+ */
+async function manifestOffers(...heights: number[]): Promise<void> {
+  thePlayer().onRenditions?.(heights.map((height, index) => ({ index, height })))
+  await flush()
+}
+
+/** What ABR does on its own, and what a manual switch does after it lands. */
+async function nowPlaying(height: number): Promise<void> {
+  thePlayer().onPlayingRendition?.(height)
+  await flush()
 }
 
 import { VideoLibraryPage } from './VideoLibraryPage'
@@ -86,6 +117,7 @@ beforeEach(() => {
   posted.length = 0
   archiveFailure = null
   listFailure = null
+  mounted = null
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
   container = document.createElement('div')
   document.body.append(container)
@@ -130,6 +162,33 @@ async function openRowMenu(): Promise<void> {
 
 function statusText(): string {
   return container.querySelector('#status')?.textContent ?? ''
+}
+
+async function openPreview(): Promise<void> {
+  await openRowMenu()
+  buttonFor('預覽')?.click()
+  await flush()
+}
+
+/** The 畫質 control, or nothing if the page decided not to offer one. */
+function qualityControl(): HTMLFieldSetElement | null {
+  return container.querySelector('[role="dialog"] fieldset')
+}
+
+function qualityChoices(): { label: string; input: HTMLInputElement }[] {
+  return [...(qualityControl()?.querySelectorAll('input[type="radio"]') ?? [])].map((input) => ({
+    input: input as HTMLInputElement,
+    // The label sits beside the input inside the same row.
+    label: (input.parentElement?.textContent ?? '').trim(),
+  }))
+}
+
+async function chooseQuality(label: string): Promise<void> {
+  const choice = qualityChoices().find((option) => option.label === label)
+  if (!choice) throw new Error(`沒有這個畫質選項：${label}`)
+  choice.input.checked = true
+  choice.input.dispatchEvent(new Event('change', { bubbles: true }))
+  await flush()
 }
 
 test('a video is listed with what it is', async () => {
@@ -579,6 +638,98 @@ test('a settled list starts asking again when something new is uploading', async
   await flush()
 
   expect(listCalls).toBe(before + 1)
+})
+
+test('the preview offers the renditions the manifest has, not a ladder written here', async () => {
+  /** The point of the preview is to accept the transcode, and hls.js on its own
+   *  picks whichever rung the connection can afford — so on a fast line a broken
+   *  480p is never seen. The list has to come from the manifest: the ladder is a
+   *  property of the encode, which is the thing being inspected. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openPreview()
+
+  await manifestOffers(480, 720, 1080)
+
+  expect(qualityChoices().map((choice) => choice.label)).toEqual(['自動', '1080p', '720p', '480p'])
+})
+
+test('a manifest with different rungs offers those instead', async () => {
+  /** Same test, said the other way: nothing here knows the ladder is 1080/720/480. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openPreview()
+
+  await manifestOffers(360, 540)
+
+  expect(qualityChoices().map((choice) => choice.label)).toEqual(['自動', '540p', '360p'])
+})
+
+test('choosing a rendition asks the player for that one', async () => {
+  /** By the manifest's own index, not the position in the list on screen — the
+   *  list is shown highest first and the manifest is ordered lowest first, so
+   *  the two disagree about every rung. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openPreview()
+  await manifestOffers(480, 720, 1080)
+
+  await chooseQuality('480p')
+
+  // Bottom of the ladder, and bottom of the list on screen — the two numbers
+  // disagree, which is the point.
+  expect(thePlayer().level).toBe(0)
+})
+
+test('in automatic mode it says which rendition is on screen', async () => {
+  /** Which is the information the acceptance needs: "自動" alone tells the admin
+   *  nothing about the picture they are looking at, and it changes underneath
+   *  them as hls.js switches. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openPreview()
+  await manifestOffers(480, 720, 1080)
+
+  await nowPlaying(480)
+  expect(qualityChoices()[0]?.label).toBe('自動（目前 480p）')
+
+  await nowPlaying(1080)
+  expect(qualityChoices()[0]?.label).toBe('自動（目前 1080p）')
+})
+
+test('where nothing can be switched, no control is offered', async () => {
+  /** Safari plays the manifest itself, hls.js is never loaded, and no rendition
+   *  is ever named. A control there would sit under the video doing nothing,
+   *  which is worse than not having one. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openPreview()
+
+  expect(container.querySelector('[role="dialog"] video')).not.toBeNull()
+  expect(qualityControl()).toBeNull()
+})
+
+test('a second preview does not inherit the first one’s renditions', async () => {
+  /** They belong to the manifest that was open, and the next video's has not
+   *  been read yet — offering the old rungs would be offering indexes into
+   *  something else. */
+  assets = [aVideoAsset()]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  await openPreview()
+  await manifestOffers(480, 720, 1080)
+
+  container.querySelector<HTMLElement>('.ui-backdrop')?.click()
+  await flush()
+  await openPreview()
+
+  expect(qualityControl()).toBeNull()
 })
 
 test('it does not refresh underneath a preview', async () => {

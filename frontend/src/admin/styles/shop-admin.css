@@ -1014,3 +1014,20 @@ body.admin .video-preview {
   background: #000;
   border-radius: var(--radius-sm);
 }
+
+/* Under the picture and on one line: choosing a rendition is part of watching,
+   not a field on a form, so it gets the space a caption gets and no more. */
+body.admin .video-quality {
+  margin-top: var(--space-2);
+}
+
+body.admin .video-quality .ui-radio-group {
+  margin: 0;
+  gap: var(--space-3);
+}
+
+body.admin .video-quality legend {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}

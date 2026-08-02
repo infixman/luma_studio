@@ -8,34 +8,62 @@
  * passes freshly-created callback props. When those were effect dependencies
  * the effect tore the player down and built it again on each one, which looks
  * like a video that loads, vanishes, loads, vanishes.
+ *
+ * Choosing a rendition is the same rule wearing a different hat: the choice is
+ * pushed into the player that is already running, so the picture changes and
+ * the video carries on from where it was.
  */
 
 import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-const built: { src: string | null; destroyed: boolean }[] = []
+interface FakePlayer {
+  src: string | null
+  destroyed: boolean
+  currentLevel: number
+  /** Push an hls.js event at the component, as the real one would. */
+  fire(event: string, data?: unknown): void
+}
+
+const built: FakePlayer[] = []
+
+/** What a master playlist offers, lowest first — the order hls.js reports. */
+const LADDER = [{ height: 480 }, { height: 720 }, { height: 1080 }]
 
 vi.mock('hls.js', () => {
   class FakeHls {
-    static Events = { ERROR: 'hlsError' }
-    static isSupported = () => true
-    private entry = { src: null as string | null, destroyed: false }
-    constructor() {
-      built.push(this.entry)
+    static Events = {
+      ERROR: 'hlsError',
+      MANIFEST_PARSED: 'hlsManifestParsed',
+      LEVEL_SWITCHED: 'hlsLevelSwitched',
     }
-    on() {}
+    static isSupported = () => true
+    src: string | null = null
+    destroyed = false
+    currentLevel = -1
+    levels = LADDER
+    private listeners = new Map<string, (event: string, data: unknown) => void>()
+    constructor() {
+      built.push(this)
+    }
+    on(event: string, listener: (event: string, data: unknown) => void) {
+      this.listeners.set(event, listener)
+    }
+    fire(event: string, data: unknown = {}) {
+      this.listeners.get(event)?.(event, data)
+    }
     loadSource(src: string) {
-      this.entry.src = src
+      this.src = src
     }
     attachMedia() {}
     destroy() {
-      this.entry.destroyed = true
+      this.destroyed = true
     }
   }
   return { default: FakeHls }
 })
 
-import { HlsVideo } from './HlsVideo'
+import { HlsVideo, type HlsRendition } from './HlsVideo'
 
 let container: HTMLDivElement
 
@@ -89,4 +117,65 @@ test('unmounting takes the player with it', async () => {
   await settle()
 
   expect(built[0]!.destroyed).toBe(true)
+})
+
+test('the renditions are the ones the manifest names, not a ladder we assumed', async () => {
+  /** The encode ladder is a property of the transcode, and the transcode is the
+   *  thing under inspection. A list written out here would keep showing three
+   *  rungs after the ladder changed. */
+  const reported: HlsRendition[][] = []
+  render(<HlsVideo src="/media/master.m3u8" onRenditions={(list) => reported.push(list)} />, container)
+  await settle()
+
+  built[0]!.fire('hlsManifestParsed')
+
+  expect(reported).toEqual([
+    [
+      { index: 0, height: 480 },
+      { index: 1, height: 720 },
+      { index: 2, height: 1080 },
+    ],
+  ])
+})
+
+test('it reports which rendition is actually on screen', async () => {
+  /** In automatic mode this is the only way to know. Nothing else says which
+   *  rung the picture came from, and on a fast connection it is always the top
+   *  one — which is exactly how a broken 480p goes unnoticed. */
+  const playing: (number | null)[] = []
+  render(<HlsVideo src="/media/master.m3u8" onPlayingRendition={(height) => playing.push(height)} />, container)
+  await settle()
+
+  built[0]!.fire('hlsLevelSwitched', { level: 1 })
+  built[0]!.fire('hlsLevelSwitched', { level: 2 })
+
+  expect(playing).toEqual([720, 1080])
+})
+
+test('choosing a rendition switches the running player rather than rebuilding it', async () => {
+  /** Rebuilding would take the video back to the beginning, so the one thing an
+   *  admin is trying to look at closely is the one thing they would lose. */
+  render(<HlsVideo src="/media/master.m3u8" level={-1} />, container)
+  await settle()
+
+  render(<HlsVideo src="/media/master.m3u8" level={2} />, container)
+  await settle()
+
+  expect(built).toHaveLength(1)
+  expect(built[0]!.destroyed).toBe(false)
+  expect(built[0]!.currentLevel).toBe(2)
+})
+
+test('native playback names no renditions, because nothing there can switch them', async () => {
+  /** Safari plays the manifest itself and hls.js is never loaded, so there is no
+   *  level to set. A caller that shows its control only once renditions arrive
+   *  therefore shows none there, rather than one that does nothing. */
+  HTMLMediaElement.prototype.canPlayType = () => 'maybe'
+  const reported: HlsRendition[][] = []
+
+  render(<HlsVideo src="/media/master.m3u8" onRenditions={(list) => reported.push(list)} />, container)
+  await settle()
+
+  expect(built).toHaveLength(0)
+  expect(reported).toEqual([])
 })

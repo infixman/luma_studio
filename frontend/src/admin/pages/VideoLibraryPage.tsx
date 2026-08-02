@@ -9,6 +9,7 @@ import {
   MenuItem,
   Modal,
   Panel,
+  RadioGroup,
   Spinner,
   useConfirm,
 } from '../components/ui'
@@ -26,7 +27,8 @@ import {
   videoStatusLabel,
   videoStatusTone,
 } from '../lib/videoFacts'
-import { HlsVideo } from '../../shared/components/HlsVideo'
+import { AUTO_LEVEL, HlsVideo } from '../../shared/components/HlsVideo'
+import type { HlsRendition } from '../../shared/components/HlsVideo'
 import type { VideoAsset } from '../../shared/types'
 import '../styles/shop-admin.css'
 
@@ -72,11 +74,20 @@ const MAX_POLL_FAILURES = 3
  * is who may be issued one — and the reason to allow it is that nothing else can
  * tell you a transcode came out right. Every object exists and the manifest
  * parses whether or not the picture is a mess.
+ *
+ * Which rendition plays is the admin's choice here, and only here. Left to
+ * itself the player takes whichever rung the connection can afford, so on the
+ * office line that is always the top one — and a 480p that came out broken ships
+ * without anybody having seen it. In 自動 the control names the rung actually on
+ * screen, because that, and not what was asked for, is what is being accepted.
  */
 export function VideoLibraryPage() {
   const [assets, setAssets] = useState<VideoAsset[] | null>(null)
   const [watching, setWatching] = useState<{ asset: VideoAsset; url: string } | null>(null)
   const [playerFailed, setPlayerFailed] = useState(false)
+  const [renditions, setRenditions] = useState<HlsRendition[]>([])
+  const [level, setLevel] = useState<number>(AUTO_LEVEL)
+  const [playing, setPlaying] = useState<number | null>(null)
   const [missingPosters, setMissingPosters] = useState<Set<string>>(new Set())
   const [stalled, setStalled] = useState(false)
   const { message, showError, run } = useStatus()
@@ -225,6 +236,11 @@ export function VideoLibraryPage() {
         {},
       )
       setPlayerFailed(false)
+      // The ladder belongs to the manifest that was open, and this one has not
+      // been read yet. Keeping it would offer indexes into a different video.
+      setRenditions([])
+      setLevel(AUTO_LEVEL)
+      setPlaying(null)
       setWatching({ asset, url: session.playbackUrl })
     }, '已取得播放權限。')
   }
@@ -381,7 +397,32 @@ export function VideoLibraryPage() {
               // quietly, and the status bar has already said the permission was
               // granted — which it was. What failed is the playing.
               onError={() => setPlayerFailed(true)}
+              level={level}
+              onRenditions={setRenditions}
+              onPlayingRendition={setPlaying}
             />
+            {/* Nothing to choose between where the manifest has one rung, and
+                nothing at all where the browser plays the manifest itself and
+                no rendition is ever named — Safari, where a control could only
+                sit there doing nothing. */}
+            {renditions.length > 1 ? (
+              <div class="video-quality">
+                <RadioGroup
+                  legend="畫質"
+                  inline
+                  value={level}
+                  options={[
+                    { value: AUTO_LEVEL, label: playing === null ? '自動' : `自動（目前 ${playing}p）` },
+                    // Highest first, which is the order people look for one in.
+                    // hls.js reports the ladder the other way up.
+                    ...[...renditions]
+                      .sort((one, other) => other.height - one.height)
+                      .map((rendition) => ({ value: rendition.index, label: `${rendition.height}p` })),
+                  ]}
+                  onChange={setLevel}
+                />
+              </div>
+            ) : null}
             {playerFailed ? (
               <p class="muted">播放失敗。通行證會過期，關掉再開一次就會重新取得。</p>
             ) : null}
