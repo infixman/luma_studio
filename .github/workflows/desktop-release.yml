@@ -92,6 +92,11 @@ jobs:
       # machine — the value the version policy is compared against.
       - name: Stamp the version in
         working-directory: desktop
+        # bash, like every other step here that reads a variable. The default on
+        # a Windows runner is PowerShell, where `$VERSION` is one of its own
+        # variables and an unset one at that — it does not fall back to the
+        # environment, it fails.
+        shell: bash
         run: npm pkg set version="$VERSION"
 
       # The same command a person runs locally: typecheck, tests, bundle, and the
@@ -142,6 +147,7 @@ jobs:
         working-directory: desktop
         shell: bash
         run: |
+          set -euo pipefail
           {
             echo "### 已發佈 $VERSION"
             echo

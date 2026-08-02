@@ -2237,3 +2237,20 @@ tag 與 package.json」的檢查是同一個，只是更徹底：留在檔案裡
 
 修法是在 `electron-builder.yml` 釘死 `artifactName`，並讓後端的測試**去讀那個 yml**：
 regex 只有一份（Python 那份），設定從另一邊讀進來。改名字就會紅。
+
+### 第一次真的發版：卡在 PowerShell
+
+`Stamp the version in` 那一步沒寫 `shell: bash`。Windows runner 的預設 shell 是 PowerShell，
+`$VERSION` 在那裡是 PowerShell 自己的變數 —— 而且是沒設過的那種。它不會退回去讀環境變數，
+它直接停下來：`The variable '$VERSION' cannot be retrieved because it has not been set.`
+
+同一個檔案裡其他讀變數的步驟都寫了 `shell: bash`，就這一個漏掉。這種東西在本機看不出來，
+只有推上去、發一次 release 才會知道 —— 所以補了 `tests/test_workflows.py`：跑在 windows 上、
+`run` 裡有 `$VAR`、又沒宣告 `shell: bash` 的步驟，測試就紅。
+
+順手加的第二條規則抓到另一個：多行的 bash 步驟要有 `set -euo pipefail`，否則其中一行失敗
+之後會繼續跑完，job 拿最後一行的結束碼 —— 在上傳那個 for 迴圈裡，等於漏傳一個檔案還顯示綠色。
+「印出摘要」那一步正好漏了，補上。
+
+為此在 backend 的 dev 相依加了 pyyaml。它不會進 Worker 的執行環境，而這兩條規則檢查的
+正是「各自都對、合起來錯」那一類 —— 跟隔壁那個讀 `electron-builder.yml` 檢查檔名的測試同一種。

@@ -19,6 +19,10 @@ dev = [
     # only check that can catch a wrong signature quietly stopped running.
     "botocore>=1.34",
     "pyotp>=2.9",
+    # For reading the workflows and the desktop packaging config. The tests that
+    # need it are checking agreements between things written in different
+    # languages in different directories — the kind that are each correct alone.
+    "pyyaml>=6.0",
 ]
 
 [tool.uv]
