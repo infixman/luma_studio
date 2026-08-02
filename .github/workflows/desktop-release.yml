@@ -1,17 +1,29 @@
 name: Release desktop tool
 
-# Deliberately manual, and deliberately not on a tag push.
+# Publishing a release publishes the installer.
 #
-# Publishing a build is one of two halves; the other is changing the version
-# policy in the back office, and the order matters — `minSupported` has to be
-# raised only once the installer somebody would update *to* is actually
-# downloadable. A workflow that fired on every tag would do half of that while
-# nobody was looking.
+# A published release rather than a pushed tag: a tag can be moved and is often
+# pushed mid-thought, while publishing a release is a deliberate act with a
+# person behind it. Draft releases do nothing here, so the tag can exist for as
+# long as it takes to write the notes.
+#
+# It still only does half the job, and that is on purpose. Uploading an
+# installer gives it to nobody: the back office decides which version is
+# current and which is the floor, and `minSupported` may only be raised once the
+# installer somebody would update *to* is actually downloadable. The summary at
+# the end says so, because the half that is left is the half that is easy to
+# forget.
+#
+# The tag names the component as well as the version — `desktop-v0.1.0` — since
+# the backend and the two sites live in this repository too, and `v0.1.0` alone
+# would not say what it is a version of.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'The version being published, for the summary only. package.json is the source of truth.'
+        description: 'For the summary only. desktop/package.json is the source of truth.'
         required: false
         default: ''
 
@@ -25,6 +37,10 @@ permissions:
 jobs:
   build:
     name: Build and publish the Windows installer
+    # Other components will have their own releases in this repository. Theirs
+    # must not build a desktop installer, and a run that did nothing but succeed
+    # would be worse than one that never started.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'desktop-v')
     # Windows, because an NSIS installer is built by NSIS. Cross-building it from
     # Linux is possible with wine and is one more thing to be wrong about the day
     # the installer misbehaves on somebody's machine.
@@ -41,6 +57,26 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: desktop/package-lock.json
+
+      # The tag is what a person will quote; package.json is what ends up in the
+      # installer's name and in `latest.yml`. When they disagree the release is
+      # named after a version nobody can download, and nothing downstream would
+      # ever notice — the updater compares against `latest.yml`, not the tag.
+      - name: Check the tag against package.json
+        if: github.event_name == 'release'
+        working-directory: desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          tagged="${TAG#desktop-v}"
+          packaged="$(node -p "require('./package.json').version")"
+          if [ "$tagged" != "$packaged" ]; then
+            echo "::error::release $TAG would publish $packaged. Set desktop/package.json to $tagged, or retag."
+            exit 1
+          fi
+          echo "publishing $packaged"
+        env:
+          TAG: ${{ github.event.release.tag_name }}
 
       - name: Install
         working-directory: desktop
@@ -99,7 +135,9 @@ jobs:
             echo
             ls dist/*.exe dist/latest.yml 2>/dev/null | sed 's/^/- /'
             echo
-            echo "還沒有人會拿到它：到後台的「桌面上傳工具」把「最新版本」改成這一版。"
-            echo "要讓舊版停下來，同時把「最低支援版本」提上去 —— 但只有在上面的安裝檔"
-            echo "真的下載得到之後。"
+            echo "**還沒有人會拿到它。** 到後台 → 線上課程 → 桌面工具 → 版本政策，"
+            echo "把「最新版本」改成這一版。"
+            echo
+            echo "要讓舊版停下來，才把「最低支援版本」也提上去 —— 但只有在上面的安裝檔"
+            echo "真的下載得到之後，否則等於把人擋在一個下載不到的版本前面。"
           } >> "$GITHUB_STEP_SUMMARY"

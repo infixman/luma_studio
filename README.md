@@ -1144,6 +1144,25 @@ Worker 不能跑 FFmpeg。所以轉檔跑在管理員的機器上，由 `desktop
 TOTP 配對碼換來的），簽章一律在 Admin Worker 裡做。工具被拿走的最壞情況是「有人
 可以上傳影片」，不是「有人可以改訂單」。
 
+#### 發一版
+
+在 GitHub 上建一個 release，tag 用 `desktop-v{版本}`（例如 `desktop-v0.1.0`）。tag 帶
+元件名字是因為後端和兩個站也住在這個 repo，單一個 `v0.1.0` 沒有說它是什麼東西的版本。
+**按下 publish 才會動**，草稿不會 —— 所以 tag 可以先存在、release note 慢慢寫。
+
+Actions 會在 Windows runner 上跑完整的 `npm run build`（typecheck、測試、打包，以及真的
+啟動一次 Electron 的 smoke test），用 electron-builder 打出安裝檔，然後上傳到 R2。
+`latest.yml` **最後**上傳：在它指向新安裝檔之前沒有人會知道有更新，反過來則是讓大家去
+下載一個還沒傳完的檔案。
+
+`desktop/package.json` 的 `version` 是唯一的真相來源 —— 安裝檔的檔名和 `latest.yml`
+都從它來。workflow 會比對 tag 與它，不一致就直接失敗：否則 release 會叫一個沒有人
+下載得到的版本，而下游沒有任何東西會發現（更新程式比對的是 `latest.yml`，不是 tag）。
+
+上傳完**還沒有人拿得到**。到後台 → 線上課程 → 桌面工具 → 版本政策把「最新版本」改成
+這一版；要讓舊版停下來才把「最低支援版本」也提上去，而且只能在安裝檔真的下載得到之後。
+這一半刻意留給人做：發佈和放行是兩個決定。
+
 #### 安裝與更新
 
 安裝檔放在 `luma-desktop-tools` 桶的 `releases/` 底下，由 Admin Worker 的公開路由

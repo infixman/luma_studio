@@ -2194,3 +2194,29 @@ hls.js 放棄的時候是安靜的，而狀態列已經說了「已取得播放�
 管理 Worker 要有自己的 `PLAYBACK_SECRET`。secret 是綁 Worker 的，公開 Worker 那把不會
 自動出現在這裡；沒有它，預覽會回 503（這是刻意的：發一張沒簽章的 token 更糟）。兩把
 不需要一樣 —— 後台的 token 是後台自己發、自己驗的。
+
+## 發版改成 GitHub release 觸發
+
+原本是手動 `workflow_dispatch`，理由寫在 workflow 的註解裡：發佈是兩個半，另一半是後台
+的版本政策，綁 tag 會在沒人看著的時候只做完一半。
+
+改成 release publish 觸發，但那個顧慮沒有消失，只是換了位置：**上傳安裝檔本來就給不到
+任何人**，是後台決定哪一版是現行、哪一版是底線。所以 job 的結尾會把剩下那一半印在
+summary 上。用 published release 而不是 push tag，因為 tag 可以被移動、也常常是想到
+一半就推上去的；publish 是一個有人按下去的決定，草稿不會觸發。
+
+tag 帶元件名字（`desktop-v0.1.0`），因為後端和兩個站也在這個 repo。
+
+新增的一步是比對 tag 與 `desktop/package.json`。不一致的話 release 會叫一個沒有人下載得到
+的版本，而且不會有任何東西發現 —— 更新程式比對的是 `latest.yml`，不是 tag。
+
+### 順手抓到一個會讓整條路徑失敗的 bug
+
+`src/main/updater.ts` 寫 `import { autoUpdater } from 'electron-updater'`，但那是 CommonJS
+模組、主程序的 bundle 是 ESM，具名匯出在執行期不存在 —— 載入時就丟例外，視窗永遠不會出現。
+
+typecheck 過、打包也過。只有 smoke test（真的啟動一次 Electron）會說話，而它說了：
+`Named export 'autoUpdater' not found`。改成 default import 之後 `smoke: ok`。
+
+如果先送出 release 才發現，拿到的會是一個紅色的 job；如果 smoke test 不存在，拿到的會是
+一個裝得起來、打不開的工具。

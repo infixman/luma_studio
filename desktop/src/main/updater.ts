@@ -1,4 +1,10 @@
-import { autoUpdater } from 'electron-updater'
+// `electron-updater` is CommonJS and the main bundle is ESM, so the named
+// export does not exist at runtime — the import throws while the main process
+// is still evaluating, and the app never opens a window. It builds and
+// typechecks either way; only the smoke test says so.
+import updater from 'electron-updater'
+
+const { autoUpdater } = updater
 
 /**
  * Fetching a new build, when the server says there is one.
