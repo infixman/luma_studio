@@ -205,6 +205,36 @@ async def handle(ctx: Ctx):
         except (AttributeError, TypeError):
             return ctx.error("Invalid policy", 400)
 
+    if ctx.path == "/api/desktop/releases" and ctx.method == "GET":
+        # The record, never the bucket. Opening this page must not spend a
+        # listing — asking for one is the route below, and it is a POST because
+        # it costs money and rewrites what is recorded.
+        return ctx.json(await desktop_release.recorded_releases(ctx.env))
+
+    if ctx.path == "/api/desktop/releases/refresh" and ctx.method == "POST":
+        try:
+            return ctx.json(await desktop_release.refresh_releases(ctx.env, now=utc_timestamp()))
+        except NotConfigured as error:
+            return ctx.error(str(error) or "工具檔案尚未設定", 503)
+
+    if ctx.path.startswith("/api/desktop/releases/") and ctx.method == "DELETE":
+        try:
+            return ctx.json(
+                await desktop_release.delete_release(
+                    ctx.env, version=ctx.path[len("/api/desktop/releases/") :]
+                )
+            )
+        except ValueError as error:
+            # 409 rather than 400: what refuses this is the state of the policy
+            # rather than the shape of the request, and the policy is something
+            # the caller can go and change. A segment that is not a version at
+            # all arrives here too, and says which of the two it was.
+            return ctx.error(str(error) or "無法刪除這個版本", 409)
+        except LookupError as error:
+            return ctx.error(str(error) or "Not found", 404)
+        except NotConfigured as error:
+            return ctx.error(str(error) or "工具檔案尚未設定", 503)
+
     if ctx.path == "/api/desktop/pairing-code" and ctx.method == "GET":
         try:
             # For whoever is signed in, never for an address in the request. A

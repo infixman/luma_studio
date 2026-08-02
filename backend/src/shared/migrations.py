@@ -1194,6 +1194,32 @@ MIGRATIONS = [
                )""",
         ],
     },
+    {
+        # Phase 4 S7: what the releases bucket actually holds.
+        #
+        # A cache of a listing, not a record of anything. The bucket is the truth
+        # — this exists so the page can be opened without paying for a listing
+        # every time — and it is replaced wholesale whenever somebody asks, so a
+        # version deleted in the Cloudflare dashboard leaves no row behind. A row
+        # for an object that is gone can only mislead the person about to copy
+        # its download link.
+        #
+        # Keyed by file rather than by version: the installer and its blockmap
+        # are two objects of one release, and the thing that has to be unique is
+        # the object.
+        "name": "0039_create_desktop_releases",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS desktop_releases (
+                 file TEXT PRIMARY KEY NOT NULL,
+                 version TEXT NOT NULL,
+                 byte_size INTEGER NOT NULL DEFAULT 0,
+                 uploaded_at INTEGER,
+                 refreshed_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_desktop_releases_version"
+            " ON desktop_releases (version)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

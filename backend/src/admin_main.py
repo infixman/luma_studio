@@ -121,6 +121,8 @@ async def dispatch(ctx: Ctx):
     if (
         path == "/api/desktop/pairing-code"
         or path == "/api/desktop/version-policy"
+        or path == "/api/desktop/releases"
+        or path.startswith("/api/desktop/releases/")
         or path.startswith("/tools/ffmpeg/")
     ):
         return await desktop_admin_api.handle(ctx)

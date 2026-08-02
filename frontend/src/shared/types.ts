@@ -775,3 +775,26 @@ export interface DesktopVersionPolicy {
   feedUrl: string
   updatedAt: number
 }
+
+/** One published build, as the installer and its blockmap together. */
+export interface DesktopRelease {
+  version: string
+  /** Every object of this version — what a delete would remove. */
+  files: string[]
+  bytes: number
+  uploadedAt: number | null
+}
+
+/**
+ * What R2 held the last time somebody asked.
+ *
+ * A snapshot rather than a live view: listing a bucket costs money and this page
+ * is opened rarely, so it is refreshed by hand. `refreshedAt` is `null` when
+ * nobody has ever asked, which is not the same fact as an empty bucket.
+ */
+export interface DesktopReleaseList {
+  versions: DesktopRelease[]
+  /** Whether `latest.yml` was there. Without it, no installed tool hears about a new build. */
+  hasFeed: boolean
+  refreshedAt: number | null
+}

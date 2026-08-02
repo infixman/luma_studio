@@ -20,6 +20,8 @@
 import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
+import type { DesktopReleaseList } from '../../shared/types'
+
 const pairings: { code: string; expiresInSeconds: number; adminEmail: string }[] = []
 let calls = 0
 let failStatus: number | null = null
@@ -34,19 +36,47 @@ let policy = {
 }
 const saved: unknown[] = []
 
+// What the record says now, and what a refresh would find. Two values rather
+// than one, because the whole point of the panel is that the second only
+// arrives when somebody asks for it.
+let recorded: DesktopReleaseList = { versions: [], hasFeed: false, refreshedAt: null }
+let inTheBucket: DesktopReleaseList = { versions: [], hasFeed: false, refreshedAt: null }
+let deleteRefusal: string | null = null
+const requests: { path: string; method: string }[] = []
+
 // The real ApiError, so the page's `instanceof` check means what it says. Only
 // the fetching is replaced.
 vi.mock('../../shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/api')>()
   return {
     ...actual,
-    api: vi.fn(async (path: string) => {
+    api: vi.fn(async (path: string, init?: { method?: string }) => {
+      const method = init?.method ?? 'GET'
+      requests.push({ path, method })
       if (path.startsWith('/api/desktop/version-policy')) return policy
+      if (path.startsWith('/api/desktop/releases')) {
+        if (method === 'DELETE') {
+          if (deleteRefusal !== null) throw new actual.ApiError(deleteRefusal, 409, {})
+          recorded = {
+            ...recorded,
+            versions: recorded.versions.filter(
+              (entry) => !path.endsWith(encodeURIComponent(entry.version)),
+            ),
+          }
+          return { deleted: 1 }
+        }
+        return recorded
+      }
       if (failStatus !== null) throw new actual.ApiError('nope', failStatus, {})
       calls += 1
       return pairings[Math.min(calls - 1, pairings.length - 1)]
     }),
-    apiJson: vi.fn(async (_path: string, _method: string, body: unknown) => {
+    apiJson: vi.fn(async (path: string, method: string, body: unknown) => {
+      requests.push({ path, method })
+      if (path === '/api/desktop/releases/refresh') {
+        recorded = inTheBucket
+        return recorded
+      }
       saved.push(body)
       return policy
     }),
@@ -79,6 +109,28 @@ beforeEach(() => {
   }
   pairings.length = 0
   pairings.push({ code: '418302', expiresInSeconds: 20, adminEmail: 'owner@example.com' })
+  requests.length = 0
+  deleteRefusal = null
+  // Nobody has looked yet, which is not the same as an empty bucket.
+  recorded = { versions: [], hasFeed: false, refreshedAt: null }
+  inTheBucket = {
+    versions: [
+      {
+        version: '1.2.0',
+        files: ['luma-video-uploader-1.2.0-setup.exe', 'luma-video-uploader-1.2.0-setup.exe.blockmap'],
+        bytes: 94_690_523,
+        uploadedAt: 1_785_292_800,
+      },
+      {
+        version: '0.9.0',
+        files: ['luma-video-uploader-0.9.0-setup.exe'],
+        bytes: 90_000_000,
+        uploadedAt: 1_784_292_800,
+      },
+    ],
+    hasFeed: true,
+    refreshedAt: 1_785_300_000,
+  }
   container = document.createElement('div')
   document.body.append(container)
 })
@@ -260,6 +312,131 @@ test('saving sends what the form says, not what was loaded', async () => {
       notes: '',
     },
   ])
+})
+
+/**
+ * The release list, which is the one part of this page that costs money to be
+ * wrong about: a listing is billed, and a row for an object that is no longer
+ * there hands somebody a download link to a 404.
+ */
+
+/** Rendered and settled, including the panels below the pairing code. */
+async function open(): Promise<void> {
+  render(<DesktopToolPage />, container)
+  await settle()
+  await idle()
+}
+
+async function idle(): Promise<void> {
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function buttonSaying(text: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes(text),
+  )
+}
+
+function deleteButtons(): HTMLButtonElement[] {
+  return [...container.querySelectorAll('button')].filter((element) =>
+    (element.textContent ?? '').includes('刪除'),
+  )
+}
+
+async function loadTheList(): Promise<void> {
+  buttonSaying('重新載入 R2')?.click()
+  await idle()
+}
+
+test('the list is not fetched from R2 until somebody asks for it', async () => {
+  /** Listing a bucket is billed and this page is opened rarely. A panel that
+   *  refreshed itself would be a page costing money while nobody reads it. */
+  await open()
+
+  expect(requests.some((request) => request.path.includes('/releases/refresh'))).toBe(false)
+  expect(container.textContent).toContain('尚未載入')
+})
+
+test('pressing the button lists what R2 actually holds', async () => {
+  await open()
+  await loadTheList()
+
+  expect(requests.some((request) => request.path === '/api/desktop/releases/refresh')).toBe(true)
+  expect(container.textContent).toContain('1.2.0')
+  expect(container.textContent).toContain('0.9.0')
+})
+
+test('the download URL is built from the feed the server reports', async () => {
+  /** A host typed here is a host that is wrong on whichever deployment is not
+   *  production, and the symptom is a copied link that 404s. */
+  await open()
+  await loadTheList()
+
+  const copy = [...container.querySelectorAll('button')].find(
+    (element) => element.getAttribute('aria-label') === '複製 1.2.0 的下載網址',
+  )
+  copy?.click()
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    'https://admin-api.example.com/releases/luma-video-uploader-1.2.0-setup.exe',
+  )
+})
+
+test('the version the policy publishes cannot be deleted, and says why', async () => {
+  /** Every installed tool is being told to update to it. The server refuses it
+   *  as well — this is the half somebody can see before clicking. */
+  await open()
+  await loadTheList()
+
+  const refused = deleteButtons()[0]
+  expect(refused?.disabled).toBe(true)
+  expect(refused?.getAttribute('title') ?? '').toContain('最新版本')
+})
+
+test('deleting asks first, and names the version', async () => {
+  await open()
+  await loadTheList()
+
+  deleteButtons()[1]?.click()
+  await idle()
+  // In the dialog, not merely somewhere on the page: the table lists both
+  // versions, so "the page mentions 0.9.0" would be true without asking.
+  expect(container.querySelector('[role="dialog"]')?.textContent ?? '').toContain('0.9.0')
+
+  buttonSaying('確定刪除')?.click()
+  await idle()
+
+  expect(
+    requests.some(
+      (request) => request.method === 'DELETE' && request.path === '/api/desktop/releases/0.9.0',
+    ),
+  ).toBe(true)
+})
+
+test('a refusal from the server is shown rather than swallowed', async () => {
+  /** The page disables what it knows about; the server knows about the rest,
+   *  and its answer is the one that decides. */
+  deleteRefusal = '這是版本政策的最低支援版本'
+  await open()
+  await loadTheList()
+
+  deleteButtons()[1]?.click()
+  await idle()
+  buttonSaying('確定刪除')?.click()
+  await idle()
+
+  expect(container.textContent).toContain('這是版本政策的最低支援版本')
+})
+
+test('a missing latest.yml is called out, because nothing else would show it', async () => {
+  /** Without the feed every installed tool goes on believing it is current,
+   *  and every version in this list looks perfectly fine. */
+  inTheBucket = { ...inTheBucket, hasFeed: false }
+  await open()
+  await loadTheList()
+
+  // Not just the string `latest.yml`, which the download section prints anyway.
+  expect(container.textContent).toContain('沒有 latest.yml')
 })
 
 test('the copy is HTML, not markdown source', async () => {

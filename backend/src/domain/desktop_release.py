@@ -20,17 +20,38 @@ and then resolves the installer's name *relative to the feed*, so a versioned
 directory means writing our own update logic. Ours would be the part nobody can
 test without the machine it runs on, and the version is in the installer's name
 anyway.
+
+It also answers what is *in* that bucket. The policy names a version and a CI job
+uploads one, and until now nothing could say whether the two agreed — "最新版本
+0.2.0" could name a build that was never published, and the only way to find out
+was the Cloudflare dashboard. The listing is asked for by hand, because listing a
+bucket is not free and this page is opened rarely, and what is recorded is
+whatever R2 said at that moment: a version deleted since is gone from the record
+too, since a row for an object that does not exist is a row that can only
+mislead.
 """
 
 import re
 
-from shared.common import d1_rows
+from domain import video_storage
+from shared.common import NotConfigured, d1_rows
 
 
 VERSION_PATTERN = re.compile(r"^\d{1,4}(?:\.\d{1,4}){0,2}$")
 
 # Where the published files live in the tools bucket.
 RELEASE_PREFIX = "releases/"
+
+# What every updater reads. It belongs to no version — offering it as one would
+# mean offering to delete it, and deleting it stops every installed tool from
+# ever hearing about a new build.
+FEED_FILE = "latest.yml"
+
+# How far a listing goes. A release is two objects, so this is a thousand builds:
+# past that, whoever is looking is scrolling rather than deleting, and the
+# request has stopped being cheap.
+LIST_PAGE = 200
+MAX_LIST_PAGES = 10
 
 # What electron-updater fetches, and nothing else. The installer's name carries
 # its version, so the pattern has to allow that rather than a fixed list.
@@ -59,6 +80,16 @@ SAVE_SQL = (
     " min_supported = excluded.min_supported, force_update = excluded.force_update,"
     " blocked = excluded.blocked, notes = excluded.notes, updated_at = excluded.updated_at"
 )
+
+FORGET_ALL_SQL = "DELETE FROM desktop_releases"
+RECORD_SQL = (
+    "INSERT INTO desktop_releases (file, version, byte_size, uploaded_at, refreshed_at)"
+    " VALUES (?1, ?2, ?3, ?4, ?5)"
+)
+RECORDED_SQL = (
+    "SELECT file, version, byte_size, uploaded_at, refreshed_at FROM desktop_releases"
+)
+FORGET_FILE_SQL = "DELETE FROM desktop_releases WHERE file = ?1"
 
 
 def _parts(version) -> tuple[int, int, int]:
@@ -202,3 +233,203 @@ def release_key(file) -> str | None:
     if not any(pattern.fullmatch(name) for pattern in FILE_PATTERNS):
         return None
     return f"{RELEASE_PREFIX}{name}"
+
+
+def version_of(file: str) -> str:
+    """The version an installer's name carries, or nothing.
+
+    Read out of the name rather than assembled from the template in
+    `electron-builder.yml`: the objects in the bucket outlive the config that
+    produced them, and this has to keep working for whatever was uploaded before
+    somebody edited that template.
+
+    `latest.yml` deliberately gets nothing. It is the file every updater reads
+    and it belongs to no version, so treating it as one would put it in a list of
+    things somebody is offered a delete button for.
+    """
+
+    if not isinstance(file, str) or not file.endswith((".exe", ".exe.blockmap")):
+        return ""
+    found = re.search(r"\d{1,4}\.\d{1,4}\.\d{1,4}", file)
+    return found.group(0) if found else ""
+
+
+def _same_version(left, right) -> bool:
+    """Whether two version strings name the same build.
+
+    Compared as numbers when both are readable, because electron-builder writes
+    `1.2` in some places and `1.2.0` in others — the policy's field is typed by
+    hand and the record's comes out of a file name, so the two can disagree in
+    spelling about the same release. Falls back to the plain text when either is
+    not a version at all, since a policy holding nonsense must still be able to
+    protect whatever it points at.
+    """
+
+    try:
+        return compare(left, right) == 0
+    except ValueError:
+        return str(left).strip() == str(right).strip()
+
+
+def _versions_from(files: list[dict]) -> list[dict]:
+    """Group the objects into the thing somebody acts on.
+
+    An installer and its blockmap are one release. Listing them apart invites
+    deleting half of one, which leaves an update that downloads and then cannot
+    verify itself.
+    """
+
+    grouped: dict[str, dict] = {}
+    for entry in files:
+        version = entry["version"]
+        if not version:
+            # The feed, which is reported separately and is nobody's version.
+            continue
+        found = grouped.setdefault(
+            version, {"version": version, "files": [], "bytes": 0, "uploadedAt": None}
+        )
+        found["files"].append(entry["file"])
+        found["bytes"] += entry["bytes"]
+        if entry["uploadedAt"]:
+            # The earliest, which is when the release landed: the blockmap is
+            # written seconds after the installer and would otherwise decide.
+            found["uploadedAt"] = (
+                entry["uploadedAt"]
+                if found["uploadedAt"] is None
+                else min(found["uploadedAt"], entry["uploadedAt"])
+            )
+
+    # Newest first, by number rather than by text. As strings `0.10.0 < 0.9.0`,
+    # which would put the newest build in the middle of the list.
+    return sorted(grouped.values(), key=lambda entry: _parts(entry["version"]), reverse=True)
+
+
+def _snapshot(files: list[dict], *, refreshed_at: int | None) -> dict:
+    return {
+        "versions": _versions_from(files),
+        "hasFeed": any(entry["file"] == FEED_FILE for entry in files),
+        "refreshedAt": refreshed_at,
+    }
+
+
+def _bucket(env):
+    bucket = getattr(env, "DESKTOP_TOOLS", None)
+    if bucket is None:
+        # Its own type, and not the `LookupError` a missing version raises: an
+        # unconfigured deployment is nobody's fault but ours, and answering it
+        # like "no such version" sends somebody looking for the version.
+        raise NotConfigured("工具檔案尚未設定（缺少 DESKTOP_TOOLS binding）")
+    return bucket
+
+
+async def refresh_releases(env, *, now: int) -> dict:
+    """Ask the bucket what it holds, and record the answer.
+
+    By hand rather than on a timer. Listing is not free, this page is opened
+    rarely, and a snapshot that refreshed itself would be a page costing money
+    while nobody was reading it.
+    """
+
+    bucket = _bucket(env)
+
+    found: list[dict] = []
+    cursor = None
+    for _ in range(MAX_LIST_PAGES):
+        listing = await bucket.list(prefix=RELEASE_PREFIX, limit=LIST_PAGE, cursor=cursor)
+        for item in listing.objects:
+            name = str(item.key)[len(RELEASE_PREFIX) :]
+            if name != FEED_FILE and not version_of(name):
+                # The bucket is ours, but a stray object is not a release. It
+                # stays where it is and stays out of a list that offers download
+                # links and a delete button.
+                continue
+            found.append(
+                {
+                    "file": name,
+                    "version": version_of(name),
+                    "bytes": int(item.size),
+                    "uploadedAt": video_storage.uploaded_seconds(item) or None,
+                }
+            )
+        if not getattr(listing, "truncated", False):
+            break
+        cursor = getattr(listing, "cursor", None)
+        if not cursor:
+            break
+
+    # Replaced, not merged. Anything deleted since the last look has to disappear
+    # from here too; an upsert alone would keep it for ever, and the copy-link
+    # beside it would hand out a 404 nobody can explain.
+    await env.DB.prepare(FORGET_ALL_SQL).run()
+    for entry in found:
+        await env.DB.prepare(RECORD_SQL).bind(
+            entry["file"], entry["version"], entry["bytes"], entry["uploadedAt"], now
+        ).run()
+
+    return _snapshot(found, refreshed_at=now)
+
+
+async def recorded_releases(env) -> dict:
+    """The last answer, without asking the bucket again."""
+
+    rows = await d1_rows(env.DB.prepare(RECORDED_SQL))
+    files = [
+        {
+            "file": row["file"],
+            "version": row["version"] or "",
+            "bytes": int(row["byte_size"] or 0),
+            "uploadedAt": None if row["uploaded_at"] is None else int(row["uploaded_at"]),
+        }
+        for row in rows
+    ]
+    # `None` rather than zero when nobody has looked yet: an empty list under a
+    # date would be a claim about the bucket, and this page has not made one.
+    refreshed = max((int(row["refreshed_at"]) for row in rows), default=None)
+    return _snapshot(files, refreshed_at=refreshed)
+
+
+async def delete_release(env, *, version: str) -> dict:
+    """Remove one release's objects, and the record of them.
+
+    The two refusals are the versions the policy points at. Deleting `latest`
+    leaves every installed tool downloading a 404 with nothing on screen to
+    explain it; deleting `minSupported` leaves the policy naming a version that
+    does not exist, which is the exact confusion this list was added to clear up.
+
+    Refused here rather than only in the page. The button is disabled there too,
+    but a disabled button is a courtesy and this is the rule.
+    """
+
+    # Before anything is read: a caller asking to delete "" would otherwise match
+    # the feed's row, whose version is empty on purpose.
+    _parts(version)
+
+    policy = await read_policy(env)
+    if _same_version(version, policy["latest"]):
+        raise ValueError("這是版本政策指定的最新版本，刪掉之後每一台工具都會下載到 404")
+    if _same_version(version, policy["minSupported"]):
+        raise ValueError("這是版本政策的最低支援版本，刪掉之後政策會指著一個不存在的版本")
+
+    rows = await d1_rows(env.DB.prepare(RECORDED_SQL))
+    files = [
+        row["file"]
+        for row in rows
+        if _same_version(row["version"] or "", version)
+        # And it really is that version's own file. The feed carries no version,
+        # so this is what keeps a bad row from making it deletable.
+        and _same_version(version_of(row["file"]) or "", version)
+    ]
+    if not files:
+        # The keys come from the record. Building them from the version number
+        # would be this module inventing file names the build may never have
+        # produced, and then deleting whatever happened to match.
+        raise LookupError("找不到這個版本的檔案，請先重新載入清單")
+
+    bucket = _bucket(env)
+    for name in files:
+        await bucket.delete(f"{RELEASE_PREFIX}{name}")
+        # The row after its object, matching the storage cleanup next door: a row
+        # removed while the object remains leaves bytes nothing can find.
+        await env.DB.prepare(FORGET_FILE_SQL).bind(name).run()
+
+    return {"deleted": len(files), "version": version}
