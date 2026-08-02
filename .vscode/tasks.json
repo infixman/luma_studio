@@ -1,0 +1,27 @@
+{
+  // Two tasks for the one production setting that has to be off before the shop
+  // opens. They edit `backend/wrangler.toml` and deploy the public Worker,
+  // because that value is deployed with it — changing it in the Cloudflare
+  // dashboard holds only until the next deploy from this repository.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "啟用正式環境假交易",
+      "detail": "ALLOW_FAKE_PAYMENT=1 並部署公開 Worker。任何登入的顧客都能把自己的訂單標成已付 —— 開賣前務必關掉。",
+      "type": "shell",
+      "command": "python scripts/fake_payment.py on",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "關閉正式環境假交易",
+      "detail": "ALLOW_FAKE_PAYMENT=0 並部署公開 Worker。付款回到只能透過金流。",
+      "type": "shell",
+      "command": "python scripts/fake_payment.py off",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    }
+  ]
+}
