@@ -11,6 +11,7 @@ before an Offer may be enabled or a product made active.
 
 import re
 
+from domain import media
 from shared import sanitize
 from shared.common import d1_changed, d1_rows, urlsafe_token, utc_timestamp, validate_choice, validate_text
 
@@ -94,7 +95,30 @@ async def list_courses(env, *, status: str | None = None) -> list[dict]:
 
 async def get_course(env, course_id: str) -> dict | None:
     rows = await d1_rows(env.DB.prepare("SELECT * FROM courses WHERE id = ?1").bind(course_id))
-    return course_row(rows[0]) if rows else None
+    return await _with_cover(env, course_row(rows[0])) if rows else None
+
+
+async def _with_cover(env, course: dict) -> dict:
+    """Turn the stored media id into a URL a page can draw.
+
+    The course keeps the id — that is what the picker sets and what the form
+    saves — and gains the path beside it. The editor used to build
+    `/media-assets/{coverMediaId}` itself, which is not where anything is
+    served: the URL comes from the object key, and only the library knows it.
+
+    A cover whose picture has since been deleted comes back as nothing, and the
+    page draws nothing. The alternative is the browser's broken-image icon,
+    which reads as the page being at fault rather than the picture being gone.
+    """
+
+    media_id = course.get("coverMediaId")
+    if not media_id:
+        course["coverPath"] = None
+        return course
+    found = await media.resolve(env, [media_id])
+    item = found.get(media_id)
+    course["coverPath"] = item["path"] if item else None
+    return course
 
 
 async def slug_taken(env, slug: str, *, excluding: str | None = None) -> bool:

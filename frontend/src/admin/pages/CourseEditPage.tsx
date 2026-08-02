@@ -234,13 +234,17 @@ export function CourseEditPage({ id }: { id: string }) {
       </Panel>
 
       <Panel title="課程封面">
-        {course.coverMediaId ? (
+        {course.coverMediaId && course.coverPath ? (
           <div class="course-cover">
-            <img src={apiUrl(`/media-assets/${course.coverMediaId}`)} alt="" />
+            {/* The path, not the id. The id is what the picker sets and the form
+                saves; the URL is built from the object key, which only the media
+                library knows — building it here drew a broken image on every
+                course that had a cover. */}
+            <img src={apiUrl(course.coverPath)} alt="" />
             <Button size="sm" onClick={() => setPickingCover(true)}>
               更換
             </Button>
-            <Button size="sm" tone="ghost" onClick={() => edit({ coverMediaId: null })}>
+            <Button size="sm" tone="ghost" onClick={() => edit({ coverMediaId: null, coverPath: null })}>
               移除
             </Button>
           </div>
@@ -256,7 +260,9 @@ export function CourseEditPage({ id }: { id: string }) {
           open={pickingCover}
           selectedId={course.coverMediaId}
           onPick={(item) => {
-            edit({ coverMediaId: item.id })
+            // Both, so the preview is the picture just chosen rather than
+            // whatever the last save resolved.
+            edit({ coverMediaId: item.id, coverPath: item.path })
             setPickingCover(false)
           }}
           onClose={() => setPickingCover(false)}

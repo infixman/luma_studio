@@ -345,3 +345,73 @@ class TestWhatAProductPageShows:
         database = self._database([self._component()], course_status="draft")
 
         assert asyncio.run(courses.public_for_offers(make_env(database), ["off-1"])) == []
+
+
+class TestTheCoverPicture:
+    """The course carries an id; a page needs a URL.
+
+    The editor drew `\/media-assets\/{coverMediaId}` — a path that does not
+    exist, because the URL a picture is served at is built from its object key,
+    not from its id. The result was a broken-image icon on every course with a
+    cover, and nothing in the network log but a 404 for a route nobody wrote.
+
+    Resolved here rather than looked up by the page: the storefront needs the
+    same URL for the same picture, and two callers guessing at it is how the
+    first guess went unnoticed.
+    """
+
+    def _course(self, courses, media_rows):
+        database = FakeDatabase(
+            {
+                "SELECT * FROM courses WHERE id": [
+                    {
+                        "id": "c1", "slug": "night-shining-waves", "title": "夜光海浪",
+                        "status": "draft", "cover_media_id": "media-1",
+                        "created_at": 1, "updated_at": 2,
+                    }
+                ],
+                "FROM media WHERE id IN": media_rows,
+            }
+        )
+        return asyncio.run(courses.get_course(make_env(database), "c1"))
+
+    def test_the_cover_comes_back_as_something_a_page_can_draw(self, courses):
+        course = self._course(
+            courses,
+            [
+                {
+                    "id": "media-1", "object_key": "_media/abc123.webp", "file_name": "cover.webp",
+                    "title": "", "alt": "", "byte_size": 10, "width": 1216, "height": 832,
+                    "created_at": 1,
+                }
+            ],
+        )
+
+        assert course["coverPath"] == "/media-assets/abc123.webp"
+        # The id stays: it is what the picker sets and what the form saves.
+        assert course["coverMediaId"] == "media-1"
+
+    def test_a_cover_whose_picture_has_been_deleted_is_nothing_rather_than_broken(self, courses):
+        """A page that draws nothing beats a page that draws the browser's
+        broken-image icon, which reads as the page being at fault."""
+
+        course = self._course(courses, [])
+
+        assert course["coverPath"] is None
+
+    def test_a_course_with_no_cover_asks_the_library_nothing(self, courses):
+        database = FakeDatabase(
+            {
+                "SELECT * FROM courses WHERE id": [
+                    {
+                        "id": "c1", "slug": "s", "title": "t", "status": "draft",
+                        "cover_media_id": None, "created_at": 1, "updated_at": 2,
+                    }
+                ]
+            }
+        )
+
+        course = asyncio.run(courses.get_course(make_env(database), "c1"))
+
+        assert course["coverPath"] is None
+        assert not [sql for sql in database.statements if "FROM media" in sql]

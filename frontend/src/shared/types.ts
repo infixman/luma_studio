@@ -548,6 +548,10 @@ export interface Course {
   summary: string
   descriptionHtml: string
   coverMediaId: string | null
+  /** Where that picture is served, resolved by the server. The id alone cannot
+   *  be turned into a URL: it is built from the object key, which only the
+   *  media library knows. */
+  coverPath: string | null
   instructorName: string
   instructorBioHtml: string
   level: CourseLevel

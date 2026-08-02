@@ -28,7 +28,22 @@ vi.mock('../../shared/api', async (importOriginal) => {
       if (url.endsWith('/outline')) return { sections }
       // The outline editor offers finished videos to choose from.
       if (url.startsWith('/api/video-assets')) return { assets: [] }
-      if (url.startsWith('/api/media')) return { items: [] }
+      if (url.startsWith('/api/media/tags')) return { tags: [] }
+      if (url.startsWith('/api/media'))
+        return {
+          media: [
+            {
+              id: 'media-2', path: '/media-assets/picked.webp', fileName: 'picked.webp',
+              title: '', alt: '', tags: [], byteSize: 1, width: 100, height: 100,
+              sizes: [], createdAt: 1,
+            },
+          ],
+          page: 1,
+          pages: 1,
+          total: 1,
+          perPage: 24,
+          count: 1,
+        }
       return { course }
     }),
     apiJson: vi.fn(async (url: string) => {
@@ -163,4 +178,48 @@ test('a lesson with no video is not shown as broken', async () => {
   await settle()
 
   expect(container.textContent).toContain('文字單元')
+})
+
+test('the cover is drawn from the path the server resolved', async () => {
+  /** The page used to build `/media-assets/{coverMediaId}` itself, which is not
+   *  where anything is served — the URL comes from the object key, and only the
+   *  library knows it. Every course with a cover showed a broken-image icon. */
+  course = aCourse({ coverMediaId: 'media-1', coverPath: '/media-assets/abc123.webp' })
+
+  render(<CourseEditPage id="c1" />, container)
+  await settle()
+
+  const cover = container.querySelector<HTMLImageElement>('.course-cover img')
+  expect(cover?.getAttribute('src')).toContain('/media-assets/abc123.webp')
+  expect(cover?.getAttribute('src')).not.toContain('media-1')
+})
+
+test('picking a cover shows that picture rather than waiting for a save', async () => {
+  /** The path comes from the server, and the picked item already carries it —
+   *  so the preview is the picture just chosen. Setting only the id would leave
+   *  the page with a cover it cannot draw until somebody reloads. */
+  course = aCourse({ coverMediaId: null, coverPath: null })
+
+  render(<CourseEditPage id="c1" />, container)
+  await settle()
+
+  const choose = [...container.querySelectorAll('button')].find((element) =>
+    (element.textContent ?? '').includes('選擇封面'),
+  )
+  choose?.click()
+  // The picker debounces its search by 250ms, so the grid arrives later than
+  // the dialog does.
+  await new Promise((resolve) => setTimeout(resolve, 320))
+  await settle()
+
+  const picked = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+    (element) => element.querySelector('img'),
+  )
+  expect(picked, 'the picker showed no pictures to choose from').toBeTruthy()
+  picked?.click()
+  await settle()
+
+  expect(container.querySelector<HTMLImageElement>('.course-cover img')?.getAttribute('src')).toContain(
+    '/media-assets/picked.webp',
+  )
 })

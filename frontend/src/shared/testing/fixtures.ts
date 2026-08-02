@@ -18,6 +18,7 @@ export function aCourse(overrides: Partial<Course> = {}): Course {
     summary: '兩小時學會水彩花卉',
     descriptionHtml: '',
     coverMediaId: 'media-1',
+    coverPath: '/media-assets/abc123.webp',
     instructorName: '王老師',
     instructorBioHtml: '',
     level: 'beginner',
