@@ -335,7 +335,9 @@ async def refresh_releases(env, *, now: int) -> dict:
     found: list[dict] = []
     cursor = None
     for _ in range(MAX_LIST_PAGES):
-        listing = await bucket.list(prefix=RELEASE_PREFIX, limit=LIST_PAGE, cursor=cursor)
+        listing = await video_storage.list_page(
+            bucket, prefix=RELEASE_PREFIX, limit=LIST_PAGE, cursor=cursor
+        )
         for item in listing.objects:
             name = str(item.key)[len(RELEASE_PREFIX) :]
             if name != FEED_FILE and not version_of(name):

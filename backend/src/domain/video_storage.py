@@ -101,6 +101,24 @@ def validate_prefix(prefix) -> str:
     return prefix
 
 
+async def list_page(bucket, *, prefix: str, limit: int, cursor: str | None = None):
+    """One page of a listing, asked for the way R2 accepts.
+
+    The cursor is left out entirely when there is none. Passing `cursor=None`
+    reaches the runtime as `null`, and R2 answers a TypeError rather than
+    treating it as absent — which every caller here did, because a fake bucket
+    accepts anything and the first page is the only page most tests have.
+
+    One helper rather than the same conditional three times: the mistake is
+    invisible at the call site, and it cost the same 500 in the desktop tool,
+    the orphan scan and the release list.
+    """
+
+    if cursor:
+        return await bucket.list(prefix=prefix, limit=limit, cursor=cursor)
+    return await bucket.list(prefix=prefix, limit=limit)
+
+
 async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None) -> dict:
     """What is actually in the bucket under this prefix.
 
@@ -111,7 +129,7 @@ async def list_objects(env, *, kind: str, prefix: str, cursor: str | None = None
     """
 
     bucket = binding_for(env, kind)
-    listing = await bucket.list(prefix=validate_prefix(prefix), limit=MAX_LISTED, cursor=cursor)
+    listing = await list_page(bucket, prefix=validate_prefix(prefix), limit=MAX_LISTED, cursor=cursor)
     return {
         "objects": [
             {

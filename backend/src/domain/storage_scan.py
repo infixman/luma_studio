@@ -197,7 +197,7 @@ async def run_scan(env, *, now: int | None = None) -> dict:
         prefix = "sources/" if kind == "source" else "videos/"
         cursor = None
         for _ in range(MAX_PAGES):
-            listing = await bucket.list(prefix=prefix, limit=PAGE, cursor=cursor)
+            listing = await video_storage.list_page(bucket, prefix=prefix, limit=PAGE, cursor=cursor)
             for item in listing.objects:
                 entry = {
                     "key": item.key,

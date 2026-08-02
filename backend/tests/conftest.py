@@ -198,6 +198,19 @@ class FakeBucket:
         self.objects = objects or {}
         self.deleted: list[str] = []
 
+    async def list(self, **options):
+        """As permissive as R2 and no more.
+
+        R2 answers `cursor: null` with a TypeError — "the provided value is not
+        of type 'string'" — and a fake that shrugs at it is a fake that passes
+        every test for code that cannot list anything at all. Three call sites
+        were written that way before this refused.
+        """
+
+        reject_null_cursor(options)
+        keys = sorted(key for key in self.objects if key.startswith(options.get("prefix") or ""))
+        return FakeListing([FakeListed(key, self.objects[key]) for key in keys])
+
     async def get(self, key):
         return self.objects.get(key)
 
@@ -207,6 +220,34 @@ class FakeBucket:
     async def delete(self, key):
         self.deleted.append(key)
         self.objects.pop(key, None)
+
+
+def reject_null_cursor(options: dict) -> None:
+    """What the runtime does, so a test double cannot be kinder than production."""
+
+    if "cursor" in options and not isinstance(options["cursor"], str):
+        raise TypeError(
+            "Incorrect type for the 'cursor' field on 'ListOptions':"
+            " the provided value is not of type 'string'."
+        )
+
+
+class FakeListing:
+    def __init__(self, objects, truncated: bool = False, cursor=None):
+        self.objects = objects
+        self.truncated = truncated
+        self.cursor = cursor
+
+
+class FakeListed:
+    """One row of a listing: a key, a size, and when R2 says it landed."""
+
+    def __init__(self, key: str, stored=None, uploaded_at: int | None = None):
+        self.key = key
+        self.size = len(getattr(stored, "content", b"")) if stored is not None else 0
+        self.uploaded = (
+            types.SimpleNamespace(getTime=lambda: uploaded_at * 1000) if uploaded_at else None
+        )
 
 
 class FakeObject:
