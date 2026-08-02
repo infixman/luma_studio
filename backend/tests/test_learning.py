@@ -363,12 +363,12 @@ class TestGatewayRoutes:
 
         assert response.status == 403
 
-    def test_an_unauthorised_request_reads_neither_the_cache_nor_r2(self, call, monkeypatch):
-        """The class below says authorisation comes first; this is what says it.
+    def test_an_unauthorised_request_does_not_read_r2(self, call):
+        """The token is checked before anything is fetched.
 
-        The cache key deliberately carries no identity, which is what makes it
-        shareable between members — and also what would make one unauthorised
-        hit serve a lesson to everybody. Nothing may be read before the token.
+        Cheap to get wrong in the other order — the answer is a 403 either way —
+        and getting it wrong would mean an unauthorised request still costing a
+        read of a member's video.
         """
 
         looked_up: list[str] = []
@@ -377,17 +377,6 @@ class TestGatewayRoutes:
             async def get(self, key):
                 looked_up.append(key)
                 return None
-
-        async def _never(ctx, key):
-            looked_up.append(f"cache:{key}")
-            return None
-
-        # The byte-serving lives in `api.media_gateway` now: two Workers answer
-        # this route, and one copy of "does this token cover this object" is the
-        # point of the module.
-        from api import media_gateway
-
-        monkeypatch.setattr(media_gateway, "_cached", _never)
 
         response = call(
             self._request("/course-media/asset-1/1/720p/segment-000001.m4s"),
@@ -575,30 +564,103 @@ class TestAReadingIsStillPartOfACourse:
         assert result["courseId"] == "course-1"
 
 
-class TestMediaCaching:
-    """Segments are immutable, so fetching them from R2 twice is waste.
+class TestServingTheBytes:
+    """A segment is passed through, never read into Python.
 
-    Authorisation happens before the cache is consulted. A cached segment that
-    could be served without a token would mean the first member to watch a
-    lesson opened it for everybody.
+    This is what broke the day playback first worked. `binary` copies the whole
+    object twice — the ArrayBuffer R2 hands over, and the `bytes` built from it
+    — and a 1080p segment is megabytes. The Worker hit its CPU limit part-way
+    through and was killed:
+
+        GET .../1080p/segment-000001.m4s - Exceeded CPU Limit
+
+    A request killed mid-flight leaves its task half-executed, and every request
+    landing on that isolate afterwards cannot enter the event loop and is
+    cancelled for never answering. One segment took the whole back office down
+    with it — which is how a video nobody could play became a 500 on a button
+    about something else entirely.
+
+    Streaming costs no copies: the runtime moves the bytes, Python never sees
+    them.
     """
 
-    def test_a_segment_is_read_from_the_cache_before_r2(self, monkeypatch):
-        from api import media_gateway as module
+    class Stored:
+        def __init__(self):
+            self.body = "the-stream"
+            self.read = 0
 
-        assert module.CACHEABLE_SUFFIXES == (".m4s", ".mp4", ".webp")
+        async def arrayBuffer(self):
+            self.read += 1
+            return b"x" * 4_000_000
 
-    def test_a_playlist_is_not_cached_at_the_edge(self):
+    class Bucket:
+        def __init__(self, stored):
+            self.stored = stored
+
+        async def get(self, _key):
+            return self.stored
+
+    def _play(self, stored, path="asset-1/1/720p/segment-000001.m4s"):
+        import asyncio
+
+        from api import media_gateway
+        from conftest import FakeDatabase, FakeRequest, STOREFRONT_ORIGIN, make_env
+        from domain import playback
+        from shared.common import utc_timestamp
+        from shared.responses import Ctx
+
+        token = playback.issue(
+            {"assetId": "asset-1", "encodeVersion": 1}, secret="s", now=utc_timestamp()
+        )
+        request = FakeRequest(
+            f"/course-media/{path}",
+            "GET",
+            {"Origin": STOREFRONT_ORIGIN, "x-luma-app": "1", "Cookie": f"luma_playback={token}"},
+        )
+        env = make_env(FakeDatabase(), PLAYBACK_SECRET="s", COURSE_VIDEO=self.Bucket(stored))
+        ctx = Ctx(env, request, f"/course-media/{path}", {})
+        return asyncio.run(media_gateway.media_response(ctx, path))
+
+    def test_a_segment_is_streamed_rather_than_read(self):
+        stored = self.Stored()
+
+        response = self._play(stored)
+
+        assert response.status == 200
+        assert stored.read == 0, "read into Python, which is the cost that killed the isolate"
+        assert response.body == "the-stream"
+
+    def test_the_same_is_true_of_a_playlist(self):
+        """Small today, and there is no reason for two ways of answering."""
+
+        stored = self.Stored()
+
+        self._play(stored, path="asset-1/1/720p/playlist.m3u8")
+
+        assert stored.read == 0
+
+
+class TestMediaCaching:
+    """What may be kept, and what a player must be able to re-read.
+
+    The Worker no longer copies objects into a shared cache itself: that meant
+    holding a whole segment in Python, which is the cost that killed the
+    isolate. What is left is the header that lets the edge and the browser keep
+    the ones that can never change.
+    """
+
+    def test_a_playlist_is_not_kept_for_long(self):
         """It is what a player re-reads, and a switched encode version has to
         be picked up without waiting out a long TTL."""
 
         from api import media_gateway
 
-        assert not media_gateway.is_cacheable("master.m3u8")
-        assert not media_gateway.is_cacheable("720p/playlist.m3u8")
+        assert "max-age=60" in media_gateway._media_headers("master.m3u8")["Cache-Control"]
 
-    def test_a_segment_is(self):
+    def test_a_segment_can_be_kept_for_ever(self):
+        """A re-encode is a new version and therefore a new URL, so nothing at
+        this one can ever change."""
+
         from api import media_gateway
 
-        assert media_gateway.is_cacheable("720p/segment-000001.m4s") is True
-        assert media_gateway.is_cacheable("720p/init.mp4") is True
+        assert "immutable" in media_gateway._media_headers("720p/segment-000001.m4s")["Cache-Control"]

@@ -11,25 +11,12 @@ encode version, it is still short-lived, and it is still the only way past this
 function.
 """
 
-from js import Uint8Array
-
 from domain import playback, video
 from shared.common import env_var, utc_timestamp
 from shared.responses import Ctx
 
 
 COOKIE_NAME = "luma_playback"
-
-# What is worth keeping at the edge. These are immutable: a re-encode is a new
-# version and therefore a new key, so a hit is always the right bytes.
-#
-# Playlists are left out on purpose. They are what a player re-reads, and a
-# switched encode version has to be picked up without waiting out a TTL.
-CACHEABLE_SUFFIXES = (".m4s", ".mp4", ".webp")
-
-
-def is_cacheable(object_path: str) -> bool:
-    return object_path.endswith(CACHEABLE_SUFFIXES)
 
 
 def signing_secrets(env) -> tuple[str, str | None]:
@@ -118,83 +105,42 @@ async def media_response(ctx: Ctx, path: str):
         # difference is useful in a log and useful to an attacker.
         return ctx.error("Forbidden", 403)
 
-    # Only after the token has been checked. A cached object that could be
-    # served without one would mean the first member to watch a lesson opened
-    # it for everybody — the cache key deliberately carries no identity, which
-    # is what makes it shareable and also what makes the order matter.
-    cached = await _cached(ctx, key) if is_cacheable(object_path) else None
-    if cached is not None:
-        return ctx.binary(cached, _media_headers(object_path))
-
     stored = await ctx.env.COURSE_VIDEO.get(key)
     if stored is None:
         return ctx.error("Not found", 404)
 
-    body = bytes(Uint8Array.new(await stored.arrayBuffer()).to_py())
-    if is_cacheable(object_path):
-        await _remember(ctx, key, body, object_path)
-    return ctx.binary(body, _media_headers(object_path))
-
-
-def _cache_url(key: str) -> str:
-    """A stable, identity-free URL to key the cache on.
-
-    Not the request URL: that would work, but tying the entry to the incoming
-    path means a change to the route invalidates a cache full of bytes that
-    have not changed.
-    """
-
-    return f"https://course-media.internal/{key}"
-
-
-async def _cached(ctx: Ctx, key: str) -> bytes | None:
-    """Whatever the edge already has, or None.
-
-    Every failure is None. A cache that is unavailable, or a runtime without
-    one, must not stop somebody watching a lesson.
-    """
-
-    try:
-        from js import Request, caches
-
-        hit = await caches.default.match(Request.new(_cache_url(key)))
-        if hit is None:
-            return None
-        return bytes(Uint8Array.new(await hit.arrayBuffer()).to_py())
-    except Exception:
-        return None
-
-
-async def _remember(ctx: Ctx, key: str, body: bytes, object_path: str) -> None:
-    """Put an object in the shared cache, or carry on without."""
-
-    try:
-        from js import Request, Response, caches
-        from pyodide.ffi import to_js
-
-        headers = _media_headers(object_path)
-        await caches.default.put(
-            Request.new(_cache_url(key)),
-            Response.new(to_js(body), headers=to_js(headers, dict_converter=__import__("js").Object.fromEntries)),
-        )
-    except Exception:
-        # Failing to cache is not failing to serve.
-        pass
+    # Streamed, never read here. Reading a segment into Python costs two copies
+    # of a file that is megabytes — the ArrayBuffer R2 hands over and the bytes
+    # built from it — and the Worker was killed part-way through:
+    #
+    #     GET .../1080p/segment-000001.m4s - Exceeded CPU Limit
+    #
+    # A request killed mid-flight leaves its task half-executed, and every
+    # request that lands on that isolate afterwards cannot enter the event loop
+    # and is cancelled for never answering. One segment took the whole
+    # deployment down for as long as the isolate lived.
+    return ctx.stream(stored.body, _media_headers(object_path))
 
 
 def _media_headers(object_path: str) -> dict:
     """Content type and caching, decided by what the pipeline writes.
 
     Segments are immutable — a new encode is a new version and therefore a new
-    URL — so they can be cached hard. A playlist is cached briefly: it is the
+    URL — so they can be kept for ever. A playlist is kept briefly: it is the
     thing a player re-reads, and the short window is what lets a switched
     encode version be picked up without waiting out a long TTL.
+
+    Caching is left to the browser and the edge rather than done here. The
+    Worker used to put segments in the shared cache itself, which meant holding
+    a whole one in Python — the cost that killed the isolate. `private` because
+    what is behind these URLs is not public; the token in front of them is what
+    decides who may ask.
     """
 
     if object_path.endswith(".m3u8"):
         return {"Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "private, max-age=60"}
     if object_path.endswith(".webp"):
-        return {"Content-Type": "image/webp", "Cache-Control": "private, max-age=3600"}
+        return {"Content-Type": "image/webp", "Cache-Control": "private, max-age=31536000, immutable"}
     if object_path.endswith(".mp4") or object_path.endswith(".m4s"):
         return {"Content-Type": "video/mp4", "Cache-Control": "private, max-age=31536000, immutable"}
     return {"Content-Type": "application/octet-stream", "Cache-Control": "private, no-store"}
