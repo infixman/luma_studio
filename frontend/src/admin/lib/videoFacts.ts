@@ -100,6 +100,23 @@ export function canAbort(asset: VideoAsset): boolean {
 }
 
 /**
+ * Whether this row can still change without anybody pressing anything.
+ *
+ * The four states the pipeline is still moving through. Everything else has
+ * arrived somewhere it stays until a person acts, which is what makes it safe
+ * for the library to stop polling — a request every three seconds for ever,
+ * whose answer can only be identical, is not a refresh but a leak.
+ */
+export function stillMoving(asset: VideoAsset): boolean {
+  return (
+    asset.status === 'uploading' ||
+    asset.status === 'uploaded' ||
+    asset.status === 'queued' ||
+    asset.status === 'processing'
+  )
+}
+
+/**
  * Whether there is anything to watch.
  *
  * Beside `canArchive` for the same reason it exists: the server answers 409

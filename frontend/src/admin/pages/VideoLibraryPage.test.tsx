@@ -99,7 +99,13 @@ afterEach(() => {
 
 async function settle(): Promise<void> {
   for (let tick = 0; tick < 50; tick++) {
-    if (!(container.textContent ?? '').includes('載入中')) return
+    if (!(container.textContent ?? '').includes('載入中')) {
+      // The list being on screen is not the end of it: the poll only starts
+      // once the page knows whether anything in that list is still moving, and
+      // that effect runs a tick later.
+      await flush()
+      return
+    }
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   throw new Error('the page never finished loading')
@@ -523,4 +529,72 @@ test('a thumbnail with nothing playable behind it is not a button', async () => 
   await settle()
 
   expect(container.querySelector('table img')?.closest('button')).toBeFalsy()
+})
+
+test('it stops asking once nothing can change on its own', async () => {
+  /** The poll exists for the states that finish without anybody pressing
+   *  anything. A list where every row has already arrived somewhere final is a
+   *  request every three seconds, for ever, that can only come back identical. */
+  assets = [aVideoAsset({ status: 'ready' }), aVideoAsset({ id: 'asset-2', status: 'failed' })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  const before = listCalls
+
+  vi.advanceTimersByTime(30_000)
+  await flush()
+
+  expect(listCalls).toBe(before)
+})
+
+test('it keeps asking while a transcode is still running', async () => {
+  assets = [aVideoAsset({ status: 'ready' }), aVideoAsset({ id: 'asset-2', status: 'processing' })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+  const before = listCalls
+
+  vi.advanceTimersByTime(3_000)
+  await flush()
+
+  expect(listCalls).toBe(before + 1)
+})
+
+test('a settled list starts asking again when something new is uploading', async () => {
+  /** Otherwise the tool uploads, the page has already gone quiet, and nothing
+   *  appears until somebody reloads by hand. */
+  assets = [aVideoAsset({ status: 'ready' })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  // The row the desktop tool just created, seen by the one poll that a manual
+  // action triggers — here, the archive reload.
+  assets = [aVideoAsset({ status: 'ready' }), aVideoAsset({ id: 'asset-2', status: 'uploading' })]
+  await openRowMenu()
+  buttonFor('封存')?.click()
+  await flush()
+  container.querySelector<HTMLElement>('[role="dialog"] .ui-button.tone-danger')?.click()
+  await flush()
+  const before = listCalls
+
+  vi.advanceTimersByTime(3_000)
+  await flush()
+
+  expect(listCalls).toBe(before + 1)
+})
+
+test('it does not refresh underneath a preview', async () => {
+  /** Nobody is reading the list while they are watching a video, and every
+   *  refresh re-renders the tree the player is mounted in. */
+  assets = [aVideoAsset({ status: 'processing', encodeVersion: 1 })]
+  render(<VideoLibraryPage />, container)
+  await settle()
+
+  await openRowMenu()
+  buttonFor('預覽')?.click()
+  await flush()
+  const before = listCalls
+
+  vi.advanceTimersByTime(9_000)
+  await flush()
+
+  expect(listCalls).toBe(before)
 })

@@ -21,6 +21,7 @@ import {
   canArchive,
   canPreview,
   runtime,
+  stillMoving,
   videoFailure,
   videoStatusLabel,
   videoStatusTone,
@@ -121,8 +122,16 @@ export function VideoLibraryPage() {
     }
   }, [load])
 
+  // Only while something is on its way. Everything else in the list stays as it
+  // is until somebody acts on it, and an interval that can only ever fetch the
+  // same answer is a request every three seconds for the life of the tab.
+  const moving = assets !== null && assets.some(stillMoving)
+
   useEffect(() => {
-    if (stalled) return
+    // Not underneath a preview either: nobody is reading the list while they
+    // are watching a video, and each refresh re-renders the tree the player is
+    // mounted in.
+    if (stalled || !moving || watching !== null) return
 
     let timer: ReturnType<typeof setInterval> | null = null
 
@@ -152,7 +161,7 @@ export function VideoLibraryPage() {
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [load, stalled])
+  }, [load, stalled, moving, watching])
 
   /**
    * The two ways out of use, which differ only in words.
@@ -316,7 +325,7 @@ export function VideoLibraryPage() {
 
       <Panel title="所有影片">
         <p class="muted">
-          影片由桌面上傳工具轉檔並上傳，這裡看得到結果。列表每三秒自動更新，所以轉檔中的影片會自己變成可播放。
+          影片由桌面上傳工具轉檔並上傳，這裡看得到結果。有影片在上傳或轉檔時，列表每三秒自動更新，所以它會自己變成可播放；全部都結束之後就停止詢問。
         </p>
 
         {stalled ? (
