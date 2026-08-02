@@ -148,10 +148,23 @@ async def summary(env, *, now: int, orphans: dict | None = None) -> dict:
 # One row per original, with the version totals folded in. A join rather than a
 # query per asset: this page is a list, and a query per row is what turns a list
 # into a hundred round trips.
+#
+# `source_landed` is the same test the totals above and the orphan scan already
+# make: a completed upload session, not the size on the asset row. That size is
+# what the tool declared before it started sending, so a row without a session
+# read as 864 KB here while weighing nothing in the total directly above it —
+# and the video somebody wanted rid of was the one the two disagreed about.
+#
+# EXISTS rather than a second join. There is meant to be one session per asset
+# but nothing in the schema says so, and a join fanning out over the version
+# rows beside it would multiply `version_bytes` — an inflated number on the one
+# page whose job is to make the real number smaller.
 SOURCES_SQL = (
     "SELECT assets.id AS id, assets.title AS title, assets.status AS status,"
     " assets.byte_size AS byte_size, assets.active_encode_version AS active_encode_version,"
     " assets.created_at AS created_at,"
+    " EXISTS (SELECT 1 FROM video_upload_sessions sessions"
+    " WHERE sessions.asset_id = assets.id AND sessions.status = 'completed') AS source_landed,"
     " COUNT(versions.encode_version) AS version_count,"
     " COALESCE(SUM(versions.byte_size), 0) AS version_bytes"
     " FROM video_assets assets"
@@ -201,12 +214,24 @@ async def sources(env) -> list[dict]:
             }
         )
 
+    def landed(row) -> bool:
+        # Evidence, and the absence of evidence is not the other thing: a row
+        # that says nothing about a completed upload is a row with no object.
+        return bool(row.get("source_landed"))
+
     return [
         {
             "assetId": row["id"],
             "title": row["title"],
             "status": row["status"],
-            "bytes": int(row["byte_size"] or 0),
+            # Zero until the upload session says an object was assembled. The
+            # declared size of an upload that never finished is a plan, and a
+            # plan printed in a storage column is somebody hunting for bytes
+            # that were never there.
+            "bytes": int(row["byte_size"] or 0) if landed(row) else 0,
+            # Which is also the difference between "delete the original and keep
+            # the ladder" being an offer and being a button that deletes nothing.
+            "hasSourceObject": landed(row),
             # Not "is it old". No playable version means the upload never
             # finished, which points the other way about deleting it.
             "hasPlayableVersion": row["active_encode_version"] is not None,

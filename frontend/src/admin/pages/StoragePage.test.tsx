@@ -12,12 +12,13 @@
 import { render } from 'preact'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import type { CleanupCandidates, StorageSource, StorageSummary } from '../../shared/types'
+import type { StorageSource, StorageSummary } from '../../shared/types'
+import type { StorageCandidates } from './StoragePage'
 
 const GIGABYTE = 1024 * 1024 * 1024
 
 let summary: StorageSummary
-let candidates: CleanupCandidates
+let candidates: StorageCandidates
 let sources: StorageSource[]
 const posted: { path: string; body: unknown }[] = []
 let failing: string | null = null
@@ -221,6 +222,101 @@ test('backing out of that dialog deletes nothing', async () => {
   await flush()
 
   expect(posted).toEqual([])
+})
+
+test('deleting a whole video names it and says the row goes too', async () => {
+  /** The case the back office could not act on at all: a row with nothing left
+   *  in R2, which the library only offered to archive. Archiving is a state, so
+   *  the sentence has to say that this one really is a deletion. */
+  candidates = {
+    safe: [],
+    needsJudgement: [
+      {
+        kind: 'entireVideo',
+        assetId: 'asset-1',
+        title: '驗證用—可刪除',
+        bytes: 0,
+        consequence: '整支影片、所有畫質版本與這筆紀錄都會刪除，無法復原',
+      },
+    ],
+    scannedAt: 1785292800,
+  }
+  render(<StoragePage />, container)
+  await settle()
+
+  buttonFor('刪除整支影片')?.click()
+  await flush()
+
+  // Its objects are already gone, and "0 B" reads as a measurement of the video
+  // rather than of what is left of it.
+  expect(container.textContent).not.toContain('0 B')
+
+  const dialog = container.querySelector('[role="dialog"]')
+  expect(dialog?.textContent).toContain('驗證用—可刪除')
+  expect(dialog?.textContent).toContain('無法復原')
+  expect(posted).toEqual([])
+
+  buttonFor('確定刪除整支影片')?.click()
+  await flush()
+
+  expect(posted).toEqual([
+    { path: '/api/video-storage/cleanup', body: { kind: 'entireVideo', assetId: 'asset-1' } },
+  ])
+})
+
+test('an upload that never finished is deleted as the upload it is', async () => {
+  /** A different sentence from the one about an original, because a different
+   *  thing is lost: there is no video here yet, only parts R2 is billing for. */
+  candidates = {
+    safe: [],
+    needsJudgement: [
+      {
+        kind: 'unfinishedUpload',
+        assetId: 'asset-2',
+        title: '傳到一半',
+        bytes: 0,
+        consequence: '這次上傳沒有完成，刪除後這筆紀錄與已經送出的分段都會消失',
+      },
+    ],
+    scannedAt: 1785292800,
+  }
+  render(<StoragePage />, container)
+  await settle()
+
+  buttonFor('刪除這筆上傳')?.click()
+  await flush()
+
+  const dialog = container.querySelector('[role="dialog"]')
+  expect(dialog?.textContent).toContain('傳到一半')
+  expect(dialog?.textContent).toContain('已經送出的分段')
+
+  buttonFor('確定刪除這筆上傳')?.click()
+  await flush()
+
+  expect(posted).toEqual([
+    { path: '/api/video-storage/cleanup', body: { kind: 'unfinishedUpload', assetId: 'asset-2' } },
+  ])
+})
+
+test('a video offered both ways offers them one at a time', async () => {
+  /** Keeping a working video while dropping its original is not the same
+   *  decision as deciding the video should not exist, and one row with two
+   *  buttons is how somebody presses the wrong one. */
+  candidates = {
+    safe: [],
+    needsJudgement: [
+      { kind: 'unusedSource', assetId: 'a', title: '第一課', bytes: 4 * GIGABYTE, consequence: '無法再重新轉檔' },
+      { kind: 'entireVideo', assetId: 'a', title: '第一課', bytes: 7 * GIGABYTE, consequence: '無法復原' },
+    ],
+    scannedAt: 1,
+  }
+  render(<StoragePage />, container)
+  await settle()
+
+  const offers = [...container.querySelectorAll('button')]
+    .map((element) => element.textContent ?? '')
+    .filter((label) => label.startsWith('刪除'))
+  expect(offers).toEqual(['刪除這一支', '刪除整支影片'])
 })
 
 test('there is no way to select every original at once', async () => {

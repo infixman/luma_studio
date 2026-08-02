@@ -19,11 +19,96 @@ import '../styles/shop-admin.css'
 
 type Tab = 'overview' | 'sources' | 'outputs'
 
+/**
+ * The three ways something can be removed on judgement, and what each costs.
+ *
+ * Declared beside the page rather than with the other API shapes, because it is
+ * the page that owes each kind a sentence: a kind the server can produce and
+ * this file has no wording for is a delete button that says nothing, and a type
+ * that lives where the branch lives cannot be widened without noticing.
+ */
+export type RemovalKind = 'unusedSource' | 'unfinishedUpload' | 'entireVideo'
+
+export interface Removal {
+  kind: RemovalKind
+  assetId: string
+  title: string
+  bytes: number
+  consequence: string
+}
+
+export type StorageCandidates = Omit<CleanupCandidates, 'needsJudgement'> & {
+  needsJudgement: Removal[]
+}
+
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: '總覽' },
   { id: 'sources', label: '原始檔' },
   { id: 'outputs', label: '輸出與孤兒' },
 ]
+
+/**
+ * What one entry offers to remove, in words somebody can refuse.
+ *
+ * One table rather than a dialog per button, so the three sentences sit beside
+ * each other: they are easy to write and hard to tell apart at four in the
+ * afternoon, and the whole value of the confirmation is that it names which of
+ * the three this one is.
+ */
+function removalCopy(entry: Removal): {
+  summary: string
+  label: string
+  title: string
+  body: preact.JSX.Element
+  confirmLabel: string
+  done: string
+} {
+  switch (entry.kind) {
+    case 'unfinishedUpload':
+      return {
+        summary: `「${entry.title}」沒有上傳完成`,
+        label: '刪除這筆上傳',
+        title: `刪除「${entry.title}」這筆沒完成的上傳？`,
+        body: (
+          <p>
+            {entry.consequence}。這一筆還不是能播的影片，刪掉之後它會從影片庫消失，已經送出的分段也不再算錢。
+          </p>
+        ),
+        confirmLabel: '確定刪除這筆上傳',
+        done: '這筆上傳已刪除。',
+      }
+    case 'entireVideo':
+      return {
+        summary: `「${entry.title}」整支影片`,
+        label: '刪除整支影片',
+        title: `刪除整支「${entry.title}」？`,
+        body: (
+          <p>
+            {entry.consequence}。原始檔、每一個畫質版本和這一列都會不見。現在沒有任何單元用它 ——
+            刪掉之後也沒有辦法再拿回來。
+          </p>
+        ),
+        confirmLabel: '確定刪除整支影片',
+        done: '影片已刪除。',
+      }
+    // No `default`. A kind added to the union and not to this switch is a type
+    // error here, which is the only place that noticing it costs nothing.
+    case 'unusedSource':
+      return {
+        summary: `「${entry.title}」的原始檔`,
+        label: '刪除這一支',
+        title: `刪除「${entry.title}」的原始檔？`,
+        body: (
+          <p>
+            {entry.consequence}。已經轉好的畫質階梯還在，會員照樣看得到 —— 但這支影片以後不能再加畫質、
+            不能修，也補不回 R2 掉掉的物件。
+          </p>
+        ),
+        confirmLabel: '確定刪除原始檔',
+        done: '原始檔已刪除。',
+      }
+  }
+}
 
 /**
  * Where the storage bill becomes somebody's problem.
@@ -41,7 +126,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function StoragePage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [summary, setSummary] = useState<StorageSummary | null>(null)
-  const [candidates, setCandidates] = useState<CleanupCandidates | null>(null)
+  const [candidates, setCandidates] = useState<StorageCandidates | null>(null)
   const [sources, setSources] = useState<StorageSource[] | null>(null)
   const [orphans, setOrphans] = useState<StorageOrphan[] | null>(null)
   const [openAsset, setOpenAsset] = useState<string | null>(null)
@@ -60,7 +145,7 @@ export function StoragePage() {
     // hides the capacity figures, which are the reason somebody came.
     const answers = await Promise.allSettled([
       api<StorageSummary>('/api/video-storage/summary'),
-      api<CleanupCandidates>('/api/video-storage/cleanup-candidates'),
+      api<StorageCandidates>('/api/video-storage/cleanup-candidates'),
       api<{ sources: StorageSource[] }>('/api/video-storage/sources'),
       api<{ objects: StorageOrphan[] }>('/api/video-storage/orphans?bucket=output'),
     ])
@@ -146,24 +231,20 @@ export function StoragePage() {
     await load()
   }
 
-  async function removeSource(entry: CleanupCandidates['needsJudgement'][number]) {
+  async function remove(entry: Removal) {
     // Named, and with the consequence in the dialog. No select-all exists for
     // this list: every one of these is a different video and a different loss.
+    const copy = removalCopy(entry)
     const confirmed = await ask({
-      title: `刪除「${entry.title}」的原始檔？`,
-      body: (
-        <p>
-          {entry.consequence}。已經轉好的畫質階梯還在，會員照樣看得到 —— 但這支影片以後不能再加畫質、
-          不能修，也補不回 R2 掉掉的物件。
-        </p>
-      ),
-      confirmLabel: '確定刪除原始檔',
+      title: copy.title,
+      body: copy.body,
+      confirmLabel: copy.confirmLabel,
     })
     if (!confirmed) return
 
     await run(async () => {
-      await apiJson('/api/video-storage/cleanup', 'POST', { kind: 'unusedSource', assetId: entry.assetId })
-    }, '原始檔已刪除。')
+      await apiJson('/api/video-storage/cleanup', 'POST', { kind: entry.kind, assetId: entry.assetId })
+    }, copy.done)
     await load()
   }
 
@@ -304,14 +385,22 @@ export function StoragePage() {
             <h3>要判斷的</h3>
             {candidates?.needsJudgement.length ? (
               <ul>
-                {candidates.needsJudgement.map((entry) => (
-                  <li key={entry.assetId}>
-                    「{entry.title}」的原始檔 {fileSize(entry.bytes)} —— {entry.consequence}
-                    <Button tone="ghost" busy={busy} onClick={() => void removeSource(entry)}>
-                      刪除這一支
-                    </Button>
-                  </li>
-                ))}
+                {candidates.needsJudgement.map((entry) => {
+                  const copy = removalCopy(entry)
+                  return (
+                    // Keyed by kind as well as asset: one video can be offered
+                    // both ways, and they are different decisions.
+                    <li key={`${entry.kind}-${entry.assetId}`}>
+                      {copy.summary}
+                      {/* No "0 B". These rows are exactly the ones whose objects
+                          are already gone, and a size is not why they go. */}
+                      {entry.bytes > 0 ? ` ${fileSize(entry.bytes)}` : ''} —— {entry.consequence}
+                      <Button tone="ghost" busy={busy} onClick={() => void remove(entry)}>
+                        {copy.label}
+                      </Button>
+                    </li>
+                  )
+                })}
               </ul>
             ) : (
               <p class="muted">沒有需要判斷的項目。</p>

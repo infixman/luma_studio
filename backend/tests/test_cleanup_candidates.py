@@ -38,6 +38,7 @@ def a_source(**extra) -> dict:
         "activeEncodeVersion": 2,
         "versionCount": 2,
         "versionBytes": 3 * GIGABYTE,
+        "hasSourceObject": True,
         "lessons": [],
         "createdAt": 1_700_000_000,
         **extra,
@@ -152,7 +153,10 @@ class TestWhatNeedsDeciding:
 
     def test_a_source_a_lesson_uses_appears_in_neither_list(self, cleanup, monkeypatch):
         """Not warned about. The rule is that there is no entrance, because a
-        warning is a thing somebody clicks past at four in the afternoon."""
+        warning is a thing somebody clicks past at four in the afternoon.
+
+        Every kind of removal, not only the original: a lesson that plays this
+        video must not be offered the video itself either."""
 
         found = candidates_of(
             cleanup,
@@ -165,13 +169,83 @@ class TestWhatNeedsDeciding:
         assert found["safe"] == []
 
     def test_an_upload_that_never_finished_is_not_a_source_to_delete(self, cleanup, monkeypatch):
-        """There is no original object to remove — the orphan sweep is what
-        finds the parts it did send, and it is the sweep that reports them."""
+        """There is no original object to remove. What it did send is a pending
+        multipart upload, which is a different thing to delete and says so."""
 
         found = candidates_of(
             cleanup,
-            sources=[a_source(status="uploading", hasPlayableVersion=False, activeEncodeVersion=None)],
+            sources=[a_source(status="uploading", hasPlayableVersion=False,
+                              activeEncodeVersion=None, hasSourceObject=False, bytes=0)],
             monkeypatch=monkeypatch,
         )
 
-        assert found["needsJudgement"] == []
+        assert [entry for entry in found["needsJudgement"] if entry["kind"] == "unusedSource"] == []
+
+    def test_an_upload_that_never_finished_is_offered_as_the_upload_it_is(self, cleanup, monkeypatch):
+        """The row is the only thing anybody can see of it, and until now the
+        library offered nothing but 封存 — which changes a state rather than
+        removing a video that should not exist."""
+
+        found = candidates_of(
+            cleanup,
+            sources=[a_source(status="uploading", hasPlayableVersion=False,
+                              activeEncodeVersion=None, hasSourceObject=False, bytes=0)],
+            monkeypatch=monkeypatch,
+        )
+
+        offered = [entry for entry in found["needsJudgement"] if entry["kind"] == "unfinishedUpload"]
+        assert offered and offered[0]["title"] == "第一課"
+        assert offered[0]["consequence"]
+
+    def test_an_upload_that_never_finished_is_offered_exactly_one_way(self, cleanup, monkeypatch):
+        """And not also as a whole video. That entry deletes the row without
+        cancelling the pending multipart upload, which would leave R2 holding
+        parts nothing can name — the one outcome worth more than the row."""
+
+        found = candidates_of(
+            cleanup,
+            sources=[a_source(status="uploading", hasPlayableVersion=False,
+                              activeEncodeVersion=None, hasSourceObject=False, bytes=0)],
+            monkeypatch=monkeypatch,
+        )
+
+        assert [entry["kind"] for entry in found["needsJudgement"]] == ["unfinishedUpload"]
+
+    def test_a_video_no_lesson_uses_can_be_deleted_whole(self, cleanup, monkeypatch):
+        """The case the back office could not act on at all: a `ready` row with
+        no objects left in R2, which the source list offered nothing for and the
+        library only offered to archive."""
+
+        found = candidates_of(
+            cleanup,
+            sources=[a_source(hasSourceObject=False, bytes=0)],
+            monkeypatch=monkeypatch,
+        )
+
+        whole = [entry for entry in found["needsJudgement"] if entry["kind"] == "entireVideo"]
+        assert whole and whole[0]["title"] == "第一課"
+        assert whole[0]["bytes"] == 3 * GIGABYTE
+
+    def test_a_source_that_never_landed_is_not_offered_as_an_original(self, cleanup, monkeypatch):
+        """There is nothing at the key. An entry for it would be a button that
+        deletes nothing and reports success."""
+
+        found = candidates_of(
+            cleanup,
+            sources=[a_source(hasSourceObject=False, bytes=0)],
+            monkeypatch=monkeypatch,
+        )
+
+        assert [entry for entry in found["needsJudgement"] if entry["kind"] == "unusedSource"] == []
+
+    def test_a_video_being_transcoded_is_offered_nothing(self, cleanup, monkeypatch):
+        """A container is writing its objects right now. Deleting the row would
+        leave whatever it writes next belonging to nothing."""
+
+        found = candidates_of(
+            cleanup,
+            sources=[a_source(status="processing", hasSourceObject=True)],
+            monkeypatch=monkeypatch,
+        )
+
+        assert [entry for entry in found["needsJudgement"] if entry["kind"] == "entireVideo"] == []

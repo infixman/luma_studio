@@ -289,7 +289,8 @@ async def handle(ctx: Ctx):
             bucket = str(body.get("bucket") or "output")
             asset_id = str(body.get("assetId") or "").strip()
             raw_version = body.get("encodeVersion")
-            if kind not in ("orphan", "supersededVersion", "unusedSource"):
+            if kind not in ("orphan", "supersededVersion", "unusedSource", "unfinishedUpload",
+                            "entireVideo"):
                 return ctx.error("不認識的清理類型", 400)
             if kind == "orphan" and bucket not in storage_scan.BUCKETS:
                 return ctx.error("bucket 必須是 source 或 output", 400)
@@ -312,6 +313,17 @@ async def handle(ctx: Ctx):
                     encode_version=int(raw_version),
                     dry_run=dry_run,
                     now=video.utc_timestamp(),
+                )
+            elif kind == "unfinishedUpload":
+                removed = await cleanup.delete_upload(
+                    env, asset_id=asset_id, dry_run=dry_run, now=video.utc_timestamp()
+                )
+            elif kind == "entireVideo":
+                # The only removal that takes the row with it, and the only one
+                # whose refusal is "a lesson plays this". `cleanup` asks that
+                # again itself — the list this came from was built earlier.
+                removed = await cleanup.delete_asset(
+                    env, asset_id=asset_id, dry_run=dry_run, now=video.utc_timestamp()
                 )
             else:
                 removed = await cleanup.delete_source(

@@ -34,6 +34,7 @@ def a_source_row(**extra) -> dict:
         "created_at": 1_700_000_000,
         "version_count": 2,
         "version_bytes": 3 * GIGABYTE,
+        "source_landed": 1,
         **extra,
     }
 
@@ -96,6 +97,24 @@ class TestTheSourceList:
         assert rows[0]["lessons"] == [
             {"lessonId": "l1", "lessonTitle": "工具介紹", "courseId": "c1", "courseTitle": "水彩入門"}
         ]
+
+    def test_an_original_that_never_landed_weighs_nothing(self, storage_report):
+        """The size on the asset row is what the tool declared before uploading,
+        not evidence of an object. The completed upload session is that evidence
+        — it is already what the totals sum and what the orphan scan treats as a
+        claim on a key — so a row without one is 0 B here too. Otherwise the same
+        video is 864 KB on this list and nothing at all in the total above it."""
+
+        rows = self._rows(storage_report, source=a_source_row(source_landed=0))
+
+        assert rows[0]["bytes"] == 0
+        assert rows[0]["hasSourceObject"] is False
+
+    def test_an_original_that_landed_says_so(self, storage_report):
+        """Which is what makes "delete the original, keep the ladder" an offer
+        worth making rather than a button that deletes nothing."""
+
+        assert self._rows(storage_report)[0]["hasSourceObject"] is True
 
     def test_a_source_nothing_uses_says_so_plainly(self, storage_report):
         assert self._rows(storage_report)[0]["lessons"] == []

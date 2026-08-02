@@ -204,6 +204,21 @@ def encode_prefix(asset_id: str, encode_version: int) -> str:
     return f"videos/{_asset_id(asset_id)}/{_version(encode_version)}/"
 
 
+def asset_prefix(asset_id: str, *, kind: str) -> str:
+    """Everything one asset owns in one bucket, whatever the version.
+
+    The two prefixes above name a single upload or a single encode, which is
+    what writing needs. Deleting a whole video needs the other question — what
+    is under this asset at all — and answering it by walking version numbers
+    would miss exactly the versions nothing recorded a row for, which are the
+    ones most worth removing.
+    """
+
+    if kind not in KINDS:
+        raise ValueError(f"Unknown object kind: {kind}")
+    return f"{'sources' if kind == 'source' else 'videos'}/{_asset_id(asset_id)}/"
+
+
 def source_key(asset_id: str, upload_version: int) -> str:
     return f"{source_prefix(asset_id, upload_version)}source.mp4"
 

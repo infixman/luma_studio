@@ -400,6 +400,11 @@ class TestWhatMayBeCleaned:
                         "id": ASSET_ID, "title": "第一課", "status": "ready", "byte_size": 4096,
                         "active_encode_version": 1, "created_at": 0,
                         "version_count": 1, "version_bytes": 2048,
+                        # A completed upload session is what says the original is
+                        # really in the bucket. Without it the row is declaring a
+                        # size for something nothing ever stored, and what the
+                        # page offers is removing the whole video instead.
+                        "source_landed": 1,
                     }
                 ],
                 "FROM course_lessons lessons": [],
@@ -409,8 +414,8 @@ class TestWhatMayBeCleaned:
 
         assert response.status == 200
         body = response.json()
-        assert body["needsJudgement"][0]["kind"] == "unusedSource"
-        assert "重新轉檔" in body["needsJudgement"][0]["consequence"]
+        source = next(entry for entry in body["needsJudgement"] if entry["kind"] == "unusedSource")
+        assert "重新轉檔" in source["consequence"]
         assert body["safe"] == []
 
     def test_a_source_a_lesson_uses_is_not_offered_at_all(self, call):
