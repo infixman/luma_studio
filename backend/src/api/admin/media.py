@@ -17,13 +17,18 @@ from shared.responses import Ctx
 
 
 async def _form_text(form, name: str) -> str:
-    """Read a text field that Workers Python may have wrapped in a File."""
+    """Read a text field that Workers Python may have wrapped in a File.
+
+    Anything that is not text or a file reads as empty, and that is the whole
+    point: a field nobody filled in comes back as the JavaScript `null`, which
+    is not Python `None`, does not raise, and stringifies to `jsnull`. Two
+    images went into the media library titled exactly that.
+    """
+
     raw = form.get(name)
-    if raw is None:
-        return ""
     if hasattr(raw, "bytes"):
         return (await raw.bytes()).decode("utf-8", errors="replace")
-    return str(raw)
+    return raw if isinstance(raw, str) else ""
 
 
 async def _read_variants(form) -> list[dict]:

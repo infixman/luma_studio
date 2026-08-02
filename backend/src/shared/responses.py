@@ -32,6 +32,10 @@ def frontend_origin(env) -> str:
     return origins[0] if origins else ""
 
 
+# `None` is a JSON value a body may legitimately be, so absence needs its own.
+_UNREAD = object()
+
+
 class Ctx:
     """Everything a handler needs about one request, plus response builders."""
 
@@ -48,6 +52,7 @@ class Ctx:
         self.origin = (request.headers.get("Origin") or "").rstrip("/")
         self.allowed_origins = allowed_origins(env)
         self.cors = self._cors_headers()
+        self._body = _UNREAD
 
     def _cors_headers(self) -> dict:
         headers = {"vary": "Origin"}
@@ -97,10 +102,27 @@ class Ctx:
         return self.request.headers.get(APP_HEADER) == "1" and self.origin_allowed()
 
     async def json_body(self) -> dict:
-        body = await self.request.json()
-        if not isinstance(body, dict):
+        """The request's JSON, however many times a handler asks for it.
+
+        A body is a stream, and the runtime says so the second time —
+        `OSError: Body already used`. Handlers do not look like they are reading
+        a stream, though: `await ctx.json_body()` reads like a dict, and saving
+        a course asked twice, two lines apart, and answered every attempt with
+        an unexplained 500.
+
+        Remembered here rather than threaded through each handler's branches,
+        because "the body may only be read once" is a rule nothing at the call
+        site can show.
+        """
+
+        # What was read is remembered; whether it was acceptable is decided
+        # every time. Caching the verdict instead would mean a body that was
+        # refused once being trusted afterwards.
+        if self._body is _UNREAD:
+            self._body = await self.request.json()
+        if not isinstance(self._body, dict):
             raise ValueError("Expected a JSON object")
-        return body
+        return self._body
 
     def _headers(self, headers: dict, extra: dict | None) -> dict:
         merged = dict(self.cors)
