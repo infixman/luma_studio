@@ -248,16 +248,30 @@
   flex: none;
 }
 
+/* Sized by its own content, not by the button it hangs off.
+
+   An absolutely positioned box shrinks to fit the *containing block*, which
+   here is the 34px gear button — so the labels were laid out into 34px and
+   Chinese, which may break between any two characters, came out one
+   character per line. `max-content` measures the text instead. */
 .player-menu {
   position: absolute;
   right: 0;
   bottom: calc(100% + 0.5rem);
+  width: max-content;
   min-width: 11rem;
+  max-width: min(18rem, calc(100vw - 2rem));
   padding: 0.25rem;
   border-radius: 0.5rem;
   background: #201c19;
   color: #f2ece4;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+}
+
+/* The label never wraps; the value beside it may. */
+.player-menu-row > span:first-child,
+.player-menu-back {
+  white-space: nowrap;
 }
 
 .player-menu-row,

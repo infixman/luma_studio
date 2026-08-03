@@ -789,3 +789,32 @@ test('a length nobody knows yet paints nothing rather than a guess', async () =>
   expect(customProperty('--played')).toBe('0%')
   expect(customProperty('--buffered')).toBe('0%')
 })
+
+/**
+ * Tooltips.
+ *
+ * Every control on this bar is an icon. `aria-label` names them for a screen
+ * reader but shows a sighted visitor nothing at all — so the only way to
+ * learn what the third button does was to press it. `title` is the one
+ * affordance the browser gives for that, and it costs the same string that
+ * is already there.
+ */
+test('every icon button says what it is on hover, not only to a screen reader', async () => {
+  await mount()
+  media({ duration: 100 }, 'durationchange')
+  await settle()
+
+  const icons = [...container.querySelectorAll<HTMLButtonElement>('.player-bar button')]
+  expect(icons.length).toBeGreaterThan(4)
+
+  for (const icon of icons) {
+    expect(icon.getAttribute('title')).toBe(icon.getAttribute('aria-label'))
+  }
+})
+
+/* The menu's own width had the same bug in reverse — absolutely positioned
+   inside a 34px button, it shrank to fit 34px and laid the Chinese labels out
+   one character per line. The fix is `width: max-content` plus `nowrap` in
+   lesson-player.css, and it is deliberately not asserted here: happy-dom does
+   not apply the imported stylesheet, so `getComputedStyle` would be reading
+   this file's own defaults and would pass whatever the CSS said. */

@@ -331,12 +331,25 @@ export function LessonPlayer({
       />
 
       <div class="player-bar">
-        <button type="button" aria-label={playing ? '暫停' : '播放'} onClick={toggle}>
+        {/* Every control here is an icon, so each carries the same string
+            twice: `aria-label` for a screen reader, `title` for the tooltip
+            that tells a sighted visitor what it does without pressing it. */}
+        <button
+          type="button"
+          aria-label={playing ? '暫停' : '播放'}
+          title={playing ? '暫停' : '播放'}
+          onClick={toggle}
+        >
           {playing ? <PauseGlyph /> : <PlayGlyph />}
         </button>
 
         <div class="player-volume-group">
-          <button type="button" aria-label={muted ? '取消靜音' : '靜音'} onClick={toggleMute}>
+          <button
+            type="button"
+            aria-label={muted ? '取消靜音' : '靜音'}
+            title={muted ? '取消靜音' : '靜音'}
+            onClick={toggleMute}
+          >
             {muted || volume === 0 ? <MutedGlyph /> : <VolumeGlyph />}
           </button>
 
@@ -375,6 +388,7 @@ export function LessonPlayer({
           <button
             type="button"
             aria-label="設定"
+            title="設定"
             aria-haspopup="menu"
             aria-expanded={menu !== 'closed'}
             onClick={() => setMenu(menu === 'closed' ? 'root' : 'closed')}
@@ -479,6 +493,7 @@ export function LessonPlayer({
         <button
           type="button"
           aria-label={theater ? '結束劇院模式' : '劇院模式'}
+          title={theater ? '結束劇院模式' : '劇院模式'}
           aria-pressed={theater}
           onClick={toggleTheater}
         >
@@ -488,6 +503,7 @@ export function LessonPlayer({
         <button
           type="button"
           aria-label={fullscreen ? '離開全螢幕' : '全螢幕'}
+          title={fullscreen ? '離開全螢幕' : '全螢幕'}
           onClick={toggleFullscreen}
         >
           {fullscreen ? <ShrinkGlyph /> : <ExpandGlyph />}

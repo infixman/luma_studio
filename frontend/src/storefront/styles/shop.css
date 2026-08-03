@@ -1415,6 +1415,18 @@ main.order .totals {
   }
 }
 
+/* And the page itself gets out of the way.
+
+   Hiding the outline only bought back its 18rem: the page is still held at
+   the site's shell width, so on a wide screen theatre mode left the video
+   the same size with more paper around it — which is not what the button
+   says. The reading width is right for a page of text and wrong for the one
+   state whose entire purpose is a bigger picture, so here the shell is
+   dropped and the video takes the window. */
+main.learn:has(.learn-layout.is-theater) {
+  max-width: min(100rem, calc(100vw - 2 * var(--site-gutter)));
+}
+
 /* Visible to a screen reader, not on screen. Completion is a tick plus this,
    because a tick alone is a shape and two greens are the same green to a good
    number of people. */
