@@ -341,9 +341,6 @@ export function VideoLibraryPage() {
 
       {/* No title: the navigation and the title bar both already say 影片. */}
       <Panel>
-        <p class="muted">
-          影片由桌面上傳工具轉檔並上傳，這裡看得到結果。有影片在上傳或轉檔時，列表每三秒自動更新，所以它會自己變成可播放；全部都結束之後就停止詢問。
-        </p>
 
         {stalled ? (
           <p class="muted">自動更新已停止 —— 伺服器連續沒有回應。重新整理這一頁再試。</p>

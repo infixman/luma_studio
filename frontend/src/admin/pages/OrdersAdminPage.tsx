@@ -346,7 +346,7 @@ export function OrdersAdminPage() {
         <div class="order-filter-bar" aria-label="訂單篩選">
           <section class="order-status-filter" aria-labelledby="order-status-filter-label">
             <div class="order-filter-heading">
-              <h2 id="order-status-filter-label">狀態</h2>
+              <h2 class="ui-subhead" id="order-status-filter-label">狀態</h2>
               <span>可複選，符合任一狀態（OR）</span>
             </div>
             <div class="order-status-checks">
@@ -365,7 +365,7 @@ export function OrdersAdminPage() {
           </section>
 
           <section class="order-date-filter" aria-labelledby="order-date-filter-label">
-            <h2 id="order-date-filter-label">訂單成立日期</h2>
+            <h2 class="ui-subhead" id="order-date-filter-label">訂單成立日期</h2>
             <div class="order-date-fields">
               <div class={dateFrom ? 'order-date-control' : 'order-date-control is-empty'}>
                 <TextField

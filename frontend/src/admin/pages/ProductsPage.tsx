@@ -263,7 +263,16 @@ export function ProductsPage() {
   ]
 
   return (
-    <AdminShell current="/products" message={message} onError={showError}>
+    <AdminShell
+      current="/products"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" onClick={() => navigate('/products/new')}>
+          新增商品
+        </Button>
+      }
+    >
       {dialog}
 
       {unsellable.length > 0 && (
@@ -283,14 +292,11 @@ export function ProductsPage() {
         </Panel>
       )}
 
-      <Panel
-        title="商品"
-        actions={
-          <Button tone="primary" onClick={() => navigate('/products/new')}>
-            新增商品
-          </Button>
-        }
-      >
+      {/* No title, and the create button is on the title bar. The navigation
+          is showing 商品 and the title bar says it again; a third heading over
+          the only table on the page adds a line to read and nothing to know.
+          Same fix the other six list pages already had. */}
+      <Panel>
         <Toolbar>
           <TextField
             label="搜尋"

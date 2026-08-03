@@ -657,6 +657,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-4);
+  /* So a table running edge to edge inside it is cut to the same corners.
+     The `⋯` menus are positioned against the viewport, not against this box,
+     so nothing that has to escape the panel is clipped by it. */
+  overflow: hidden;
 }
 
 .ui-panel-head {
@@ -667,11 +671,35 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Three sizes of heading in the whole back office, and no fourth.
+ *
+ *   .admin-title    1.05rem / 700   where you are — the top bar, once a page
+ *   .ui-panel-title 1rem    / 650   what this block is
+ *   .ui-subhead     0.875rem / 650  a section inside a block
+ *
+ * There was no third step until now, so pages that needed one invented it:
+ * 16/700 on the categories and business-card pages, 14/700 on storage and
+ * the site settings, 13.6/650 on the order filters. Four spellings of the
+ * same idea, and the reason no two pages looked like they were set by the
+ * same hand. */
 .ui-panel-title {
   margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.ui-subhead {
+  margin: 0 0 var(--space-3);
   font-size: var(--font-base);
   font-weight: 650;
   color: var(--text);
+}
+
+/* A section that is not the first one in a panel is separated by space and a
+   line, not by a bigger heading. */
+.ui-subhead:not(:first-child) {
+  margin-top: var(--space-5);
 }
 
 .ui-panel-actions {
@@ -761,6 +789,37 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
+}
+
+/* Inside a panel the frame is already drawn.
+
+   A panel is a white box with a border and a rounded corner; so is this. Put
+   one in the other and the result is two identical frames with 16px of empty
+   paper between them — which is the band that made a list page look like it
+   was holding its own content at arm's length. The inner frame goes, and the
+   table runs out to the panel's own edges: page gutter, then the table. One
+   boundary instead of three.
+
+   A table that follows something else — a toolbar, a filter bar — keeps a
+   line above it, because there the border is doing real work: separating two
+   different things rather than drawing a box around one. */
+.ui-panel-body > .ui-table-wrap {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  margin-inline: calc(-1 * var(--space-4));
+}
+
+.ui-panel-body > .ui-table-wrap:first-child {
+  margin-top: calc(-1 * var(--space-4));
+}
+
+.ui-panel-body > .ui-table-wrap:last-child {
+  margin-bottom: calc(-1 * var(--space-4));
+}
+
+.ui-panel-body > .ui-table-wrap:not(:first-child) {
+  border-top: 1px solid var(--border);
 }
 
 .ui-table {

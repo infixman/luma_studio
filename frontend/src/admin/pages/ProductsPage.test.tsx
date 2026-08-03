@@ -89,3 +89,26 @@ test('a catalogue with nothing wrong shows no warning at all', async () => {
 
   expect(container.textContent).not.toContain('無法販售的上架商品')
 })
+
+/**
+ * The page says its own name once.
+ *
+ * The navigation highlights 商品, the title bar reads 商品, and the panel
+ * over the only table on the page read 商品 a third time. Six other list
+ * pages had already dropped that panel title; this one had not.
+ */
+test('the product list does not repeat the page title over itself', async () => {
+  render(<ProductsPage />, container)
+  await settle()
+
+  const titles = [...container.querySelectorAll('.ui-panel-title')].map((h) => h.textContent?.trim())
+  expect(titles).not.toContain('商品')
+})
+
+test('adding a product is offered from the title bar, like every other list', async () => {
+  render(<ProductsPage />, container)
+  await settle()
+
+  const action = container.querySelector('.admin-topbar-actions button, .admin-topbar-actions a')
+  expect(action?.textContent).toContain('新增商品')
+})

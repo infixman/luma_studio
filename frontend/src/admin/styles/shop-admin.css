@@ -3,9 +3,10 @@
    Layout only. Colours, controls and cards come from tokens.css and the
    component set, so nothing here names a colour and both themes hold. */
 
+/* Size comes from .ui-subhead; this only keeps the spacing these sections
+   were built around. */
 body.admin .shop h3 {
   margin: 0 0 var(--space-3);
-  font-size: var(--font-lg);
 }
 
 /* --- forms still on plain markup elsewhere in the back office ---
@@ -174,10 +175,6 @@ body.admin .category-add-icon {
 @media (min-width: 80rem) {
   body.admin .product-edit-layout {
     grid-template-columns: minmax(0, 1.35fr) minmax(32rem, 0.8fr);
-  }
-
-  body.admin .product-info-panel .ui-panel-body {
-    padding-block: clamp(var(--space-5), 2vw, var(--space-7));
   }
 
   body.admin .product-form-main .rte-content {
@@ -516,53 +513,6 @@ body.admin .category-manager-panel {
   max-width: none;
 }
 
-body.admin .category-manager-panel .ui-panel-body {
-  padding: clamp(var(--space-5), 3vw, var(--space-7));
-}
-
-body.admin .category-manager {
-  display: grid;
-  gap: var(--space-7);
-}
-
-body.admin .category-create-section {
-  padding-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border);
-}
-
-body.admin .category-section-head {
-  margin-bottom: var(--space-4);
-}
-
-body.admin .category-section-head.is-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-body.admin .category-section-head h2 {
-  margin: 0 0 var(--space-1);
-  font-size: var(--font-lg);
-}
-
-body.admin .category-section-head p {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-sm);
-}
-
-body.admin .category-total {
-  flex: 0 0 auto;
-  padding: var(--space-1) var(--space-2);
-  border-radius: 999px;
-  background: var(--sunken);
-  color: var(--muted);
-  font-size: var(--font-sm);
-  font-weight: 600;
-}
-
 /* Each field hands its three parts — label, control, note — to the form's own
    rows. Aligning on the bottom edge instead put the slug input a hint-line
    higher than the name input beside it, because only one of the two has a
@@ -603,6 +553,13 @@ body.admin .category-list li {
   align-items: center;
   padding: var(--space-3) 0;
   border-top: 1px solid var(--border);
+}
+
+/* The rule between rows is a separator, so the first row has nothing to be
+   separated from. It used to follow a section heading, which is gone. */
+body.admin .category-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 body.admin .category-name-editor .ui-label {
@@ -692,14 +649,6 @@ body.admin .category-list .ui-icon-button svg {
 }
 
 @media (max-width: 47.99rem) {
-  body.admin .category-manager-panel .ui-panel-body {
-    padding: var(--space-4);
-  }
-
-  body.admin .category-manager {
-    gap: var(--space-5);
-  }
-
   /* Stacked, nothing shares a row with anything: the fields go back to
      managing their own three parts. */
   body.admin .category-create-form {
@@ -717,10 +666,6 @@ body.admin .category-list .ui-icon-button svg {
     grid-row: auto;
     grid-column: auto;
     margin-top: 0;
-  }
-
-  body.admin .category-section-head.is-row {
-    align-items: center;
   }
 
   body.admin .category-list li {

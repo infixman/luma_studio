@@ -333,11 +333,9 @@ export function MediaPage() {
       <section class="stack shop">
         {/* No title: the navigation and the title bar both already say 媒體庫. */}
         <Panel>
-          <p class="muted">
-            上傳一次，輪播、相簿與介紹區塊都能用。區塊記住的是這裡的圖片，不是網址，所以之後換掉檔名也不會斷。jpg、png
-            或 webp，最大 5 MB。上傳時會在瀏覽器裡先做好三種寬度，手機不用下載整張原圖。
-          </p>
-
+          {/* What the formats and the size limit are belongs on the control
+              that enforces them, not in a paragraph above it that is read
+              once and then re-read on every visit forever. */}
           <section class="upload-area" aria-label="圖片上傳">
             <button
               type="button"
@@ -369,7 +367,7 @@ export function MediaPage() {
                 拖曳圖片至此
                 <br />／點擊這裡選擇檔案即可上傳
               </span>
-              <span class="drop-zone-hint">可以一次拖進好幾張，會一張一張上傳。</span>
+              <span class="drop-zone-hint">jpg、png 或 webp，每張 5 MB 以內，可以一次拖進好幾張</span>
             </button>
 
             {uploads.length > 0 && (

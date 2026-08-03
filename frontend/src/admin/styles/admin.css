@@ -12,13 +12,24 @@ body.admin {
   overflow: hidden;
 }
 
-body.admin h2 {
+/* A fallback for headings nobody has classed yet, and deliberately the
+   weakest rule in the building.
+
+   As `body.admin h2` this out-ranked `.ui-panel-title` — two classes' worth
+   of specificity against one — so the component's own size was dead on
+   arrival and every heading came out at whatever its *tag* implied. That is
+   why the back office had four heading sizes: an author who reached for h2
+   got 16px, one who reached for h3 got 14px, and the choice of tag was being
+   made for depth in the document outline, which is not a size decision at
+   all. `:where()` drops this to element-only specificity, so a heading that
+   says what it is — `.ui-panel-title`, `.ui-subhead` — now wins. */
+:where(body.admin) h2 {
   font-size: var(--font-lg);
   margin: 0;
   color: var(--text);
 }
 
-body.admin h3 {
+:where(body.admin) h3 {
   font-size: var(--font-base);
   margin: 0 0 var(--space-2);
   color: var(--text);

@@ -32,13 +32,12 @@ body.admin .order-filter-heading {
   margin-bottom: var(--space-2);
 }
 
+/* Size comes from .ui-subhead now; only the tighter margin is local, because
+   these sit inside a filter bar rather than above a section of content. */
 body.admin .order-status-filter h2,
 body.admin .order-date-filter h2 {
   display: block;
   margin: 0 0 var(--space-2);
-  color: var(--text);
-  font-size: var(--font-sm);
-  font-weight: 650;
 }
 
 body.admin .order-filter-heading h2 {

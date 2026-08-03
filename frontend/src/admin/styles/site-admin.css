@@ -67,7 +67,6 @@ body.admin .site-settings-form h3 {
   margin: var(--space-2) 0 0;
   padding-top: var(--space-4);
   border-top: 1px solid var(--border);
-  font-size: var(--font-base);
 }
 
 body.admin .site-settings-form h3 + .muted {

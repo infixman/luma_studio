@@ -439,7 +439,7 @@ export function StoragePage() {
               重新盤點
             </Button>
 
-            <h3>可以直接清除</h3>
+            <h3 class="ui-subhead">可以直接清除</h3>
             {candidates?.safe.length ? (
               <>
                 <ul>
@@ -465,7 +465,7 @@ export function StoragePage() {
               <p class="muted">沒有可以直接清除的東西。</p>
             )}
 
-            <h3>要判斷的</h3>
+            <h3 class="ui-subhead">要判斷的</h3>
             {candidates?.needsJudgement.length ? (
               <ul>
                 {candidates.needsJudgement.map((entry) => {
@@ -507,7 +507,7 @@ export function StoragePage() {
 
         {summary && tab === 'outputs' && (
           <>
-            <h3>轉檔版本</h3>
+            <h3 class="ui-subhead">轉檔版本</h3>
             <p class="muted">選一支影片，看它有哪些版本、哪一個是會員正在看的。</p>
             <ul class="storage-versions">
               {(sources ?? []).map((row) => (
@@ -531,7 +531,7 @@ export function StoragePage() {
               ))}
             </ul>
 
-            <h3>孤兒物件</h3>
+            <h3 class="ui-subhead">孤兒物件</h3>
             <p class="muted">
               孤兒是 R2 裡有、但沒有任何一列記錄的物件。這份清單來自上一次盤點，不是即時的。
             </p>

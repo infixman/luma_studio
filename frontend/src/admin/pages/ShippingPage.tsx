@@ -80,10 +80,6 @@ export function ShippingPage() {
         </Button>
       }
     >
-      <p class="muted" style="margin-top:0">
-        免運門檻留空代表這個方式不提供免運。門檻是「達到就免運」，不是「超過才免運」。
-      </p>
-
       {drafts === null ? (
         <Spinner />
       ) : (
@@ -120,7 +116,7 @@ export function ShippingPage() {
                 max={100000}
                 step={1}
                 placeholder="留空＝不免運"
-                hint="達到這個金額就免運"
+                hint="達到這個金額就免運，留空代表這個方式不提供"
                 value={draft.freeThreshold}
                 onInput={(event) =>
                   edit(draft.method, { freeThreshold: (event.currentTarget as HTMLInputElement).value })

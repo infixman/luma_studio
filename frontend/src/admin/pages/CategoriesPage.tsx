@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { Button, EmptyState, IconButton, Panel, Spinner, TextField, useConfirm } from '../components/ui'
+import {
+  Button,
+  EmptyState,
+  IconButton,
+  Menu,
+  MenuItem,
+  Modal,
+  Panel,
+  Spinner,
+  TextField,
+  useConfirm,
+} from '../components/ui'
 import { api, apiJson } from '../../shared/api'
 import { CATEGORY_SLUG_MAX, CATEGORY_TITLE_MAX } from '../features/catalogue/constraints'
 import { slugifyAscii } from '../lib/slug'
@@ -110,9 +121,13 @@ function CategoryNameEditor({
   )
 }
 
+/** Named because the submit button sits in the dialog's own footer. */
+const CREATE_FORM = 'new-category'
+
 export function CategoriesPage() {
   const [listing, setListing] = useState<CategoryListing | null>(null)
   const [draft, setDraft] = useState({ title: '', slug: '' })
+  const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -140,6 +155,7 @@ export function CategoriesPage() {
         description: '',
       })
       setDraft({ title: '', slug: '' })
+      setCreating(false)
       show('分類已建立。', 'ok')
       await load()
     } catch (error) {
@@ -191,87 +207,91 @@ export function CategoriesPage() {
   const canCreate = draft.title.trim() !== '' && (draft.slug.trim() !== '' || suggested !== '')
 
   return (
-    <AdminShell current="/categories" message={message} onError={showError}>
+    <AdminShell
+      current="/categories"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" onClick={() => setCreating(true)}>
+          新增分類
+        </Button>
+      }
+    >
       {dialog}
 
+      {/* No title and no section headings. With the create form behind the
+          title bar there is one thing on this page — the list — and a page
+          with one thing on it does not need that thing labelled. */}
       <Panel class="category-manager-panel">
-        <div class="category-manager">
-          <section class="category-create-section" aria-labelledby="category-create-title">
-            <header class="category-section-head">
-              <h2 id="category-create-title">新增分類</h2>
-              <p>用分類整理商品；網址代稱會成為前台分類頁的路徑。</p>
-            </header>
-
-            <form class="category-create-form" onSubmit={addCategory}>
-              <TextField
-                label="分類名稱"
-                value={draft.title}
-                maxLength={CATEGORY_TITLE_MAX}
-                required
-                onInput={(event) =>
-                  setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })
-                }
-              />
-              <TextField
-                label="網址代稱"
-                value={draft.slug}
-                maxLength={CATEGORY_SLUG_MAX}
-                placeholder={suggested || '中文名稱請填英文代稱'}
-                hint="只使用英文字母、數字與連字號。"
-                onInput={(event) =>
-                  setDraft({ ...draft, slug: (event.currentTarget as HTMLInputElement).value })
-                }
-              />
-              <Button type="submit" tone="primary" busy={busy} disabled={!canCreate}>
-                新增分類
-              </Button>
-            </form>
-          </section>
-
-          <section class="category-list-section" aria-labelledby="category-list-title">
-            <header class="category-section-head is-row">
-              <div>
-                <h2 id="category-list-title">現有分類</h2>
-                <p>直接修改名稱；網址代稱建立後保持不變，避免舊連結失效。</p>
-              </div>
-              {listing && <span class="category-total">{listing.categories.length} 個分類</span>}
-            </header>
-
-            {listing === null ? (
-              <Spinner />
-            ) : listing.categories.length === 0 ? (
-              <EmptyState title="還沒有分類" body="分類是選填的；建立後即可在商品資料中勾選。" />
-            ) : (
-              <ul class="category-list">
-                {listing.categories.map((category) => (
-                  <li key={category.id}>
-                    <div class="category-name">
-                      <CategoryNameEditor
-                        category={category}
-                        onSave={(title) => renameCategory(category, title)}
-                      />
-                    </div>
-                    <div class="category-route">
-                      <code>/shop/c/{category.slug}</code>
-                      <span class="count">{listing.counts[category.id] ?? 0} 件上架中</span>
-                    </div>
-                    <IconButton
-                      label={`刪除分類「${category.title}」`}
-                      size="sm"
-                      tone="danger"
-                      onClick={() => void removeCategory(category)}
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14" />
-                      </svg>
-                    </IconButton>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        {listing === null ? (
+          <Spinner />
+        ) : listing.categories.length === 0 ? (
+          <EmptyState title="還沒有分類" body="分類是選填的；建立後即可在商品資料中勾選。" />
+        ) : (
+          <ul class="category-list">
+            {listing.categories.map((category) => (
+              <li key={category.id}>
+                <div class="category-name">
+                  <CategoryNameEditor
+                    category={category}
+                    onSave={(title) => renameCategory(category, title)}
+                  />
+                </div>
+                <div class="category-route">
+                  <code>/shop/c/{category.slug}</code>
+                  <span class="count">{listing.counts[category.id] ?? 0} 件上架中</span>
+                </div>
+                <Menu label={`「${category.title}」的操作`}>
+                  <MenuItem tone="danger" onClick={() => void removeCategory(category)}>
+                    刪除分類
+                  </MenuItem>
+                </Menu>
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
+
+      <Modal
+        title="新增分類"
+        open={creating}
+        onClose={() => setCreating(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setCreating(false)}>
+              取消
+            </Button>
+            <Button type="submit" form={CREATE_FORM} tone="primary" busy={busy} disabled={!canCreate}>
+              新增
+            </Button>
+          </>
+        }
+      >
+        <form id={CREATE_FORM} onSubmit={addCategory}>
+          {/* Beside the fields, not over the list: it is a rule about the
+              thing being made, and this is the only moment anybody makes one. */}
+          <p class="muted">網址代稱會成為前台分類頁的路徑，建立後不再更動，避免舊連結失效。</p>
+          <TextField
+            label="分類名稱"
+            value={draft.title}
+            maxLength={CATEGORY_TITLE_MAX}
+            required
+            onInput={(event) =>
+              setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })
+            }
+          />
+          <TextField
+            label="網址代稱"
+            value={draft.slug}
+            maxLength={CATEGORY_SLUG_MAX}
+            placeholder={suggested || '中文名稱請填英文代稱'}
+            hint="只使用英文字母、數字與連字號。"
+            onInput={(event) =>
+              setDraft({ ...draft, slug: (event.currentTarget as HTMLInputElement).value })
+            }
+          />
+        </form>
+      </Modal>
     </AdminShell>
   )
 }
