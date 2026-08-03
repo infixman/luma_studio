@@ -1431,11 +1431,34 @@ main.order .totals {
 .learn-layout.is-theater .lesson-player {
   margin-inline: calc(50% - 50vw);
   border-radius: 0;
+  /* The whole player, bar included — capping the picture alone put the
+     controls off the bottom of the screen, because the bar is under the
+     video and the title and the header are above it. Short enough to fit
+     the window in one piece means the bar is always reachable by scrolling
+     to it, whatever is stacked above.
+
+     Not the exact free space: that depends on a header whose height is a
+     site setting, and measuring it would tie the player to the chrome
+     around it and resize the video as somebody scrolls. This is slack. */
+  max-height: calc(100dvh - 8rem);
+  display: flex;
+  flex-direction: column;
 }
 
+/* Whichever of the two runs out first. The video takes the height left over
+   after the bar and keeps its own shape inside it, so a wide window gets
+   black down the sides and a narrow one simply gets a shorter video. The
+   black is the player's own background showing through. */
 .learn-layout.is-theater .lesson-player video {
-  max-height: calc(100vh - 9rem);
+  flex: 1;
+  min-height: 0;
+  height: auto;
   object-fit: contain;
+}
+
+/* Fullscreen already is the window; the allowance would only shrink it. */
+.learn-layout.is-theater .lesson-player:fullscreen {
+  max-height: none;
 }
 
 /* The bleed is 100vw and the page has a scrollbar, so it is a few pixels
