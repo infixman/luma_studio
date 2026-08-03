@@ -148,7 +148,8 @@ export function PagesPage() {
         </form>
       </Panel>
 
-      <Panel title="頁面">
+      {/* No title: the navigation and the title bar both already say 頁面. */}
+      <Panel>
         {pages === null ? (
           <Spinner />
         ) : pages.length === 0 ? (

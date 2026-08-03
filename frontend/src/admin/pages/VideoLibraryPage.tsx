@@ -339,7 +339,8 @@ export function VideoLibraryPage() {
     <AdminShell current="/videos" message={message} onError={showError}>
       {dialog}
 
-      <Panel title="所有影片">
+      {/* No title: the navigation and the title bar both already say 影片. */}
+      <Panel>
         <p class="muted">
           影片由桌面上傳工具轉檔並上傳，這裡看得到結果。有影片在上傳或轉檔時，列表每三秒自動更新，所以它會自己變成可播放；全部都結束之後就停止詢問。
         </p>

@@ -331,7 +331,8 @@ export function MediaPage() {
       />
 
       <section class="stack shop">
-        <Panel title="媒體庫">
+        {/* No title: the navigation and the title bar both already say 媒體庫. */}
+        <Panel>
           <p class="muted">
             上傳一次，輪播、相簿與介紹區塊都能用。區塊記住的是這裡的圖片，不是網址，所以之後換掉檔名也不會斷。jpg、png
             或 webp，最大 5 MB。上傳時會在瀏覽器裡先做好三種寬度，手機不用下載整張原圖。

@@ -268,7 +268,8 @@ export function CustomersPage() {
     <AdminShell current="/customers" message={message} onError={showError}>
       {dialog}
 
-      <Panel title="會員">
+      {/* No title: the navigation and the title bar both already say 會員. */}
+      <Panel>
         <p class="muted">顧客第一次用 Google 登入結帳時自動建立，沒有註冊流程。</p>
 
         <Toolbar>

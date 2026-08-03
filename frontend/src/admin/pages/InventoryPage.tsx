@@ -99,7 +99,8 @@ export function InventoryPage() {
 
   return (
     <AdminShell current="/inventory" message={message} onError={showError}>
-      <Panel title="庫存品">
+      {/* No title: the navigation and the title bar both already say 庫存品. */}
+      <Panel>
         <p class="muted">
           庫存品是實際會出貨的東西。同一個庫存品可以被多個銷售方案使用，它們共用同一批數量。
         </p>
