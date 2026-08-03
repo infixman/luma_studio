@@ -1,5 +1,6 @@
 import { useRef, useState } from 'preact/hooks'
 
+import { IconButton, Menu, MenuItem as MenuAction } from './ui'
 import { MAX_DEPTH, canIndent, canOutdent, drop, flatten, indent, move, outdent, toOrder } from '../lib/menu-tree'
 import type { Row } from '../lib/menu-tree'
 import type { MenuItem, MenuState } from '../../shared/types'
@@ -95,35 +96,41 @@ export function MenuEditor({
             </span>
             <span class="label">{row.item.label}</span>
             <code class={hint.startsWith('⚠') ? 'broken' : ''}>{hint}</code>
+            {/* The four arrows stay on the row: they are the reason this
+                editor exists, and burying "move up" one click deep would make
+                reordering a list slower than editing one. Everything else
+                folds into the menu, the same as every other list. */}
             <span class="controls">
-              <button type="button" disabled={busy} title="上移" onClick={() => commit(move(rows, index, -1))}>
-                ↑
-              </button>
-              <button type="button" disabled={busy} title="下移" onClick={() => commit(move(rows, index, 1))}>
-                ↓
-              </button>
-              <button
-                type="button"
+              <IconButton label="上移" size="sm" disabled={busy} onClick={() => commit(move(rows, index, -1))}>
+                <span aria-hidden="true">↑</span>
+              </IconButton>
+              <IconButton label="下移" size="sm" disabled={busy} onClick={() => commit(move(rows, index, 1))}>
+                <span aria-hidden="true">↓</span>
+              </IconButton>
+              <IconButton
+                label="升一層"
+                size="sm"
                 disabled={busy || !canOutdent(rows, index)}
-                title="升一層"
                 onClick={() => commit(outdent(rows, index))}
               >
-                ⇤
-              </button>
-              <button
-                type="button"
+                <span aria-hidden="true">⇤</span>
+              </IconButton>
+              <IconButton
+                label={`降一層（成為上一項的子項目，最多 ${MAX_DEPTH} 層）`}
+                size="sm"
                 disabled={busy || !canIndent(rows, index)}
-                title={`降一層（成為上一項的子項目，最多 ${MAX_DEPTH} 層）`}
                 onClick={() => commit(indent(rows, index))}
               >
-                ⇥
-              </button>
-              <button type="button" disabled={busy} onClick={() => onEdit(row.item)}>
-                編輯
-              </button>
-              <button type="button" class="danger" disabled={busy} onClick={() => onRemove(row.item)}>
-                刪除
-              </button>
+                <span aria-hidden="true">⇥</span>
+              </IconButton>
+              <Menu label={`「${row.item.label}」的操作`}>
+                <MenuAction disabled={busy} onClick={() => onEdit(row.item)}>
+                  編輯
+                </MenuAction>
+                <MenuAction tone="danger" disabled={busy} onClick={() => onRemove(row.item)}>
+                  刪除
+                </MenuAction>
+              </Menu>
             </span>
           </li>
         )

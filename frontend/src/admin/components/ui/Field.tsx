@@ -63,13 +63,24 @@ interface TextFieldProps extends InputProps {
   label: string
   hint?: string
   error?: string | null
+  /** Keep the label for screen readers only — see Field. */
+  hiddenLabel?: boolean
   /** Sits inside the field, at the end — a unit, or a button that acts on the value. */
   trailing?: ComponentChildren
 }
 
-export function TextField({ label, hint, error, required, trailing, class: extra, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  hint,
+  error,
+  required,
+  hiddenLabel,
+  trailing,
+  class: extra,
+  ...rest
+}: TextFieldProps) {
   return (
-    <Field label={label} hint={hint} error={error} required={Boolean(required)}>
+    <Field label={label} hint={hint} error={error} required={Boolean(required)} hiddenLabel={hiddenLabel}>
       {({ id, describedBy }) => (
         <div class="ui-input-wrap">
           <input

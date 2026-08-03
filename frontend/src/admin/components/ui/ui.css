@@ -515,6 +515,30 @@
   border-width: 5px;
 }
 
+/* A colour option shows the colour rather than a dot. Being chosen is said by
+   the ring around it, because the swatch itself is already spoken for. */
+.ui-swatch {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.ui-swatch.is-cream { background: var(--site-surface-cream); }
+.ui-swatch.is-sand { background: var(--site-surface-sand); }
+.ui-swatch.is-clay { background: var(--site-surface-clay); }
+.ui-swatch.is-forest { background: var(--site-surface-forest); }
+.ui-swatch.is-ink { background: var(--site-surface-ink); }
+
+.ui-choice-input:checked + .ui-choice-label .ui-swatch {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
 .ui-choice-input:disabled + .ui-choice-label {
   cursor: not-allowed;
   opacity: 0.55;
@@ -700,6 +724,32 @@
    line, not by a bigger heading. */
 .ui-subhead:not(:first-child) {
   margin-top: var(--space-5);
+}
+
+/* The panel header's rule one level down: what this is on the left, what you
+   can do to it on the right. */
+.ui-section + .ui-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.ui-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ui-section-head .ui-subhead {
+  margin: 0;
+}
+
+.ui-section-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .ui-panel-actions {

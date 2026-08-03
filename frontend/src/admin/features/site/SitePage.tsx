@@ -1,9 +1,23 @@
-import { useCallback, useEffect, useId, useState } from 'preact/hooks'
+import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../../components/AdminShell'
 import { MenuEditor } from '../../components/MenuEditor'
 import { useStatus } from '../../components/StatusBar'
-import { Button, ColourPicker, Modal, Panel, Spinner, TextField, useConfirm } from '../../components/ui'
+import {
+  Button,
+  Checkbox,
+  ColourPicker,
+  Menu,
+  MenuItem as MenuAction,
+  Modal,
+  Panel,
+  RadioGroup,
+  Section,
+  Select,
+  Spinner,
+  TextField,
+  useConfirm,
+} from '../../components/ui'
 import { SiteFooter, SiteHeader } from '../../../shared/components/SiteChrome'
 import { socialPlatforms } from '../../../shared/components/SocialIcon'
 import { api, apiJson, apiUrl, uploadHeaderImage } from '../../../shared/api'
@@ -26,53 +40,20 @@ const SIZES: { value: SiteSettings['headerHeight']; label: string }[] = [
 ]
 const EMPTY_ITEM = { label: '', targetKind: 'page' as MenuItem['targetKind'], target: '', parentId: '' }
 
-/** Fixed choices use a compact segmented control; the native radios remain
- * underneath for keyboard navigation and form semantics. */
-function Choice<T extends string>({
-  legend,
-  value,
-  options,
-  onPick,
-}: {
-  legend: string
-  value: T
-  options: { value: T; label: string; swatch?: string; colour?: string }[]
-  onPick: (next: T) => void
-}) {
-  const name = useId()
-  return (
-    <fieldset class="site-choice">
-      <legend class="ui-label">{legend}</legend>
-      <div class="site-choice-options">
-        {options.map((option) => {
-          const id = `${name}-${option.value}`
-          return (
-            <span class="site-choice-option" key={option.value}>
-              <input
-                id={id}
-                class="site-choice-input"
-                type="radio"
-                name={name}
-                checked={option.value === value}
-                onChange={() => onPick(option.value)}
-              />
-              <label class="site-choice-label" for={id}>
-                {(option.swatch || option.colour) && (
-                  <span
-                    class={['site-colour-swatch', option.swatch ? `is-${option.swatch}` : ''].filter(Boolean).join(' ')}
-                    style={option.colour ? { backgroundColor: option.colour } : undefined}
-                    aria-hidden="true"
-                  />
-                )}
-                {option.label}
-              </label>
-            </span>
-          )
-        })}
-      </div>
-    </fieldset>
-  )
-}
+/** Named because the submit button sits in the dialog's own footer. */
+const ADD_ITEM_FORM = 'new-menu-item'
+
+const TARGET_KINDS: { value: MenuItem['targetKind']; label: string }[] = [
+  { value: 'parent', label: '父選單（無連結）' },
+  { value: 'page', label: '頁面' },
+  { value: 'category', label: '商品分類' },
+  { value: 'url', label: '外部網址' },
+]
+
+/* This page had its own `Choice` — a segmented radio group with colour
+   swatches — sitting beside the shared RadioGroup that does the same job.
+   The swatch is the only thing it had that the shared one did not, so that
+   moved across and this one went. */
 
 export function SitePage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
@@ -80,6 +61,7 @@ export function SitePage() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [draft, setDraft] = useState(EMPTY_ITEM)
   const [savingSection, setSavingSection] = useState<'header' | 'footer' | null>(null)
+  const [addingItem, setAddingItem] = useState(false)
   const [collapsed, setCollapsed] = useState({ menu: false, header: false, footer: false })
   /** The item being renamed, and what it is being renamed to. Null when closed. */
   const [renaming, setRenaming] = useState<{ item: MenuItem; label: string } | null>(null)
@@ -199,6 +181,7 @@ export function SitePage() {
         }),
       )
       setDraft(EMPTY_ITEM)
+      setAddingItem(false)
     }, '選單項目已新增。')
   }
 
@@ -324,9 +307,78 @@ export function SitePage() {
         />
       </Modal>
 
+      <Modal
+        title="新增選單項目"
+        open={addingItem}
+        onClose={() => setAddingItem(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setAddingItem(false)}>
+              取消
+            </Button>
+            <Button
+              type="submit"
+              form={ADD_ITEM_FORM}
+              tone="primary"
+              busy={busy}
+              disabled={!draft.label.trim() || (draft.targetKind !== 'parent' && !draft.target)}
+            >
+              新增
+            </Button>
+          </>
+        }
+      >
+        <form id={ADD_ITEM_FORM} onSubmit={addItem}>
+          <TextField
+            label="選單文字"
+            value={draft.label}
+            maxLength={30}
+            required
+            onInput={(event) => setDraft({ ...draft, label: (event.currentTarget as HTMLInputElement).value })}
+          />
+          <Select
+            label="連到哪裡"
+            value={draft.targetKind}
+            options={TARGET_KINDS}
+            onChange={(targetKind) => setDraft({ ...draft, targetKind, target: '' })}
+          />
+          {draft.targetKind === 'page' && (
+            <Select
+              label="目標頁面"
+              value={draft.target || null}
+              placeholder="選一個頁面"
+              options={menu.pages.map((page) => ({
+                value: page.id,
+                label: `${page.title}${page.status === 'draft' ? '（草稿）' : ''}`,
+              }))}
+              onChange={(target) => setDraft({ ...draft, target })}
+            />
+          )}
+          {draft.targetKind === 'category' && (
+            <Select
+              label="目標分類"
+              value={draft.target || null}
+              placeholder="選一個分類"
+              options={menu.categories.map((category) => ({ value: category.slug, label: category.title }))}
+              onChange={(target) => setDraft({ ...draft, target })}
+            />
+          )}
+          {draft.targetKind === 'url' && (
+            <TextField
+              label="外部網址"
+              type="url"
+              placeholder="https://"
+              value={draft.target}
+              required
+              onInput={(event) => setDraft({ ...draft, target: (event.currentTarget as HTMLInputElement).value })}
+            />
+          )}
+          {draft.targetKind === 'parent' && <p class="muted">沒有連結，只用來收納子項目。</p>}
+        </form>
+      </Modal>
+
       <section class="stack shop">
         <Panel title="預覽">
-          <p class="muted">前台渲染外框的同一份程式，所以看到的就是網站上的樣子。</p>
           <div class="chrome-preview">
             <SiteHeader
               settings={settings}
@@ -346,95 +398,14 @@ export function SitePage() {
           title="選單"
           collapsed={collapsed.menu}
           onCollapsedChange={(menu) => setCollapsed((current) => ({ ...current, menu }))}
-        >
-          <p class="muted">
-            拖曳可以上下移動，⇤ ⇥ 改變層級，最多三層。按鈕在所有裝置上都能用——拖曳只在有滑鼠時方便。
-          </p>
-          <MenuEditor state={menu} busy={busy} onReorder={reorder} onEdit={editItem} onRemove={removeItem} />
-
-          <form class="new-product menu-form" onSubmit={addItem}>
-            <label>
-              選單文字
-              <input
-                value={draft.label}
-                onInput={(event) => setDraft({ ...draft, label: (event.target as HTMLInputElement).value })}
-                maxLength={30}
-                required
-              />
-            </label>
-            <label>
-              連到哪裡
-              <select
-                value={draft.targetKind}
-                onChange={(event) =>
-                  setDraft({ ...draft, targetKind: (event.target as HTMLSelectElement).value as MenuItem['targetKind'], target: '' })
-                }
-              >
-                <option value="parent">父選單（無連結）</option>
-                <option value="page">頁面</option>
-                <option value="category">商品分類</option>
-                <option value="url">外部網址</option>
-              </select>
-            </label>
-            {draft.targetKind === 'parent' ? (
-              <div class="menu-parent-target">
-                <span>目標</span>
-                <strong>無連結，只用來收納子項目</strong>
-              </div>
-            ) : (
-              <label>
-                目標
-                {draft.targetKind === 'page' ? (
-                  <select
-                    value={draft.target}
-                    onChange={(event) =>
-                      setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })
-                    }
-                    required
-                  >
-                    <option value="">選一個頁面</option>
-                    {menu.pages.map((page) => (
-                      <option key={page.id} value={page.id}>
-                        {page.title}
-                        {page.status === 'draft' ? '（草稿）' : ''}
-                      </option>
-                    ))}
-                  </select>
-                ) : draft.targetKind === 'category' ? (
-                  <select
-                    value={draft.target}
-                    onChange={(event) =>
-                      setDraft({ ...draft, target: (event.target as HTMLSelectElement).value })
-                    }
-                    required
-                  >
-                    <option value="">選一個分類</option>
-                    {menu.categories.map((category) => (
-                      <option key={category.slug} value={category.slug}>
-                        {category.title}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="url"
-                    placeholder="https://"
-                    value={draft.target}
-                    onInput={(event) =>
-                      setDraft({ ...draft, target: (event.target as HTMLInputElement).value })
-                    }
-                    required
-                  />
-                )}
-              </label>
-            )}
-            <button
-              type="submit"
-              disabled={busy || !draft.label.trim() || (draft.targetKind !== 'parent' && !draft.target)}
-            >
+          actions={
+            <Button tone="primary" size="sm" onClick={() => setAddingItem(true)}>
               新增項目
-            </button>
-          </form>
+            </Button>
+          }
+        >
+          <p class="muted">拖曳可以上下移動，⇤ ⇥ 改變層級，最多三層。</p>
+          <MenuEditor state={menu} busy={busy} onReorder={reorder} onEdit={editItem} onRemove={removeItem} />
         </Panel>
 
         <Panel
@@ -454,15 +425,16 @@ export function SitePage() {
           }
         >
           <form id="site-header-settings" class="site-settings-form" onSubmit={saveSettings}>
-            <Choice
+            <RadioGroup
               legend="背景"
+              inline
               value={settings.headerBackground}
               options={[
                 { value: 'solid', label: '純色' },
                 { value: 'transparent', label: '透明' },
                 { value: 'image', label: '圖片' },
               ]}
-              onPick={(headerBackground) => edit({ headerBackground })}
+              onChange={(headerBackground) => edit({ headerBackground })}
             />
             {/* Only shown for the background that uses it: an upload control
                 beside a solid colour is a control that appears to do nothing. */}
@@ -476,23 +448,24 @@ export function SitePage() {
                 <div class="controls">
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={pickHeaderImage} disabled={busy} />
                   {settings.headerImagePath && (
-                    <button type="button" class="danger" disabled={busy} onClick={removeHeaderImage}>
+                    <Button tone="danger" size="sm" disabled={busy} onClick={removeHeaderImage}>
                       移除背景圖
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             )}
             {settings.headerBackground === 'solid' && (
               <>
-                <Choice
+                <RadioGroup
                   legend="底色"
+                  inline
                   value={settings.headerColour}
                   options={[
                     ...COLOURS,
                     { value: 'custom', label: '自訂', colour: settings.headerCustomColour },
                   ]}
-                  onPick={(headerColour) => edit({ headerColour })}
+                  onChange={(headerColour) => edit({ headerColour })}
                 />
                 {settings.headerColour === 'custom' && (
                   <ColourPicker
@@ -503,16 +476,23 @@ export function SitePage() {
                 )}
               </>
             )}
-            <Choice legend="高度" value={settings.headerHeight} options={SIZES} onPick={(headerHeight) => edit({ headerHeight })} />
-            <Choice
+            <RadioGroup
+              legend="高度"
+              inline
+              value={settings.headerHeight}
+              options={SIZES}
+              onChange={(headerHeight) => edit({ headerHeight })}
+            />
+            <RadioGroup
               legend="文字色"
+              inline
               value={settings.headerText}
               options={[
                 { value: 'dark', label: '深', colour: '#2b2622' },
                 { value: 'light', label: '淺', colour: '#f3efe9' },
                 { value: 'custom', label: '自訂', colour: settings.headerCustomText },
               ]}
-              onPick={(headerText) => edit({ headerText })}
+              onChange={(headerText) => edit({ headerText })}
             />
             {settings.headerText === 'custom' && (
               <ColourPicker
@@ -521,57 +501,47 @@ export function SitePage() {
                 onChange={(headerCustomText) => edit({ headerCustomText })}
               />
             )}
-            <Choice
+            <RadioGroup
               legend="logo 大小"
+              inline
               value={settings.headerLogoSize}
               options={SIZES}
-              onPick={(headerLogoSize) => edit({ headerLogoSize })}
+              onChange={(headerLogoSize) => edit({ headerLogoSize })}
             />
 
-            <label class="toggle">
-              <input
-                type="checkbox"
-                checked={settings.headerSticky}
-                onChange={(event) => edit({ headerSticky: (event.target as HTMLInputElement).checked })}
-              />
-              捲動時固定在頂端
-            </label>
-            <label class="toggle">
-              <input
-                type="checkbox"
-                checked={settings.headerShowCart}
-                onChange={(event) => edit({ headerShowCart: (event.target as HTMLInputElement).checked })}
-              />
-              顯示購物車
-            </label>
-            <label class="toggle">
-              <input
-                type="checkbox"
-                checked={settings.headerShowLogin}
-                onChange={(event) => edit({ headerShowLogin: (event.target as HTMLInputElement).checked })}
-              />
-              顯示登入入口
-            </label>
+            {/* Checkbox rather than Toggle: these are saved with the rest of
+                the form by 儲存頁首, and a switch says the change already
+                happened. */}
+            <Checkbox
+              label="捲動時固定在頂端"
+              checked={settings.headerSticky}
+              onChange={(headerSticky) => edit({ headerSticky })}
+            />
+            <Checkbox
+              label="顯示購物車"
+              checked={settings.headerShowCart}
+              onChange={(headerShowCart) => edit({ headerShowCart })}
+            />
+            <Checkbox
+              label="顯示登入入口"
+              checked={settings.headerShowLogin}
+              onChange={(headerShowLogin) => edit({ headerShowLogin })}
+            />
 
-            <label>
-              行動呼籲按鈕文字
-              <input
-                value={settings.headerCtaLabel}
-                onInput={(event) => edit({ headerCtaLabel: (event.target as HTMLInputElement).value })}
-                maxLength={20}
-                placeholder="留空就不顯示"
-              />
-            </label>
-            <label>
-              按鈕連結
-              <input
-                type="url"
-                value={settings.headerCtaUrl}
-                onInput={(event) => edit({ headerCtaUrl: (event.target as HTMLInputElement).value })}
-                placeholder="https://"
-              />
-            </label>
-
+            <TextField
+              label="行動呼籲按鈕文字"
+              value={settings.headerCtaLabel}
+              maxLength={20}
+              placeholder="留空就不顯示"
+              onInput={(event) => edit({ headerCtaLabel: (event.currentTarget as HTMLInputElement).value })}
+            />
+            <TextField
+              label="按鈕連結"
+              type="url"
+              value={settings.headerCtaUrl}
+              placeholder="https://"
+              onInput={(event) => edit({ headerCtaUrl: (event.currentTarget as HTMLInputElement).value })}
+            />
           </form>
         </Panel>
 
@@ -592,14 +562,15 @@ export function SitePage() {
           }
         >
           <form id="site-footer-settings" class="site-settings-form" onSubmit={saveSettings}>
-            <Choice
+            <RadioGroup
               legend="底色"
+              inline
               value={settings.footerColour}
               options={[
                 ...COLOURS,
                 { value: 'custom', label: '自訂', colour: settings.footerCustomColour },
               ]}
-              onPick={(footerColour) => edit({ footerColour })}
+              onChange={(footerColour) => edit({ footerColour })}
             />
             {settings.footerColour === 'custom' && (
               <ColourPicker
@@ -608,15 +579,16 @@ export function SitePage() {
                 onChange={(footerCustomColour) => edit({ footerCustomColour })}
               />
             )}
-            <Choice
+            <RadioGroup
               legend="文字色"
+              inline
               value={settings.footerText}
               options={[
                 { value: 'dark', label: '深', colour: '#2b2622' },
                 { value: 'light', label: '淺', colour: '#f3efe9' },
                 { value: 'custom', label: '自訂', colour: settings.footerCustomText },
               ]}
-              onPick={(footerText) => edit({ footerText })}
+              onChange={(footerText) => edit({ footerText })}
             />
             {settings.footerText === 'custom' && (
               <ColourPicker
@@ -625,161 +597,164 @@ export function SitePage() {
                 onChange={(footerCustomText) => edit({ footerCustomText })}
               />
             )}
-            <h3>品牌欄</h3>
-            <p class="muted">頁尾左邊的那一塊：logo、一句話、版權。連結欄位會靠右排。</p>
-            <label>
-              一句話介紹
-              <input
+            <Section title="品牌欄">
+              <TextField
+                label="一句話介紹"
                 value={settings.footerBlurb}
-                onInput={(event) => edit({ footerBlurb: (event.target as HTMLInputElement).value })}
                 maxLength={200}
                 placeholder="台中的插畫工作室，把日常畫成可以帶走的東西。"
+                onInput={(event) => edit({ footerBlurb: (event.currentTarget as HTMLInputElement).value })}
               />
-            </label>
-            <label>
-              版權文字
-              <input
+              <TextField
+                label="版權文字"
                 value={settings.footerCopyright}
-                onInput={(event) => edit({ footerCopyright: (event.target as HTMLInputElement).value })}
                 maxLength={200}
                 placeholder="© 2026 苒光繪誌"
+                onInput={(event) => edit({ footerCopyright: (event.currentTarget as HTMLInputElement).value })}
               />
-            </label>
+            </Section>
 
-            <h3>連結欄位</h3>
-            <p class="muted">服務條款、退換貨政策、隱私權政策這類頁面放這裡。最多 {FOOTER_COLUMN_MAX} 欄，每欄 {FOOTER_LINK_MAX} 個連結。</p>
+            <Section
+              title="連結欄位"
+              actions={
+                <Button
+                  size="sm"
+                  disabled={settings.footerColumns.length >= FOOTER_COLUMN_MAX}
+                  onClick={() => edit({ footerColumns: [...settings.footerColumns, { title: '', links: [] }] })}
+                >
+                  加一欄
+                </Button>
+              }
+            >
             <ul class="footer-columns-editor">
               {settings.footerColumns.map((column, columnIndex) => (
                 <li key={columnIndex}>
                   <div class="column-head">
-                    <input
+                    <TextField
+                      label="欄位標題"
+                      hiddenLabel
                       placeholder="欄位標題"
                       maxLength={40}
                       value={column.title}
-                      onInput={(event) => editColumn(columnIndex, { title: (event.target as HTMLInputElement).value })}
+                      onInput={(event) => editColumn(columnIndex, { title: (event.currentTarget as HTMLInputElement).value })}
                     />
-                    <button
-                      type="button"
-                      class="danger"
-                      onClick={() => edit({ footerColumns: settings.footerColumns.filter((_, at) => at !== columnIndex) })}
-                    >
-                      刪除這一欄
-                    </button>
+                    <Menu label={`第 ${columnIndex + 1} 欄的操作`}>
+                      <MenuAction
+                        onClick={() =>
+                          editColumn(columnIndex, {
+                            links: [...column.links, { label: '', url: '', newTab: true }],
+                          })
+                        }
+                        disabled={column.links.length >= FOOTER_LINK_MAX}
+                      >
+                        加一個連結
+                      </MenuAction>
+                      <MenuAction
+                        tone="danger"
+                        onClick={() => edit({ footerColumns: settings.footerColumns.filter((_, at) => at !== columnIndex) })}
+                      >
+                        刪除這一欄
+                      </MenuAction>
+                    </Menu>
                   </div>
                   <ul class="link-list">
                     {column.links.map((link, linkIndex) => (
                       <li key={linkIndex}>
-                        <input
+                        <TextField
+                          label="連結文字"
+                          hiddenLabel
                           placeholder="文字"
                           maxLength={40}
                           value={link.label}
-                          onInput={(event) => editLink(columnIndex, linkIndex, { label: (event.target as HTMLInputElement).value })}
+                          onInput={(event) =>
+                            editLink(columnIndex, linkIndex, { label: (event.currentTarget as HTMLInputElement).value })
+                          }
                         />
-                        <input
+                        <TextField
+                          label="連結網址"
+                          hiddenLabel
                           type="url"
                           placeholder="https://"
                           value={link.url}
-                          onInput={(event) => editLink(columnIndex, linkIndex, { url: (event.target as HTMLInputElement).value })}
+                          onInput={(event) =>
+                            editLink(columnIndex, linkIndex, { url: (event.currentTarget as HTMLInputElement).value })
+                          }
                         />
-                        <label class="link-new-tab">
-                          <input
-                            type="checkbox"
-                            checked={link.newTab}
-                            onChange={(event) =>
-                              editLink(columnIndex, linkIndex, {
-                                newTab: (event.currentTarget as HTMLInputElement).checked,
-                              })
-                            }
-                          />
-                          另開分頁
-                        </label>
-                        <button
-                          type="button"
-                          class="danger"
-                          onClick={() => editColumn(columnIndex, { links: column.links.filter((_, at) => at !== linkIndex) })}
-                        >
-                          移除
-                        </button>
+                        <Checkbox
+                          label="另開分頁"
+                          checked={link.newTab}
+                          onChange={(newTab) => editLink(columnIndex, linkIndex, { newTab })}
+                        />
+                        <Menu label={`「${link.label || '未命名連結'}」的操作`}>
+                          <MenuAction
+                            tone="danger"
+                            onClick={() => editColumn(columnIndex, { links: column.links.filter((_, at) => at !== linkIndex) })}
+                          >
+                            移除連結
+                          </MenuAction>
+                        </Menu>
                       </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    disabled={column.links.length >= FOOTER_LINK_MAX}
-                    onClick={() =>
-                      editColumn(columnIndex, {
-                        links: [...column.links, { label: '', url: '', newTab: true }],
-                      })
-                    }
-                  >
-                    加一個連結
-                  </button>
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              disabled={settings.footerColumns.length >= FOOTER_COLUMN_MAX}
-              onClick={() => edit({ footerColumns: [...settings.footerColumns, { title: '', links: [] }] })}
-            >
-              加一欄
-            </button>
+            </Section>
 
-            <h3>社群連結</h3>
+            <Section
+              title="社群連結"
+              actions={
+                <Button
+                  size="sm"
+                  disabled={settings.footerSocials.length >= 10}
+                  onClick={() =>
+                    edit({
+                      footerSocials: [
+                        ...settings.footerSocials,
+                        { platform: 'instagram', url: '', newTab: true },
+                      ],
+                    })
+                  }
+                >
+                  新增社群連結
+                </Button>
+              }
+            >
             <ul class="link-list">
               {settings.footerSocials.map((social, index) => (
                 <li key={index}>
-                  <select
+                  <Select
+                    label="平台"
+                    hiddenLabel
                     value={social.platform}
-                    onChange={(event) => editSocial(index, { platform: (event.target as HTMLSelectElement).value })}
-                  >
-                    {socialPlatforms.map((platform) => (
-                      <option key={platform.value} value={platform.value}>
-                        {platform.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
+                    options={socialPlatforms.map((platform) => ({ value: platform.value, label: platform.label }))}
+                    onChange={(platform) => editSocial(index, { platform })}
+                  />
+                  <TextField
+                    label="社群網址"
+                    hiddenLabel
                     type="url"
                     placeholder="https://"
                     value={social.url}
-                    onInput={(event) => editSocial(index, { url: (event.target as HTMLInputElement).value })}
+                    onInput={(event) => editSocial(index, { url: (event.currentTarget as HTMLInputElement).value })}
                   />
-                  <label class="link-new-tab">
-                    <input
-                      type="checkbox"
-                      checked={social.newTab}
-                      onChange={(event) =>
-                        editSocial(index, { newTab: (event.currentTarget as HTMLInputElement).checked })
-                      }
-                    />
-                    另開分頁
-                  </label>
-                  <button
-                    type="button"
-                    class="danger"
-                    onClick={() => edit({ footerSocials: settings.footerSocials.filter((_, at) => at !== index) })}
-                  >
-                    移除
-                  </button>
+                  <Checkbox
+                    label="另開分頁"
+                    checked={social.newTab}
+                    onChange={(newTab) => editSocial(index, { newTab })}
+                  />
+                  <Menu label={`${social.platform} 連結的操作`}>
+                    <MenuAction
+                      tone="danger"
+                      onClick={() => edit({ footerSocials: settings.footerSocials.filter((_, at) => at !== index) })}
+                    >
+                      移除連結
+                    </MenuAction>
+                  </Menu>
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              disabled={settings.footerSocials.length >= 10}
-              onClick={() =>
-                edit({
-                  footerSocials: [
-                    ...settings.footerSocials,
-                    { platform: 'instagram', url: '', newTab: true },
-                  ],
-                })
-              }
-            >
-              加一個社群連結
-            </button>
-
+            </Section>
           </form>
         </Panel>
       </section>

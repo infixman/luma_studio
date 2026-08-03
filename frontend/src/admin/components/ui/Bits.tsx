@@ -56,6 +56,35 @@ export function Panel({
   )
 }
 
+/**
+ * A section inside a panel, and the buttons that act on it.
+ *
+ * The same rule the panel header follows, one level down: what this part is
+ * on the left, what you can do to it on the right. Pages that needed this
+ * were writing a bare `<h3>` and then hanging an "add one" button off the
+ * bottom of the list underneath — which is why "where is the add button"
+ * had a different answer on every page.
+ */
+export function Section({
+  title,
+  actions,
+  children,
+}: {
+  title: string
+  actions?: ComponentChildren
+  children: ComponentChildren
+}) {
+  return (
+    <section class="ui-section">
+      <header class="ui-section-head">
+        <h3 class="ui-subhead">{title}</h3>
+        {actions && <div class="ui-section-actions">{actions}</div>}
+      </header>
+      {children}
+    </section>
+  )
+}
+
 export type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
 export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ComponentChildren }) {

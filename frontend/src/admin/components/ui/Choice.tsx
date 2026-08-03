@@ -54,7 +54,16 @@ export function Checkbox({ label, checked, onChange, hint, disabled }: CheckboxP
 interface RadioGroupProps<T extends string | number> {
   legend: string
   value: T | null
-  options: { value: T; label: string; hint?: string; disabled?: boolean }[]
+  options: {
+    value: T
+    label: string
+    hint?: string
+    disabled?: boolean
+    /** A named swatch from the theme, for picking a colour by name. */
+    swatch?: string
+    /** A literal colour, for the custom option that shows what it is set to. */
+    colour?: string
+  }[]
   onChange: (value: T) => void
   /** Laid out across rather than down, for two or three short options. */
   inline?: boolean
@@ -94,7 +103,18 @@ export function RadioGroup<T extends string | number>({
               onChange={() => onChange(option.value)}
             />
             <label class="ui-choice-label" for={id}>
-              <span class="ui-dot" aria-hidden="true" />
+              {/* A colour option shows the colour instead of the dot: the dot
+                  says which one is chosen, and a swatch says that as well by
+                  being the one that is outlined. */}
+              {option.swatch || option.colour ? (
+                <span
+                  class={['ui-swatch', option.swatch ? `is-${option.swatch}` : ''].filter(Boolean).join(' ')}
+                  style={option.colour ? { backgroundColor: option.colour } : undefined}
+                  aria-hidden="true"
+                />
+              ) : (
+                <span class="ui-dot" aria-hidden="true" />
+              )}
               <span class="ui-choice-text">
                 {option.label}
                 {option.hint && <small class="ui-choice-hint">{option.hint}</small>}
