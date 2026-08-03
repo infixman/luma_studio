@@ -4,7 +4,7 @@ import { AdminShell } from '../../components/AdminShell'
 import { OpenButton } from '../../components/IconButtons'
 import { SlugLock } from '../../components/SlugLock'
 import { useStatus } from '../../components/StatusBar'
-import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../../components/ui'
+import { Badge, Button, EmptyState, Modal, Panel, Spinner, TextField, Toggle, useConfirm } from '../../components/ui'
 import { navigate } from '../../lib/navigation'
 import { nextPath, suggestPath } from '../../lib/slug'
 import { STOREFRONT_ORIGIN, api, apiJson } from '../../../shared/api'
@@ -12,8 +12,12 @@ import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
 import type { Page } from '../../../shared/types'
 import '../../styles/pages-admin.css'
 
+/** Named because the submit button sits outside the form and points at it. */
+const CREATE_FORM = 'new-page'
+
 export function PagesPage() {
   const [pages, setPages] = useState<Page[] | null>(null)
+  const [creating, setCreating] = useState(false)
   /* The lock starts shut on a page that does not exist yet: there is no
      address to protect, so following the title is free. */
   const [draft, setDraft] = useState({ title: '', path: '', locked: true })
@@ -104,11 +108,42 @@ export function PagesPage() {
   }
 
   return (
-    <AdminShell current="/pages" message={message} onError={showError}>
+    <AdminShell
+      current="/pages"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" onClick={() => setCreating(true)}>
+          新增頁面
+        </Button>
+      }
+    >
       {dialog}
 
-      <Panel title="新增頁面">
-        <form onSubmit={create}>
+      {/* The buttons sit in the dialog's own footer, which already orders
+          them; `form=` is how the submit reaches the fields from out there. */}
+      <Modal
+        title="新增頁面"
+        open={creating}
+        onClose={() => setCreating(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setCreating(false)}>
+              取消
+            </Button>
+            <Button
+              type="submit"
+              form={CREATE_FORM}
+              tone="primary"
+              busy={busy}
+              disabled={!draft.title.trim() || !newPath}
+            >
+              新增頁面
+            </Button>
+          </>
+        }
+      >
+        <form id={CREATE_FORM} onSubmit={create}>
           <div class="field-pair">
             <TextField
               label="頁面名稱"
@@ -142,11 +177,8 @@ export function PagesPage() {
               maxLength={PAGE_PATH_MAX}
             />
           </div>
-          <Button type="submit" tone="primary" busy={busy} disabled={!draft.title.trim() || !newPath}>
-            新增頁面
-          </Button>
         </form>
-      </Panel>
+      </Modal>
 
       {/* No title: the navigation and the title bar both already say 頁面. */}
       <Panel>
