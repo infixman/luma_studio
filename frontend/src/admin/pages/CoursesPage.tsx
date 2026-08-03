@@ -7,6 +7,7 @@ import {
   Button,
   DataTable,
   EmptyState,
+  Modal,
   Panel,
   Spinner,
   TextField,
@@ -31,6 +32,9 @@ const STATUS_TONES: Record<CourseStatus, BadgeTone> = {
 
 const EMPTY_DRAFT = { title: '', slug: '' }
 
+/** Named because the submit button sits outside the form and points at it. */
+const CREATE_FORM = 'new-course'
+
 /**
  * Courses as things an offer can point at.
  *
@@ -43,6 +47,7 @@ const EMPTY_DRAFT = { title: '', slug: '' }
  */
 export function CoursesPage() {
   const [courses, setCourses] = useState<Course[] | null>(null)
+  const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const { message, showError, busy, run } = useStatus()
 
@@ -94,12 +99,20 @@ export function CoursesPage() {
   ]
 
   return (
-    <AdminShell current="/courses" message={message} onError={showError}>
-      <Panel title="所有課程">
-        <p class="muted">
-          課程只負責「教什麼」，售價與方案在商品那邊設定。課程要先發布，包含它的銷售方案才能上架。
-        </p>
-
+    <AdminShell
+      current="/courses"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" onClick={() => setCreating(true)}>
+          新增課程
+        </Button>
+      }
+    >
+      {/* No title. The navigation is showing 課程 and the title bar says it
+          again; a third heading over the only table on the page adds a line
+          to read and nothing to know. */}
+      <Panel>
         {courses === null ? (
           <Spinner />
         ) : (
@@ -117,8 +130,38 @@ export function CoursesPage() {
         )}
       </Panel>
 
-      <Panel title="新增課程">
-        <form class="ui-inline-form" onSubmit={create}>
+      {/* The buttons live in the dialog's own footer, which already puts the
+          way out on the left and the action on the right. Reaching the form
+          from out there is what `form=` is for — the same trick the course
+          editor's save button uses. */}
+      <Modal
+        title="新增課程"
+        open={creating}
+        onClose={() => setCreating(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setCreating(false)}>
+              取消
+            </Button>
+            <Button
+              type="submit"
+              form={CREATE_FORM}
+              tone="primary"
+              busy={busy}
+              disabled={draft.title.trim() === ''}
+            >
+              新增
+            </Button>
+          </>
+        }
+      >
+        <form id={CREATE_FORM} onSubmit={create}>
+          {/* Beside the fields rather than over the list. It is a rule about
+              what is being made, and this is the only moment anybody is
+              making one. */}
+          <p class="muted">
+            課程只負責「教什麼」，售價與方案在商品那邊設定。課程要先發布，包含它的銷售方案才能上架。
+          </p>
           <TextField
             label="課程名稱"
             value={draft.title}
@@ -133,11 +176,8 @@ export function CoursesPage() {
             maxLength={64}
             onInput={(event) => setDraft({ ...draft, slug: (event.currentTarget as HTMLInputElement).value })}
           />
-          <Button type="submit" tone="primary" busy={busy} disabled={draft.title.trim() === ''}>
-            新增
-          </Button>
         </form>
-      </Panel>
+      </Modal>
     </AdminShell>
   )
 }

@@ -74,6 +74,62 @@ test('an empty list says what a course is for here', async () => {
   expect(container.textContent).toContain('還沒有課程')
 })
 
+/**
+ * Creating a course is a thing somebody does a handful of times in the life
+ * of the shop. It had a panel of its own, permanently open, under the list —
+ * so the page's lower half was given over to a form nobody was filling in,
+ * and the list it belongs to had to be scrolled past to reach it.
+ *
+ * It moves to a button on the title bar and a dialog behind it. The list is
+ * then the whole page, which is what the page is called.
+ */
+function createButton(): HTMLButtonElement | null {
+  return container.querySelector('.admin-topbar-actions button')
+}
+
+function dialog(): HTMLElement | null {
+  return container.querySelector('[role="dialog"]')
+}
+
+async function openCreate(): Promise<void> {
+  createButton()!.click()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+test('the form to create one is not sitting on the page', async () => {
+  render(<CoursesPage />, container)
+  await settle()
+
+  expect(dialog()).toBeNull()
+  expect(container.querySelector('form')).toBeNull()
+})
+
+test('the title bar is where it is asked for', async () => {
+  render(<CoursesPage />, container)
+  await settle()
+
+  expect(createButton()?.textContent).toContain('新增課程')
+
+  await openCreate()
+
+  expect(dialog()).not.toBeNull()
+  expect(container.querySelector('form')).not.toBeNull()
+})
+
+test('the rule about what a course is for is told where it is needed', async () => {
+  /** It used to be a paragraph above the list, read on every visit by
+   *  somebody who already knew. It belongs beside the field that acts on
+   *  it — which is the moment a course is being made. */
+  render(<CoursesPage />, container)
+  await settle()
+
+  expect(container.textContent).not.toContain('售價與方案在商品那邊設定')
+
+  await openCreate()
+
+  expect(dialog()?.textContent).toContain('售價與方案在商品那邊設定')
+})
+
 test('a slug is derived from the title when none is given', async () => {
   // Asking for a URL segment before the admin has thought about one is a
   // step they will skip badly. The server would refuse a bad slug, so the
@@ -82,6 +138,7 @@ test('a slug is derived from the title when none is given', async () => {
 
   render(<CoursesPage />, container)
   await settle()
+  await openCreate()
 
   const [title] = [...container.querySelectorAll<HTMLInputElement>('input')]
   title!.value = 'Watercolour Flowers'
