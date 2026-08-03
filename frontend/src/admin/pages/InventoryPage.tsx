@@ -7,6 +7,7 @@ import {
   Button,
   DataTable,
   EmptyState,
+  Modal,
   Panel,
   Spinner,
   TextField,
@@ -20,6 +21,9 @@ import '../styles/shop-admin.css'
 
 const EMPTY_DRAFT = { title: '', sku: '', stock: '', enabled: true }
 
+/** Named because the submit button sits outside the form and points at it. */
+const CREATE_FORM = 'new-inventory-item'
+
 /**
  * The stockroom.
  *
@@ -32,6 +36,7 @@ const EMPTY_DRAFT = { title: '', sku: '', stock: '', enabled: true }
 export function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const { message, showError, busy, run } = useStatus()
 
@@ -98,13 +103,18 @@ export function InventoryPage() {
   const complete = draft.title.trim() !== '' && draft.stock !== ''
 
   return (
-    <AdminShell current="/inventory" message={message} onError={showError}>
+    <AdminShell
+      current="/inventory"
+      message={message}
+      onError={showError}
+      actions={
+        <Button tone="primary" onClick={() => setCreating(true)}>
+          新增庫存品
+        </Button>
+      }
+    >
       {/* No title: the navigation and the title bar both already say 庫存品. */}
       <Panel>
-        <p class="muted">
-          庫存品是實際會出貨的東西。同一個庫存品可以被多個銷售方案使用，它們共用同一批數量。
-        </p>
-
         <Toolbar>
           <TextField
             label="搜尋"
@@ -132,8 +142,30 @@ export function InventoryPage() {
         )}
       </Panel>
 
-      <Panel title="新增庫存品">
-        <form class="ui-inline-form" onSubmit={create}>
+      {/* The buttons sit in the dialog's own footer, which already orders
+          them; `form=` is how the submit reaches the fields from out there. */}
+      <Modal
+        title="新增庫存品"
+        open={creating}
+        onClose={() => setCreating(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setCreating(false)}>
+              取消
+            </Button>
+            <Button type="submit" form={CREATE_FORM} tone="primary" busy={busy} disabled={!complete}>
+              新增
+            </Button>
+          </>
+        }
+      >
+        <form id={CREATE_FORM} onSubmit={create}>
+          {/* A rule about the thing being made, told at the only moment
+              anybody is making one — rather than over the list, where it was
+              re-read on every visit by somebody who already knew. */}
+          <p class="muted">
+            庫存品是實際會出貨的東西。同一個庫存品可以被多個銷售方案使用，它們共用同一批數量。
+          </p>
           <TextField
             label="名稱"
             value={draft.title}
@@ -158,11 +190,8 @@ export function InventoryPage() {
             onInput={(event) => setDraft({ ...draft, stock: (event.currentTarget as HTMLInputElement).value })}
           />
           <Toggle label="啟用" checked={draft.enabled} onChange={(enabled) => setDraft({ ...draft, enabled })} />
-          <Button type="submit" tone="primary" busy={busy} disabled={!complete}>
-            新增
-          </Button>
         </form>
-      </Panel>
+      </Modal>
     </AdminShell>
   )
 }

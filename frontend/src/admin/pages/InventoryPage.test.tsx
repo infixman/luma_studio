@@ -70,6 +70,56 @@ async function settle() {
   throw new Error('the page never finished loading')
 }
 
+/**
+ * Adding stock is a thing done a handful of times, and its form had the
+ * lower half of the screen permanently — so the list it belongs to had to be
+ * scrolled past to reach it, and the screen's own subject was the smaller of
+ * the two things on it. The courses list had the same shape and lost it the
+ * same way.
+ */
+function createButton(): HTMLButtonElement | null {
+  return container.querySelector('.admin-topbar-actions button')
+}
+
+function dialog(): HTMLElement | null {
+  return container.querySelector('[role="dialog"]')
+}
+
+test('the form to add stock is not sitting on the page', async () => {
+  render(<InventoryPage />, container)
+  await settle()
+
+  expect(dialog()).toBeNull()
+  expect(container.querySelector('form')).toBeNull()
+})
+
+test('the title bar is where stock is added from', async () => {
+  render(<InventoryPage />, container)
+  await settle()
+
+  expect(createButton()?.textContent).toContain('新增庫存品')
+
+  createButton()!.click()
+  await tick()
+
+  expect(dialog()).not.toBeNull()
+  expect(container.querySelector('form')).not.toBeNull()
+})
+
+test('what a stock item is gets said where one is being made', async () => {
+  /** As a paragraph over the list it was re-read on every visit by somebody
+   *  who already knew. It is a rule about the thing being created. */
+  render(<InventoryPage />, container)
+  await settle()
+
+  expect(container.textContent).not.toContain('共用同一批數量')
+
+  createButton()!.click()
+  await tick()
+
+  expect(dialog()?.textContent).toContain('共用同一批數量')
+})
+
 test('an item shows its code and how many there are', async () => {
   items = [KIT]
 
