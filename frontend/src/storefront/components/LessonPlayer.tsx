@@ -44,11 +44,19 @@ export function LessonPlayer({
   onEnded,
   onError,
   onTheaterChange,
+  autoplay,
+  onAutoplayChange,
 }: {
   src: string
   onPosition?: (seconds: number) => void
   onEnded?: () => void
   onError?: () => void
+  /** Whether the end of this video should run on into whatever comes after
+   *  it. The switch is here because this is where the controls are; what
+   *  "after" means is the page's, and so is acting on it. Left out entirely
+   *  when nothing owns the answer, and then the row is not drawn. */
+  autoplay?: boolean
+  onAutoplayChange?: (next: boolean) => void
   /** Widening the player and collapsing whatever sits beside it is the
    *  page's layout, not the video's — this only says the flag changed. */
   onTheaterChange?: (active: boolean) => void
@@ -421,6 +429,17 @@ export function LessonPlayer({
             >
               {menu === 'root' && (
                 <>
+                  {onAutoplayChange && (
+                    <button
+                      type="button"
+                      class="player-menu-row"
+                      aria-pressed={autoplay === true}
+                      onClick={() => onAutoplayChange(!autoplay)}
+                    >
+                      <span>自動播放</span>
+                      <span class="player-menu-value">{autoplay ? '開啟' : '關閉'}</span>
+                    </button>
+                  )}
                   <button type="button" class="player-menu-row" onClick={() => setMenu('speed')}>
                     <span>播放速度</span>
                     <span class="player-menu-value">{speedLabel(rate)}</span>

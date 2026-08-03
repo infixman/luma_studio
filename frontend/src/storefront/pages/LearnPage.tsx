@@ -29,6 +29,29 @@ interface LearnCourse {
 const RETRY_SECONDS = 20
 
 /**
+ * Whether the end of a lesson runs on into the next one.
+ *
+ * Remembered, unlike theatre mode and playback speed: those are about one
+ * sitting, this is about how somebody watches a course, and being carried
+ * into the next lesson when you did not want to be is the kind of thing you
+ * turn off once and expect to stay off.
+ *
+ * On by default. A course is an ordered thing somebody sits through, and
+ * stopping dead at the end of every lesson to reach for the mouse is the
+ * behaviour that needs the excuse.
+ */
+const AUTOPLAY_KEY = 'luma.learn.autoplay'
+
+function rememberedAutoplay(): boolean {
+  try {
+    return localStorage.getItem(AUTOPLAY_KEY) !== 'off'
+  } catch {
+    // Private windows and blocked storage: the default is a working default.
+    return true
+  }
+}
+
+/**
  * Watching a course.
  *
  * The player is pointed at a gateway URL and the permission travels as a
@@ -48,6 +71,17 @@ export function LearnPage({ slug }: { slug: string }) {
   const [refusal, setRefusal] = useState<{ reason: PlaybackRefusal | 'unknown'; message: string } | null>(null)
   const [failed, setFailed] = useState(false)
   const [theater, setTheater] = useState(false)
+  const [autoplay, setAutoplay] = useState(rememberedAutoplay)
+
+  const chooseAutoplay = useCallback((next: boolean) => {
+    setAutoplay(next)
+    try {
+      localStorage.setItem(AUTOPLAY_KEY, next ? 'on' : 'off')
+    } catch {
+      // Nothing to do about it, and nothing worth stopping for: the choice
+      // still holds for this sitting.
+    }
+  }, [])
   const renewal = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSaved = useRef<number | null>(null)
 
@@ -149,7 +183,13 @@ export function LearnPage({ slug }: { slug: string }) {
                 <LessonPlayer
                   src={apiUrl(playbackUrl)}
                   onPosition={(seconds) => record(seconds, false)}
-                  onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
+                  onEnded={() => {
+                    record(Math.max(1, lastSaved.current ?? 1), true)
+                    // Marked finished either way; moving on is the extra.
+                    if (autoplay && next) setLessonId(next.id)
+                  }}
+                  autoplay={autoplay}
+                  onAutoplayChange={chooseAutoplay}
                   onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}
                   onTheaterChange={setTheater}
                 />

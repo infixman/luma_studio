@@ -60,11 +60,14 @@ vi.mock('../lib/playback', async (importOriginal) => {
 // tested there.
 interface PlayerProps {
   src: string
+  onEnded?: () => void
 }
 
+// `onEnded` is kept because what this page does at the end of a lesson is its
+// own behaviour, not the video's.
 vi.mock('../../shared/components/HlsVideo', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../shared/components/HlsVideo')>()),
-  HlsVideo: (props: PlayerProps) => <video data-src={props.src} />,
+  HlsVideo: (props: PlayerProps) => <video data-src={props.src} onEnded={props.onEnded} />,
 }))
 
 import { LearnPage } from './LearnPage'
@@ -73,6 +76,7 @@ let container: HTMLDivElement
 
 beforeEach(() => {
   session = freshSession()
+  localStorage.clear()
   container = document.createElement('div')
   document.body.append(container)
 })
@@ -108,6 +112,87 @@ test('a refusal is shown instead of a player', async () => {
 // Choosing a rendition and a playback speed is LessonPlayer's own job now —
 // see LessonPlayer.test.tsx — so this page only has to prove it hands the
 // player a URL and shows a refusal in its place, both above.
+
+/**
+ * Playing on into the next lesson.
+ *
+ * A course is an ordered thing somebody sits through, so the end of a lesson
+ * is normally the start of the next one and reaching for the mouse to say so
+ * is friction. The choice belongs to this page rather than the player: the
+ * player knows a video finished, not that there is another lesson after it.
+ */
+
+function endVideo(): void {
+  container.querySelector('video')!.dispatchEvent(new Event('ended'))
+}
+
+function currentLesson(): string {
+  return container.querySelector('.learn-stage h2')?.textContent ?? ''
+}
+
+test('a finished lesson runs on into the next one', async () => {
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+  expect(currentLesson()).toBe('調色')
+
+  endVideo()
+  await settle()
+
+  expect(currentLesson()).toBe('疊色')
+})
+
+test('turning it off leaves the lesson where it ended', async () => {
+  /** Somebody who wants to sit with what they just watched, or who is
+   *  following along with their hands full, should not be moved on. */
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+
+  container.querySelector<HTMLButtonElement>('button[aria-label="設定"]')!.click()
+  await settle()
+  const row = [...container.querySelectorAll<HTMLButtonElement>('.player-menu-row')].find((button) =>
+    button.textContent?.includes('自動播放'),
+  )
+  row!.click()
+  await settle()
+
+  endVideo()
+  await settle()
+
+  expect(currentLesson()).toBe('調色')
+})
+
+test('the last lesson stays put rather than wrapping round', async () => {
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+  const buttons = [...container.querySelectorAll<HTMLButtonElement>('.learn-actions button')]
+  buttons.find((button) => button.textContent === '下一單元')!.click()
+  await settle()
+  expect(currentLesson()).toBe('疊色')
+
+  endVideo()
+  await settle()
+
+  expect(currentLesson()).toBe('疊色')
+})
+
+test('the choice is remembered, because it is about how somebody watches', async () => {
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+  container.querySelector<HTMLButtonElement>('button[aria-label="設定"]')!.click()
+  await settle()
+  ;[...container.querySelectorAll<HTMLButtonElement>('.player-menu-row')]
+    .find((button) => button.textContent?.includes('自動播放'))!
+    .click()
+  await settle()
+
+  render(null, container)
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+
+  endVideo()
+  await settle()
+  expect(currentLesson()).toBe('調色')
+})
 
 test('theatre mode widens the stage by collapsing the outline beside it', async () => {
   /** The player only says the flag changed; folding the outline away is the
