@@ -1506,39 +1506,33 @@ body:has(.learn-layout.is-theater) .site-footer {
   border-top: 1px solid var(--hairline);
 }
 
-/* The capsule stays; the strip it floats on stops being see-through.
+/* Only the colour changes. The capsule keeps its size and keeps floating.
 
-   That strip is transparent by design, which works because the page behind
-   it is paper. The player runs the full width of it now, so scrolled down
-   there was video behind the header, showing through everywhere the capsule
-   was not. Painting the strip fixes that without flattening the capsule
-   into a band — the capsule is the site's shape and losing it in one mode
-   is losing it.
+   Two earlier attempts are worth recording because both were wrong in the
+   same direction — treating the header as something this mode gets to
+   redesign. Flattening it into a band killed the shape the whole site is
+   built on. Painting the strip it floats on put a black slab behind a thing
+   whose entire point is that there is nothing behind it.
 
-   The colour and the geometry both follow the scrolled state, which is what
-   this mode wants anyway: darker, and pulled in on every side.
+   The shrink is gone too. It copied the scrolled state's insets and heights,
+   which moved what is inside the capsule without moving the capsule itself,
+   and half a movement reads as a mistake rather than as a smaller header.
+   The real scrolled state still fires here, on scroll, doing the whole thing
+   at once — which is where that movement belongs.
 
-   `!important` because a custom header colour arrives as an inline style
-   and nothing written in a stylesheet can reach it. A cream capsule is the
-   one bright object left on the screen, which is what this mode exists to
+   `!important` because a custom header colour arrives as an inline style and
+   nothing written in a stylesheet can reach it. A cream capsule is the one
+   bright object left on the screen, which is what this mode exists to
    remove. It comes back on the way out. */
 body:has(.learn-layout.is-theater) .site-header {
-  padding-top: 8px;
-  padding-inline: clamp(16px, 6vw, 120px);
-  background: #0c0a09;
   color: #f2ece4;
 }
 
 body:has(.learn-layout.is-theater) .site-header .header-inner {
-  max-width: 62rem;
   background: #1b1816 !important;
   border-color: rgb(242 236 228 / 0.12);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 34px rgb(0 0 0 / 0.5);
 }
-
-body:has(.learn-layout.is-theater) .site-header.height-small .header-inner { min-height: 40px; }
-body:has(.learn-layout.is-theater) .site-header.height-medium .header-inner { min-height: 46px; }
-body:has(.learn-layout.is-theater) .site-header.height-large .header-inner { min-height: 54px; }
 
 /* A photograph in the capsule is the same bright object by another route. */
 body:has(.learn-layout.is-theater) .header-image {
