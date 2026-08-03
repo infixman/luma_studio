@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { AUTO_LEVEL, HlsVideo } from '../../shared/components/HlsVideo'
+import { AUTO_LEVEL } from '../../shared/components/HlsVideo'
 import type { HlsRendition } from '../../shared/components/HlsVideo'
+import { LessonPlayer } from '../components/LessonPlayer'
 import { api, apiJson, apiUrl } from '../../shared/api'
 import { renewDelay, requestSession, shouldSaveProgress, worthRetrying } from '../lib/playback'
 import type { PlaybackRefusal } from '../../shared/types'
@@ -163,7 +164,7 @@ export function LearnPage({ slug }: { slug: string }) {
 
               {playbackUrl && (
                 <>
-                  <HlsVideo
+                  <LessonPlayer
                     src={apiUrl(playbackUrl)}
                     level={level}
                     onRenditions={setRenditions}
