@@ -9,11 +9,16 @@ body.admin .orders-list-panel .ui-panel-body {
   padding-top: var(--space-4);
 }
 
+/* Aligned on the top edge, not the bottom. Each column here opens with its
+   own heading, and bottom-aligning them pushed the shortest one — 狀態 —
+   eleven pixels below where the panel's padding puts everything else on
+   every other page. Which control ends up lowest matters less than the page
+   starting where the others start. */
 body.admin .order-filter-bar {
   display: grid;
   grid-template-columns: minmax(32rem, 1.4fr) minmax(25rem, 0.9fr) minmax(20rem, 1fr);
   gap: var(--space-4) clamp(var(--space-4), 2.5vw, var(--space-6));
-  align-items: end;
+  align-items: start;
   padding-bottom: var(--space-4);
   margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);

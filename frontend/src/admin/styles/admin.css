@@ -65,11 +65,15 @@ body.admin .admin-data-link:hover {
 }
 
 /* Shared page layout and feedback. Feature styles may extend these, but do
-   not need to import the catalogue stylesheet merely to get a stack or crumb. */
+   not need to import the catalogue stylesheet merely to get a stack or crumb.
+
+   No margin along the top. The gutter above a page's first block belongs to
+   `.admin-content`, which sets it once for every page; adding another 32px
+   here meant the handful of pages using this wrapper started 56px down while
+   the rest started at 24px. */
 body.admin .stack {
   display: grid;
-  gap: var(--space-5);
-  margin-top: var(--space-6);
+  gap: var(--space-4);
 }
 
 body.admin .crumb {

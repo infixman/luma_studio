@@ -439,9 +439,13 @@ export function BioLinkAdminPage() {
           {/* No title: the navigation and the title bar both already say 名片.
               What is worth saying here is the address, which the title bar
               cannot show. */}
-          <Panel
-            actions={
-              <>
+          <Panel>
+            {/* One row, not a panel header holding two buttons over a line of
+                text saying what they act on. With no title to sit beside, that
+                header was an empty band splitting one idea in half. */}
+            <p class="muted bio-address">
+              公開網址：{bioLinkPageUrl()}
+              <span class="bio-address-actions">
                 <OpenButton url={bioLinkPageUrl()} label="公開的名片頁" />
                 <CopyButton
                   url={bioLinkPageUrl()}
@@ -449,10 +453,8 @@ export function BioLinkAdminPage() {
                   onCopied={(label) => show(`已複製「${label}」的網址。`, 'ok')}
                   onFailed={showError}
                 />
-              </>
-            }
-          >
-            <p class="muted">公開網址：{bioLinkPageUrl()}</p>
+              </span>
+            </p>
 
             <div class="bio-avatar-field">
               {page.avatarPath ? (

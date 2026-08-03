@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { Spinner } from './ui'
+import { Button, Spinner } from './ui'
 import { api } from '../../shared/api'
 import type { BioLinkStats as Stats, LabelledTotal } from '../../shared/types'
 
@@ -54,15 +54,19 @@ export function BioLinkStatsPanel({ onError }: { onError: (error: unknown) => vo
   return (
     <section class="stats">
       <div class="stats-head">
-        <div>
-          <h3>造訪統計</h3>
-          <p class="muted">數字是「不重複訪客」：同一人同一天對同一個目標只算一次。</p>
-        </div>
+        {/* No heading: the panel around this already says 統計. */}
+        <p class="muted">數字是「不重複訪客」：同一人同一天對同一個目標只算一次。</p>
         <div class="stats-ranges">
           {RANGES.map((range) => (
-            <button key={range} class={range === days ? 'choice selected' : 'choice'} onClick={() => setDays(range)}>
+            <Button
+              key={range}
+              size="sm"
+              tone={range === days ? 'primary' : 'neutral'}
+              aria-pressed={range === days}
+              onClick={() => setDays(range)}
+            >
               {range} 天
-            </button>
+            </Button>
           ))}
         </div>
       </div>

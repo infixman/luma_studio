@@ -1,3 +1,4 @@
+import { RadioGroup } from './ui'
 import type { BioLinkFont, BioLinkShape, BioLinkStyle, BioLinkTheme } from '../../shared/types'
 
 /**
@@ -35,29 +36,25 @@ interface Props {
 }
 
 export function BioLinkAppearance({ style, avatarPath, displayName, busy, onChange }: Props) {
+  /* Radios, not buttons. They were `<button class="choice">`, leaning on a
+     class the ibon page owned; when that page moved onto the component set
+     the class went with it and all five palettes rendered as identical
+     filled buttons — no gap, and no way to see which one was picked. Being
+     one-of-a-set is what a radio group is, so the selected state, the
+     spacing and the arrow keys all arrive with it. */
   const group = <T extends string>(
     legend: string,
     options: { value: T; label: string }[],
     current: T,
     key: keyof BioLinkStyle,
   ) => (
-    <fieldset>
-      <legend>{legend}</legend>
-      <div class="choices">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            class={current === option.value ? 'choice selected' : 'choice'}
-            disabled={busy}
-            aria-pressed={current === option.value}
-            onClick={() => onChange({ [key]: option.value } as Partial<BioLinkStyle>)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </fieldset>
+    <RadioGroup
+      legend={legend}
+      inline
+      value={current}
+      options={options.map((option) => ({ ...option, disabled: busy }))}
+      onChange={(value) => onChange({ [key]: value } as Partial<BioLinkStyle>)}
+    />
   )
 
   return (

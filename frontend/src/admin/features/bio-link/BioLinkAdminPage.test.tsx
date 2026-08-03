@@ -125,6 +125,35 @@ test('a row hides and deletes from its own menu', async () => {
   expect(items?.some((label) => label?.includes('隱藏'))).toBe(true)
 })
 
+test('the address and the buttons that act on it share one row', async () => {
+  /** As a panel header holding only the two buttons, with the address on its
+   *  own line underneath, the header contributed an empty band and the two
+   *  halves of one idea sat apart. */
+  render(<BioLinkAdminPage />, container)
+  await settle()
+
+  const row = container.querySelector<HTMLElement>('.bio-address')!
+  expect(row.textContent).toContain('https://luma-studio.tw/card')
+  expect(row.querySelectorAll('a, button').length).toBe(2)
+  expect(container.querySelector('.ui-panel-head .copy-link')).toBeNull()
+})
+
+test('the appearance choices say which one is chosen', async () => {
+  /** They were raw buttons leaning on a `.choice` class that belonged to the
+   *  ibon page; when that page moved off it the class went, and all five
+   *  palettes rendered as identical filled buttons with no gap and no way to
+   *  tell which was selected. They are radios, so they are a RadioGroup. */
+  render(<BioLinkAdminPage />, container)
+  await settle()
+
+  const groups = [...container.querySelectorAll('.bio-appearance-controls .ui-radio-group')]
+  expect(groups.map((g) => g.querySelector('legend')?.textContent)).toEqual(['配色', '按鈕形狀', '字體'])
+
+  const chosen = groups[0]!.querySelector<HTMLInputElement>('input:checked')
+  expect(chosen).not.toBeNull()
+  expect(chosen!.closest('.ui-choice')?.textContent).toContain('暖白')
+})
+
 test('the public address is stated once, not as a heading plus a caption', async () => {
   /** 名片頁 was an h2 inside the first card, directly under a title bar
    *  already reading 名片 — the same duplication six other pages had fixed. */

@@ -39,14 +39,14 @@
 }
 
 body.admin .bio-loading {
-  margin-top: 32px;
   text-align: center;
 }
 
+/* Same gap between panels as everywhere else, and no top margin — the page
+   gutter is `.admin-content`'s job. */
 body.admin .bio-admin {
   display: grid;
-  gap: 24px;
-  margin-top: 28px;
+  gap: var(--space-4);
 }
 
 
@@ -55,12 +55,29 @@ body.admin .bio-admin {
 
 
 
+/* The address, and the two buttons that act on it, on one line. */
+body.admin .bio-address {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+body.admin .bio-address-actions {
+  margin-left: auto;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 body.admin .bio-avatar-field {
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   align-items: center;
-  margin: 22px 0 20px;
-  padding: 18px 0 20px;
+  margin: var(--space-4) 0;
+  padding: var(--space-4) 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
@@ -220,12 +237,13 @@ body.admin .bio-preview-socials span {
   background: var(--bio-surface);
 }
 
+/* No rule along the top any more: it separated these settings from the
+   paragraph that used to sit above them, and that paragraph is now the URL
+   field's own hint. With nothing above it the line drew a band under
+   nothing. */
 body.admin .bio-calendar-settings {
   display: grid;
-  gap: 12px;
-  margin: 20px 0;
-  padding: 18px 0 0;
-  border-top: 1px solid var(--border);
+  gap: var(--space-3);
 }
 
 body.admin .bio-calendar-row {
@@ -411,26 +429,20 @@ body.admin .stats {
 
 body.admin .stats-head {
   display: flex;
-  gap: 14px;
+  gap: var(--space-3);
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-body.admin .stats-head h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 1rem;
+  margin-bottom: var(--space-4);
 }
 
 body.admin .stats-head p {
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 body.admin .stats-ranges {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 body.admin .stat-totals {

@@ -806,6 +806,15 @@
   display: none;
 }
 
+/* A panel carries its own bottom margin so panels stack correctly on the
+   pages that just list them. Inside a grid the gap is already doing that
+   job, and keeping both made those pages space their panels twice as far
+   apart as the rest. */
+.stack > .ui-panel,
+.bio-admin > .ui-panel {
+  margin-bottom: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-panel-toggle svg {
     transition: none;
