@@ -14,6 +14,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { App } from './App'
 import type { SessionStatus } from '../../shared/session'
+import type { UpdateState } from '../../shared/updateState'
 import type { VersionState } from '../../shared/versionGate'
 
 const PAIRED: SessionStatus = {
@@ -29,18 +30,23 @@ const UNPAIRED: SessionStatus = { ...PAIRED, paired: false, adminEmail: null, se
 
 let container: HTMLDivElement
 let versionAnswer: { state: unknown; message: string } = { state: null, message: '' }
+let updateAnswer: UpdateState = { checking: false, downloaded: false, version: '', error: '' }
 
 function resetVersion(): void {
   versionAnswer = { state: null, message: '' }
+  updateAnswer = { checking: false, downloaded: false, version: '', error: '' }
 }
 
 function bridge(status: SessionStatus) {
   const signOut = vi.fn(async () => UNPAIRED)
+  const installUpdate = vi.fn(async () => true)
   Object.defineProperty(window, 'desktop', {
     configurable: true,
     value: {
       version: vi.fn(async () => '1.2.3'),
       versionState: vi.fn(async () => versionAnswer),
+      updateState: vi.fn(async () => updateAnswer),
+      installUpdate,
       auth: { status: vi.fn(async () => status), pair: vi.fn(), signOut },
       upload: { scan: vi.fn(), start: vi.fn(), cancel: vi.fn(), onProgress: () => () => {} },
       clipboard: vi.fn(async () => ''),
@@ -48,7 +54,7 @@ function bridge(status: SessionStatus) {
       pathFor: vi.fn(() => ''),
     },
   })
-  return { signOut }
+  return { signOut, installUpdate }
 }
 
 beforeEach(() => {
@@ -175,4 +181,115 @@ test('a build with an update available keeps working and says so', async () => {
 
   expect(container.textContent).toContain('有新版本')
   expect(container.querySelector('.drop')).not.toBeNull()
+})
+
+/**
+ * The half that was never wired up.
+ *
+ * The updater downloads a new build on its own — `autoDownload` is on — but
+ * deliberately refuses to install on quit, because replacing the program in
+ * the middle of a two-hour upload would lose the upload. `installNow()` is
+ * documented as "only reached from a button", and there was no button:
+ * nothing in the renderer called `updateState` or `installUpdate` at all.
+ *
+ * So a stopped build sat there telling somebody to install a new version
+ * while silently holding the new version it had already downloaded.
+ */
+function stopped(): void {
+  versionSaying(
+    {
+      verdict: { allowed: false, mustUpdate: true, updateAvailable: true, reason: 'tooOld' },
+      latest: '1.0.1',
+      notes: '',
+    },
+    '這個版本太舊，已經不能上傳影片了。請安裝新版。（最新版本 1.0.1）',
+  )
+}
+
+test('a downloaded update offers to restart into it', async () => {
+  stopped()
+  updateAnswer = { checking: false, downloaded: true, version: '1.0.1', error: '' }
+  const { installUpdate } = bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  const install = [...container.querySelectorAll('button')].find((b) =>
+    (b.textContent ?? '').includes('重新啟動'),
+  )
+  expect(install).toBeDefined()
+
+  install!.click()
+  expect(installUpdate).toHaveBeenCalled()
+})
+
+test('while it is still downloading it says so instead of offering a dead button', async () => {
+  stopped()
+  updateAnswer = { checking: true, downloaded: false, version: '', error: '' }
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).toContain('下載')
+  expect([...container.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('重新啟動'))).toBe(
+    false,
+  )
+})
+
+test('an update that failed says why rather than staying silent', async () => {
+  /** The download is the tool's own doing and invisible; a failure that is not
+   *  reported leaves somebody waiting for something that already gave up. */
+  stopped()
+  updateAnswer = { checking: false, downloaded: false, version: '', error: '沒有網路' }
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).toContain('沒有網路')
+})
+
+test('a build that still works can also apply the update it downloaded', async () => {
+  /** The milder half of the same gap: "there is a new version" is advice with
+   *  no way to take it if the finished download has nowhere to be applied. */
+  versionSaying(
+    {
+      verdict: { allowed: true, mustUpdate: false, updateAvailable: true, reason: 'ok' },
+      latest: '2.0.0',
+      notes: '',
+    },
+    '有新版本 2.0.0 可以更新。',
+  )
+  updateAnswer = { checking: false, downloaded: true, version: '2.0.0', error: '' }
+  const { installUpdate } = bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  // Still usable while it waits to be restarted.
+  expect(container.querySelector('.drop')).not.toBeNull()
+
+  const install = [...container.querySelectorAll('button')].find((b) =>
+    (b.textContent ?? '').includes('重新啟動'),
+  )
+  install!.click()
+  expect(installUpdate).toHaveBeenCalled()
+})
+
+test('a tool on the current build is not nagged about downloads', async () => {
+  versionSaying(
+    {
+      verdict: { allowed: true, mustUpdate: false, updateAvailable: false, reason: 'ok' },
+      latest: '1.2.3',
+      notes: '',
+    },
+    '',
+  )
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  expect(container.textContent).not.toContain('下載')
 })
