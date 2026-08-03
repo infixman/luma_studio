@@ -323,10 +323,15 @@ body.admin .admin-sidebar .account-logout:focus-visible {
   background: var(--surface);
 }
 
+/* Small. This is not the page's headline, it is where you are — the
+   navigation is already saying the same word, highlighted, a few
+   centimetres to the left. At 2rem it was a shout in a 60px bar with
+   nothing else in it. */
 .admin-title {
   margin: 0;
-  font-size: var(--font-xl);
-  font-weight: 650;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  font-weight: 700;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;

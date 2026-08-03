@@ -27,26 +27,33 @@
    and the toggle would work in one direction only. */
 
 :root {
-  /* --- surfaces, back to front --- */
-  --page: #faf7f3;
+  /* --- surfaces, back to front ---
+
+     Neutral, not sand. These were warmed to match the shop, and the two do
+     not have to match: the storefront is the brand, and this is the tool the
+     brand is run from. A cream page under white cards reads as dusty, and
+     the yellow in the lines made every table look like a document that had
+     been left out in the sun. The warmth is still on --storefront-page
+     below, where it belongs. */
+  --page: #f5f5f4;
   --surface: #fff;
   --raised: #fff;
-  --sunken: #f4f0ea;
+  --sunken: #eeeeec;
   /* Named for the icon rail that used to wear them. The navigation is one
      column on --surface now; what still reads these is the toast, which
      wants a surface of its own and an ink that reads on it. */
   --rail: #fff;
-  --rail-text-strong: #2b2622;
+  --rail-text-strong: #1c1b19;
 
   /* --- text --- */
-  --text: #2b2622;
-  --text-soft: #4a423b;
-  --muted: #6b625a;
+  --text: #1c1b19;
+  --text-soft: #45433f;
+  --muted: #78756f;
   --on-primary: #fff;
 
   /* --- lines --- */
-  --border: #e7e0d7;
-  --border-strong: #cbc1b5;
+  --border: #e6e5e3;
+  --border-strong: #c4c2be;
 
   /* --- the one accent, and the states that borrow it ---
 
@@ -54,14 +61,14 @@
      selection: all of them are ink on paper, which leaves the four status
      colours below as the only saturated things on screen — so a red badge
      means something because nothing near it is competing. */
-  --primary: #33302c;
-  --primary-hover: #1f1d1a;
-  --primary-soft: #f0ebe4;
-  --primary-line: #ddd4c8;
+  --primary: #2a2825;
+  --primary-hover: #131210;
+  --primary-soft: #ededeb;
+  --primary-line: #d6d5d1;
   /* The accent as *text*. The same ink here; the dark theme needs its own,
      see the note there. */
-  --primary-text: #33302c;
-  --focus-ring: rgb(51 48 44 / 0.25);
+  --primary-text: #2a2825;
+  --focus-ring: rgb(42 40 37 / 0.25);
 
   /* --- meaning --- */
   --danger: #b3261e;
@@ -85,16 +92,18 @@
   /* --- depth --- */
   /* Behind a modal. The same in both themes: a scrim is there to push the
      page back, and it does that by being dark whatever is under it. */
-  --scrim: rgb(20 17 15 / 0.55);
-  --shadow-1: 0 1px 4px rgb(43 38 34 / 0.09);
-  --shadow-2: 0 2px 15px rgb(43 38 34 / 0.1);
-  --shadow-3: 0 16px 40px rgb(43 38 34 / 0.22);
+  --scrim: rgb(16 15 14 / 0.55);
+  --shadow-1: 0 1px 4px rgb(28 27 25 / 0.09);
+  --shadow-2: 0 2px 15px rgb(28 27 25 / 0.1);
+  --shadow-3: 0 16px 40px rgb(28 27 25 / 0.22);
 
   /* --- shape and rhythm --- */
-  /* 4px on everything, the way Strapi does it. A pill is still a pill. */
-  --radius-sm: 4px;
-  --radius: 4px;
-  --radius-lg: 4px;
+  /* One value on everything, the way Strapi does it — but 7px rather than
+     Strapi's 4px, which at this size reads as a corner nobody set. A pill is
+     still a pill. */
+  --radius-sm: 7px;
+  --radius: 7px;
+  --radius-lg: 7px;
   --radius-pill: 999px;
 
   --space-1: 4px;
@@ -113,47 +122,46 @@
 
   /* One navigation column now, not a 56px rail plus a 232px list. */
   --sidebar-width: 248px;
-  --topbar-height: 60px;
+  --topbar-height: 50px;
   --control-height: 38px;
 
   --font-xs: 0.75rem;
   --font-sm: 0.85rem;
   --font-base: 0.875rem;
   --font-lg: 1rem;
-  --font-xl: 2rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --page: #1a1817;
-    --surface: #232120;
-    --raised: #232120;
-    --sunken: #1a1817;
-    --rail: #232120;
-    --rail-text-strong: #f4f0ea;
+    --page: #171716;
+    --surface: #212120;
+    --raised: #212120;
+    --sunken: #171716;
+    --rail: #212120;
+    --rail-text-strong: #f0f0ee;
 
-    --text: #f4f0ea;
-    --text-soft: #ddd6cd;
-    --muted: #a79e94;
+    --text: #f0f0ee;
+    --text-soft: #d6d5d2;
+    --muted: #9d9b96;
     /* The fill is near-white here, so what reads on it is the dark ink. */
-    --on-primary: #221f1d;
+    --on-primary: #1c1c1a;
 
-    --border: #38332f;
-    --border-strong: #4c4540;
+    --border: #343431;
+    --border-strong: #484844;
 
     /* Inverted, not lightened: the light theme's primary is ink on paper, so
        the dark one is paper on ink. A filled button stays the strongest thing
        on screen without being the only coloured thing on screen. */
-    --primary: #e9e3da;
-    --primary-hover: #fffaf2;
-    --primary-soft: #2b2725;
-    --primary-line: #4c4540;
+    --primary: #e8e8e5;
+    --primary-hover: #fbfbf9;
+    --primary-soft: #2a2a28;
+    --primary-line: #484844;
     /* Not the fill: a near-white "link" is indistinguishable from body text.
        This is the one place the studio's own terracotta shows through, warmed
        up until it reads at 10:1 on the surface. */
     --primary-text: #e9c9a8;
-    --focus-ring: rgb(233 227 218 / 0.35);
+    --focus-ring: rgb(232 232 229 / 0.35);
 
     --danger: #f08a80;
     --danger-hover: #f5a49c;
@@ -183,34 +191,34 @@
 /* The chosen theme, which must beat the system rule above — hence the
    duplication rather than a shared block. */
 :root[data-theme='dark'] {
-  --page: #1a1817;
-  --surface: #232120;
-  --raised: #232120;
-  --sunken: #1a1817;
-  --rail: #232120;
-  --rail-text-strong: #f4f0ea;
+  --page: #171716;
+  --surface: #212120;
+  --raised: #212120;
+  --sunken: #171716;
+  --rail: #212120;
+  --rail-text-strong: #f0f0ee;
 
-  --text: #f4f0ea;
-  --text-soft: #ddd6cd;
-  --muted: #a79e94;
+  --text: #f0f0ee;
+  --text-soft: #d6d5d2;
+  --muted: #9d9b96;
   /* The fill is near-white here, so what reads on it is the dark ink. */
-  --on-primary: #221f1d;
+  --on-primary: #1c1c1a;
 
-  --border: #38332f;
-  --border-strong: #4c4540;
+  --border: #343431;
+  --border-strong: #484844;
 
   /* Inverted, not lightened: the light theme's primary is ink on paper, so
      the dark one is paper on ink. A filled button stays the strongest thing
      on screen without being the only coloured thing on screen. */
-  --primary: #e9e3da;
-  --primary-hover: #fffaf2;
-  --primary-soft: #2b2725;
-  --primary-line: #4c4540;
+  --primary: #e8e8e5;
+  --primary-hover: #fbfbf9;
+  --primary-soft: #2a2a28;
+  --primary-line: #484844;
   /* Not the fill: a near-white "link" is indistinguishable from body text.
      This is the one place the studio's own terracotta shows through, warmed
      up until it reads at 10:1 on the surface. */
   --primary-text: #e9c9a8;
-  --focus-ring: rgb(233 227 218 / 0.35);
+  --focus-ring: rgb(232 232 229 / 0.35);
 
   --danger: #f08a80;
   --danger-hover: #f5a49c;
