@@ -44,6 +44,7 @@
   isolation: isolate;
   padding: 14px 16px 0;
   background: transparent;
+  transition: padding 220ms ease;
 }
 
 .site-header.sticky {
@@ -59,11 +60,23 @@
   transition: min-height 220ms ease, max-width 220ms ease, box-shadow 220ms ease;
 }
 
-/* Scrolled past. The inset is what made it an object; now that there is
-   content passing underneath, it gives some of that back and leans on the
-   shadow instead. */
+/* Scrolled past, the capsule pulls in from every side at once.
+
+   It used to narrow by dropping a `max-width` from 76rem to 66rem, and that
+   only bites on a window wider than about 1090px — under that the capsule is
+   already limited by the window, so nothing moved sideways and the whole
+   effect was the height changing. Even above it, 13% of the width against
+   21% of the height read as "only the height shrank".
+
+   The inset is proportional now, so it narrows at every window size, and the
+   cap tightens as well for the wide ones. */
+.site-header.scrolled {
+  padding-top: 8px;
+  padding-inline: clamp(16px, 6vw, 120px);
+}
+
 .site-header.scrolled .header-inner {
-  max-width: 66rem;
+  max-width: 62rem;
   box-shadow: 0 1px 2px rgb(43 38 34 / 0.05), 0 10px 34px rgb(43 38 34 / 0.11);
 }
 
@@ -72,6 +85,7 @@
 .site-header.scrolled.height-large .header-inner { min-height: 54px; }
 
 @media (prefers-reduced-motion: reduce) {
+  .site-header,
   .site-header .header-inner { transition: none; }
 }
 

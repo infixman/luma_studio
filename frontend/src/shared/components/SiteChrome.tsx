@@ -109,6 +109,7 @@ export function SiteHeader({
   signedIn,
   loginHref,
   onLogout,
+  preview,
 }: {
   settings: SiteSettings
   menu: ResolvedMenuItem[]
@@ -116,6 +117,16 @@ export function SiteHeader({
   signedIn?: boolean
   loginHref?: string
   onLogout?: () => Promise<void>
+  /**
+   * Drawn inside the back office rather than at the top of the shop.
+   *
+   * The window scroll then belongs to the settings form around it, not to a
+   * page passing underneath this header, so reacting to it made the preview
+   * change shape while somebody scrolled down to the field they were
+   * looking for. Sticky still means sticky — that is the owner's setting and
+   * has to keep meaning what it says on the real site.
+   */
+  preview?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -142,12 +153,12 @@ export function SiteHeader({
    * two states, so anything finer would only be a source of jitter.
    */
   useEffect(() => {
-    if (!settings.headerSticky) return
+    if (!settings.headerSticky || preview) return
     const sync = () => setScrolled(window.scrollY > 8)
     sync()
     window.addEventListener('scroll', sync, { passive: true })
     return () => window.removeEventListener('scroll', sync)
-  }, [settings.headerSticky])
+  }, [settings.headerSticky, preview])
 
   const classes = [
     'site-header',

@@ -165,3 +165,18 @@ test('a header that scrolls away with the page never claims the state', async ()
 
   expect(header()?.classList.contains('scrolled')).toBe(false)
 })
+
+test('the back office preview never takes the scrolled state', async () => {
+  /** The appearance preview renders this header inside a panel, and the
+   *  window scroll it would otherwise listen to belongs to the admin page
+   *  around it — so scrolling the settings form made the preview jump to
+   *  its scrolled shape. Sticky is the owner's setting and has to keep
+   *  meaning what it says on the real site, so the preview says so itself. */
+  render(<SiteHeader settings={{ ...SETTINGS, headerSticky: true }} menu={[]} preview />, container)
+  await settle()
+
+  scrollTo(64)
+  await settle()
+
+  expect(header()?.classList.contains('scrolled')).toBe(false)
+})

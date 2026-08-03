@@ -381,6 +381,7 @@ export function SitePage() {
         <Panel title="預覽">
           <div class="chrome-preview">
             <SiteHeader
+              preview
               settings={settings}
               menu={menu.menu.map((item) => ({
                 id: item.id,
