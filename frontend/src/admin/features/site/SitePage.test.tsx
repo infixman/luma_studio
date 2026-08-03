@@ -80,9 +80,12 @@ async function tick() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+/** The loading state is a Panel too, so waiting for one is not waiting for
+ *  the page — wait for a panel that has a title, which only the loaded page
+ *  renders. */
 async function settle() {
   for (let i = 0; i < 40; i++) {
-    if (container.querySelector('.ui-panel')) return
+    if (container.querySelector('.ui-panel-title')) return
     await tick()
   }
 }

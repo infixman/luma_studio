@@ -6,7 +6,22 @@ import { CopyButton, OpenButton } from '../../components/IconButtons'
 import { SocialIcon, platformLabel, socialPlatforms } from '../../../shared/components/SocialIcon'
 import { AdminShell } from '../../components/AdminShell'
 import { useStatus } from '../../components/StatusBar'
-import { Button, EmptyState, Spinner, useConfirm } from '../../components/ui'
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  IconButton,
+  Menu,
+  MenuItem as MenuAction,
+  Modal,
+  Panel,
+  Section,
+  Select,
+  Spinner,
+  TextArea,
+  TextField,
+  useConfirm,
+} from '../../components/ui'
 import { api, apiJson, apiUrl, bioLinkPageUrl, uploadBioLinkAvatar } from '../../../shared/api'
 import type { BioLinkItem, BioLinkKind, BioLinkState } from '../../../shared/types'
 import '../../styles/bio-link-admin.css'
@@ -41,6 +56,9 @@ interface Draft {
 
 const emptyDraft: Draft = { title: '', url: '', platform: 'instagram' }
 
+/** Named because each dialog's submit button sits in its own footer. */
+const ADD_FORM = 'new-bio-item'
+
 export function BioLinkAdminPage() {
   const { message, show, showError } = useStatus()
   const { ask, dialog } = useConfirm()
@@ -51,6 +69,8 @@ export function BioLinkAdminPage() {
   const [linkDraft, setLinkDraft] = useState<Draft>({ ...emptyDraft })
   const [socialDraft, setSocialDraft] = useState<Draft>({ ...emptyDraft })
   const [busy, setBusy] = useState(false)
+  /** Which list is being added to, if either. */
+  const [adding, setAdding] = useState<BioLinkKind | null>(null)
   const avatarInput = useRef<HTMLInputElement>(null)
 
   const adopt = (data: BioLinkState) => {
@@ -234,6 +254,7 @@ export function BioLinkAdminPage() {
     edit({ items: [...page.items, item] })
     if (kind === 'link') setLinkDraft({ ...emptyDraft })
     else setSocialDraft({ ...emptyDraft, platform: draft.platform })
+    setAdding(null)
   }
 
   const editItem = (id: string, changes: Partial<BioLinkItem>) => {
@@ -283,43 +304,18 @@ export function BioLinkAdminPage() {
     const draft = kind === 'link' ? linkDraft : socialDraft
     const setDraft = kind === 'link' ? setLinkDraft : setSocialDraft
 
-    return (
-      <section class="bio-group">
-        <h3>{kind === 'link' ? '連結按鈕' : '社群 icon'}</h3>
-        <div class="bio-draft">
-          {kind === 'social' && (
-            <select
-              aria-label="社群平台"
-              value={draft.platform}
-              onChange={(event) => setDraft({ ...draft, platform: event.currentTarget.value })}
-            >
-              {socialPlatforms.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <input
-            placeholder={kind === 'link' ? '標題，例如 作品集' : '標題（留空用平台名稱）'}
-            maxLength={MAX_TITLE}
-            value={draft.title}
-            onInput={(event) => setDraft({ ...draft, title: event.currentTarget.value })}
-          />
-          <input
-            placeholder="https://"
-            maxLength={MAX_URL}
-            value={draft.url}
-            onInput={(event) => setDraft({ ...draft, url: event.currentTarget.value })}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') addItem(kind)
-            }}
-          />
-          <button disabled={busy || atCapacity} onClick={() => addItem(kind)}>
-            新增
-          </button>
-        </div>
+    void draft
+    void setDraft
 
+    return (
+      <Section
+        title={kind === 'link' ? '連結按鈕' : '社群 icon'}
+        actions={
+          <Button size="sm" disabled={busy || atCapacity} onClick={() => setAdding(kind)}>
+            新增
+          </Button>
+        }
+      >
         {group.length === 0 ? (
           <EmptyState title="尚未新增。" compact />
         ) : (
@@ -362,54 +358,53 @@ export function BioLinkAdminPage() {
                   </span>
                 )}
                 <div class="bio-item-fields">
-                  <input
-                    aria-label="標題"
+                  <TextField
+                    label="標題"
+                    hiddenLabel
                     maxLength={MAX_TITLE}
                     value={item.title}
-                    onInput={(event) => editItem(item.id, { title: event.currentTarget.value })}
+                    onInput={(event) => editItem(item.id, { title: (event.currentTarget as HTMLInputElement).value })}
                   />
-                  <input
-                    aria-label="網址"
+                  <TextField
+                    label="網址"
+                    hiddenLabel
                     maxLength={MAX_URL}
                     value={item.url}
-                    onInput={(event) => editItem(item.id, { url: event.currentTarget.value })}
+                    onInput={(event) => editItem(item.id, { url: (event.currentTarget as HTMLInputElement).value })}
                   />
                 </div>
+                {/* The two arrows stay out: reordering is what this list is
+                    for. Hiding and deleting go behind the menu, same as
+                    every other row in the back office. */}
                 <div class="bio-item-actions">
-                  <button class="ghost" title="上移" aria-label="上移" disabled={busy || index === 0} onClick={() => moveItem(kind, index, -1)}>
-                    ↑
-                  </button>
-                  <button
-                    class="ghost"
-                    title="下移"
-                    aria-label="下移"
+                  <IconButton label="上移" size="sm" disabled={busy || index === 0} onClick={() => moveItem(kind, index, -1)}>
+                    <span aria-hidden="true">↑</span>
+                  </IconButton>
+                  <IconButton
+                    label="下移"
+                    size="sm"
                     disabled={busy || index === group.length - 1}
                     onClick={() => moveItem(kind, index, 1)}
                   >
-                    ↓
-                  </button>
-                  <button
-                    class={item.enabled ? 'bio-toggle on' : 'bio-toggle off'}
-                    disabled={busy}
-                    aria-pressed={item.enabled}
-                    title={item.enabled ? '目前顯示中，點擊隱藏' : '目前已隱藏，點擊顯示'}
-                    onClick={() => editItem(item.id, { enabled: !item.enabled })}
-                  >
-                    {item.enabled ? '顯示中' : '已隱藏'}
-                  </button>
-                  <button class="danger" disabled={busy} onClick={() => removeItem(item)}>
-                    刪除
-                  </button>
+                    <span aria-hidden="true">↓</span>
+                  </IconButton>
+                  <Menu label={`「${item.title || item.url}」的操作`}>
+                    <MenuAction disabled={busy} onClick={() => editItem(item.id, { enabled: !item.enabled })}>
+                      {item.enabled ? '隱藏' : '顯示'}
+                    </MenuAction>
+                    <MenuAction tone="danger" disabled={busy} onClick={() => removeItem(item)}>
+                      刪除
+                    </MenuAction>
+                  </Menu>
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Section>
     )
   }
 
-  const remaining = page ? MAX_ITEMS - page.items.length : MAX_ITEMS
 
   return (
     <AdminShell
@@ -441,13 +436,12 @@ export function BioLinkAdminPage() {
         <Spinner />
       ) : (
         <section class="bio-admin">
-          <div class="card">
-            <div class="bio-admin-head">
-              <div>
-                <h2>名片頁</h2>
-                <p class="muted">公開網址：{bioLinkPageUrl()}</p>
-              </div>
-              <div class="bio-admin-head-actions">
+          {/* No title: the navigation and the title bar both already say 名片.
+              What is worth saying here is the address, which the title bar
+              cannot show. */}
+          <Panel
+            actions={
+              <>
                 <OpenButton url={bioLinkPageUrl()} label="公開的名片頁" />
                 <CopyButton
                   url={bioLinkPageUrl()}
@@ -455,8 +449,10 @@ export function BioLinkAdminPage() {
                   onCopied={(label) => show(`已複製「${label}」的網址。`, 'ok')}
                   onFailed={showError}
                 />
-              </div>
-            </div>
+              </>
+            }
+          >
+            <p class="muted">公開網址：{bioLinkPageUrl()}</p>
 
             <div class="bio-avatar-field">
               {page.avatarPath ? (
@@ -473,13 +469,13 @@ export function BioLinkAdminPage() {
                   onChange={(event) => changeAvatar(event.currentTarget.files?.[0])}
                 />
                 <div class="bio-avatar-buttons">
-                  <button class="ghost" disabled={busy} onClick={() => avatarInput.current?.click()}>
+                  <Button size="sm" disabled={busy} onClick={() => avatarInput.current?.click()}>
                     {page.avatarPath ? '更換頭像' : '上傳頭像'}
-                  </button>
+                  </Button>
                   {page.avatarPath && (
-                    <button class="ghost" disabled={busy} onClick={() => void removeAvatar()}>
+                    <Button size="sm" tone="danger" disabled={busy} onClick={() => void removeAvatar()}>
                       移除
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <p class="muted">
@@ -488,31 +484,24 @@ export function BioLinkAdminPage() {
               </div>
             </div>
 
-            <label class="bio-field">
-              <span>顯示名稱</span>
-              <input
-                maxLength={MAX_DISPLAY_NAME}
-                value={page.displayName}
-                onInput={(event) => edit({ displayName: event.currentTarget.value })}
-              />
-            </label>
+            <TextField
+              label="顯示名稱"
+              maxLength={MAX_DISPLAY_NAME}
+              value={page.displayName}
+              onInput={(event) => edit({ displayName: (event.currentTarget as HTMLInputElement).value })}
+            />
 
-            <label class="bio-field">
-              <span>簡介</span>
-              <textarea
-                maxLength={MAX_BIO}
-                rows={3}
-                value={page.bio}
-                onInput={(event) => edit({ bio: event.currentTarget.value })}
-              />
-              <span class="muted">
-                {page.bio.length} / {MAX_BIO}
-              </span>
-            </label>
-          </div>
+            <TextArea
+              label="簡介"
+              maxLength={MAX_BIO}
+              rows={3}
+              hint={`${page.bio.length} / ${MAX_BIO}`}
+              value={page.bio}
+              onInput={(event) => edit({ bio: (event.currentTarget as HTMLTextAreaElement).value })}
+            />
+          </Panel>
 
-          <div class="card">
-            <h2>外觀</h2>
+          <Panel title="外觀">
             <BioLinkAppearance
               style={page}
               avatarPath={page.avatarPath ? apiUrl(page.avatarPath) : null}
@@ -520,77 +509,120 @@ export function BioLinkAdminPage() {
               busy={busy}
               onChange={(patch) => edit(patch)}
             />
-          </div>
+          </Panel>
 
-          <div class="card">
-            <h2>課程行事曆</h2>
-            <p class="muted">
-              在 Google 日曆的「設定 → 這個日曆的設定 → 公開網址 (iCal 格式)」複製網址貼上。日曆必須設為公開，且分享權限要選「查看所有活動詳細資訊」，否則每堂課的名稱都會變成 Busy。
-            </p>
+          <Panel title="課程行事曆">
             <div class="bio-calendar-settings">
-              <label class="bio-checkbox">
-                <input
-                  type="checkbox"
-                  checked={page.calendarEnabled}
-                  disabled={busy}
-                  onChange={(event) => edit({ calendarEnabled: event.currentTarget.checked })}
-                />
-                <span>在公開頁顯示近期活動</span>
-              </label>
+              <Checkbox
+                label="在公開頁顯示近期活動"
+                checked={page.calendarEnabled}
+                disabled={busy}
+                onChange={(calendarEnabled) => edit({ calendarEnabled })}
+              />
 
               <div class="bio-calendar-row">
-                <input
-                  type="text"
+                <TextField
+                  label="日曆網址"
                   placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
                   maxLength={MAX_URL}
                   value={page.calendarUrl}
-                  onInput={(event) => edit({ calendarUrl: event.currentTarget.value })}
+                  hint="Google 日曆 → 設定 → 這個日曆的設定 → 公開網址 (iCal)。日曆要設為公開，分享權限選「查看所有活動詳細資訊」，否則課名會變成 Busy。"
+                  onInput={(event) => edit({ calendarUrl: (event.currentTarget as HTMLInputElement).value })}
                 />
-                <button type="button" class="ghost" disabled={busy || !page.calendarUrl} onClick={testCalendar}>
+                <Button size="sm" disabled={busy || !page.calendarUrl} onClick={testCalendar}>
                   測試連線
-                </button>
+                </Button>
               </div>
 
               <div class="bio-calendar-row">
-                <label class="bio-field">
-                  <span>區塊標題</span>
-                  <input
-                    type="text"
-                    maxLength={MAX_CALENDAR_TITLE}
-                    value={page.calendarTitle}
-                    onInput={(event) => edit({ calendarTitle: event.currentTarget.value })}
-                  />
-                </label>
-                <label class="bio-field bio-field-narrow">
-                  <span>最多顯示</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={MAX_CALENDAR_COUNT}
-                    value={page.calendarCount}
-                    onInput={(event) => edit({ calendarCount: Number(event.currentTarget.value) })}
-                  />
-                </label>
+                <TextField
+                  label="區塊標題"
+                  maxLength={MAX_CALENDAR_TITLE}
+                  value={page.calendarTitle}
+                  onInput={(event) => edit({ calendarTitle: (event.currentTarget as HTMLInputElement).value })}
+                />
+                <TextField
+                  label="最多顯示"
+                  type="number"
+                  min={1}
+                  max={MAX_CALENDAR_COUNT}
+                  class="bio-field-narrow"
+                  value={page.calendarCount}
+                  onInput={(event) => edit({ calendarCount: Number((event.currentTarget as HTMLInputElement).value) })}
+                />
               </div>
 
               <p class="bio-calendar-warning">
                 公開頁會顯示活動的標題、時間、地點與說明。日曆上的說明欄若寫了學員姓名或聯絡方式，任何人都看得到。
               </p>
             </div>
-          </div>
+          </Panel>
 
-          <div class="card">
-            <p class="muted bio-quota">
-              目前 {page.items.length} / {MAX_ITEMS} 筆，還可新增 {Math.max(0, remaining)} 筆。
-            </p>
+          <Panel title={`連結（${page.items.length} / ${MAX_ITEMS}）`}>
             {/* Same order as the public page, so the editor previews itself. */}
             {renderGroup('social')}
             {renderGroup('link')}
-          </div>
+          </Panel>
 
-          <div class="card">
+          <Panel title="統計">
             <BioLinkStatsPanel onError={showError} />
-          </div>
+          </Panel>
+
+          <Modal
+            title={adding === 'social' ? '新增社群 icon' : '新增連結按鈕'}
+            open={adding !== null}
+            onClose={() => setAdding(null)}
+            footer={
+              <>
+                <Button tone="ghost" onClick={() => setAdding(null)}>
+                  取消
+                </Button>
+                <Button type="submit" form={ADD_FORM} tone="primary" disabled={busy}>
+                  新增
+                </Button>
+              </>
+            }
+          >
+            <form
+              id={ADD_FORM}
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (adding) addItem(adding)
+              }}
+            >
+              {adding === 'social' && (
+                <Select
+                  label="社群平台"
+                  value={socialDraft.platform}
+                  options={socialPlatforms.map((option) => ({ value: option.value, label: option.label }))}
+                  onChange={(platform) => setSocialDraft({ ...socialDraft, platform })}
+                />
+              )}
+              <TextField
+                label="標題"
+                placeholder={adding === 'link' ? '例如 作品集' : '留空就用平台名稱'}
+                maxLength={MAX_TITLE}
+                value={adding === 'social' ? socialDraft.title : linkDraft.title}
+                onInput={(event) => {
+                  const title = (event.currentTarget as HTMLInputElement).value
+                  if (adding === 'social') setSocialDraft({ ...socialDraft, title })
+                  else setLinkDraft({ ...linkDraft, title })
+                }}
+              />
+              <TextField
+                label="網址"
+                placeholder="https://"
+                maxLength={MAX_URL}
+                required
+                value={adding === 'social' ? socialDraft.url : linkDraft.url}
+                onInput={(event) => {
+                  const url = (event.currentTarget as HTMLInputElement).value
+                  if (adding === 'social') setSocialDraft({ ...socialDraft, url })
+                  else setLinkDraft({ ...linkDraft, url })
+                }}
+              />
+            </form>
+          </Modal>
         </section>
       )}
       {dialog}

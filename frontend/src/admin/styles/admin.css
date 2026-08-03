@@ -190,20 +190,13 @@ body.admin a:focus-visible {
   outline-offset: 2px;
 }
 
-/* --- layout helpers --- */
+/* --- layout helpers ---
 
-body.admin .grid {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: var(--space-5);
-}
-
-body.admin .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-}
+   `.grid` and `.card` used to live here: a hand-rolled panel and the two
+   column layout the ibon page, the site settings and the business card each
+   drew for themselves. All three are on Panel now, and a second way to draw
+   a white box with a border is exactly how the back office ended up with two
+   of everything. */
 
 body.admin .row {
   display: flex;
@@ -215,50 +208,6 @@ body.admin .row input {
   min-width: 0;
   flex: 1;
   padding: 0.55rem 0.7rem;
-}
-
-body.admin .folders,
-body.admin .files {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-4) 0 0;
-}
-
-/* Scoped to the two lists it was written for. As `body.admin li` it turned
-   every list item in the back office into a horizontal flex row — including
-   ones that arrived years later and had no idea, which is how a block that
-   opens into a form ended up laying its form out beside its own header. */
-body.admin .folders li,
-body.admin .files li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border);
-}
-
-body.admin .folder {
-  flex: 1;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  padding: var(--space-1) var(--space-1);
-  color: var(--text);
-  font-weight: 600;
-}
-
-body.admin .folder:hover:not(:disabled) {
-  background: var(--primary-soft);
-  color: var(--primary-text);
-}
-
-body.admin .folder-row.selected {
-  margin: 0 -8px;
-  padding: var(--space-3) var(--space-2);
-  border-radius: var(--radius);
-  background: var(--primary-soft);
-  border-bottom-color: transparent;
 }
 
 body.admin .copy-link {
@@ -305,44 +254,6 @@ body.admin .copy-link.copied {
   50% {
     transform: translateY(-3px) scale(1.08);
   }
-}
-
-body.admin .file-main {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-body.admin .file-thumb-btn {
-  all: unset;
-  cursor: zoom-in;
-  flex: none;
-  line-height: 0;
-}
-
-body.admin .file-thumb {
-  flex: 0 0 46px;
-  width: 46px;
-  height: 46px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--sunken);
-  object-fit: cover;
-}
-
-body.admin .file-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-weight: 600;
-}
-
-body.admin .file-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--space-2);
-  align-items: center;
 }
 
 body.admin .muted {
@@ -444,31 +355,6 @@ body.admin .empty {
 
 /* --- the ibon print page --- */
 
-body.admin .print-settings {
-  margin: var(--space-5) 0;
-  padding: var(--space-5) 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-body.admin .print-settings-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  align-items: baseline;
-}
-
-body.admin .print-settings-header p {
-  margin: var(--space-1) 0 0;
-}
-
-body.admin .setting-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4) var(--space-5);
-  margin: var(--space-4) 0 0;
-}
-
 body.admin fieldset {
   min-width: 0;
   margin: 0;
@@ -480,56 +366,6 @@ body.admin legend {
   padding: 0;
   color: var(--text);
   font-weight: 700;
-}
-
-body.admin .choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-body.admin button.choice {
-  min-height: 38px;
-  border-color: var(--border);
-  background: var(--surface);
-  color: var(--text-soft);
-  font-size: var(--font-sm);
-}
-
-body.admin button.choice:hover:not(:disabled) {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary-text);
-}
-
-body.admin button.choice.selected {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
-body.admin button.choice:disabled {
-  border-color: var(--border);
-  background: var(--sunken);
-  color: var(--muted);
-  opacity: 1;
-}
-
-body.admin .print-summary {
-  margin: var(--space-4) 0 0;
-  color: var(--text-soft);
-  font-size: var(--font-sm);
-}
-
-body.admin .cache-notice {
-  margin: var(--space-3) 0 0;
-  padding: var(--space-3);
-  border-radius: var(--radius);
-  background: var(--sunken);
-  color: var(--text-soft);
-  font-size: var(--font-sm);
-  line-height: 1.55;
 }
 
 body.admin .upload-area {
@@ -606,61 +442,20 @@ body.admin .progress-bar {
   transition: width 0.2s ease-out;
 }
 
-body.admin .upload-limit {
-  margin: var(--space-5) 0 0;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--sunken);
-  color: var(--text-soft);
-  line-height: 1.55;
-}
-
-body.admin .folder-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--space-3);
-}
-
 @media (max-width: 720px) {
-  body.admin .grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-  }
-
   body.admin .row {
     align-items: stretch;
     flex-wrap: wrap;
-  }
-
-  body.admin .setting-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-  }
-
-  body.admin button.choice {
-    min-height: 44px;
   }
 
   body.admin button.drop-zone {
     min-height: 154px;
   }
 
-  body.admin .file-actions button {
-    min-height: 44px;
-  }
-
-  body.admin .file-actions .copy-link,
-  body.admin .folder-row .copy-link {
+  body.admin .copy-link {
     flex-basis: 44px;
     width: 44px;
     height: 44px;
-  }
-
-  body.admin .file-thumb {
-    flex: 0 0 40px;
-    width: 40px;
-    height: 40px;
   }
 }
 

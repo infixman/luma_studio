@@ -131,6 +131,12 @@ body.admin .footer-columns-editor .column-head {
   gap: 0.7rem;
 }
 
+body.admin .footer-columns-editor .column-head .ui-field {
+  flex: 1;
+  min-width: 10rem;
+  margin-bottom: 0;
+}
+
 body.admin .header-image-row .thumb {
   width: 140px;
   height: 74px;
@@ -165,42 +171,28 @@ body.admin .footer-columns-editor > li {
   border-radius: 8px;
 }
 
-body.admin .footer-columns-editor .link-list,
-body.admin .card .link-list {
+/* Was scoped to `.card`, the wrapper this page used before it moved onto
+   Panel. The list is the thing being described, so it is what the rule
+   names now. */
+body.admin .link-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
-body.admin .card .link-list li {
+body.admin .link-list li {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
-body.admin .card .link-list input:not([type="checkbox"]),
-body.admin .card .link-list select {
+/* The fields carry their own label, hidden on these rows because the column
+   header already says which is which. */
+body.admin .link-list .ui-field {
   flex: 1;
   min-width: 8rem;
-}
-
-body.admin .card .link-list .link-new-tab {
-  min-height: 2.25rem;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding-inline: var(--space-2);
-  color: var(--text-soft);
-  font-size: var(--font-sm);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-body.admin .card .link-list .link-new-tab input {
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  accent-color: var(--primary);
+  margin-bottom: 0;
 }

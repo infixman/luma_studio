@@ -49,24 +49,11 @@ body.admin .bio-admin {
   margin-top: 28px;
 }
 
-body.admin .bio-admin-head {
-  display: flex;
-  gap: 14px;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
 
-body.admin .bio-admin-head p {
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
-}
 
-body.admin .bio-admin-head-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+
+
+
 
 body.admin .bio-avatar-field {
   display: flex;
@@ -110,28 +97,11 @@ body.admin .bio-avatar-buttons {
   flex-wrap: wrap;
 }
 
-body.admin .bio-field {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 16px;
-}
 
-body.admin .bio-field > span:first-child {
-  color: var(--text);
-  font-weight: 700;
-}
 
-body.admin .bio-field input,
-body.admin .bio-field textarea {
-  width: 100%;
-  padding: 10px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  resize: vertical;
-}
+
+
+
 
 body.admin .bio-savebar {
   position: sticky;
@@ -276,29 +246,21 @@ body.admin .bio-calendar-row > input {
   font: inherit;
 }
 
-body.admin .bio-calendar-row .bio-field {
+/* The fields are Field/TextField now, so the row only decides how they
+   share the width. */
+body.admin .bio-calendar-row .ui-field {
   flex: 1 1 200px;
   min-width: 0;
   margin-bottom: 0;
 }
 
-body.admin .bio-calendar-row .bio-field-narrow {
-  flex: 0 0 120px;
+body.admin .bio-calendar-row .ui-field:has(.bio-field-narrow) {
+  flex: 0 0 140px;
 }
 
-body.admin .bio-checkbox {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  color: var(--text);
-  font-weight: 700;
-}
 
-body.admin .bio-checkbox input {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--bio-accent);
-}
+
+
 
 body.admin .bio-calendar-warning {
   margin: 0;
@@ -310,49 +272,16 @@ body.admin .bio-calendar-warning {
   line-height: 1.6;
 }
 
-body.admin .bio-quota {
-  margin: 0 0 18px;
-}
 
-body.admin .bio-group {
-  margin: 0 0 26px;
-}
 
-body.admin .bio-group:last-child {
-  margin-bottom: 0;
-}
 
-body.admin .bio-group h3 {
-  margin: 0 0 10px;
-  color: var(--text);
-  font-size: 1rem;
-}
 
-body.admin .bio-draft {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
 
-body.admin .bio-draft input {
-  flex: 1 1 170px;
-  min-width: 0;
-  padding: 10px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-}
 
-body.admin .bio-draft select {
-  padding: 10px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
+
+
+
+
 
 body.admin .bio-items {
   display: grid;
@@ -466,32 +395,15 @@ body.admin .bio-item-actions button.ghost:hover:not(:disabled) {
 }
 
 /* A state, not an action: it reports whether the link is live and toggles it. */
-body.admin .bio-toggle {
-  min-width: 66px;
-  border-width: 1px;
-  border-style: solid;
-  font-weight: 700;
-}
 
-body.admin .bio-toggle.on {
-  background: var(--bio-accent-soft);
-  border-color: var(--bio-accent-line);
-  color: var(--bio-accent-text);
-}
 
-body.admin .bio-toggle.off {
-  background: var(--sunken);
-  border-color: var(--border);
-  color: var(--muted);
-}
 
-body.admin .bio-toggle:hover:not(:disabled) {
-  border-color: var(--bio-accent-line);
-}
 
-body.admin .bio-toggle:disabled {
-  opacity: 0.6;
-}
+
+
+
+
+
 
 body.admin .stats {
   margin-top: 4px;

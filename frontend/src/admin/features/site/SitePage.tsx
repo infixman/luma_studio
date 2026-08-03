@@ -241,9 +241,9 @@ export function SitePage() {
     return (
       <AdminShell current="/site" message={message} onError={showError}>
         <section class="stack shop">
-          <div class="card">
+          <Panel>
             <Spinner />
-          </div>
+          </Panel>
         </section>
       </AdminShell>
     )
