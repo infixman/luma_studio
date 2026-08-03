@@ -28,6 +28,8 @@ export const AUTO_LEVEL = -1
 export function HlsVideo({
   src,
   class: className = 'learn-video',
+  controls = true,
+  mediaRef,
   onError,
   onPosition,
   onEnded,
@@ -38,6 +40,22 @@ export function HlsVideo({
   src: string
   /** Named by the caller: the storefront and the back office style it apart. */
   class?: string
+  /**
+   * The browser's own control bar. On by default, so adding this changed
+   * nothing for anybody already using it.
+   *
+   * The back office keeps it: it is a tool, the job there is checking that a
+   * transcode came out right, and the native bar is the one every browser
+   * already knows how to make accessible. A caller drawing its own turns this
+   * off — two bars over one video disagree about it.
+   */
+  controls?: boolean
+  /**
+   * The media element, for a caller drawing its own controls. Play, pause,
+   * seek and volume all live on the element; without it there is nothing for
+   * a control bar to control.
+   */
+  mediaRef?: { current: HTMLVideoElement | null }
   onError?: () => void
   /** Called as playback proceeds, throttled by the caller, not here. */
   onPosition?: (seconds: number) => void
@@ -134,9 +152,14 @@ export function HlsVideo({
 
   return (
     <video
-      ref={video}
+      // Both refs from one callback: this component needs the element for
+      // hls.js, and the caller needs the same element for its own bar.
+      ref={(element) => {
+        video.current = element
+        if (mediaRef) mediaRef.current = element
+      }}
       class={className}
-      controls
+      controls={controls}
       crossOrigin="use-credentials"
       onTimeUpdate={(event) =>
         handlers.current.onPosition?.(Math.floor((event.currentTarget as HTMLVideoElement).currentTime))

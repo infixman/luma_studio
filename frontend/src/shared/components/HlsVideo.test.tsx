@@ -85,6 +85,43 @@ async function settle() {
   for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+/**
+ * Whose controls.
+ *
+ * The back office wants the browser's — it is a tool, the person using it is
+ * checking that a transcode came out right, and the native bar is the one
+ * every browser already knows how to make accessible. The storefront is
+ * building its own, and a native bar underneath it would be two sets of
+ * controls disagreeing about the same video.
+ *
+ * Native is therefore the default: adding a prop must not quietly change what
+ * every existing caller gets.
+ */
+test('the browser draws the controls unless asked otherwise', async () => {
+  render(<HlsVideo src="/media/master.m3u8" />, container)
+  await settle()
+
+  expect(container.querySelector('video')?.hasAttribute('controls')).toBe(true)
+})
+
+test('a caller drawing its own gets a bare video', async () => {
+  render(<HlsVideo src="/media/master.m3u8" controls={false} />, container)
+  await settle()
+
+  expect(container.querySelector('video')?.hasAttribute('controls')).toBe(false)
+})
+
+test('the element is handed to a caller that asks for it', async () => {
+  /** A control bar of one's own has nothing to control without it: play,
+   *  pause, seek and volume all live on the element, not on this component. */
+  const media: { current: HTMLVideoElement | null } = { current: null }
+
+  render(<HlsVideo src="/media/master.m3u8" controls={false} mediaRef={media} />, container)
+  await settle()
+
+  expect(media.current).toBe(container.querySelector('video'))
+})
+
 test('a re-render with new callbacks does not rebuild the player', async () => {
   render(<HlsVideo src="/media/master.m3u8" onError={() => {}} />, container)
   await settle()
