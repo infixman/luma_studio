@@ -191,10 +191,81 @@ export function LessonPlayer({
     })
   }, [onTheaterChange])
 
+  const seekBy = useCallback(
+    (delta: number) => {
+      const element = media.current
+      if (!element) return
+      const upper = Number.isFinite(duration) ? duration : Infinity
+      seek(Math.max(0, Math.min(upper, element.currentTime + delta)))
+    },
+    [duration, seek],
+  )
+
+  const nudgeVolume = useCallback(
+    (delta: number) => {
+      const element = media.current
+      if (!element) return
+      changeVolume(Math.max(0, Math.min(1, element.volume + delta)))
+    },
+    [changeVolume],
+  )
+
+  // Scoped to the player, not the document: the letters here are ones a page
+  // can reasonably use elsewhere, and a native form control already knows
+  // what its own arrow keys mean — this defers to it rather than fighting it.
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement | null)?.tagName === 'INPUT') return
+
+      switch (event.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          event.preventDefault()
+          toggle()
+          break
+        case 'ArrowLeft':
+          event.preventDefault()
+          seekBy(-5)
+          break
+        case 'ArrowRight':
+          event.preventDefault()
+          seekBy(5)
+          break
+        case 'ArrowUp':
+          event.preventDefault()
+          nudgeVolume(0.05)
+          break
+        case 'ArrowDown':
+          event.preventDefault()
+          nudgeVolume(-0.05)
+          break
+        case 'm':
+        case 'M':
+          toggleMute()
+          break
+        case 'f':
+        case 'F':
+          toggleFullscreen()
+          break
+        case 't':
+        case 'T':
+          toggleTheater()
+          break
+      }
+    },
+    [toggle, seekBy, nudgeVolume, toggleMute, toggleFullscreen, toggleTheater],
+  )
+
   const known = Number.isFinite(duration)
 
   return (
-    <div class={`lesson-player${theater ? ' is-theater' : ''}`} ref={shell}>
+    <div
+      class={`lesson-player${theater ? ' is-theater' : ''}`}
+      ref={shell}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+    >
       <HlsVideo
         src={src}
         controls={false}

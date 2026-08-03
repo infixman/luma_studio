@@ -86,6 +86,14 @@ function scrubber(): HTMLInputElement {
   return container.querySelector<HTMLInputElement>('.player-scrub')!
 }
 
+function shell(): HTMLDivElement {
+  return container.querySelector<HTMLDivElement>('.lesson-player')!
+}
+
+function key(value: string, target: HTMLElement = shell()): void {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }))
+}
+
 function volumeSlider(): HTMLInputElement {
   return container.querySelector<HTMLInputElement>('.player-volume')!
 }
@@ -524,4 +532,106 @@ test('the page is told when theatre mode changes, not just the player', async ()
   await settle()
 
   expect(onTheaterChange).toHaveBeenCalledWith(false)
+})
+
+/**
+ * Keyboard shortcuts.
+ *
+ * Scoped to the player itself, not the document: the shortcuts share letters
+ * with things a page can reasonably contain elsewhere, and a global listener
+ * would fire from anywhere on the page rather than from the video somebody is
+ * actually watching.
+ *
+ * Every one of these dispatches through the same handlers the buttons call —
+ * there is no second copy of "what does mute mean" to drift from the first.
+ */
+
+test('space and K both play and pause', async () => {
+  await mount()
+
+  key(' ')
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce()
+
+  video().dispatchEvent(new Event('play'))
+  await settle()
+  key('k')
+  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledOnce()
+})
+
+test('the arrows seek five seconds at a time', async () => {
+  await mount()
+  media({ duration: 175, currentTime: 60 }, 'durationchange')
+  await settle()
+
+  key('ArrowRight')
+  expect(video().currentTime).toBe(65)
+
+  key('ArrowLeft')
+  expect(video().currentTime).toBe(60)
+})
+
+test('seeking does not run past either end', async () => {
+  await mount()
+  media({ duration: 175, currentTime: 2 }, 'durationchange')
+  await settle()
+
+  key('ArrowLeft')
+  expect(video().currentTime).toBe(0)
+
+  media({ currentTime: 173 })
+  key('ArrowRight')
+  expect(video().currentTime).toBe(175)
+})
+
+test('up and down nudge the volume', async () => {
+  await mount()
+  media({ volume: 0.5 }, 'volumechange')
+  await settle()
+
+  key('ArrowUp')
+  expect(video().volume).toBeCloseTo(0.55)
+
+  key('ArrowDown')
+  key('ArrowDown')
+  expect(video().volume).toBeCloseTo(0.45)
+})
+
+test('M mutes and unmutes', async () => {
+  await mount()
+
+  key('m')
+  expect(video().muted).toBe(true)
+
+  key('m')
+  expect(video().muted).toBe(false)
+})
+
+test('F asks for full screen the same as the button', async () => {
+  await mount()
+
+  key('f')
+  await settle()
+
+  expect(Element.prototype.requestFullscreen).toHaveBeenCalled()
+})
+
+test('T enters theatre mode the same as the button', async () => {
+  await mount()
+
+  key('t')
+  await settle()
+
+  expect(shell().classList.contains('is-theater')).toBe(true)
+})
+
+test('a shortcut typed into the volume slider is left to the slider', async () => {
+  /** Otherwise pressing Left to nudge the volume down one native step also
+   *  rewinds the video five seconds, because both handlers saw the same key. */
+  await mount()
+  media({ duration: 175, currentTime: 60 }, 'durationchange')
+  await settle()
+
+  key('ArrowLeft', volumeSlider())
+
+  expect(video().currentTime).toBe(60)
 })
