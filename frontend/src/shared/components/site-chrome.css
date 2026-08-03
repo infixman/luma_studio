@@ -23,10 +23,19 @@
 
 /* --- header --- */
 
+/* The header is a capsule inset from every edge rather than a band running
+   wall to wall. That only works because the shop's page is not white — see
+   --surface in storefront/styles/surface.css — so there is something for it
+   to float on.
+
+   The owner's settings all still mean what they meant: the colour paints the
+   capsule, the height sets its height, sticky still pins it. What is gone is
+   the geometry, which was never one of the choices. */
 .site-header {
   position: relative;
   isolation: isolate;
-  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+  padding: 14px 16px 0;
+  background: transparent;
 }
 
 .site-header.sticky {
@@ -35,20 +44,54 @@
   z-index: 20;
 }
 
-.site-header.colour-cream { background: var(--surface-cream); }
-.site-header.colour-sand { background: var(--surface-sand); }
-.site-header.colour-clay { background: var(--surface-clay); }
-.site-header.colour-forest { background: var(--surface-forest); }
-.site-header.colour-ink { background: var(--surface-ink); }
-.site-header.bg-transparent { background: transparent; border-bottom-color: transparent; }
+.site-header .header-inner {
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(43 38 34 / 0.04), 0 6px 20px rgb(43 38 34 / 0.05);
+  transition: min-height 220ms ease, max-width 220ms ease, box-shadow 220ms ease;
+}
+
+/* Scrolled past. The inset is what made it an object; now that there is
+   content passing underneath, it gives some of that back and leans on the
+   shadow instead. */
+.site-header.scrolled .header-inner {
+  max-width: 66rem;
+  box-shadow: 0 1px 2px rgb(43 38 34 / 0.05), 0 10px 34px rgb(43 38 34 / 0.11);
+}
+
+.site-header.scrolled.height-small .header-inner { min-height: 48px; }
+.site-header.scrolled.height-medium .header-inner { min-height: 60px; }
+.site-header.scrolled.height-large .header-inner { min-height: 78px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header .header-inner { transition: none; }
+}
+
+/* The colour lands on the capsule, not on the strip behind it. */
+.site-header.colour-cream .header-inner { background: var(--surface-cream); }
+.site-header.colour-sand .header-inner { background: var(--surface-sand); }
+.site-header.colour-clay .header-inner { background: var(--surface-clay); }
+.site-header.colour-forest .header-inner { background: var(--surface-forest); }
+.site-header.colour-ink .header-inner { background: var(--surface-ink); }
+
+/* Asked for no background at all: then there is no capsule either, only the
+   menu floating over whatever is behind it. */
+.site-header.bg-transparent .header-inner {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
 
 .site-header.text-dark { color: #2b2622; }
 .site-header.text-light { color: #fff; }
 
+/* Inset and rounded to the capsule's own shape, so a photograph fills the
+   capsule rather than the strip of page it floats on. */
 .header-image {
   position: absolute;
-  inset: 0;
+  inset: 14px 16px 0;
   z-index: -2;
+  border-radius: 999px;
   background-size: cover;
   background-position: center;
 }
@@ -58,17 +101,20 @@
 .site-header.bg-image::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 14px 16px 0;
   z-index: -1;
+  border-radius: 999px;
   background: rgb(0 0 0 / 0.45);
 }
 
-.site-header.bg-image { background: transparent; }
+/* The photograph is the capsule's fill, so the colour must not paint over
+   it — the colour classes land on .header-inner now. */
+.site-header.bg-image .header-inner { background: transparent; }
 
 .header-inner {
   max-width: 76rem;
   margin: 0 auto;
-  padding: 0 1.1rem;
+  padding: 0 1.35rem;
   display: flex;
   align-items: center;
   gap: 1.2rem;

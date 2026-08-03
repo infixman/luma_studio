@@ -119,6 +119,7 @@ export function SiteHeader({
 }) {
   const [open, setOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -127,6 +128,27 @@ export function SiteHeader({
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  /**
+   * The header is a capsule inset from every edge, and the inset is what
+   * makes it read as an object rather than a band. Once there is content
+   * passing underneath it, it gives some of that back.
+   *
+   * Only when it is pinned: a header that scrolls away with the page has
+   * nothing left on screen to shrink, and the back office's appearance
+   * preview renders this component inside a panel whose scrolling the
+   * window knows nothing about.
+   *
+   * A threshold rather than the scroll position itself — the capsule has
+   * two states, so anything finer would only be a source of jitter.
+   */
+  useEffect(() => {
+    if (!settings.headerSticky) return
+    const sync = () => setScrolled(window.scrollY > 8)
+    sync()
+    window.addEventListener('scroll', sync, { passive: true })
+    return () => window.removeEventListener('scroll', sync)
+  }, [settings.headerSticky])
+
   const classes = [
     'site-header',
     `bg-${settings.headerBackground}`,
@@ -134,16 +156,20 @@ export function SiteHeader({
     `height-${settings.headerHeight}`,
     `text-${settings.headerText}`,
     settings.headerSticky ? 'sticky' : '',
+    scrolled ? 'scrolled' : '',
     open ? 'open' : '',
   ]
     .filter(Boolean)
     .join(' ')
-  const customStyle: JSX.CSSProperties = {
-    ...(settings.headerBackground === 'solid' && settings.headerColour === 'custom'
+  // The text colour is inherited, so it can stay on the outer element. The
+  // background cannot: the outer element is the transparent strip the capsule
+  // floats on, and painting that paints a band across the page.
+  const customStyle: JSX.CSSProperties =
+    settings.headerText === 'custom' ? { color: settings.headerCustomText } : {}
+  const customInnerStyle: JSX.CSSProperties =
+    settings.headerBackground === 'solid' && settings.headerColour === 'custom'
       ? { backgroundColor: settings.headerCustomColour }
-      : {}),
-    ...(settings.headerText === 'custom' ? { color: settings.headerCustomText } : {}),
-  }
+      : {}
   const customBadgeStyle: JSX.CSSProperties | undefined =
     settings.headerText === 'custom'
       ? {
@@ -160,7 +186,7 @@ export function SiteHeader({
         <div class="header-image" style={{ backgroundImage: `url(${settings.headerImagePath})` }} aria-hidden="true" />
       )}
 
-      <div class="header-inner">
+      <div class="header-inner" style={customInnerStyle}>
         <a class={`brand size-${settings.headerLogoSize}`} href="/">
           <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
         </a>
