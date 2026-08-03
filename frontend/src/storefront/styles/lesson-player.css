@@ -385,8 +385,12 @@
     height: 22px;
   }
 
-  .player-volume-group,
-  .player-theater {
+  /* Both selectors carry the bar, because the rule they have to beat does:
+     `:is(.player-bar, …) > button` scores a class and an element, so a bare
+     `.player-theater` loses to it and the button stayed on the phone. The
+     same specificity trap as the settings menu, the other way up. */
+  .player-bar > .player-volume-group,
+  .player-bar > .player-theater {
     display: none;
   }
 

@@ -237,8 +237,23 @@ export function LessonPlayer({
   }, [])
 
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement === shell.current) void document.exitFullscreen()
-    else void shell.current?.requestFullscreen()
+    if (document.fullscreenElement === shell.current) {
+      void document.exitFullscreen()
+      return
+    }
+
+    // The whole player, so the bar comes with it.
+    if (shell.current?.requestFullscreen) {
+      void shell.current.requestFullscreen()
+      return
+    }
+
+    // Except on the iPhone, where no element but a video can go fullscreen at
+    // all — `requestFullscreen` is simply absent. The video goes on its own
+    // and Safari's own controls come with it, which is the whole of what is
+    // available there; the alternative is a button that does nothing.
+    const element = media.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
+    element?.webkitEnterFullscreen?.()
   }, [])
 
   const toggleTheater = useCallback(() => {

@@ -908,3 +908,19 @@ test('the settings tooltip goes when the menu it opened is over the same spot', 
 
   expect(tip('設定')).toBe('')
 })
+
+test('an iPhone gets the video fullscreen rather than nothing at all', async () => {
+  /** No element but a video can go fullscreen there — `requestFullscreen` is
+   *  simply absent — so asking the player for it silently did nothing. The
+   *  video goes on its own, with Safari's controls, which is the whole of
+   *  what is available. */
+  await mount()
+  // @ts-expect-error — modelling a browser that does not have it.
+  delete Element.prototype.requestFullscreen
+  const enter = vi.fn()
+  Object.defineProperty(video(), 'webkitEnterFullscreen', { value: enter, configurable: true })
+
+  button('全螢幕')!.click()
+
+  expect(enter).toHaveBeenCalled()
+})

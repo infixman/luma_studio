@@ -173,6 +173,11 @@ export function HlsVideo({
       }}
       class={className}
       controls={controls}
+      // iOS will not play a video inside a page without this. Left off, Safari
+      // holds the whole thing back for its own fullscreen player: nothing
+      // loads, no metadata arrives, and the element stays a black rectangle
+      // with no length — which is what the lesson page showed on a phone.
+      playsInline
       crossOrigin="use-credentials"
       onTimeUpdate={(event) =>
         handlers.current.onPosition?.(Math.floor((event.currentTarget as HTMLVideoElement).currentTime))

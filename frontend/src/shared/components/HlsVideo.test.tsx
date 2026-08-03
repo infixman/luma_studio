@@ -263,3 +263,13 @@ test('native playback names no renditions, because nothing there can switch them
   expect(reported).toEqual([])
   expect(container.querySelector('video')?.getAttribute('src')).toBe('/media/master.m3u8')
 })
+
+test('the video may play where it sits, which iOS refuses without being told', async () => {
+  /** Left off, Safari holds playback back for its own fullscreen player:
+   *  nothing loads, no metadata arrives, and the element is a black
+   *  rectangle of no length. */
+  render(<HlsVideo src="https://api.example.test/course-media/a/1/master.m3u8" />, container)
+  await settle()
+
+  expect(container.querySelector('video')?.hasAttribute('playsinline')).toBe(true)
+})
