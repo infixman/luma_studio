@@ -71,18 +71,6 @@ export function LessonPlayer({
   const [duration, setDuration] = useState(Number.NaN)
   const [fullscreen, setFullscreen] = useState(false)
   const [volume, setVolume] = useState(1)
-  /**
-   * Whether this browser lets a page set the volume at all.
-   *
-   * iOS does not: `volume` is read-only there, so the slider is a handle that
-   * moves and changes nothing. The mute button still works, and muting is a
-   * real thing to want in public, so only the slider goes.
-   *
-   * Asked of the element rather than guessed from the screen width. Narrow is
-   * not the question — an Android phone can set it and a small desktop window
-   * certainly can, and both were losing the control to a media query.
-   */
-  const [volumeSettable, setVolumeSettable] = useState(true)
   const [muted, setMuted] = useState(false)
   const [theater, setTheater] = useState(false)
   const [bufferedEnd, setBufferedEnd] = useState(0)
@@ -120,14 +108,6 @@ export function LessonPlayer({
       setMuted(element.muted)
     }
 
-    // Asked by trying it: a browser that refuses swallows the assignment and
-    // reads back what it had. Put back either way, so the probe cannot be
-    // heard — on the browsers where it does take, this sets and restores in
-    // the same tick, before anything is playing.
-    const before = element.volume
-    element.volume = before === 1 ? 0.5 : 1
-    setVolumeSettable(element.volume !== before)
-    element.volume = before
     // The end of whichever buffered range currently holds the playhead —
     // that range is the one that answers "how much further can this play
     // right now", not necessarily the last one the network has fetched.
@@ -143,9 +123,23 @@ export function LessonPlayer({
       setBufferedEnd(end)
     }
 
+    // Safari puts the rate back to 1 by itself — when the source loads, and
+    // again when playback starts — so setting it once at the moment somebody
+    // picks it holds on every other browser and nowhere on an iPhone: the
+    // menu said 1.5x over a video playing at 1. Asserted again whenever the
+    // element reports something that would have reset it. Guarded, because
+    // this fires the very event it listens to.
+    const rated = () => {
+      if (element.playbackRate !== wantedRate.current) element.playbackRate = wantedRate.current
+    }
+
     const bindings: [string, () => void][] = [
       ['play', started],
       ['playing', started],
+      ['play', rated],
+      ['playing', rated],
+      ['loadedmetadata', rated],
+      ['ratechange', rated],
       ['pause', stopped],
       ['ended', stopped],
       ['timeupdate', moved],
@@ -186,6 +180,11 @@ export function LessonPlayer({
     const element = media.current
     if (element) element.playbackRate = rate
   }, [rate])
+
+  /** For the listeners below, which are bound once and must not be rebound
+   *  every time the number changes. */
+  const wantedRate = useRef(rate)
+  wantedRate.current = rate
 
   // A menu open over a video is a menu somebody expects to dismiss without
   // hunting for the one control that opened it.
@@ -370,6 +369,15 @@ export function LessonPlayer({
       onMouseMove={wake}
       onTouchStart={wake}
     >
+      {/* The picture is the biggest pause button on the screen, and every
+          player has taught everybody that it is one. A div over the video
+          rather than a handler on it: the video is drawn by another
+          component, and this is the bar's behaviour, not the video's.
+
+          It stops at the bar — a click meant for the scrubber must not also
+          stop the video on its way past. */}
+      <div class="player-surface" onClick={toggle} aria-hidden="true" />
+
       <HlsVideo
         src={src}
         controls={false}
@@ -397,18 +405,16 @@ export function LessonPlayer({
               back. The handle shows what is being heard, which while muted
               is zero — a slider sitting at 0.8 over silence says the sound
               is on, and the handle is the part being looked at. */}
-          {volumeSettable && (
-            <input
-              class="player-volume"
-              type="range"
-              min={0}
-              max={1}
-              step="any"
-              value={muted ? 0 : volume}
-              aria-label="音量"
-              onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
-            />
-          )}
+          <input
+            class="player-volume"
+            type="range"
+            min={0}
+            max={1}
+            step="any"
+            value={muted ? 0 : volume}
+            aria-label="音量"
+            onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
+          />
         </div>
 
         <input

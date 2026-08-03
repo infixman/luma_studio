@@ -925,31 +925,50 @@ test('an iPhone gets the video fullscreen rather than nothing at all', async () 
   expect(enter).toHaveBeenCalled()
 })
 
-test('a browser that will not set the volume gets no slider to pretend with', async () => {
-  /** iOS: `volume` is read-only, so the handle moves and the sound does not.
-   *  Mute still works and stays — muting in public is a real thing to want. */
-  render(<LessonPlayer src="https://api.example.test/a.m3u8" />, container)
+
+test('a chosen speed survives the browser putting it back', async () => {
+  /** Safari resets `playbackRate` to 1 on its own — when the source loads and
+   *  again when playback starts — so setting it once held everywhere except
+   *  the iPhone, where the menu said 1.5x over a video playing at 1. */
+  await mount()
+  button('設定')!.click()
+  await settle()
+  ;[...container.querySelectorAll<HTMLButtonElement>('.player-menu-row')]
+    .find((row) => row.textContent?.includes('播放速度'))!
+    .click()
+  await settle()
+  ;[...container.querySelectorAll<HTMLButtonElement>('.player-menu-option')]
+    .find((option) => option.textContent === '1.5x')!
+    .click()
+  await settle()
+  expect(video().playbackRate).toBe(1.5)
+
+  // What Safari does the moment playback begins.
+  video().playbackRate = 1
+  video().dispatchEvent(new Event('play'))
   await settle()
 
-  // Rebuild with an element that swallows the assignment, the way iOS does.
-  render(null, container)
-  const readOnly = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume')
-  Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
-    configurable: true,
-    get: () => 1,
-    set: () => {},
-  })
-  render(<LessonPlayer src="https://api.example.test/a.m3u8" />, container)
-  await settle()
-
-  expect(container.querySelector('.player-volume')).toBeNull()
-  expect(button('靜音')).not.toBeNull()
-
-  if (readOnly) Object.defineProperty(HTMLMediaElement.prototype, 'volume', readOnly)
+  expect(video().playbackRate).toBe(1.5)
 })
 
-test('a browser that will set it keeps the slider', async () => {
+test('the picture is a pause button, because every player has taught that', async () => {
   await mount()
 
-  expect(container.querySelector('.player-volume')).not.toBeNull()
+  container.querySelector<HTMLDivElement>('.player-surface')!.click()
+
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
+})
+
+test('a click on the bar is not also a click on the picture behind it', async () => {
+  /** The surface spans the whole player; the bar sits over it, later in the
+   *  source, and takes its own clicks. Otherwise reaching for the scrubber
+   *  would pause the video on the way past. */
+  await mount()
+  video().dispatchEvent(new Event('play'))
+  await settle()
+
+  const bar = container.querySelector<HTMLDivElement>('.player-bar')!
+  expect(bar.contains(container.querySelector('.player-surface'))).toBe(false)
+  expect(container.querySelector('.player-surface')!.compareDocumentPosition(bar))
+    .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 })

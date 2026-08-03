@@ -42,7 +42,22 @@
   object-fit: contain;
 }
 
+/* Over the picture, under the bar.
+
+   Both are positioned and the bar comes later in the source, so the bar is
+   painted over this and takes its own clicks — a click aimed at the scrubber
+   does not pause the video on its way past. That is why this spans the whole
+   player rather than stopping at some remembered bar height: the stacking
+   order already knows where the bar is, and a number here would be a second
+   copy of that fact, wrong the moment the bar changed. */
+.player-surface {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
 .player-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -365,14 +380,10 @@
    own, where it is long enough to aim at with a thumb, and what is left
    goes underneath, split between the two ends somebody's hands are at.
 
-   Nothing is dropped for being on a phone. An earlier version took theatre
-   and the volume slider away here, on the grounds that the video is already
-   full width and a phone has its own volume buttons. The first is not true
-   of this layout — the video sits inside the page's gutter with two titles
-   over it, so theatre still buys the gutter, the titles and the dark room —
-   and the second is a guess about the device where the real question is
-   whether the browser lets a page set the volume at all. That one is asked
-   directly now, in the component. */
+   Theatre stays. It was taken away once on the grounds that the video is
+   already full width here, which is not true of this layout: the video sits
+   inside the page's gutter with two titles over it, so theatre still buys
+   the gutter, the titles and the dark room. */
 @media (max-width: 30rem) {
   .player-bar {
     flex-wrap: wrap;
@@ -397,6 +408,28 @@
 
   .player-time {
     font-size: 0.75rem;
+  }
+}
+
+/* --- volume, where the device already has some ---
+
+   Gone on anything with a coarse pointer. That is not a way of saying
+   "phone": it is the set of devices you touch, which is the same set that
+   has volume keys on its side, and on iOS it is also the set where a page
+   cannot change the volume at all — the property is read-only, so the handle
+   moves and nothing happens.
+
+   This was tried in the component first, by setting the volume to something
+   else and reading it back. Safari takes the assignment and ignores it, so
+   the probe was told yes and the dead slider stayed. A capability the
+   platform lies about is not one worth asking about.
+
+   The mute button goes with it: on a device held in one hand, the hardware
+   keys reach silence faster than a control on a bar that fades out. It also
+   buys back the width that was pushing fullscreen onto a line of its own. */
+@media (pointer: coarse) {
+  .player-bar > .player-volume-group {
+    display: none;
   }
 }
 
