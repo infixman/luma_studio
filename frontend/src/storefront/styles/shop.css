@@ -1485,11 +1485,17 @@ body:has(.learn-layout.is-theater) {
   color: #f2ece4;
 }
 
-/* Not from a token — the body's colour is written literally in surface.css,
-   so the footer would keep the ink it was given on a black background. */
+/* `!important` for the same reason as the header: a footer set to a custom
+   colour carries it as an inline style, which no stylesheet can reach. The
+   header got this and the footer did not, so the page went black with a
+   pale slab still sitting under it.
+
+   The text is set by hand rather than inherited — the body's colour is
+   written literally in surface.css, and a custom footer text colour is
+   inline too, so it would keep its ink on a black background. */
 body:has(.learn-layout.is-theater) .site-footer {
-  background: var(--surface);
-  color: #f2ece4;
+  background: var(--surface) !important;
+  color: #f2ece4 !important;
   border-top: 1px solid var(--hairline);
 }
 
@@ -1528,6 +1534,26 @@ body:has(.learn-layout.is-theater) .site-header.height-large .header-inner { min
 /* A photograph in the capsule is the same bright object by another route. */
 body:has(.learn-layout.is-theater) .header-image {
   display: none;
+}
+
+/* The menu that drops out of the header is white, and it opens over the
+   picture — the one white rectangle left on the screen, in front of the
+   thing the mode exists to show. */
+body:has(.learn-layout.is-theater) .account-popover {
+  background: #1b1816;
+  color: #f2ece4;
+  border-color: rgb(242 236 228 / 0.14);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+
+body:has(.learn-layout.is-theater) .site-header .account-popover a:hover,
+body:has(.learn-layout.is-theater) .site-header .account-popover button:hover:not(:disabled) {
+  background: rgb(242 236 228 / 0.12);
+  color: #f2ece4;
+}
+
+body:has(.learn-layout.is-theater) .site-header .account-popover button:disabled {
+  color: rgb(242 236 228 / 0.42);
 }
 
 /* The course and the lesson are already known to whoever pressed the button;

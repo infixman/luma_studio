@@ -235,7 +235,7 @@ export function SiteHeader({
           {settings.headerShowLogin && (
             signedIn ? (
               <details class="account-menu">
-                <summary class="action" aria-label="開啟個人選單">帳戶</summary>
+                <summary class="action" aria-label="開啟個人選單">設定</summary>
                 <div class="account-popover">
                   {/* Above the orders: what somebody comes back for is the
                       course, not the receipt. Buying one used to say 已開通 on
