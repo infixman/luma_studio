@@ -59,9 +59,9 @@
   box-shadow: 0 1px 2px rgb(43 38 34 / 0.05), 0 10px 34px rgb(43 38 34 / 0.11);
 }
 
-.site-header.scrolled.height-small .header-inner { min-height: 48px; }
-.site-header.scrolled.height-medium .header-inner { min-height: 60px; }
-.site-header.scrolled.height-large .header-inner { min-height: 78px; }
+.site-header.scrolled.height-small .header-inner { min-height: 40px; }
+.site-header.scrolled.height-medium .header-inner { min-height: 46px; }
+.site-header.scrolled.height-large .header-inner { min-height: 54px; }
 
 @media (prefers-reduced-motion: reduce) {
   .site-header .header-inner { transition: none; }
@@ -120,9 +120,12 @@
   gap: 1.2rem;
 }
 
-.site-header.height-small .header-inner { min-height: 56px; }
-.site-header.height-medium .header-inner { min-height: 76px; }
-.site-header.height-large .header-inner { min-height: 104px; }
+/* Recalibrated for a capsule. These numbers were set for a band running wall
+   to wall, where 76px is unremarkable; the same 76px on an object floating
+   with air around it reads as a slab. */
+.site-header.height-small .header-inner { min-height: 48px; }
+.site-header.height-medium .header-inner { min-height: 58px; }
+.site-header.height-large .header-inner { min-height: 70px; }
 
 /* Sized by height, not by width. The width was what let the artwork decide
    how tall the capsule was; the height setting is supposed to. */
@@ -136,25 +139,23 @@
 .site-header .brand img {
   display: block;
   width: auto;
-  height: 30px;
+  height: 28px;
+  transition: height 220ms ease;
 }
 
 .site-header .brand.size-small img { height: 24px; }
-.site-header .brand.size-large img { height: 38px; }
+.site-header .brand.size-large img { height: 34px; }
 
-/* Live text, so it takes the header's own colour and stays sharp at any size
-   — neither of which the drawn name could do. */
-.site-header .brand-name {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  /* The tracking adds a space after the last character too, which would sit
-     the name a hair left of centre against the mark. */
-  text-indent: 0.14em;
+/* The mark shrinks with the capsule. Sixteen pixels off a bar is a change
+   nobody notices; the mark moving is what makes the capsule read as having
+   got out of the way. */
+.site-header.scrolled .brand img { height: 22px; }
+.site-header.scrolled .brand.size-small img { height: 19px; }
+.site-header.scrolled .brand.size-large img { height: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header .brand img { transition: none; }
 }
-
-.site-header .brand.size-small .brand-name { font-size: 0.95rem; }
-.site-header .brand.size-large .brand-name { font-size: 1.2rem; }
 
 .site-header a {
   color: inherit;

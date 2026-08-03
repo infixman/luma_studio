@@ -116,16 +116,17 @@ test('and notices coming back to it', async () => {
   expect(header()?.classList.contains('scrolled')).toBe(false)
 })
 
-test('the shop name is text, and the mark does not repeat it', () => {
-  /** It used to be one picture with the name drawn into it. A picture cannot
-   *  take the header's colour — it read on the dark capsule only because the
-   *  artwork happens to be gold — and it was what decided how tall the
-   *  capsule was, over the height the owner had chosen. */
+test('the mark is the only thing naming the way home', () => {
+  /** The header wears the mark alone — no wordmark drawn into the picture,
+   *  and no name in text beside it. That leaves the alt text carrying the
+   *  whole job: it is the only thing telling a screen reader what this link
+   *  is, and an empty one would announce it as nothing at all. */
   render(<SiteHeader settings={SETTINGS} menu={[]} />, container)
 
-  expect(container.querySelector('.brand .brand-name')?.textContent).toBe('苒光繪誌')
-  // Otherwise a screen reader reads the name twice.
-  expect(container.querySelector('.brand img')?.getAttribute('alt')).toBe('')
+  const mark = container.querySelector('.brand img')
+  expect(mark?.getAttribute('src')).toContain('mark')
+  expect(mark?.getAttribute('alt')).toBe('苒光繪誌')
+  expect(container.querySelector('.brand .brand-name')).toBeNull()
 })
 
 test('a colour the owner typed paints the capsule, not the strip it floats on', () => {

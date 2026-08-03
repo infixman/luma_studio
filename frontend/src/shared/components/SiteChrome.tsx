@@ -194,11 +194,11 @@ export function SiteHeader({
             a bar left the name a few pixels tall. It was also what set the
             capsule's height: 150px wide at the artwork's 1.58 ratio is 95px,
             taller than the 76px the height setting asked for.
-            `alt=""` because the name is right there in text; a description
-            would have a screen reader say it twice. */}
+            The name is not repeated beside it: the mark is the mark, and the
+            shop's name is on every page it leads to. That makes the alt text
+            load-bearing — it is now the only thing naming this link. */}
         <a class={`brand size-${settings.headerLogoSize}`} href="/">
-          <img src="/assets/luma-studio-mark.png" alt="" aria-hidden="true" />
-          <span class="brand-name">苒光繪誌</span>
+          <img src="/assets/luma-studio-mark.png" alt="苒光繪誌" />
         </a>
 
         <button
