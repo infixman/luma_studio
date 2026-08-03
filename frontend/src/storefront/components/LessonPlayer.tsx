@@ -53,6 +53,8 @@ export function LessonPlayer({
   const [position, setPosition] = useState(0)
   const [duration, setDuration] = useState(Number.NaN)
   const [fullscreen, setFullscreen] = useState(false)
+  const [volume, setVolume] = useState(1)
+  const [muted, setMuted] = useState(false)
 
   // The ladder the manifest turned out to have, which rung the member asked
   // for, and which one hls.js is actually serving — the last is worth keeping
@@ -80,6 +82,10 @@ export function LessonPlayer({
     const stopped = () => setPlaying(false)
     const moved = () => setPosition(element.currentTime)
     const measured = () => setDuration(element.duration)
+    const volumed = () => {
+      setVolume(element.volume)
+      setMuted(element.muted)
+    }
 
     const bindings: [string, () => void][] = [
       ['play', started],
@@ -90,6 +96,7 @@ export function LessonPlayer({
       ['seeked', moved],
       ['durationchange', measured],
       ['loadedmetadata', measured],
+      ['volumechange', volumed],
     ]
 
     for (const [name, listener] of bindings) element.addEventListener(name, listener)
@@ -98,6 +105,7 @@ export function LessonPlayer({
     setPlaying(!element.paused && !element.ended)
     moved()
     measured()
+    volumed()
 
     return () => {
       for (const [name, listener] of bindings) element.removeEventListener(name, listener)
@@ -151,6 +159,20 @@ export function LessonPlayer({
     setPosition(seconds)
   }, [])
 
+  const toggleMute = useCallback(() => {
+    const element = media.current
+    if (!element) return
+    element.muted = !element.muted
+    setMuted(element.muted)
+  }, [])
+
+  const changeVolume = useCallback((value: number) => {
+    const element = media.current
+    if (!element) return
+    element.volume = value
+    setVolume(value)
+  }, [])
+
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement === shell.current) void document.exitFullscreen()
     else void shell.current?.requestFullscreen()
@@ -176,6 +198,23 @@ export function LessonPlayer({
         <button type="button" aria-label={playing ? '暫停' : '播放'} onClick={toggle}>
           {playing ? <PauseGlyph /> : <PlayGlyph />}
         </button>
+
+        <div class="player-volume-group">
+          <button type="button" aria-label={muted ? '取消靜音' : '靜音'} onClick={toggleMute}>
+            {muted || volume === 0 ? <MutedGlyph /> : <VolumeGlyph />}
+          </button>
+
+          <input
+            class="player-volume"
+            type="range"
+            min={0}
+            max={1}
+            step="any"
+            value={volume}
+            aria-label="音量"
+            onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
+          />
+        </div>
 
         <input
           class="player-scrub"
@@ -329,6 +368,36 @@ function PauseGlyph() {
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
       <rect x="7" y="5.5" width="3.4" height="13" rx="1" />
       <rect x="13.6" y="5.5" width="3.4" height="13" rx="1" />
+    </svg>
+  )
+}
+
+function VolumeGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M4 9.5v5h4l5 4v-13l-5 4z" />
+      <path
+        d="M16.5 8.5a5 5 0 0 1 0 7"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+    </svg>
+  )
+}
+
+function MutedGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M4 9.5v5h4l5 4v-13l-5 4z" />
+      <path
+        d="M15.5 9.5l5 5m0-5l-5 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
     </svg>
   )
 }

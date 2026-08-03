@@ -86,8 +86,15 @@ function scrubber(): HTMLInputElement {
   return container.querySelector<HTMLInputElement>('.player-scrub')!
 }
 
+function volumeSlider(): HTMLInputElement {
+  return container.querySelector<HTMLInputElement>('.player-volume')!
+}
+
 /** What the browser does: change the property, then announce it. */
-function media(values: Partial<Record<'duration' | 'currentTime', number>>, event?: string): void {
+function media(
+  values: Partial<Record<'duration' | 'currentTime' | 'volume' | 'muted', number | boolean>>,
+  event?: string,
+): void {
   for (const [name, value] of Object.entries(values)) {
     Object.defineProperty(video(), name, { value, configurable: true, writable: true })
   }
@@ -404,4 +411,64 @@ test('Escape closes the menu', async () => {
   await settle()
 
   expect(menu()).toBeNull()
+})
+
+/**
+ * Volume and mute.
+ *
+ * The same rule as play and pause: the button and the slider read the
+ * element back rather than a number kept beside it, so a change from
+ * anywhere — the slider, a keyboard shortcut still to come, the element
+ * starting out already muted — shows up the same way.
+ */
+
+test('the volume slider starts at whatever the element already has', async () => {
+  await mount()
+  media({ volume: 0.4 }, 'volumechange')
+  await settle()
+
+  expect(volumeSlider().value).toBe('0.4')
+})
+
+test('dragging the volume slider sets the element, not just the handle', async () => {
+  await mount()
+
+  volumeSlider().value = '0.2'
+  volumeSlider().dispatchEvent(new Event('input', { bubbles: true }))
+  await settle()
+
+  expect(video().volume).toBe(0.2)
+})
+
+test('the mute button asks the element to mute', async () => {
+  await mount()
+  expect(button('靜音')).not.toBeNull()
+
+  button('靜音')!.click()
+
+  expect(video().muted).toBe(true)
+})
+
+test('the button follows the element back out of mute, not just into it', async () => {
+  await mount()
+  button('靜音')!.click()
+  media({ muted: true }, 'volumechange')
+  await settle()
+  expect(button('取消靜音')).not.toBeNull()
+
+  button('取消靜音')!.click()
+
+  expect(video().muted).toBe(false)
+})
+
+test('the label follows the element, not the last button pressed', async () => {
+  /** Muting can happen without this button — a keyboard shortcut still to
+   *  come, or the element starting out already muted — and the label has to
+   *  agree with whichever one did it. */
+  await mount()
+  media({ muted: true }, 'volumechange')
+  await settle()
+
+  expect(button('取消靜音')).not.toBeNull()
+  expect(button('靜音')).toBeNull()
 })

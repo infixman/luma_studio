@@ -70,6 +70,68 @@
   letter-spacing: 0.01em;
 }
 
+.player-volume-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.player-volume {
+  width: 64px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.player-volume:focus-visible {
+  outline: 2px solid #f2ece4;
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
+.player-volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(242 236 228 / 0.26);
+}
+
+.player-volume::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(242 236 228 / 0.26);
+}
+
+.player-volume::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: #f2ece4;
+}
+
+.player-volume::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
+.player-volume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
 /* --- the scrubber ---
 
    A real range input. Everything below is appearance only: the dragging, the
