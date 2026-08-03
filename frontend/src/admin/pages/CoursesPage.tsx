@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+﻿import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -14,6 +14,7 @@ import {
 } from '../components/ui'
 import type { BadgeTone, Column } from '../components/ui'
 import { api, apiJson } from '../../shared/api'
+import { navigate } from '../lib/navigation'
 import { slugifyAscii } from '../lib/slug'
 import type { Course, CourseStatus } from '../../shared/types'
 import '../styles/shop-admin.css'
@@ -78,7 +79,7 @@ export function CoursesPage() {
     if (ok && created.id) {
       // Straight into the editor. A new course is a name and nothing else, and
       // the next thing anybody wants is to add a chapter to it.
-      location.assign(`/courses/${encodeURIComponent(created.id)}`)
+      navigate(`/courses/${encodeURIComponent(created.id)}`)
     }
   }
 

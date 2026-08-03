@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
+﻿import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -22,6 +22,7 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { BadgeTone, Column, FilterField, FilterRule } from '../components/ui'
+import { navigate } from '../lib/navigation'
 import { api, apiUrl } from '../../shared/api'
 import type { Product, ProductListing, ProductStatus } from '../../shared/types'
 import '../styles/shop-admin.css'
@@ -285,7 +286,7 @@ export function ProductsPage() {
       <Panel
         title="商品"
         actions={
-          <Button tone="primary" onClick={() => location.assign('/products/new')}>
+          <Button tone="primary" onClick={() => navigate('/products/new')}>
             新增商品
           </Button>
         }
@@ -329,7 +330,7 @@ export function ProductsPage() {
             rowClass={(product) => `product-${product.status}`}
             menu={(product) => (
               <>
-                <MenuItem onClick={() => location.assign(`/products/${encodeURIComponent(product.id)}`)}>
+                <MenuItem onClick={() => navigate(`/products/${encodeURIComponent(product.id)}`)}>
                   編輯
                 </MenuItem>
                 <MenuItem tone="danger" onClick={() => void remove(product)}>
@@ -358,7 +359,7 @@ export function ProductsPage() {
                   title="還沒有商品"
                   body="建立第一個商品，完成名稱、網址、說明、分類與狀態後再儲存。"
                   action={
-                    <Button tone="primary" onClick={() => location.assign('/products/new')}>
+                    <Button tone="primary" onClick={() => navigate('/products/new')}>
                       新增商品
                     </Button>
                   }

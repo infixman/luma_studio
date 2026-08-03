@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+﻿import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -7,6 +7,7 @@ import {
   ProductFormFields,
   type ProductFormValue,
 } from '../features/catalogue/ProductFormFields'
+import { navigate } from '../lib/navigation'
 import { api, apiJson } from '../../shared/api'
 import type { Category, ProductDetail } from '../../shared/types'
 import {
@@ -62,7 +63,7 @@ export function ProductCreatePage() {
     }, '商品已建立。')
 
     if (ok && result.id) {
-      location.assign(`/products/${encodeURIComponent(result.id)}`)
+      navigate(`/products/${encodeURIComponent(result.id)}`)
     }
   }
 

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+﻿import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { AdminShell } from '../../components/AdminShell'
 import { OpenButton } from '../../components/IconButtons'
 import { SlugLock } from '../../components/SlugLock'
 import { useStatus } from '../../components/StatusBar'
 import { Badge, Button, EmptyState, Panel, Spinner, TextField, Toggle, useConfirm } from '../../components/ui'
+import { navigate } from '../../lib/navigation'
 import { nextPath, suggestPath } from '../../lib/slug'
 import { STOREFRONT_ORIGIN, api, apiJson } from '../../../shared/api'
 import { PAGE_PATH_MAX, PAGE_TITLE_MAX } from './constraints'
@@ -191,7 +192,7 @@ export function PagesPage() {
                     onChange={(on) => void setLive(page, on)}
                   />
                   <Toggle label="首頁" checked={page.isHome} onChange={(isHome) => void save(page, { isHome })} />
-                  <Button size="sm" onClick={() => location.assign(`/pages/${encodeURIComponent(page.id)}`)}>
+                  <Button size="sm" onClick={() => navigate(`/pages/${encodeURIComponent(page.id)}`)}>
                     編輯
                   </Button>
                   <Button size="sm" tone="danger" onClick={() => void remove(page)}>

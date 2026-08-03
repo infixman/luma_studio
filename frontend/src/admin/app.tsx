@@ -1,3 +1,5 @@
+import { useEffect } from 'preact/hooks'
+
 import { AdminGate } from './components/AdminGate'
 import { RichTextEditorPreview } from './components/RichTextEditorPreview'
 import { AdminPage } from './pages/AdminPage'
@@ -21,6 +23,7 @@ import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { OrdersAdminPage } from './pages/OrdersAdminPage'
 import { DesktopToolPage } from './pages/DesktopToolPage'
 import { SitePage } from './features/site/SitePage'
+import { interceptLinks, useRoute } from './lib/navigation'
 import { routeForPath, routeParam } from './routes'
 
 /**
@@ -32,7 +35,7 @@ function markBody(page: string): void {
 }
 
 function Routed() {
-  const path = location.pathname.replace(/\/+$/, '') || '/'
+  const path = useRoute()
 
   const route = routeForPath(path)
   switch (route?.id) {
@@ -75,6 +78,12 @@ function Routed() {
 
 export function App() {
   markBody('admin')
+
+  // Before the early return below, because a hook cannot be conditional. It
+  // is what stops every link in the back office from fetching the document
+  // again — and with it, stops AdminGate from re-mounting and asking who is
+  // signed in once per click.
+  useEffect(() => interceptLinks(), [])
 
   // A local visual check must not require a real session. Vite replaces DEV
   // with false in the production bundle, so this path can never bypass the

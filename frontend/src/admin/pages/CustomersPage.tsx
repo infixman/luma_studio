@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
+﻿import { useCallback, useEffect, useMemo, useState } from 'preact/hooks'
 
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
@@ -23,6 +23,7 @@ import {
   writeHidden,
 } from '../components/ui'
 import type { Column, FilterField, FilterRule } from '../components/ui'
+import { navigate } from '../lib/navigation'
 import { api, apiJson } from '../../shared/api'
 import type { AdminCustomer, PageInfo } from '../../shared/types'
 import '../styles/orders-admin.css'
@@ -120,7 +121,7 @@ export function CustomersPage() {
   }
 
   function open(customer: AdminCustomer) {
-    location.assign(`/customers/${encodeURIComponent(customer.id)}`)
+    navigate(`/customers/${encodeURIComponent(customer.id)}`)
   }
 
   async function setBlocked(customer: AdminCustomer, blocked: boolean) {
