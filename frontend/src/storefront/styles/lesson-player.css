@@ -351,3 +351,52 @@
   .player-menu-back,
   .player-menu-option { transition: none; }
 }
+
+/* --- the bar on a phone ---
+
+   Not the desktop row made smaller. That row is play, volume, scrubber,
+   clock, and three icons, and it has a minimum width: the buttons are
+   fixed, the clock does not wrap, and the scrubber can only give back so
+   much. Below about 30rem the row stops fitting, and because a grid track
+   grows to its content the whole player was pushed wider than the screen —
+   the picture was cropped and the last controls were off the edge.
+
+   So the phone gets its own arrangement: the scrubber takes a line of its
+   own, where it is long enough to aim at with a thumb, and what is left
+   goes underneath, split between the two ends somebody's hands are at.
+
+   Two controls go. The volume slider is a desktop control — a phone has
+   buttons on its side, and on iOS the volume property cannot be set from
+   a page at all, so the slider is a handle that moves nothing. Mute stays,
+   because muting is a real thing to want in public. Theatre goes because
+   the video already runs the width of the screen; there is nothing left
+   for it to widen. */
+@media (max-width: 30rem) {
+  .player-bar {
+    flex-wrap: wrap;
+    gap: 0.15rem 0.35rem;
+    padding: 0.35rem 0.4rem 0.45rem;
+  }
+
+  /* Its own line, first, above the controls it belongs to. */
+  .player-scrub {
+    order: -1;
+    flex: 1 0 100%;
+    height: 22px;
+  }
+
+  .player-volume-group,
+  .player-theater {
+    display: none;
+  }
+
+  /* The settings and fullscreen pair sits at the far end, so the row reads
+     from both edges inward rather than trailing off in the middle. */
+  .player-settings {
+    margin-inline-start: auto;
+  }
+
+  .player-time {
+    font-size: 0.75rem;
+  }
+}

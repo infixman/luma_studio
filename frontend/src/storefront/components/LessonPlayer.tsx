@@ -404,6 +404,22 @@ export function LessonPlayer({
           {clock(position)} / {clock(duration)}
         </span>
 
+        {/* On the bar rather than inside the gear. It is a setting somebody
+            changes while watching — at the end of a lesson, when the next one
+            starts and they did not want it to — and two taps into a menu is
+            too far to reach for that. */}
+        {onAutoplayChange && (
+          <button
+            type="button"
+            aria-label={autoplay ? '關閉自動播放' : '開啟自動播放'}
+            title={autoplay ? '自動播放：開啟' : '自動播放：關閉'}
+            aria-pressed={autoplay === true}
+            onClick={() => onAutoplayChange(!autoplay)}
+          >
+            <AutoplayGlyph on={autoplay === true} />
+          </button>
+        )}
+
         <div class="player-settings" ref={settings}>
           <button
             type="button"
@@ -429,17 +445,6 @@ export function LessonPlayer({
             >
               {menu === 'root' && (
                 <>
-                  {onAutoplayChange && (
-                    <button
-                      type="button"
-                      class="player-menu-row"
-                      aria-pressed={autoplay === true}
-                      onClick={() => onAutoplayChange(!autoplay)}
-                    >
-                      <span>自動播放</span>
-                      <span class="player-menu-value">{autoplay ? '開啟' : '關閉'}</span>
-                    </button>
-                  )}
                   <button type="button" class="player-menu-row" onClick={() => setMenu('speed')}>
                     <span>播放速度</span>
                     <span class="player-menu-value">{speedLabel(rate)}</span>
@@ -521,8 +526,11 @@ export function LessonPlayer({
           )}
         </div>
 
+        {/* Classed so a phone can drop it: the video there already runs the
+            width of the screen, so theatre has nothing left to widen. */}
         <button
           type="button"
+          class="player-theater"
           aria-label={theater ? '結束劇院模式' : '劇院模式'}
           title={theater ? '結束劇院模式' : '劇院模式'}
           aria-pressed={theater}
@@ -591,6 +599,33 @@ function MutedGlyph() {
         stroke-width="1.8"
         stroke-linecap="round"
       />
+    </svg>
+  )
+}
+
+/**
+ * A switch, not a symbol.
+ *
+ * Autoplay is the one control on the bar that is on or off rather than a
+ * thing that happens when pressed, so the icon has to carry its own state:
+ * the knob sits at the end the setting is at, and the track fills behind it
+ * when it is on. An icon that looked the same either way would be a button
+ * whose meaning is only in a tooltip.
+ */
+function AutoplayGlyph({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect
+        x="2"
+        y="7"
+        width="20"
+        height="10"
+        rx="5"
+        fill={on ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        stroke-width="1.6"
+      />
+      <circle cx={on ? 17 : 7} cy="12" r="3.1" fill={on ? '#14110f' : 'currentColor'} />
     </svg>
   )
 }

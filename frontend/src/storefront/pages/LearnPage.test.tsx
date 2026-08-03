@@ -141,18 +141,25 @@ test('a finished lesson runs on into the next one', async () => {
   expect(currentLesson()).toBe('疊色')
 })
 
+test('the switch is on the bar itself, not two taps inside the gear', async () => {
+  /** It is changed while watching — at the end of a lesson, when the next one
+   *  starts and somebody did not want it to — so it has to be reachable
+   *  without opening a menu first. */
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+
+  const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')
+  expect(toggle).not.toBeNull()
+  expect(toggle!.closest('.player-menu')).toBeNull()
+})
+
 test('turning it off leaves the lesson where it ended', async () => {
   /** Somebody who wants to sit with what they just watched, or who is
    *  following along with their hands full, should not be moved on. */
   render(<LearnPage slug="watercolour" />, container)
   await settle()
 
-  container.querySelector<HTMLButtonElement>('button[aria-label="設定"]')!.click()
-  await settle()
-  const row = [...container.querySelectorAll<HTMLButtonElement>('.player-menu-row')].find((button) =>
-    button.textContent?.includes('自動播放'),
-  )
-  row!.click()
+  container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')!.click()
   await settle()
 
   endVideo()
@@ -178,11 +185,7 @@ test('the last lesson stays put rather than wrapping round', async () => {
 test('the choice is remembered, because it is about how somebody watches', async () => {
   render(<LearnPage slug="watercolour" />, container)
   await settle()
-  container.querySelector<HTMLButtonElement>('button[aria-label="設定"]')!.click()
-  await settle()
-  ;[...container.querySelectorAll<HTMLButtonElement>('.player-menu-row')]
-    .find((button) => button.textContent?.includes('自動播放'))!
-    .click()
+  container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')!.click()
   await settle()
 
   render(null, container)

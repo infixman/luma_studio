@@ -428,8 +428,16 @@
 }
 
 @media (max-width: 860px) {
+  /* Last in the row, not wedged between the mark and the actions.
+
+     It was placed next to the brand because that is where it sits in the
+     desktop row, where it is hidden anyway. On a phone that reads as a
+     button belonging to the logo, with the things it has nothing to do
+     with sitting past it. The controls belong together at the reaching
+     end of the bar. */
   .menu-toggle {
     display: block;
+    order: 1;
     margin-left: 0;
   }
 
@@ -491,6 +499,7 @@
 
   .header-actions {
     margin-left: auto;
+    gap: 0.7rem;
   }
 }
 
