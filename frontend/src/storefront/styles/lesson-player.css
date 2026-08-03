@@ -365,12 +365,14 @@
    own, where it is long enough to aim at with a thumb, and what is left
    goes underneath, split between the two ends somebody's hands are at.
 
-   Two controls go. The volume slider is a desktop control — a phone has
-   buttons on its side, and on iOS the volume property cannot be set from
-   a page at all, so the slider is a handle that moves nothing. Mute stays,
-   because muting is a real thing to want in public. Theatre goes because
-   the video already runs the width of the screen; there is nothing left
-   for it to widen. */
+   Nothing is dropped for being on a phone. An earlier version took theatre
+   and the volume slider away here, on the grounds that the video is already
+   full width and a phone has its own volume buttons. The first is not true
+   of this layout — the video sits inside the page's gutter with two titles
+   over it, so theatre still buys the gutter, the titles and the dark room —
+   and the second is a guess about the device where the real question is
+   whether the browser lets a page set the volume at all. That one is asked
+   directly now, in the component. */
 @media (max-width: 30rem) {
   .player-bar {
     flex-wrap: wrap;
@@ -385,18 +387,11 @@
     height: 22px;
   }
 
-  /* Both selectors carry the bar, because the rule they have to beat does:
-     `:is(.player-bar, …) > button` scores a class and an element, so a bare
-     `.player-theater` loses to it and the button stayed on the phone. The
-     same specificity trap as the settings menu, the other way up. */
-  .player-bar > .player-volume-group,
-  .player-bar > .player-theater {
-    display: none;
-  }
-
-  /* The settings and fullscreen pair sits at the far end, so the row reads
-     from both edges inward rather than trailing off in the middle. */
-  .player-settings {
+  /* Everything from autoplay rightward goes to the far end, so the row reads
+     from its two edges inward rather than trailing off in the middle. The
+     break is before autoplay rather than before the gear: autoplay belongs
+     with the settings beside it, not stranded next to the clock. */
+  .player-autoplay {
     margin-inline-start: auto;
   }
 

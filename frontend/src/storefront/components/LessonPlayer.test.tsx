@@ -924,3 +924,32 @@ test('an iPhone gets the video fullscreen rather than nothing at all', async () 
 
   expect(enter).toHaveBeenCalled()
 })
+
+test('a browser that will not set the volume gets no slider to pretend with', async () => {
+  /** iOS: `volume` is read-only, so the handle moves and the sound does not.
+   *  Mute still works and stays — muting in public is a real thing to want. */
+  render(<LessonPlayer src="https://api.example.test/a.m3u8" />, container)
+  await settle()
+
+  // Rebuild with an element that swallows the assignment, the way iOS does.
+  render(null, container)
+  const readOnly = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume')
+  Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
+    configurable: true,
+    get: () => 1,
+    set: () => {},
+  })
+  render(<LessonPlayer src="https://api.example.test/a.m3u8" />, container)
+  await settle()
+
+  expect(container.querySelector('.player-volume')).toBeNull()
+  expect(button('靜音')).not.toBeNull()
+
+  if (readOnly) Object.defineProperty(HTMLMediaElement.prototype, 'volume', readOnly)
+})
+
+test('a browser that will set it keeps the slider', async () => {
+  await mount()
+
+  expect(container.querySelector('.player-volume')).not.toBeNull()
+})

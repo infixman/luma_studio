@@ -71,6 +71,18 @@ export function LessonPlayer({
   const [duration, setDuration] = useState(Number.NaN)
   const [fullscreen, setFullscreen] = useState(false)
   const [volume, setVolume] = useState(1)
+  /**
+   * Whether this browser lets a page set the volume at all.
+   *
+   * iOS does not: `volume` is read-only there, so the slider is a handle that
+   * moves and changes nothing. The mute button still works, and muting is a
+   * real thing to want in public, so only the slider goes.
+   *
+   * Asked of the element rather than guessed from the screen width. Narrow is
+   * not the question — an Android phone can set it and a small desktop window
+   * certainly can, and both were losing the control to a media query.
+   */
+  const [volumeSettable, setVolumeSettable] = useState(true)
   const [muted, setMuted] = useState(false)
   const [theater, setTheater] = useState(false)
   const [bufferedEnd, setBufferedEnd] = useState(0)
@@ -107,6 +119,15 @@ export function LessonPlayer({
       setVolume(element.volume)
       setMuted(element.muted)
     }
+
+    // Asked by trying it: a browser that refuses swallows the assignment and
+    // reads back what it had. Put back either way, so the probe cannot be
+    // heard — on the browsers where it does take, this sets and restores in
+    // the same tick, before anything is playing.
+    const before = element.volume
+    element.volume = before === 1 ? 0.5 : 1
+    setVolumeSettable(element.volume !== before)
+    element.volume = before
     // The end of whichever buffered range currently holds the playhead —
     // that range is the one that answers "how much further can this play
     // right now", not necessarily the last one the network has fetched.
@@ -376,16 +397,18 @@ export function LessonPlayer({
               back. The handle shows what is being heard, which while muted
               is zero — a slider sitting at 0.8 over silence says the sound
               is on, and the handle is the part being looked at. */}
-          <input
-            class="player-volume"
-            type="range"
-            min={0}
-            max={1}
-            step="any"
-            value={muted ? 0 : volume}
-            aria-label="音量"
-            onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
-          />
+          {volumeSettable && (
+            <input
+              class="player-volume"
+              type="range"
+              min={0}
+              max={1}
+              step="any"
+              value={muted ? 0 : volume}
+              aria-label="音量"
+              onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
+            />
+          )}
         </div>
 
         <input
@@ -413,6 +436,7 @@ export function LessonPlayer({
             too far to reach for that. */}
         {onAutoplayChange && (
           <Control
+            className="player-autoplay"
             label={autoplay ? '已啟用自動播放功能' : '已停用自動播放功能'}
             pressed={autoplay === true}
             onClick={() => onAutoplayChange(!autoplay)}
