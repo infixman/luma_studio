@@ -218,6 +218,13 @@ export function LessonPlayer({
     if (!element) return
     element.volume = value
     setVolume(value)
+    // Asking for a level is asking to hear it. Moving the handle while muted
+    // would otherwise set a volume nobody can hear and leave the slider and
+    // the silence disagreeing.
+    if (value > 0 && element.muted) {
+      element.muted = false
+      setMuted(false)
+    }
   }, [])
 
   const toggleFullscreen = useCallback(() => {
@@ -353,13 +360,18 @@ export function LessonPlayer({
             {muted || volume === 0 ? <MutedGlyph /> : <VolumeGlyph />}
           </button>
 
+          {/* Mute is a pause on the volume, not a way of setting it to
+              nothing: the level is kept in state so the button can put it
+              back. The handle shows what is being heard, which while muted
+              is zero — a slider sitting at 0.8 over silence says the sound
+              is on, and the handle is the part being looked at. */}
           <input
             class="player-volume"
             type="range"
             min={0}
             max={1}
             step="any"
-            value={volume}
+            value={muted ? 0 : volume}
             aria-label="音量"
             onInput={(event) => changeVolume(Number((event.currentTarget as HTMLInputElement).value))}
           />

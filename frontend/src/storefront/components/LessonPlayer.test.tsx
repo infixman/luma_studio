@@ -470,6 +470,43 @@ test('the button follows the element back out of mute, not just into it', async 
   expect(video().muted).toBe(false)
 })
 
+test('muting drops the slider to zero and unmuting puts it back', async () => {
+  /** The two controls describe one thing. A slider still sitting at 0.8 over
+   *  silence says the sound is on, so the icon and the handle disagree and
+   *  the handle is the one being looked at. The level is not lost, though —
+   *  mute is a pause on the volume, not a way of setting it to nothing. */
+  await mount()
+  media({ volume: 0.8 }, 'volumechange')
+  await settle()
+  expect(volumeSlider().value).toBe('0.8')
+
+  button('靜音')!.click()
+  media({ volume: 0.8, muted: true }, 'volumechange')
+  await settle()
+  expect(volumeSlider().value).toBe('0')
+
+  button('取消靜音')!.click()
+  media({ volume: 0.8, muted: false }, 'volumechange')
+  await settle()
+
+  expect(volumeSlider().value).toBe('0.8')
+})
+
+test('dragging the slider up out of mute makes a sound', async () => {
+  /** Otherwise the handle moves, the level is set, and nothing is heard,
+   *  because the element is still muted underneath. */
+  await mount()
+  button('靜音')!.click()
+  media({ volume: 1, muted: true }, 'volumechange')
+  await settle()
+
+  volumeSlider().value = '0.3'
+  volumeSlider().dispatchEvent(new Event('input', { bubbles: true }))
+
+  expect(video().volume).toBe(0.3)
+  expect(video().muted).toBe(false)
+})
+
 test('the label follows the element, not the last button pressed', async () => {
   /** Muting can happen without this button — a keyboard shortcut still to
    *  come, or the element starting out already muted — and the label has to

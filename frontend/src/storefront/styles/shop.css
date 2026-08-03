@@ -1417,14 +1417,32 @@ main.order .totals {
 
 /* And the page itself gets out of the way.
 
-   Hiding the outline only bought back its 18rem: the page is still held at
-   the site's shell width, so on a wide screen theatre mode left the video
-   the same size with more paper around it — which is not what the button
-   says. The reading width is right for a page of text and wrong for the one
-   state whose entire purpose is a bigger picture, so here the shell is
-   dropped and the video takes the window. */
-main.learn:has(.learn-layout.is-theater) {
-  max-width: min(100rem, calc(100vw - 2 * var(--site-gutter)));
+   Widening the column was still the wrong shape: theatre mode is not "a
+   bigger reading width", it is the video taking the window and everything
+   else going below it. So the player breaks out of the shell entirely —
+   edge to edge — while the title, the lesson text and the buttons stay at
+   the width they are readable at.
+
+   Capped against the window height as well, because a 16:9 video across a
+   wide screen is taller than the screen, and a picture you have to scroll
+   is worse than the one you started with. The video keeps its shape inside
+   that box and the leftover is black, which is what the dark surround is:
+   nothing beside the picture to look at. */
+.learn-layout.is-theater .lesson-player {
+  margin-inline: calc(50% - 50vw);
+  border-radius: 0;
+}
+
+.learn-layout.is-theater .lesson-player video {
+  max-height: calc(100vh - 9rem);
+  object-fit: contain;
+}
+
+/* The bleed is 100vw and the page has a scrollbar, so it is a few pixels
+   wider than the space it can occupy. Clipped rather than hidden: `clip`
+   does not make a scroll container, so the sticky header still sticks. */
+body:has(.learn-layout.is-theater) {
+  overflow-x: clip;
 }
 
 /* Visible to a screen reader, not on screen. Completion is a tick plus this,

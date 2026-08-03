@@ -46,7 +46,14 @@
   cursor: none;
 }
 
-.player-bar button {
+/* The controls themselves, not every button that happens to be inside the bar.
+
+   `.player-bar button` also reached the settings popup, which hangs off the
+   gear and so lives inside the bar: every menu row was being made a 34px
+   circle, which is why the labels came out one character per line and on top
+   of each other. The popup is a list, not a control; only the bar's own
+   children are round. */
+:is(.player-bar, .player-volume-group, .player-settings) > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -62,7 +69,7 @@
   transition: background-color 140ms ease;
 }
 
-.player-bar button:hover {
+:is(.player-bar, .player-volume-group, .player-settings) > button:hover {
   background: rgb(242 236 228 / 0.14);
 }
 
