@@ -124,14 +124,37 @@
 .site-header.height-medium .header-inner { min-height: 76px; }
 .site-header.height-large .header-inner { min-height: 104px; }
 
-.site-header .brand img {
-  display: block;
-  height: auto;
-  width: 108px;
+/* Sized by height, not by width. The width was what let the artwork decide
+   how tall the capsule was; the height setting is supposed to. */
+.site-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
 }
 
-.site-header .brand.size-small img { width: 84px; }
-.site-header .brand.size-large img { width: 150px; }
+.site-header .brand img {
+  display: block;
+  width: auto;
+  height: 30px;
+}
+
+.site-header .brand.size-small img { height: 24px; }
+.site-header .brand.size-large img { height: 38px; }
+
+/* Live text, so it takes the header's own colour and stays sharp at any size
+   — neither of which the drawn name could do. */
+.site-header .brand-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  /* The tracking adds a space after the last character too, which would sit
+     the name a hair left of centre against the mark. */
+  text-indent: 0.14em;
+}
+
+.site-header .brand.size-small .brand-name { font-size: 0.95rem; }
+.site-header .brand.size-large .brand-name { font-size: 1.2rem; }
 
 .site-header a {
   color: inherit;

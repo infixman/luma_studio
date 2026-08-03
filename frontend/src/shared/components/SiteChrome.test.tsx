@@ -116,6 +116,18 @@ test('and notices coming back to it', async () => {
   expect(header()?.classList.contains('scrolled')).toBe(false)
 })
 
+test('the shop name is text, and the mark does not repeat it', () => {
+  /** It used to be one picture with the name drawn into it. A picture cannot
+   *  take the header's colour — it read on the dark capsule only because the
+   *  artwork happens to be gold — and it was what decided how tall the
+   *  capsule was, over the height the owner had chosen. */
+  render(<SiteHeader settings={SETTINGS} menu={[]} />, container)
+
+  expect(container.querySelector('.brand .brand-name')?.textContent).toBe('苒光繪誌')
+  // Otherwise a screen reader reads the name twice.
+  expect(container.querySelector('.brand img')?.getAttribute('alt')).toBe('')
+})
+
 test('a colour the owner typed paints the capsule, not the strip it floats on', () => {
   /** The fixed palettes are class names and land wherever the stylesheet
    *  says. A custom colour is an inline style, and inline styles land on

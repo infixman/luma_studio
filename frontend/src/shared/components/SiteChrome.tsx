@@ -187,8 +187,18 @@ export function SiteHeader({
       )}
 
       <div class="header-inner" style={customInnerStyle}>
+        {/* The mark, and the name as live text beside it.
+            The full lockup is one picture with the name drawn into it, so it
+            could not take the header's colour — it reads on the dark capsule
+            only because the artwork happens to be gold — and scaling it to fit
+            a bar left the name a few pixels tall. It was also what set the
+            capsule's height: 150px wide at the artwork's 1.58 ratio is 95px,
+            taller than the 76px the height setting asked for.
+            `alt=""` because the name is right there in text; a description
+            would have a screen reader say it twice. */}
         <a class={`brand size-${settings.headerLogoSize}`} href="/">
-          <img src="/assets/luma-studio-logo.png" alt="苒光繪誌" />
+          <img src="/assets/luma-studio-mark.png" alt="" aria-hidden="true" />
+          <span class="brand-name">苒光繪誌</span>
         </a>
 
         <button
