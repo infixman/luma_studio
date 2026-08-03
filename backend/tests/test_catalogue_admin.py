@@ -400,10 +400,38 @@ class TestCourseDisplayFields:
             self._course(),
         )
 
-    def test_the_long_form_fields_are_saved(self, call):
-        response = self._save(call, {"descriptionHtml": "<p>介紹</p>", "outcomesHtml": "<p>你會學到</p>"})
+    def test_the_description_is_saved(self, call):
+        response = self._save(call, {"descriptionHtml": "<p>介紹</p>"})
 
         assert response.status == 200
+
+    def test_the_five_retired_prose_fields_are_gone(self):
+        """A course sells itself with one block of prose now.
+
+        The back office used to ask for 你將學會, 適合對象, 先備知識,
+        需要準備的工具或材料 and 講師介紹 as five more rich-text fields; two
+        of them were never rendered to a customer at all. Course pages
+        elsewhere put all of it into one image inside the description, so
+        that is the field that stayed. The columns are still in D1 — this is
+        the API refusing to carry them, which is reversible.
+        """
+
+        from api.admin import catalogue
+
+        fields = catalogue._course_display_fields(
+            {
+                "descriptionHtml": "<p>好</p>",
+                "instructorBioHtml": "<p>x</p>",
+                "audienceHtml": "<p>x</p>",
+                "outcomesHtml": "<p>x</p>",
+                "prerequisitesHtml": "<p>x</p>",
+                "materialsHtml": "<p>x</p>",
+            }
+        )
+
+        assert "descriptionHtml" in fields
+        for gone in ("instructorBioHtml", "audienceHtml", "outcomesHtml", "prerequisitesHtml", "materialsHtml"):
+            assert gone not in fields
 
     def test_html_is_cleaned_on_the_way_in(self):
         """The editor restricts what an author can type. That is a convenience,
@@ -427,16 +455,7 @@ class TestCourseDisplayFields:
         from api.admin import catalogue
 
         attack = "<p><script>alert(1)</script></p>"
-        fields = catalogue._course_display_fields(
-            {
-                "descriptionHtml": attack,
-                "instructorBioHtml": attack,
-                "audienceHtml": attack,
-                "outcomesHtml": attack,
-                "prerequisitesHtml": attack,
-                "materialsHtml": attack,
-            }
-        )
+        fields = catalogue._course_display_fields({"descriptionHtml": attack})
 
         for name, value in fields.items():
             if name.endswith("Html"):

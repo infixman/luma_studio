@@ -334,19 +334,13 @@ export function ProductPage({ slug }: { slug: string }) {
           </dl>
 
           {/* Sanitised on the server. The editor's limits are a convenience;
-              this is the same HTML the back office saved. */}
-          {course.outcomesHtml && (
-            <div class="course-block">
-              <h3>你將學會</h3>
-              <div dangerouslySetInnerHTML={{ __html: course.outcomesHtml }} />
-            </div>
-          )}
-          {course.audienceHtml && (
-            <div class="course-block">
-              <h3>適合對象</h3>
-              <div dangerouslySetInnerHTML={{ __html: course.audienceHtml }} />
-            </div>
-          )}
+              this is the same HTML the back office saved.
+
+              One block, not four. The back office used to ask for 你將學會,
+              適合對象, 課程介紹 and 講師介紹 separately and this page headed
+              each of them — which set the shape of the sales pitch from here
+              rather than letting the person writing it decide. It is one
+              field now, and whatever headings belong inside it are theirs. */}
           {course.descriptionHtml && (
             <div class="course-block">
               <h3>課程介紹</h3>
@@ -375,12 +369,6 @@ export function ProductPage({ slug }: { slug: string }) {
             </ol>
           </div>
 
-          {course.instructorBioHtml && (
-            <div class="course-block">
-              <h3>關於講師</h3>
-              <div dangerouslySetInnerHTML={{ __html: course.instructorBioHtml }} />
-            </div>
-          )}
         </section>
       ))}
     </main>

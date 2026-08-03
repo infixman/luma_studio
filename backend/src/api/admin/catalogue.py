@@ -131,12 +131,12 @@ def _course_display_fields(body: dict) -> dict:
         "level": validate_choice(body.get("level") or "all", courses.LEVELS, "難度"),
         "language": validate_text(body.get("language") or "zh-Hant", 20, "語言", required=False),
         "coverMediaId": cover,
+        # One block of prose. 講師介紹, 適合對象, 學習成果, 先備知識 and
+        # 工具與材料 were five more fields the back office asked for one at a
+        # time, and two of them were never shown to a customer at all. Their
+        # columns are still in D1 and untouched; this route simply no longer
+        # reads or writes them.
         "descriptionHtml": html("descriptionHtml", "課程介紹"),
-        "instructorBioHtml": html("instructorBioHtml", "講師介紹"),
-        "audienceHtml": html("audienceHtml", "適合對象"),
-        "outcomesHtml": html("outcomesHtml", "學習成果"),
-        "prerequisitesHtml": html("prerequisitesHtml", "先備知識"),
-        "materialsHtml": html("materialsHtml", "工具與材料"),
     }
 
 

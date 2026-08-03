@@ -142,15 +142,14 @@ export interface PublicCourse {
   slug: string
   title: string
   summary: string
+  /** The whole sales pitch. It used to be five fields — 你將學會, 適合對象,
+   *  課程介紹, 先備知識, 需要準備的工具或材料 — plus a separate instructor
+   *  bio, each with a heading this app chose. Course pages elsewhere put all
+   *  of it in one image, so whatever structure it has is the author's. */
   descriptionHtml: string
   instructorName: string
-  instructorBioHtml: string
   level: CourseLevel
   language: string
-  audienceHtml: string
-  outcomesHtml: string
-  prerequisitesHtml: string
-  materialsHtml: string
   lessonCount: number
   sections: PublicCourseSection[]
 }
@@ -553,13 +552,8 @@ export interface Course {
    *  media library knows. */
   coverPath: string | null
   instructorName: string
-  instructorBioHtml: string
   level: CourseLevel
   language: string
-  audienceHtml: string
-  outcomesHtml: string
-  prerequisitesHtml: string
-  materialsHtml: string
   /** When it first went on sale. Re-publishing after an edit does not move it. */
   publishedAt: number | null
   createdAt: number

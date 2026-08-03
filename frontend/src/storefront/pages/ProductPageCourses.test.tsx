@@ -21,13 +21,8 @@ function aPublicCourse(overrides: Partial<PublicCourse> = {}): PublicCourse {
     summary: '兩小時學會水彩花卉',
     descriptionHtml: '<p>課程介紹</p>',
     instructorName: '王老師',
-    instructorBioHtml: '<p>講師介紹</p>',
     level: 'beginner',
     language: 'zh-Hant',
-    audienceHtml: '<p>適合新手</p>',
-    outcomesHtml: '<p>你會學到</p>',
-    prerequisitesHtml: '',
-    materialsHtml: '',
     lessonCount: 12,
     sections: [
       {
@@ -130,4 +125,24 @@ test('a bundle of two courses lists both', async () => {
 
   expect(container.textContent).toContain('水彩花卉入門')
   expect(container.textContent).toContain('玫瑰進階')
+})
+
+/**
+ * The course sells itself with one block of prose, not five headings.
+ *
+ * The page used to head 你將學會, 適合對象, 課程介紹 and 關於講師 separately,
+ * from four fields the back office asked for one at a time. Course pages
+ * elsewhere put all of that into one image inside the description, so that is
+ * the field that stayed.
+ */
+test('the course shows its description without the four headings around it', async () => {
+  product = aPublicProduct({ variants: [aPublicVariant()], containsCourse: true, courses: [aPublicCourse()] })
+
+  render(<ProductPage slug="watercolour" />, container)
+  await settle()
+
+  expect(container.textContent).toContain('課程介紹')
+  for (const gone of ['你將學會', '適合對象', '關於講師']) {
+    expect(container.textContent).not.toContain(gone)
+  }
 })

@@ -36,15 +36,14 @@ const LEVEL_LABELS: Record<CourseLevel, string> = {
   all: '不限程度',
 }
 
-/** The long-form fields, in the order somebody deciding to buy reads them. */
-const PROSE_FIELDS: { key: keyof Course & `${string}Html`; label: string; hint?: string }[] = [
-  { key: 'outcomesHtml', label: '你將學會', hint: '商品頁會放在最前面' },
-  { key: 'audienceHtml', label: '適合對象' },
-  { key: 'descriptionHtml', label: '課程介紹' },
-  { key: 'prerequisitesHtml', label: '先備知識' },
-  { key: 'materialsHtml', label: '需要準備的工具或材料' },
-  { key: 'instructorBioHtml', label: '講師介紹' },
-]
+/* One long-form field, not six.
+ *
+ * This asked for 你將學會, 適合對象, 課程介紹, 先備知識, 需要準備的工具或材料
+ * and 講師介紹 separately — six rich-text editors down one page, each a
+ * heading over a mostly-empty box. Two of them were never rendered on the
+ * product page at all, so they were collected and thrown away. Course pages
+ * elsewhere put all of this into one image inside the description, and an
+ * author who wants headings can write them. */
 
 /**
  * Writing a course.
@@ -108,11 +107,6 @@ export function CourseEditPage({ id }: { id: string }) {
         language: course.language,
         coverMediaId: course.coverMediaId,
         descriptionHtml: course.descriptionHtml,
-        instructorBioHtml: course.instructorBioHtml,
-        audienceHtml: course.audienceHtml,
-        outcomesHtml: course.outcomesHtml,
-        prerequisitesHtml: course.prerequisitesHtml,
-        materialsHtml: course.materialsHtml,
       })
       // The outline goes as one tree. The server replaces it, so a partial
       // send would be a partial course.
@@ -280,17 +274,14 @@ export function CourseEditPage({ id }: { id: string }) {
         />
       </Panel>
 
-      {PROSE_FIELDS.map((field) => (
-        <Panel title={field.label} key={field.key}>
-          {field.hint && <p class="muted">{field.hint}</p>}
-          {/* The editor limits what an author can type; the server cleans what
-              arrives, whichever route it came by. */}
-          <RichTextEditor
-            config={{ body: (course[field.key] as string) ?? '', format: 'html' }}
-            onChange={(next) => edit({ [field.key]: next.body } as Partial<Course>)}
-          />
-        </Panel>
-      ))}
+      <Panel title="課程介紹">
+        {/* The editor limits what an author can type; the server cleans what
+            arrives, whichever route it came by. */}
+        <RichTextEditor
+          config={{ body: course.descriptionHtml ?? '', format: 'html' }}
+          onChange={(next) => edit({ descriptionHtml: next.body })}
+        />
+      </Panel>
 
       <Panel title="課程大綱">
         <CourseOutlineEditor sections={sections} onChange={editOutline} />

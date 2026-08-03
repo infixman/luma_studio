@@ -70,13 +70,8 @@ def course_row(row: dict) -> dict:
         "descriptionHtml": row.get("description_html") or "",
         "coverMediaId": row.get("cover_media_id"),
         "instructorName": row.get("instructor_name") or "",
-        "instructorBioHtml": row.get("instructor_bio_html") or "",
         "level": row.get("level") or "all",
         "language": row.get("language") or "zh-Hant",
-        "audienceHtml": row.get("audience_html") or "",
-        "outcomesHtml": row.get("outcomes_html") or "",
-        "prerequisitesHtml": row.get("prerequisites_html") or "",
-        "materialsHtml": row.get("materials_html") or "",
         "publishedAt": row.get("published_at"),
         "createdAt": int(row["created_at"]),
         "updatedAt": int(row["updated_at"]),
@@ -151,23 +146,23 @@ async def update_course(
     language: str = "zh-Hant",
     coverMediaId: str | None = None,
     descriptionHtml: str = "",
-    instructorBioHtml: str = "",
-    audienceHtml: str = "",
-    outcomesHtml: str = "",
-    prerequisitesHtml: str = "",
-    materialsHtml: str = "",
 ) -> bool:
     """Save a course. The HTML arrives already cleaned.
 
     `status` is here because saving a draft is the normal case. Publishing is
     its own route: it runs checks a plain save must not.
+
+    A course sells itself with one block of prose. The five other HTML
+    columns — instructor_bio_html, audience_html, outcomes_html,
+    prerequisites_html, materials_html — are left exactly as they are rather
+    than dropped or blanked: nothing writes them now, and whatever an author
+    typed into them before is still there if this is ever reversed.
     """
 
     result = await env.DB.prepare(
         "UPDATE courses SET slug = ?2, title = ?3, status = ?4, summary = ?5, instructor_name = ?6,"
         " level = ?7, language = ?8, cover_media_id = ?9, description_html = ?10,"
-        " instructor_bio_html = ?11, audience_html = ?12, outcomes_html = ?13,"
-        " prerequisites_html = ?14, materials_html = ?15, updated_at = ?16 WHERE id = ?1"
+        " updated_at = ?11 WHERE id = ?1"
     ).bind(
         course_id,
         slug,
@@ -179,11 +174,6 @@ async def update_course(
         language,
         coverMediaId,
         descriptionHtml,
-        instructorBioHtml,
-        audienceHtml,
-        outcomesHtml,
-        prerequisitesHtml,
-        materialsHtml,
         utc_timestamp(),
     ).run()
     return d1_changed(result)
@@ -341,13 +331,8 @@ def public_course(course: dict, outline: list[dict]) -> dict:
         "summary": course.get("summary", ""),
         "descriptionHtml": course.get("descriptionHtml", ""),
         "instructorName": course.get("instructorName", ""),
-        "instructorBioHtml": course.get("instructorBioHtml", ""),
         "level": course.get("level", "all"),
         "language": course.get("language", "zh-Hant"),
-        "audienceHtml": course.get("audienceHtml", ""),
-        "outcomesHtml": course.get("outcomesHtml", ""),
-        "prerequisitesHtml": course.get("prerequisitesHtml", ""),
-        "materialsHtml": course.get("materialsHtml", ""),
         "lessonCount": total_lessons(outline),
         "sections": public_outline(outline),
     }

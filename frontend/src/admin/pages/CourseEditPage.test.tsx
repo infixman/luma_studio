@@ -248,3 +248,23 @@ test('publishing is refused while there are unsaved edits, and says why', async 
   expect(publish?.disabled).toBe(true)
   expect(publish?.title).toContain('儲存')
 })
+
+/**
+ * One prose field, not six.
+ *
+ * The editor asked for 你將學會, 適合對象, 課程介紹, 先備知識, 需要準備的工具
+ * 或材料 and 講師介紹 as six separate rich-text panels — and two of them,
+ * 先備知識 and 需要準備的工具或材料, were never rendered on the product page
+ * at all, so they were collected and thrown away. Course pages elsewhere put
+ * all of this in one image inside the description, which is one field.
+ */
+test('the editor asks for the description and nothing else in prose', async () => {
+  render(<CourseEditPage id="c1" />, container)
+  await settle()
+
+  const titles = [...container.querySelectorAll('.ui-panel-title')].map((h) => h.textContent?.trim())
+  expect(titles).toContain('課程介紹')
+  for (const gone of ['你將學會', '適合對象', '先備知識', '需要準備的工具或材料', '講師介紹']) {
+    expect(titles).not.toContain(gone)
+  }
+})
