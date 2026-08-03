@@ -29,6 +29,21 @@
   padding: 0.5rem 0.7rem;
   background: #14110f;
   color: #f2ece4;
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+
+/* Mid-playback and left alone, the bar gets out of the way of the picture
+   it sits on. Fading rather than collapsing it: both this and the player's
+   own background sit near black, so there is nothing left to see rather
+   than a gap where a bar used to be. */
+.lesson-player.is-idle .player-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lesson-player.is-idle {
+  cursor: none;
 }
 
 .player-bar button {
@@ -197,7 +212,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .player-bar button { transition: none; }
+  .player-bar button,
+  .player-bar { transition: none; }
 }
 
 /* --- the gear ---

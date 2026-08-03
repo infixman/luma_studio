@@ -16,6 +16,10 @@ function speedLabel(speed: number): string {
 
 type MenuPane = 'closed' | 'root' | 'speed' | 'quality'
 
+/** How long the pointer can sit still, mid-playback, before the bar gets out
+ *  of the way of the picture it is sitting on. */
+export const IDLE_HIDE_MS = 3000
+
 /**
  * The lesson player, with a control bar of the storefront's own.
  *
@@ -70,6 +74,8 @@ export function LessonPlayer({
   const [playingHeight, setPlayingHeight] = useState<number | null>(null)
   const [rate, setRate] = useState(1)
   const [menu, setMenu] = useState<MenuPane>('closed')
+  const [idle, setIdle] = useState(false)
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Bound to the element, because the element is where the truth is.
   //
@@ -145,6 +151,25 @@ export function LessonPlayer({
     return () => document.removeEventListener('pointerdown', outside)
   }, [menu])
 
+  // Only earns the right to disappear while something is actually playing
+  // and the settings menu is not open over it — a paused video is a video
+  // somebody is likely about to act on, and a menu with no bar under it has
+  // nothing to anchor to.
+  const wake = useCallback(() => {
+    setIdle(false)
+    if (idleTimer.current) clearTimeout(idleTimer.current)
+    if (playing && menu === 'closed') {
+      idleTimer.current = setTimeout(() => setIdle(true), IDLE_HIDE_MS)
+    }
+  }, [playing, menu])
+
+  useEffect(() => {
+    wake()
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+    }
+  }, [wake])
+
   // From the same state that draws the label, not from `paused`. The button
   // has to do what it says, and a label read from one source with an action
   // read from another is two answers to one question.
@@ -215,6 +240,7 @@ export function LessonPlayer({
   // what its own arrow keys mean — this defers to it rather than fighting it.
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      wake()
       if ((event.target as HTMLElement | null)?.tagName === 'INPUT') return
 
       switch (event.key) {
@@ -254,17 +280,19 @@ export function LessonPlayer({
           break
       }
     },
-    [toggle, seekBy, nudgeVolume, toggleMute, toggleFullscreen, toggleTheater],
+    [wake, toggle, seekBy, nudgeVolume, toggleMute, toggleFullscreen, toggleTheater],
   )
 
   const known = Number.isFinite(duration)
 
   return (
     <div
-      class={`lesson-player${theater ? ' is-theater' : ''}`}
+      class={`lesson-player${theater ? ' is-theater' : ''}${idle ? ' is-idle' : ''}`}
       ref={shell}
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onMouseMove={wake}
+      onTouchStart={wake}
     >
       <HlsVideo
         src={src}

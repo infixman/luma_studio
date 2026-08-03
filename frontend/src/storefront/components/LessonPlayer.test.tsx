@@ -51,7 +51,7 @@ vi.mock('../../shared/components/HlsVideo', async (importOriginal) => ({
 }))
 
 import { AUTO_LEVEL } from '../../shared/components/HlsVideo'
-import { LessonPlayer } from './LessonPlayer'
+import { IDLE_HIDE_MS, LessonPlayer } from './LessonPlayer'
 
 let container: HTMLDivElement
 
@@ -68,6 +68,7 @@ afterEach(() => {
   render(null, container)
   container.remove()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 async function settle() {
@@ -635,3 +636,96 @@ test('a shortcut typed into the volume slider is left to the slider', async () =
 
   expect(video().currentTime).toBe(60)
 })
+
+/**
+ * Idle auto-hide.
+ *
+ * A control bar sitting over the picture for the whole of a lesson is a
+ * control bar in the way of it. It only earns the right to disappear while
+ * something is actually playing and nobody has touched anything for a
+ * while — paused, or with the settings menu open over it, it stays.
+ *
+ * Real time, not fake timers: preact schedules its re-render and effect
+ * flush through requestAnimationFrame, and advancing a faked clock does not
+ * reliably pump that queue in happy-dom. The delay is genuinely waited out
+ * instead — slower, but it is testing the real scheduling rather than a
+ * second, separate idea of what "later" means.
+ */
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function idle(): boolean {
+  return shell().classList.contains('is-idle')
+}
+
+test('the bar starts visible', async () => {
+  await mount()
+
+  expect(idle()).toBe(false)
+})
+
+test('playing and leaving it alone hides the bar after a while', async () => {
+  await mount()
+
+  video().dispatchEvent(new Event('play'))
+  await wait(IDLE_HIDE_MS + 200)
+
+  expect(idle()).toBe(true)
+}, 10_000)
+
+test('a paused video never hides its own controls', async () => {
+  await mount()
+
+  await wait(IDLE_HIDE_MS + 200)
+
+  expect(idle()).toBe(false)
+}, 10_000)
+
+test('moving the mouse wakes it back up', async () => {
+  await mount()
+  video().dispatchEvent(new Event('play'))
+  await wait(IDLE_HIDE_MS + 200)
+  expect(idle()).toBe(true)
+
+  shell().dispatchEvent(new Event('mousemove', { bubbles: true }))
+  await settle()
+
+  expect(idle()).toBe(false)
+}, 10_000)
+
+test('a touch counts as movement too', async () => {
+  await mount()
+  video().dispatchEvent(new Event('play'))
+  await wait(IDLE_HIDE_MS + 200)
+  expect(idle()).toBe(true)
+
+  shell().dispatchEvent(new Event('touchstart', { bubbles: true }))
+  await settle()
+
+  expect(idle()).toBe(false)
+}, 10_000)
+
+test('stopping shows the bar back immediately, not after the delay runs out', async () => {
+  await mount()
+  video().dispatchEvent(new Event('play'))
+  await wait(IDLE_HIDE_MS + 200)
+  expect(idle()).toBe(true)
+
+  video().dispatchEvent(new Event('pause'))
+  await settle()
+
+  expect(idle()).toBe(false)
+}, 10_000)
+
+test('an open settings menu holds the bar open, even while playing', async () => {
+  await mount()
+  video().dispatchEvent(new Event('play'))
+  await settle()
+
+  button('設定')!.click()
+  await wait(IDLE_HIDE_MS + 200)
+
+  expect(idle()).toBe(false)
+}, 10_000)
