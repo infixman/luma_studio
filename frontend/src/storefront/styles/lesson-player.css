@@ -400,3 +400,86 @@
     font-size: 0.75rem;
   }
 }
+
+/* --- the tooltips ---
+
+   Drawn rather than left to `title`, which cannot show a key as a key and
+   arrives about a second late — long enough that somebody has usually
+   pressed the button to find out what it does.
+
+   `max-content`: the tooltip is absolutely positioned, so it would otherwise
+   be fitted into the 34px button it hangs off, and Chinese may break between
+   any two characters. The same trap the settings menu fell into. */
+.player-tip {
+  position: absolute;
+  bottom: calc(100% + 0.55rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: max-content;
+  max-width: min(16rem, 80vw);
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.3rem;
+  background: rgb(28 24 22 / 0.94);
+  color: #f2ece4;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+/* Keyboard focus counts as well as the pointer: somebody tabbing along the
+   bar needs the same answer, and it is the only way this is reachable
+   without a mouse. */
+:is(.player-bar, .player-volume-group, .player-settings) > button:hover .player-tip,
+:is(.player-bar, .player-volume-group, .player-settings) > button:focus-visible .player-tip {
+  opacity: 1;
+}
+
+/* The shortcut looks like the key it is. A letter set in the sentence reads
+   as part of the sentence. */
+.player-tip kbd {
+  display: inline-block;
+  min-width: 1.25em;
+  padding: 0.05em 0.3em;
+  border: 1px solid rgb(242 236 228 / 0.45);
+  border-radius: 0.2rem;
+  font: inherit;
+  font-size: 0.95em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* The controls at the two ends would hang their tooltip off the edge of the
+   player, which clips it: the player crops its own corners. They line up
+   with their own edge instead of their own centre. */
+.player-bar > button:first-child .player-tip,
+.player-volume-group:first-child .player-tip {
+  left: 0;
+  transform: none;
+}
+
+.player-bar > button:last-child .player-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+/* The bar is what positions them; without this they would hang off the
+   player instead, at its top edge. */
+.player-bar > button,
+.player-volume-group > button,
+.player-settings > button {
+  position: relative;
+}
+
+/* A bar that has faded out must not answer a pointer resting where a button
+   used to be. */
+.lesson-player.is-idle .player-tip {
+  display: none;
+}

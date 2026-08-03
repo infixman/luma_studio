@@ -216,7 +216,7 @@ test('leaving full screen is offered while in it, and asked of the document', as
   await settle()
 
   expect(button('全螢幕')).toBeNull()
-  button('離開全螢幕')!.click()
+  button('結束全螢幕')!.click()
 
   expect(document.exitFullscreen).toHaveBeenCalled()
 })
@@ -544,9 +544,9 @@ test('the theatre button turns it on, and back off', async () => {
   await settle()
 
   expect(container.querySelector('.lesson-player')?.classList.contains('is-theater')).toBe(true)
-  expect(button('結束劇院模式')).not.toBeNull()
+  expect(button('預設檢視模式')).not.toBeNull()
 
-  button('結束劇院模式')!.click()
+  button('預設檢視模式')!.click()
   await settle()
 
   expect(container.querySelector('.lesson-player')?.classList.contains('is-theater')).toBe(false)
@@ -566,7 +566,7 @@ test('the page is told when theatre mode changes, not just the player', async ()
 
   expect(onTheaterChange).toHaveBeenCalledWith(true)
 
-  button('結束劇院模式')!.click()
+  button('預設檢視模式')!.click()
   await settle()
 
   expect(onTheaterChange).toHaveBeenCalledWith(false)
@@ -832,9 +832,11 @@ test('a length nobody knows yet paints nothing rather than a guess', async () =>
  *
  * Every control on this bar is an icon. `aria-label` names them for a screen
  * reader but shows a sighted visitor nothing at all — so the only way to
- * learn what the third button does was to press it. `title` is the one
- * affordance the browser gives for that, and it costs the same string that
- * is already there.
+ * learn what the third button does was to press it.
+ *
+ * Drawn rather than left to `title`, which cannot show a shortcut as a key
+ * and arrives about a second late, by which time the button has usually been
+ * pressed. What matters here is that no control is left without one.
  */
 test('every icon button says what it is on hover, not only to a screen reader', async () => {
   await mount()
@@ -845,7 +847,7 @@ test('every icon button says what it is on hover, not only to a screen reader', 
   expect(icons.length).toBeGreaterThan(4)
 
   for (const icon of icons) {
-    expect(icon.getAttribute('title')).toBe(icon.getAttribute('aria-label'))
+    expect(icon.querySelector('.player-tip')?.textContent).toContain(icon.getAttribute('aria-label'))
   }
 })
 
@@ -855,3 +857,54 @@ test('every icon button says what it is on hover, not only to a screen reader', 
    lesson-player.css, and it is deliberately not asserted here: happy-dom does
    not apply the imported stylesheet, so `getComputedStyle` would be reading
    this file's own defaults and would pass whatever the CSS said. */
+
+/**
+ * The tooltips.
+ *
+ * Drawn rather than left to `title`, so what they say is this component's
+ * job and not the browser's. Two things are worth holding: they describe the
+ * state rather than the control, and where a key does the same job they say
+ * which key.
+ */
+
+function tip(label: string): string {
+  return button(label)?.querySelector('.player-tip')?.textContent ?? ''
+}
+
+test('a tooltip names the state, not both states', async () => {
+  await mount()
+  expect(tip('播放')).toContain('播放')
+
+  media({}, 'play')
+  await settle()
+
+  expect(button('播放')).toBeNull()
+  expect(tip('暫停')).toContain('暫停')
+})
+
+test('a control with a shortcut says which key', async () => {
+  await mount()
+
+  expect(button('播放')!.querySelector('.player-tip kbd')?.textContent).toBe('k')
+  expect(button('靜音')!.querySelector('.player-tip kbd')?.textContent).toBe('m')
+  expect(button('全螢幕')!.querySelector('.player-tip kbd')?.textContent).toBe('f')
+  expect(button('劇院模式')!.querySelector('.player-tip kbd')?.textContent).toBe('t')
+})
+
+test('a control without one does not invent a key', async () => {
+  /** The letter is in a box because it is a key to press. A box around
+   *  nothing would be a key that does not exist. */
+  await mount()
+
+  expect(button('設定')!.querySelector('.player-tip kbd')).toBeNull()
+})
+
+test('the settings tooltip goes when the menu it opened is over the same spot', async () => {
+  await mount()
+  expect(tip('設定')).toBe('設定')
+
+  button('設定')!.click()
+  await settle()
+
+  expect(tip('設定')).toBe('')
+})

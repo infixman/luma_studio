@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
 import { AUTO_LEVEL, HlsVideo } from '../../shared/components/HlsVideo'
@@ -346,27 +347,14 @@ export function LessonPlayer({
       />
 
       <div class="player-bar">
-        {/* Every control here is an icon, so each carries the same string
-            twice: `aria-label` for a screen reader, `title` for the tooltip
-            that tells a sighted visitor what it does without pressing it. */}
-        <button
-          type="button"
-          aria-label={playing ? '暫停' : '播放'}
-          title={playing ? '暫停' : '播放'}
-          onClick={toggle}
-        >
+        <Control label={playing ? '暫停' : '播放'} shortcut="k" onClick={toggle}>
           {playing ? <PauseGlyph /> : <PlayGlyph />}
-        </button>
+        </Control>
 
         <div class="player-volume-group">
-          <button
-            type="button"
-            aria-label={muted ? '取消靜音' : '靜音'}
-            title={muted ? '取消靜音' : '靜音'}
-            onClick={toggleMute}
-          >
+          <Control label={muted ? '取消靜音' : '靜音'} shortcut="m" onClick={toggleMute}>
             {muted || volume === 0 ? <MutedGlyph /> : <VolumeGlyph />}
-          </button>
+          </Control>
 
           {/* Mute is a pause on the volume, not a way of setting it to
               nothing: the level is kept in state so the button can put it
@@ -409,27 +397,32 @@ export function LessonPlayer({
             starts and they did not want it to — and two taps into a menu is
             too far to reach for that. */}
         {onAutoplayChange && (
-          <button
-            type="button"
-            aria-label={autoplay ? '關閉自動播放' : '開啟自動播放'}
-            title={autoplay ? '自動播放：開啟' : '自動播放：關閉'}
-            aria-pressed={autoplay === true}
+          <Control
+            label={autoplay ? '已啟用自動播放功能' : '已停用自動播放功能'}
+            pressed={autoplay === true}
             onClick={() => onAutoplayChange(!autoplay)}
           >
             <AutoplayGlyph on={autoplay === true} />
-          </button>
+          </Control>
         )}
 
         <div class="player-settings" ref={settings}>
+          {/* Not a Control: it owns a menu, so it carries the two ARIA
+              attributes that say so, and its tooltip has to go while the
+              menu it opened is over the same spot. */}
           <button
             type="button"
             aria-label="設定"
-            title="設定"
             aria-haspopup="menu"
             aria-expanded={menu !== 'closed'}
             onClick={() => setMenu(menu === 'closed' ? 'root' : 'closed')}
           >
             <GearGlyph />
+            {menu === 'closed' && (
+              <span class="player-tip" aria-hidden="true">
+                設定
+              </span>
+            )}
           </button>
 
           {menu !== 'closed' && (
@@ -528,25 +521,23 @@ export function LessonPlayer({
 
         {/* Classed so a phone can drop it: the video there already runs the
             width of the screen, so theatre has nothing left to widen. */}
-        <button
-          type="button"
-          class="player-theater"
-          aria-label={theater ? '結束劇院模式' : '劇院模式'}
-          title={theater ? '結束劇院模式' : '劇院模式'}
-          aria-pressed={theater}
+        <Control
+          className="player-theater"
+          label={theater ? '預設檢視模式' : '劇院模式'}
+          shortcut="t"
+          pressed={theater}
           onClick={toggleTheater}
         >
-          <TheaterGlyph />
-        </button>
+          <TheaterGlyph on={theater} />
+        </Control>
 
-        <button
-          type="button"
-          aria-label={fullscreen ? '離開全螢幕' : '全螢幕'}
-          title={fullscreen ? '離開全螢幕' : '全螢幕'}
+        <Control
+          label={fullscreen ? '結束全螢幕' : '全螢幕'}
+          shortcut="f"
           onClick={toggleFullscreen}
         >
           {fullscreen ? <ShrinkGlyph /> : <ExpandGlyph />}
-        </button>
+        </Control>
       </div>
     </div>
   )
@@ -604,6 +595,52 @@ function MutedGlyph() {
 }
 
 /**
+ * One control on the bar: an icon, and the tooltip that says what it is.
+ *
+ * The tooltip is drawn rather than left to the browser's `title`, for two
+ * reasons. A `title` cannot show the keyboard shortcut as a key — a letter
+ * in a box, which is what makes it read as something to press rather than
+ * as part of the sentence — and it appears about a second late, which is
+ * long enough that somebody has usually pressed the button to find out.
+ *
+ * The label is the state, not the control: "pause" over a playing video,
+ * not "play/pause". A tooltip that says both says neither.
+ */
+function Control({
+  label,
+  shortcut,
+  pressed,
+  className,
+  onClick,
+  children,
+}: {
+  label: string
+  shortcut?: string
+  pressed?: boolean
+  className?: string
+  onClick: () => void
+  children: ComponentChildren
+}) {
+  return (
+    <button
+      type="button"
+      class={className}
+      aria-label={label}
+      aria-pressed={pressed}
+      onClick={onClick}
+    >
+      {children}
+      {/* Hidden from assistive technology: it repeats the label, which is
+          already the button's name. */}
+      <span class="player-tip" aria-hidden="true">
+        {label}
+        {shortcut && <kbd>{shortcut}</kbd>}
+      </span>
+    </button>
+  )
+}
+
+/**
  * A switch, not a symbol.
  *
  * Autoplay is the one control on the bar that is on or off rather than a
@@ -617,24 +654,37 @@ function AutoplayGlyph({ on }: { on: boolean }) {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect
         x="2"
-        y="7"
+        y="6"
         width="20"
-        height="10"
-        rx="5"
-        fill={on ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        stroke-width="1.6"
+        height="12"
+        rx="6"
+        fill={on ? 'currentColor' : 'rgb(242 236 228 / 0.3)'}
       />
-      <circle cx={on ? 17 : 7} cy="12" r="3.1" fill={on ? '#14110f' : 'currentColor'} />
+      <circle cx={on ? 16 : 8} cy="12" r="4.4" fill={on ? '#14110f' : 'currentColor'} />
+      {/* The knob carries what pressing it leads to: playing on, or
+          stopping at the end of this one. */}
+      {on ? (
+        <path d="M14.6 9.9 17.6 12l-3 2.1z" fill="currentColor" />
+      ) : (
+        <path d="M6.6 10h1.1v4H6.6zM8.3 10h1.1v4H8.3z" fill="#14110f" />
+      )}
     </svg>
   )
 }
 
-function TheaterGlyph() {
+/**
+ * Which way the picture is about to go.
+ *
+ * The frame is the same either way and the arrows turn round: outward while
+ * the video can still get wider, inward once it is wide and the button
+ * brings it back. A fixed icon would leave the direction entirely to the
+ * tooltip.
+ */
+function TheaterGlyph({ on }: { on: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="6" width="18" height="12" rx="1.5" />
-      <path d="M7 9v6M17 9v6" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2" />
+      {on ? <path d="M6 9.5 9 12l-3 2.5M18 9.5 15 12l3 2.5" /> : <path d="M9 9.5 6 12l3 2.5M15 9.5l3 2.5-3 2.5" />}
     </svg>
   )
 }

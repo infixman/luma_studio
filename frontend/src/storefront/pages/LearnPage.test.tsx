@@ -148,7 +148,7 @@ test('the switch is on the bar itself, not two taps inside the gear', async () =
   render(<LearnPage slug="watercolour" />, container)
   await settle()
 
-  const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')
+  const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')
   expect(toggle).not.toBeNull()
   expect(toggle!.closest('.player-menu')).toBeNull()
 })
@@ -159,7 +159,7 @@ test('turning it off leaves the lesson where it ended', async () => {
   render(<LearnPage slug="watercolour" />, container)
   await settle()
 
-  container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')!.click()
+  container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')!.click()
   await settle()
 
   endVideo()
@@ -185,7 +185,7 @@ test('the last lesson stays put rather than wrapping round', async () => {
 test('the choice is remembered, because it is about how somebody watches', async () => {
   render(<LearnPage slug="watercolour" />, container)
   await settle()
-  container.querySelector<HTMLButtonElement>('button[aria-label="關閉自動播放"]')!.click()
+  container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')!.click()
   await settle()
 
   render(null, container)
@@ -211,7 +211,7 @@ test('theatre mode widens the stage by collapsing the outline beside it', async 
 
   expect(layout?.classList.contains('is-theater')).toBe(true)
 
-  container.querySelector<HTMLButtonElement>('button[aria-label="結束劇院模式"]')!.click()
+  container.querySelector<HTMLButtonElement>('button[aria-label="預設檢視模式"]')!.click()
   await settle()
 
   expect(layout?.classList.contains('is-theater')).toBe(false)
