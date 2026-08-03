@@ -729,3 +729,63 @@ test('an open settings menu holds the bar open, even while playing', async () =>
 
   expect(idle()).toBe(false)
 }, 10_000)
+
+/**
+ * Played and buffered, painted onto the track.
+ *
+ * Firefox fills the played portion on its own once `value` moves —
+ * `::-moz-range-progress` already does that, native. WebKit has no such
+ * pseudo-element at all, so both the played fraction and how much is
+ * buffered ahead of it are pushed onto the input as CSS custom properties
+ * and painted by a gradient on `::-webkit-slider-runnable-track` in
+ * lesson-player.css. The properties are what a test can actually see —
+ * the gradient itself is CSS, not something happy-dom renders.
+ */
+
+function timeRanges(ranges: [number, number][]) {
+  return {
+    length: ranges.length,
+    start: (index: number) => ranges[index]![0],
+    end: (index: number) => ranges[index]![1],
+  }
+}
+
+function customProperty(name: string): string {
+  return scrubber().style.getPropertyValue(name)
+}
+
+test('the played fraction is exposed as a custom property', async () => {
+  await mount()
+  media({ duration: 100 }, 'durationchange')
+  media({ currentTime: 25 }, 'timeupdate')
+  await settle()
+
+  expect(customProperty('--played')).toBe('25%')
+})
+
+test('nothing buffered yet paints nothing buffered', async () => {
+  await mount()
+  media({ duration: 100 }, 'durationchange')
+  await settle()
+
+  expect(customProperty('--buffered')).toBe('0%')
+})
+
+test('a reported buffer range becomes a custom property too', async () => {
+  await mount()
+  media({ duration: 100, currentTime: 10 }, 'durationchange')
+  Object.defineProperty(video(), 'buffered', { value: timeRanges([[0, 80]]), configurable: true })
+  video().dispatchEvent(new Event('progress'))
+  await settle()
+
+  expect(customProperty('--buffered')).toBe('80%')
+})
+
+test('a length nobody knows yet paints nothing rather than a guess', async () => {
+  /** duration is NaN before the metadata lands, and 25 / NaN is itself NaN —
+   *  a percentage that would paint the whole track as "played". */
+  await mount()
+
+  expect(customProperty('--played')).toBe('0%')
+  expect(customProperty('--buffered')).toBe('0%')
+})

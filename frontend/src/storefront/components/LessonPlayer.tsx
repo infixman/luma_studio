@@ -64,6 +64,7 @@ export function LessonPlayer({
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
   const [theater, setTheater] = useState(false)
+  const [bufferedEnd, setBufferedEnd] = useState(0)
 
   // The ladder the manifest turned out to have, which rung the member asked
   // for, and which one hls.js is actually serving — the last is worth keeping
@@ -97,6 +98,20 @@ export function LessonPlayer({
       setVolume(element.volume)
       setMuted(element.muted)
     }
+    // The end of whichever buffered range currently holds the playhead —
+    // that range is the one that answers "how much further can this play
+    // right now", not necessarily the last one the network has fetched.
+    const buffered = () => {
+      const ranges = element.buffered
+      let end = 0
+      for (let index = 0; index < ranges.length; index++) {
+        if (ranges.start(index) <= element.currentTime && element.currentTime <= ranges.end(index)) {
+          end = ranges.end(index)
+          break
+        }
+      }
+      setBufferedEnd(end)
+    }
 
     const bindings: [string, () => void][] = [
       ['play', started],
@@ -108,6 +123,7 @@ export function LessonPlayer({
       ['durationchange', measured],
       ['loadedmetadata', measured],
       ['volumechange', volumed],
+      ['progress', buffered],
     ]
 
     for (const [name, listener] of bindings) element.addEventListener(name, listener)
@@ -117,6 +133,7 @@ export function LessonPlayer({
     moved()
     measured()
     volumed()
+    buffered()
 
     return () => {
       for (const [name, listener] of bindings) element.removeEventListener(name, listener)
@@ -283,7 +300,14 @@ export function LessonPlayer({
     [wake, toggle, seekBy, nudgeVolume, toggleMute, toggleFullscreen, toggleTheater],
   )
 
-  const known = Number.isFinite(duration)
+  const known = Number.isFinite(duration) && duration > 0
+  // Firefox paints the played portion itself once `value` moves; WebKit has
+  // no pseudo-element for it at all, so both this and how much is buffered
+  // ahead of it are pushed on as custom properties for the track gradient in
+  // lesson-player.css to read. 25 / NaN is itself NaN, so `known` gates both
+  // rather than painting a percentage of a length nobody has measured yet.
+  const playedPercent = known ? Math.min(100, (position / duration) * 100) : 0
+  const bufferedPercent = known ? Math.min(100, (bufferedEnd / duration) * 100) : 0
 
   return (
     <div
@@ -337,6 +361,7 @@ export function LessonPlayer({
           max={known ? duration : 0}
           step="any"
           value={position}
+          style={{ '--played': `${playedPercent}%`, '--buffered': `${bufferedPercent}%` }}
           aria-label="播放進度"
           aria-valuetext={clock(position)}
           onInput={(event) => seek(Number((event.currentTarget as HTMLInputElement).value))}

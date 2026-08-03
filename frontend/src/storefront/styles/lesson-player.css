@@ -153,6 +153,8 @@
    touch handling and the keyboard all belong to the element already. */
 
 .player-scrub {
+  --played: 0%;
+  --buffered: 0%;
   flex: 1;
   min-width: 0;
   height: 18px;
@@ -170,20 +172,39 @@
   border-radius: 999px;
 }
 
+/* WebKit has no pseudo-element for "played so far" at all, so the played
+   fraction and how much is buffered ahead of it are both painted here, off
+   the two custom properties LessonPlayer sets on the element itself —
+   custom properties inherit into a pseudo-element the same as into a real
+   child. Firefox gets the played fill for free from ::-moz-range-progress
+   below, so only the buffered shading needs painting on its track. */
 .player-scrub::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: rgb(242 236 228 / 0.26);
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--played),
+    rgb(242 236 228 / 0.34) var(--played),
+    rgb(242 236 228 / 0.34) var(--buffered),
+    rgb(242 236 228 / 0.14) var(--buffered),
+    rgb(242 236 228 / 0.14) 100%
+  );
 }
 
 .player-scrub::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgb(242 236 228 / 0.26);
+  background: linear-gradient(
+    to right,
+    rgb(242 236 228 / 0.34) 0%,
+    rgb(242 236 228 / 0.34) var(--buffered),
+    rgb(242 236 228 / 0.14) var(--buffered),
+    rgb(242 236 228 / 0.14) 100%
+  );
 }
 
-/* Firefox fills the track up to the value on its own; WebKit does not, and
-   the fill there arrives with the buffered painting in the next step. */
+/* Firefox fills the track up to the value on its own. */
 .player-scrub::-moz-range-progress {
   height: 4px;
   border-radius: 999px;

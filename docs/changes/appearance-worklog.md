@@ -305,3 +305,33 @@ UI 從來沒有反映出來——不是隱藏邏輯錯,是 preact 在 happy-dom 
 推進在這個環境沒有把它一起推進。換成真的 `setTimeout` 硬等
 `IDLE_HIDE_MS + 200ms`,問題就消失——測試因此變慢了幾十秒,
 但測的是真正的排程,不是另外發明一套「所謂的之後」。
+
+## 第十步：進度條的已播放跟已緩衝,WebKit 也看得到
+
+Firefox 的 `::-moz-range-progress` 原生就會把已播放的部分填色,
+WebKit 完全沒有對應的偽元素可以掛——這是這個檔案第五步留下的伏筆
+（`.player-scrub::-moz-range-progress` 的註解那時就寫了「WebKit 沒有,
+填色的部分留到緩衝那步」)。做法是把兩個數字（播放到哪、緩衝到哪,
+都換算成百分比)寫成 `<input>` 元素自己的 inline style,當成 CSS
+custom property `--played` / `--buffered`——custom property 會照一般
+繼承規則穿透進偽元素,跟穿透進真正的子元素沒有差別。WebKit 的
+`::-webkit-slider-runnable-track` 讀這兩個變數,自己用一個
+`linear-gradient` 把已播放、已緩衝、還沒緩衝三段一次畫完;Firefox
+因為已播放那段有原生的 `::-moz-range-progress` 可以疊上去,自己的
+`::-moz-range-track` 只需要處理緩衝那一段深淺。
+
+### 緩衝範圍讀哪一段,不是讀最後一段
+
+`element.buffered` 回傳的是一組不連續的區間,不保證只有一段——中途
+跳著看,或者網路斷斷續續,都會留下好幾段各自緩衝好的範圍。這裡找的
+是「包含當前播放位置」的那一段,不是陣列裡最後、緩衝最多的那一段:
+使用者現在能不能順順播下去,答案在他當前所在的那一段裡,不在別的
+地方緩衝了多少。
+
+### `known` 多了一個條件
+
+原本 `known` 只檢查 `duration` 是不是有限數字。加上百分比計算後,
+如果 `duration` 剛好是 `0`,`position / duration` 會是 `NaN`——
+`NaN%` 寫進 CSS 等於這個屬性沒有值,瀏覽器會退回上一層的其他規則,
+不是「不填色」而是「不知道要怎麼填」。`known` 因此多檢查一次
+`duration > 0`,兩個百分比都用同一個閘門,不必另外各寫一次防呆。
