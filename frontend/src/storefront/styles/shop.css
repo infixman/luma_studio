@@ -1463,9 +1463,64 @@ main.order .totals {
 
 /* The bleed is 100vw and the page has a scrollbar, so it is a few pixels
    wider than the space it can occupy. Clipped rather than hidden: `clip`
-   does not make a scroll container, so the sticky header still sticks. */
+   does not make a scroll container, so the sticky header still sticks.
+
+   And the page goes dark with it. A cream page around a black player is
+   two rooms with the wall knocked through: the eye keeps going to the
+   bright half. Theatre mode is the one state whose whole purpose is that
+   there is nothing else to look at, so the surface the rest of the page
+   draws from is swapped rather than each piece being restyled — every
+   card, hairline and muted line follows from these four. */
 body:has(.learn-layout.is-theater) {
   overflow-x: clip;
+  --surface: #0c0a09;
+  --card: #1b1816;
+  --hairline: rgb(242 236 228 / 0.14);
+  --muted: rgb(242 236 228 / 0.58);
+  color: #f2ece4;
+}
+
+/* Not from a token — the body's colour is written literally in surface.css,
+   so the footer would keep the ink it was given on a black background. */
+body:has(.learn-layout.is-theater) .site-footer {
+  background: var(--surface);
+  color: #f2ece4;
+  border-top: 1px solid var(--hairline);
+}
+
+/* The header goes dark with the page and pulls in the way it does when
+   somebody scrolls: the same movement, for the same reason. The owner's
+   colour setting is deliberately overridden — a cream capsule is the one
+   bright object left on the screen, which is exactly what this mode is
+   for getting rid of. It comes back on the way out. */
+body:has(.learn-layout.is-theater) .site-header {
+  padding-top: 8px;
+  padding-inline: clamp(16px, 6vw, 120px);
+  color: #f2ece4;
+}
+
+body:has(.learn-layout.is-theater) .site-header .header-inner {
+  max-width: 62rem;
+  background: #1b1816;
+  border-color: rgb(242 236 228 / 0.12);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 34px rgb(0 0 0 / 0.45);
+}
+
+body:has(.learn-layout.is-theater) .site-header.height-small .header-inner { min-height: 40px; }
+body:has(.learn-layout.is-theater) .site-header.height-medium .header-inner { min-height: 46px; }
+body:has(.learn-layout.is-theater) .site-header.height-large .header-inner { min-height: 54px; }
+
+/* A photograph in the capsule is the same bright object by another route. */
+body:has(.learn-layout.is-theater) .header-image {
+  display: none;
+}
+
+/* The course and the lesson are already known to whoever pressed the button;
+   in theatre they are two lines of paper between the header and the picture.
+   Hidden rather than dimmed — dimmed still takes the space. */
+main.learn:has(.learn-layout.is-theater) > h1,
+.learn-layout.is-theater .learn-stage > h2 {
+  display: none;
 }
 
 /* Visible to a screen reader, not on screen. Completion is a tick plus this,
