@@ -22,6 +22,26 @@
   border-radius: 0;
 }
 
+/* Fullscreen had no layout of its own, so the video kept 16:9 of the screen's
+   width and whatever height was left over piled up underneath it as one black
+   slab, with the bar stranded in the middle of the screen. Filling the screen
+   and letting the picture centre itself puts the leftover where it belongs —
+   split evenly above and below, as letterboxing — and the bar on the bottom
+   edge where somebody reaches for it. */
+.lesson-player:fullscreen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.lesson-player:fullscreen video {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  object-fit: contain;
+}
+
 .player-bar {
   display: flex;
   align-items: center;

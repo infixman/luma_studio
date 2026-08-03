@@ -1439,8 +1439,13 @@ main.order .totals {
 
      Not the exact free space: that depends on a header whose height is a
      site setting, and measuring it would tie the player to the chrome
-     around it and resize the video as somebody scrolls. This is slack. */
-  max-height: calc(100dvh - 8rem);
+     around it and resize the video as somebody scrolls. This is slack.
+
+     Enough of it for the buttons under the player as well as the header
+     over it. At 8rem the row that moves to the next lesson was cut off by
+     the bottom of the window, which is the same mistake as the control bar
+     one commit ago: the picture fitted and the things you press did not. */
+  max-height: calc(100dvh - 11.5rem);
   display: flex;
   flex-direction: column;
 }
@@ -1488,22 +1493,32 @@ body:has(.learn-layout.is-theater) .site-footer {
   border-top: 1px solid var(--hairline);
 }
 
-/* The header goes dark with the page and pulls in the way it does when
-   somebody scrolls: the same movement, for the same reason. The owner's
-   colour setting is deliberately overridden — a cream capsule is the one
-   bright object left on the screen, which is exactly what this mode is
-   for getting rid of. It comes back on the way out. */
+/* The header stops being a capsule and becomes a band.
+
+   The capsule floats on a strip that is transparent by design — it works
+   because the page behind it is paper. The player runs the full width of
+   that strip now, so scrolled down there was video behind the header,
+   showing through everywhere the capsule was not. A solid band is also
+   what the mode is copying: nothing above the picture to look past.
+
+   The owner's colour setting is deliberately overridden, and with
+   `!important` because a custom colour arrives as an inline style and
+   nothing else can reach it. A cream bar is the one bright object left on
+   the screen, which is what this mode exists to remove. It comes back on
+   the way out. */
 body:has(.learn-layout.is-theater) .site-header {
-  padding-top: 8px;
-  padding-inline: clamp(16px, 6vw, 120px);
+  padding: 0;
+  background: #0c0a09 !important;
   color: #f2ece4;
+  border-bottom: 1px solid rgb(242 236 228 / 0.1);
 }
 
 body:has(.learn-layout.is-theater) .site-header .header-inner {
-  max-width: 62rem;
-  background: #1b1816;
-  border-color: rgb(242 236 228 / 0.12);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 34px rgb(0 0 0 / 0.45);
+  max-width: var(--site-shell);
+  background: transparent !important;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 body:has(.learn-layout.is-theater) .site-header.height-small .header-inner { min-height: 40px; }
@@ -1521,6 +1536,14 @@ body:has(.learn-layout.is-theater) .header-image {
 main.learn:has(.learn-layout.is-theater) > h1,
 .learn-layout.is-theater .learn-stage > h2 {
   display: none;
+}
+
+/* Centred under a picture that now runs the full width. Left-aligned is
+   right when the buttons sit under a column of text and start where its
+   first word does; there is no column any more, so the alignment was to
+   an edge nothing else shares. */
+.learn-layout.is-theater .learn-actions {
+  justify-content: center;
 }
 
 /* Visible to a screen reader, not on screen. Completion is a tick plus this,
