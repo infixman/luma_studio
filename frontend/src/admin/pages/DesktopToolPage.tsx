@@ -9,6 +9,8 @@ import {
   DataTable,
   EmptyState,
   IconButton,
+  Menu,
+  MenuItem,
   Panel,
   Spinner,
   TextField,
@@ -286,18 +288,19 @@ function ReleaseListPanel({
         return (
           <>
             <CopyButton value={downloadUrl(row)} label={`複製 ${row.version} 的下載網址`} />
-            <Button
-              tone="danger"
-              size="sm"
-              disabled={refusal !== null}
-              // The reason, where somebody who wonders why will look for it. The
-              // server refuses the same two versions — this is the half that can
-              // be seen before clicking.
-              title={refusal ?? undefined}
-              onClick={() => void remove(row)}
-            >
-              刪除
-            </Button>
+            <Menu label={`${row.version} 的操作`}>
+              <MenuItem
+                tone="danger"
+                disabled={refusal !== null}
+                // The reason, where somebody who wonders why will look for it.
+                // The server refuses the same two versions — this is the half
+                // that can be seen before clicking.
+                title={refusal ?? undefined}
+                onClick={() => void remove(row)}
+              >
+                刪除
+              </MenuItem>
+            </Menu>
           </>
         )
       },

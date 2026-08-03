@@ -115,3 +115,27 @@ test('the address follows the name until somebody takes it over', async () => {
 
   expect(path!.value).toBe('/about-us')
 })
+
+/**
+ * Row actions.
+ *
+ * 編輯 and 刪除 sat side by side as two labelled buttons — a full red
+ * 刪除 competing for attention on every row of the list, and a shape no
+ * other list page uses. Everything that acts on one row now lives behind
+ * that row's own menu, the way products, customers and orders already did.
+ */
+test('a row folds its actions behind one menu instead of loose buttons', async () => {
+  pages = [HOME]
+  render(<PagesPage />, container)
+  await settle()
+
+  const row = container.querySelector<HTMLElement>('.page-list li')!
+  expect(row.textContent).not.toContain('刪除')
+
+  row.querySelector<HTMLButtonElement>('.ui-menu-wrap > button')!.click()
+  await tick()
+
+  const items = [...container.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())
+  expect(items).toContain('編輯')
+  expect(items).toContain('刪除')
+})

@@ -337,8 +337,15 @@ function buttonSaying(text: string): HTMLButtonElement | undefined {
   )
 }
 
-function deleteButtons(): HTMLButtonElement[] {
-  return [...container.querySelectorAll('button')].filter((element) =>
+/** Row actions live behind the row's own menu, like every other list. */
+async function openRowMenu(index: number): Promise<void> {
+  const triggers = [...container.querySelectorAll<HTMLButtonElement>('.ui-menu-wrap > button')]
+  triggers[index]?.click()
+  await idle()
+}
+
+function deleteItem(): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((element) =>
     (element.textContent ?? '').includes('刪除'),
   )
 }
@@ -388,7 +395,8 @@ test('the version the policy publishes cannot be deleted, and says why', async (
   await open()
   await loadTheList()
 
-  const refused = deleteButtons()[0]
+  await openRowMenu(0)
+  const refused = deleteItem()
   expect(refused?.disabled).toBe(true)
   expect(refused?.getAttribute('title') ?? '').toContain('最新版本')
 })
@@ -397,7 +405,8 @@ test('deleting asks first, and names the version', async () => {
   await open()
   await loadTheList()
 
-  deleteButtons()[1]?.click()
+  await openRowMenu(1)
+  deleteItem()?.click()
   await idle()
   // In the dialog, not merely somewhere on the page: the table lists both
   // versions, so "the page mentions 0.9.0" would be true without asking.
@@ -420,7 +429,8 @@ test('a refusal from the server is shown rather than swallowed', async () => {
   await open()
   await loadTheList()
 
-  deleteButtons()[1]?.click()
+  await openRowMenu(1)
+  deleteItem()?.click()
   await idle()
   buttonSaying('確定刪除')?.click()
   await idle()
