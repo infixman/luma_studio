@@ -507,3 +507,21 @@ button.linkish:hover:not(:disabled) {
      is already on it. */
   text-decoration: underline;
 }
+
+/* The update notice over a screen that still works.
+
+   Held to the shell's width and its gutter so it lines up with what is under
+   it — it used to render outside the shell entirely, starting at the window's
+   left edge while everything below it was centred. Less padding than a shell,
+   because it is a strip and not a screen. */
+.update-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding-block: 1.25rem 0;
+}
+
+.update-line {
+  margin: 0;
+}

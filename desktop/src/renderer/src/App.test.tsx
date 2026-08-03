@@ -293,3 +293,25 @@ test('a tool on the current build is not nagged about downloads', async () => {
 
   expect(container.textContent).not.toContain('下載')
 })
+
+test('a stopped build says it once, in one block', async () => {
+  /** It used to say it three times — the server's sentence, the download
+   *  line, and a third telling somebody to install a new version underneath
+   *  the two that already had — and the three sat at three different
+   *  alignments, because the update UI rendered outside the shell that
+   *  centres everything else. */
+  stopped()
+  bridge(PAIRED)
+  render(<App />, container)
+  await settle()
+  for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0))
+
+  const shell = container.querySelector('main.shell')
+  expect(shell).not.toBeNull()
+  expect(shell!.querySelector('h1')?.textContent).toContain('需要更新')
+
+  // Everything the screen says about the update is inside that one block.
+  const said = [...container.querySelectorAll('p')].filter((p) => (p.textContent ?? '').includes('新版'))
+  expect(said.length).toBeLessThanOrEqual(2)
+  for (const line of said) expect(line.closest('main.shell')).toBe(shell)
+})

@@ -77,37 +77,49 @@ export function App() {
     )
   }
 
-  // `About` on both screens, not only after pairing. It carries the licence of a
-  // GPL binary this tool ships, and somebody who cannot pair — wrong code, no
+  // Stopped by the server. The whole screen is the update, because there is
+  // nothing else to do here: the drop target goes rather than being disabled,
+  // since a target that silently refuses a file is a tool somebody thinks is
+  // broken.
+  if (status.paired && !mayWork(version?.state ?? null)) {
+    return (
+      <>
+        <main class="shell">
+          <h1>需要更新才能繼續上傳</h1>
+          {/* Said once. This screen used to say it three times — the server's
+              sentence, the download line, and a third telling somebody to
+              install a new version underneath the two that already had. */}
+          {version?.message ? <p class="muted">{version.message}</p> : null}
+          <UpdateProgress update={update} />
+        </main>
+        <About />
+      </>
+    )
+  }
+
+  // `About` on both screens, not only after pairing. It carries the licence of
+  // a GPL binary this tool ships, and somebody who cannot pair — wrong code, no
   // back office to hand — would never reach it otherwise.
   return (
     <>
-      {version?.message ? (
-        <p class={mayWork(version.state) ? 'muted' : 'alert'} role="status">
-          {version.message}
-        </p>
+      {/* Still working, and there is a newer build. A strip rather than the
+          screen: it is worth knowing and not worth stopping for. Held to the
+          same width as everything under it — outside the shell it started at
+          the window's edge, lining up with nothing. */}
+      {version?.state?.verdict?.updateAvailable ? (
+        <div class="shell update-strip" role="status">
+          {version?.message ? <span class="muted">{version.message}</span> : null}
+          <UpdateProgress update={update} />
+        </div>
       ) : null}
 
-      {/* Once, above whichever screen is showing. A build that still works
-          needs this as much as a stopped one: without it the download that
-          already finished has nowhere to be applied either, and the banner
-          saying "there is a new version" is advice with no way to take it. */}
-      {version?.state?.verdict?.updateAvailable ? <UpdateProgress update={update} /> : null}
-
-      {status.paired && mayWork(version?.state ?? null) ? (
+      {status.paired ? (
         <UploadScreen
           adminEmail={status.adminEmail ?? ''}
           onSignOut={() => {
             void window.desktop.auth.signOut().then(setStatus)
           }}
         />
-      ) : status.paired ? (
-        // Stopped by the server. The screen goes rather than being disabled:
-        // a drop target that silently refuses a file is a tool somebody thinks
-        // is broken.
-        <main class="shell">
-          <p class="muted">請安裝新版之後再繼續上傳。</p>
-        </main>
       ) : (
         <PairingScreen status={status} onPaired={setStatus} />
       )}
@@ -127,28 +139,25 @@ export function App() {
  */
 function UpdateProgress({ update }: { update: UpdateState | null }) {
   if (update?.downloaded) {
+    // The button says what happens; a sentence in front of it saying the same
+    // thing in longer words is one of the three this screen used to carry.
     return (
-      <>
-        <p class="muted">
-          新版{update.version ? ` ${update.version}` : ''}已經下載好了，重新啟動就會換過去。
-        </p>
+      <div class="update-line">
         <button type="button" onClick={() => void window.desktop.installUpdate()}>
-          重新啟動並安裝
+          重新啟動並安裝{update.version ? ` ${update.version}` : ''}
         </button>
-      </>
+      </div>
     )
   }
 
   if (update?.error) {
     // The download is the tool's own doing and invisible; a failure nobody
-    // reports leaves somebody waiting for something that already gave up.
+    // reports leaves somebody waiting for something that already gave up. The
+    // way out belongs with the failure rather than on a line of its own.
     return (
-      <>
-        <p class="alert">下載新版失敗：{update.error}</p>
-        <p class="muted">可以到後台的「桌面工具」頁面直接下載安裝檔。</p>
-      </>
+      <p class="alert">下載新版失敗：{update.error}。可以到後台的「桌面工具」頁面直接下載安裝檔。</p>
     )
   }
 
-  return <p class="muted">正在下載新版，下載完成後就可以重新啟動安裝。</p>
+  return <p class="muted update-line">下載新版中…</p>
 }
