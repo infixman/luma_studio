@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { HlsVideo } from '../../shared/components/HlsVideo'
+import { AUTO_LEVEL, HlsVideo } from '../../shared/components/HlsVideo'
+import type { HlsRendition } from '../../shared/components/HlsVideo'
 import { api, apiJson, apiUrl } from '../../shared/api'
 import { renewDelay, requestSession, shouldSaveProgress, worthRetrying } from '../lib/playback'
 import type { PlaybackRefusal } from '../../shared/types'
@@ -47,8 +48,24 @@ export function LearnPage({ slug }: { slug: string }) {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<{ reason: PlaybackRefusal | 'unknown'; message: string } | null>(null)
   const [failed, setFailed] = useState(false)
+  /* The ladder the manifest turned out to have, which rung the member asked
+     for, and which one hls.js is actually serving. The last is worth keeping
+     because it is the answer to "why does this look soft" — without it,
+     「自動」 is a word that explains nothing. */
+  const [renditions, setRenditions] = useState<HlsRendition[]>([])
+  const [level, setLevel] = useState(AUTO_LEVEL)
+  const [playing, setPlaying] = useState<number | null>(null)
   const renewal = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSaved = useRef<number | null>(null)
+
+  // A different lesson is a different encode with its own ladder, and rung 2
+  // of the last one means nothing here. Starting again from automatic also
+  // stops a choice made for one video following the member through a course.
+  useEffect(() => {
+    setRenditions([])
+    setLevel(AUTO_LEVEL)
+    setPlaying(null)
+  }, [lessonId])
 
   useEffect(() => {
     document.title = '課程 | Luma Studio'
@@ -145,12 +162,48 @@ export function LearnPage({ slug }: { slug: string }) {
               {refusal && <p class="note">{refusal.message}</p>}
 
               {playbackUrl && (
-                <HlsVideo
-                  src={apiUrl(playbackUrl)}
-                  onPosition={(seconds) => record(seconds, false)}
-                  onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
-                  onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}
-                />
+                <>
+                  <HlsVideo
+                    src={apiUrl(playbackUrl)}
+                    level={level}
+                    onRenditions={setRenditions}
+                    onPlayingRendition={setPlaying}
+                    onPosition={(seconds) => record(seconds, false)}
+                    onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
+                    onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}
+                  />
+
+                  {/* Laid out flat under the player rather than hidden behind a
+                      gear over it: there are four of them at most, a row costs
+                      less than a popup, and nothing has to fight the video for
+                      stacking order. Only when there is a choice to make — one
+                      rung is not a ladder. */}
+                  {renditions.length > 1 && (
+                    <div class="quality" role="group" aria-label="畫質">
+                      <button
+                        type="button"
+                        aria-pressed={level === AUTO_LEVEL}
+                        onClick={() => setLevel(AUTO_LEVEL)}
+                      >
+                        {playing === null ? '自動' : `自動 · ${playing}p`}
+                      </button>
+                      {/* Highest first: somebody who opens this wants the good
+                          one and should not read to the end of the row. */}
+                      {[...renditions]
+                        .sort((a, b) => b.height - a.height)
+                        .map((rendition) => (
+                          <button
+                            key={rendition.index}
+                            type="button"
+                            aria-pressed={level === rendition.index}
+                            onClick={() => setLevel(rendition.index)}
+                          >
+                            {rendition.height}p
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </>
               )}
 
               {!current.hasVideo && <p class="note">這是文字單元。</p>}

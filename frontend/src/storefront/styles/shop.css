@@ -1364,6 +1364,53 @@ main.order .totals {
   border-radius: 0.5rem;
 }
 
+/* The rendition picker: a segmented row on a sunken track, the same shape the
+   rest of the site uses to say "one of these". Directly under the player and
+   right-aligned to it, because it is about the picture above it and not about
+   the page. */
+.quality {
+  /* Block-level with a fitted width, not inline-flex: an auto margin only
+     pushes a block aside, and the parent here is ordinary flow. */
+  display: flex;
+  width: fit-content;
+  gap: 2px;
+  margin: 0.6rem 0 0 auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgb(43 38 34 / 0.07);
+}
+
+.quality button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.quality button:hover {
+  color: #2b2622;
+}
+
+/* The chosen one is raised out of the track rather than coloured in — the
+   accent belongs to money and the primary action, and a rendition is neither. */
+.quality button[aria-pressed='true'] {
+  background: var(--card);
+  color: #2b2622;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(43 38 34 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quality button { transition: none; }
+}
+
 .learn-actions {
   display: flex;
   gap: 0.5rem;
