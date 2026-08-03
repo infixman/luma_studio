@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { HlsVideo } from '../../shared/components/HlsVideo'
+import { AUTO_LEVEL, HlsVideo } from '../../shared/components/HlsVideo'
 import type { HlsRendition } from '../../shared/components/HlsVideo'
 import { clock } from '../lib/clock'
 import '../styles/lesson-player.css'
+
+/** Playback speeds on offer, half to double with normal in the middle —
+ *  the range every player converges on because it is the one that stays
+ *  intelligible at both ends. */
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+function speedLabel(speed: number): string {
+  return speed === 1 ? '正常' : `${speed}x`
+}
+
+type MenuPane = 'closed' | 'root' | 'speed' | 'quality'
 
 /**
  * The lesson player, with a control bar of the storefront's own.
@@ -25,28 +36,33 @@ import '../styles/lesson-player.css'
  */
 export function LessonPlayer({
   src,
-  level,
-  onRenditions,
-  onPlayingRendition,
   onPosition,
   onEnded,
   onError,
 }: {
   src: string
-  level?: number
-  onRenditions?: (renditions: HlsRendition[]) => void
-  onPlayingRendition?: (height: number | null) => void
   onPosition?: (seconds: number) => void
   onEnded?: () => void
   onError?: () => void
 }) {
   const media = useRef<HTMLVideoElement | null>(null)
   const shell = useRef<HTMLDivElement>(null)
+  const settings = useRef<HTMLDivElement>(null)
 
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [duration, setDuration] = useState(Number.NaN)
   const [fullscreen, setFullscreen] = useState(false)
+
+  // The ladder the manifest turned out to have, which rung the member asked
+  // for, and which one hls.js is actually serving — the last is worth keeping
+  // because it is the answer to "why does this look soft"; without it
+  // 「自動」 is a word that explains nothing.
+  const [renditions, setRenditions] = useState<HlsRendition[]>([])
+  const [level, setLevel] = useState(AUTO_LEVEL)
+  const [playingHeight, setPlayingHeight] = useState<number | null>(null)
+  const [rate, setRate] = useState(1)
+  const [menu, setMenu] = useState<MenuPane>('closed')
 
   // Bound to the element, because the element is where the truth is.
   //
@@ -97,6 +113,25 @@ export function LessonPlayer({
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
 
+  // Pushed onto the element whenever it changes, not just at the point it is
+  // chosen — the element is what actually plays at a rate, this is only where
+  // the number is remembered.
+  useEffect(() => {
+    const element = media.current
+    if (element) element.playbackRate = rate
+  }, [rate])
+
+  // A menu open over a video is a menu somebody expects to dismiss without
+  // hunting for the one control that opened it.
+  useEffect(() => {
+    if (menu === 'closed') return
+    const outside = (event: PointerEvent) => {
+      if (!settings.current?.contains(event.target as Node)) setMenu('closed')
+    }
+    document.addEventListener('pointerdown', outside)
+    return () => document.removeEventListener('pointerdown', outside)
+  }, [menu])
+
   // From the same state that draws the label, not from `paused`. The button
   // has to do what it says, and a label read from one source with an action
   // read from another is two answers to one question.
@@ -130,8 +165,8 @@ export function LessonPlayer({
         controls={false}
         mediaRef={media}
         level={level}
-        onRenditions={onRenditions}
-        onPlayingRendition={onPlayingRendition}
+        onRenditions={setRenditions}
+        onPlayingRendition={setPlayingHeight}
         onPosition={onPosition}
         onEnded={onEnded}
         onError={onError}
@@ -159,6 +194,111 @@ export function LessonPlayer({
         <span class="player-time">
           {clock(position)} / {clock(duration)}
         </span>
+
+        <div class="player-settings" ref={settings}>
+          <button
+            type="button"
+            aria-label="設定"
+            aria-haspopup="menu"
+            aria-expanded={menu !== 'closed'}
+            onClick={() => setMenu(menu === 'closed' ? 'root' : 'closed')}
+          >
+            <GearGlyph />
+          </button>
+
+          {menu !== 'closed' && (
+            <div
+              class="player-menu"
+              role="menu"
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return
+                event.preventDefault()
+                event.stopPropagation()
+                setMenu('closed')
+              }}
+            >
+              {menu === 'root' && (
+                <>
+                  <button type="button" class="player-menu-row" onClick={() => setMenu('speed')}>
+                    <span>播放速度</span>
+                    <span class="player-menu-value">{speedLabel(rate)}</span>
+                  </button>
+                  {renditions.length > 1 && (
+                    <button type="button" class="player-menu-row" onClick={() => setMenu('quality')}>
+                      <span>畫質</span>
+                      <span class="player-menu-value">
+                        {level === AUTO_LEVEL
+                          ? playingHeight === null
+                            ? '自動'
+                            : `自動 · ${playingHeight}p`
+                          : `${renditions.find((rendition) => rendition.index === level)?.height ?? ''}p`}
+                      </span>
+                    </button>
+                  )}
+                </>
+              )}
+
+              {menu === 'speed' && (
+                <>
+                  <button type="button" class="player-menu-back" onClick={() => setMenu('root')}>
+                    ‹ 播放速度
+                  </button>
+                  {SPEEDS.map((speed) => (
+                    <button
+                      key={speed}
+                      type="button"
+                      class="player-menu-option"
+                      aria-pressed={rate === speed}
+                      onClick={() => {
+                        setRate(speed)
+                        setMenu('closed')
+                      }}
+                    >
+                      {speedLabel(speed)}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {menu === 'quality' && (
+                <>
+                  <button type="button" class="player-menu-back" onClick={() => setMenu('root')}>
+                    ‹ 畫質
+                  </button>
+                  <button
+                    type="button"
+                    class="player-menu-option"
+                    aria-pressed={level === AUTO_LEVEL}
+                    onClick={() => {
+                      setLevel(AUTO_LEVEL)
+                      setMenu('closed')
+                    }}
+                  >
+                    {playingHeight === null ? '自動' : `自動 · ${playingHeight}p`}
+                  </button>
+                  {/* Highest first: somebody who opens this wants the good one
+                      and should not read to the end of the list. */}
+                  {[...renditions]
+                    .sort((a, b) => b.height - a.height)
+                    .map((rendition) => (
+                      <button
+                        key={rendition.index}
+                        type="button"
+                        class="player-menu-option"
+                        aria-pressed={level === rendition.index}
+                        onClick={() => {
+                          setLevel(rendition.index)
+                          setMenu('closed')
+                        }}
+                      >
+                        {rendition.height}p
+                      </button>
+                    ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
@@ -197,6 +337,15 @@ function ExpandGlyph() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+    </svg>
+  )
+}
+
+function GearGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   )
 }

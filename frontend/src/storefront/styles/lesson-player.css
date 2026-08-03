@@ -137,3 +137,77 @@
 @media (prefers-reduced-motion: reduce) {
   .player-bar button { transition: none; }
 }
+
+/* --- the gear ---
+
+   One button standing in for two settings that would otherwise be a row of
+   pills competing with the video for space. The popup opens upward: it sits
+   over the bar that opened it, not over the page below the player. */
+
+.player-settings {
+  position: relative;
+  flex: none;
+}
+
+.player-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  min-width: 11rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: #201c19;
+  color: #f2ece4;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+}
+
+.player-menu-row,
+.player-menu-back,
+.player-menu-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0.75rem;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.player-menu-row {
+  justify-content: space-between;
+}
+
+.player-menu-value {
+  color: rgb(242 236 228 / 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-menu-back {
+  font-weight: 600;
+}
+
+/* The chosen option is raised out of the list rather than coloured in, the
+   same shape used everywhere else on the site for "one of these". */
+.player-menu-option[aria-pressed='true'] {
+  background: rgb(242 236 228 / 0.14);
+  font-weight: 600;
+}
+
+.player-menu-row:hover,
+.player-menu-back:hover,
+.player-menu-option:hover {
+  background: rgb(242 236 228 / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-menu-row,
+  .player-menu-back,
+  .player-menu-option { transition: none; }
+}
