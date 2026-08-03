@@ -23,7 +23,16 @@ main.orders,
 main.order {
   max-width: 62rem;
   margin: 0 auto;
-  padding: 1.5rem 1.1rem 4rem;
+  padding: 1.5rem var(--site-gutter) 4rem;
+}
+
+/* The listing is a grid and wants the room, so it takes the site's own shell
+   — the same width and the same gutter the header and footer use, which is
+   what makes its first heading start exactly under the capsule's left edge.
+   The others stay narrow on purpose: a form and a receipt are read, not
+   scanned, and a 76rem line of text is too long to follow. */
+main.shop {
+  max-width: var(--site-shell);
 }
 
 main.cart,

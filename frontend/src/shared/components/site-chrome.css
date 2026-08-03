@@ -5,6 +5,14 @@
    arrive as class names. Nothing the owner typed reaches CSS. */
 
 :root {
+  /* One gutter for the whole site. The header, the footer and the pages
+     between them each used to decide their own width and their own padding,
+     which was invisible while the header was a band with no left edge to
+     compare anything against. The capsule has an edge, and the shop's content
+     starting 130px inside it read as a mistake — because it was one. */
+  --site-shell: 76rem;
+  --site-gutter: 1.1rem;
+
   --site-surface-cream: #faf7f2;
   --site-surface-sand: #ece2d2;
   --site-surface-clay: #c9a79a;
@@ -112,9 +120,9 @@
 .site-header.bg-image .header-inner { background: transparent; }
 
 .header-inner {
-  max-width: 76rem;
+  max-width: var(--site-shell);
   margin: 0 auto;
-  padding: 0 1.35rem;
+  padding: 0 var(--site-gutter);
   display: flex;
   align-items: center;
   gap: 1.2rem;
@@ -488,7 +496,9 @@
 
 .site-footer {
   margin-top: 4rem;
-  padding: 2.5rem 1.1rem 2rem;
+  /* The gutter belongs to .footer-inner, so the footer's text lines up with
+     the header's and the page's rather than with a different inset. */
+  padding: 2.5rem 0 2rem;
 }
 
 .site-footer.colour-cream { background: var(--surface-cream); }
@@ -505,8 +515,9 @@
    than `stretch`: a column with two links should not stretch its heading's
    spacing to match a column with eight. */
 .footer-inner {
-  max-width: 76rem;
+  max-width: var(--site-shell);
   margin: 0 auto;
+  padding: 0 var(--site-gutter);
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr);
   gap: 2.5rem 3.5rem;
