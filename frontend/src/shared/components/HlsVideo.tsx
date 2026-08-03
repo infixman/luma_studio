@@ -98,18 +98,31 @@ export function HlsVideo({
     const element = video.current
     if (!element) return
 
-    // Safari and iOS. Native playback also means one less thing between the
-    // bytes and the screen, so it is preferred where it exists.
-    if (element.canPlayType('application/vnd.apple.mpegurl')) {
-      element.src = src
-      return
-    }
-
     let cancelled = false
 
     void import('hls.js').then(({ default: Hls }) => {
       if (cancelled || !video.current) return
+
+      // hls.js wherever it can run, and the browser's own player only where it
+      // cannot.
+      //
+      // This used to prefer native playback wherever `canPlayType` said
+      // anything at all — one less thing between the bytes and the screen, and
+      // when it was written the browsers saying yes were Safari and iOS. Edge
+      // on Windows now answers `maybe` and means it. The cost is not
+      // theoretical: a browser playing HLS by itself never says which
+      // renditions exist and cannot be told to change one, so the storefront's
+      // quality control had nothing to list and drew nothing, over a video
+      // whose manifest offers three.
+      //
+      // What is left on the native path is iOS, where there is no MSE for
+      // hls.js to use. No ladder is reported there and no control is offered,
+      // which is honest — better than a menu that changes nothing.
       if (!Hls.isSupported()) {
+        if (video.current.canPlayType('application/vnd.apple.mpegurl')) {
+          video.current.src = src
+          return
+        }
         handlers.current.onError?.()
         return
       }

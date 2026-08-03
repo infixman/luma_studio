@@ -67,13 +67,18 @@ import { HlsVideo, type HlsRendition } from './HlsVideo'
 
 let container: HTMLDivElement
 
-beforeEach(() => {
+beforeEach(async () => {
   built.length = 0
   container = document.createElement('div')
   document.body.append(container)
-  // happy-dom's video element answers this for everything, which would take
-  // the native path and never reach hls.js.
+  // happy-dom's video element answers this for everything. It no longer
+  // decides which path is taken, but leaving it honest keeps the tests about
+  // one thing at a time.
   HTMLMediaElement.prototype.canPlayType = () => ''
+  // The fake is a module singleton, so a test that turns MSE off has to hand
+  // it back — otherwise every test after it silently runs on the iOS path.
+  const hls = (await import('hls.js')).default as unknown as { isSupported: () => boolean }
+  hls.isSupported = () => true
 })
 
 afterEach(() => {
@@ -120,6 +125,39 @@ test('the element is handed to a caller that asks for it', async () => {
   await settle()
 
   expect(media.current).toBe(container.querySelector('video'))
+})
+
+/**
+ * Who plays it, when both could.
+ *
+ * This used to hand the URL straight to the element whenever
+ * `canPlayType('application/vnd.apple.mpegurl')` said anything at all. The
+ * comment said Safari and iOS, and when it was written that was who answered.
+ * Edge on Windows now answers `maybe` — it really can play HLS — so the
+ * storefront took the native path, hls.js was never loaded, and the ladder was
+ * never reported. The quality control had nothing to list and drew nothing,
+ * on a video with three renditions in its manifest.
+ *
+ * A browser playing HLS by itself does not say what rungs exist and cannot be
+ * asked to change rung. So MSE wins wherever it exists, and native is the
+ * fallback rather than the preference — iOS, where `isSupported` is false
+ * because there is no MSE at all.
+ */
+test('a browser that could play it natively still gets hls.js', async () => {
+  HTMLMediaElement.prototype.canPlayType = () => 'maybe'
+  const renditions: HlsRendition[][] = []
+
+  render(<HlsVideo src="/media/master.m3u8" onRenditions={(list) => renditions.push(list)} />, container)
+  await settle()
+  built[0]!.fire('hlsManifestParsed')
+
+  expect(built).toHaveLength(1)
+  expect(container.querySelector('video')?.getAttribute('src')).toBeNull()
+  expect(renditions[0]).toEqual([
+    { index: 0, height: 480 },
+    { index: 1, height: 720 },
+    { index: 2, height: 1080 },
+  ])
 })
 
 test('a re-render with new callbacks does not rebuild the player', async () => {
@@ -204,9 +242,17 @@ test('choosing a rendition switches the running player rather than rebuilding it
 })
 
 test('native playback names no renditions, because nothing there can switch them', async () => {
-  /** Safari plays the manifest itself and hls.js is never loaded, so there is no
-   *  level to set. A caller that shows its control only once renditions arrive
-   *  therefore shows none there, rather than one that does nothing. */
+  /** iOS. The element plays the manifest itself, hls.js is never loaded, and
+   *  there is no level to set — so no ladder is reported, and a caller that
+   *  shows its control only once renditions arrive shows none rather than one
+   *  that does nothing.
+   *
+   *  This used to be triggered by `canPlayType` alone, which is what put the
+   *  storefront on this path in Edge and cost it the quality control
+   *  altogether. The trigger is the absence of MSE now, which is the thing
+   *  that actually decides whether hls.js can run. */
+  const hls = (await import('hls.js')).default as unknown as { isSupported: () => boolean }
+  hls.isSupported = () => false
   HTMLMediaElement.prototype.canPlayType = () => 'maybe'
   const reported: HlsRendition[][] = []
 
@@ -215,4 +261,5 @@ test('native playback names no renditions, because nothing there can switch them
 
   expect(built).toHaveLength(0)
   expect(reported).toEqual([])
+  expect(container.querySelector('video')?.getAttribute('src')).toBe('/media/master.m3u8')
 })
