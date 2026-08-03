@@ -23,7 +23,7 @@ const openIcon = (
   </svg>
 )
 
-async function writeToClipboard(value: string): Promise<void> {
+export async function writeToClipboard(value: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value)
     return

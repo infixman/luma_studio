@@ -653,6 +653,237 @@ body.admin .folder-actions {
   }
 }
 
+/* --- the ibon print tool, rebuilt on the shared ui/* components ---
+
+   Everything above from `.grid` down to `.folder-actions` was this page's
+   own — a create-folder input sitting permanently over the list, three
+   visible buttons per row where the rest of the admin folds them into one
+   menu. Nothing here reaches for those rules any more; they stay only
+   because MediaPage and the not-yet-converted pages still do. */
+
+body.admin .ibon-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+body.admin .ibon-folder-detail {
+  display: grid;
+  gap: var(--space-4);
+}
+
+body.admin .ibon-folders,
+body.admin .ibon-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+body.admin .ibon-folders li,
+body.admin .ibon-files li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+body.admin .ibon-folders li:last-child,
+body.admin .ibon-files li:last-child {
+  border-bottom: 0;
+}
+
+body.admin .ibon-folders li.is-selected {
+  margin: 0 calc(-1 * var(--space-2));
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  border-bottom-color: transparent;
+}
+
+body.admin .ibon-folder-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: var(--space-1);
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+body.admin .ibon-folder-name:hover:not(:disabled) {
+  color: var(--primary-text);
+}
+
+body.admin .ibon-file-thumb-btn {
+  all: unset;
+  cursor: zoom-in;
+  flex: none;
+  line-height: 0;
+}
+
+body.admin .ibon-file-thumb {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  object-fit: cover;
+}
+
+body.admin .ibon-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+body.admin .ibon-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+body.admin .ibon-setting-grid fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.admin .ibon-setting-grid legend {
+  padding: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+
+body.admin .ibon-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+body.admin button.ibon-choice {
+  min-height: 38px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+body.admin button.ibon-choice:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+body.admin button.ibon-choice.is-selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+body.admin button.ibon-choice:disabled {
+  border-color: var(--border);
+  background: var(--sunken);
+  color: var(--muted);
+  opacity: 1;
+}
+
+body.admin button.ibon-dropzone {
+  display: grid;
+  width: 100%;
+  min-height: 110px;
+  place-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  color: var(--text-soft);
+  text-align: center;
+  cursor: pointer;
+}
+
+body.admin button.ibon-dropzone:hover:not(:disabled),
+body.admin button.ibon-dropzone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+body.admin button.ibon-dropzone:disabled {
+  cursor: not-allowed;
+  border-color: var(--border);
+  background: var(--sunken);
+  color: var(--muted);
+}
+
+body.admin .ibon-dropzone-title {
+  font-weight: 700;
+}
+
+body.admin .ibon-dropzone-hint {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 400;
+}
+
+body.admin .ibon-upload-progress {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+body.admin .ibon-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+}
+
+body.admin .ibon-progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.2s ease-out;
+}
+
+@media (max-width: 720px) {
+  body.admin .ibon-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  body.admin .ibon-setting-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  body.admin button.ibon-choice {
+    min-height: 44px;
+  }
+
+  body.admin button.ibon-dropzone {
+    min-height: 128px;
+  }
+
+  body.admin .ibon-file-thumb {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body.admin #status.error {
     animation: none;

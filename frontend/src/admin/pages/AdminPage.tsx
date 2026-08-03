@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 
-import { CopyButton, OpenButton } from '../components/IconButtons'
+import { writeToClipboard } from '../components/IconButtons'
 import { Lightbox } from '../components/Lightbox'
 import { AdminShell } from '../components/AdminShell'
 import { useStatus } from '../components/StatusBar'
-import { EmptyState, Spinner, useConfirm } from '../components/ui'
+import { Button, EmptyState, Menu, MenuItem, Modal, Panel, Spinner, TextField, useConfirm } from '../components/ui'
 import { fileSize } from '../lib/mediaFacts'
 import { api, apiJson, printPageUrl, publicImageUrl, thumbnailUrl, uploadImage } from '../../shared/api'
 import {
@@ -22,6 +22,9 @@ const MAX_FILE_COUNT = 8
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024
 const IMAGE_PATTERN = /\.(jpg|jpeg|png|bmp|gif)$/i
 
+/** Named because the submit button sits in the dialog's own footer and points at it. */
+const CREATE_FORM = 'new-folder'
+
 interface UploadProgress {
   label: string
   ratio: number
@@ -37,6 +40,7 @@ export function AdminPage() {
   const [choice, setChoice] = useState<PrintChoice>({ ...defaultPrintChoice })
   const [summary, setSummary] = useState('')
   const [newFolder, setNewFolder] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<UploadProgress | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -103,27 +107,34 @@ export function AdminPage() {
     }
   }, [loadFolders, showError])
 
-  const createFolder = async () => {
+  /** Returns whether it actually happened, so the dialog knows whether to close. */
+  const createFolder = async (): Promise<boolean> => {
     const name = newFolder.trim()
-    if (!name) return
+    if (!name) return false
     try {
       await apiJson('/api/folders', 'POST', { folder: name })
       setNewFolder('')
       show('資料夾已建立。', 'ok')
       await loadFolders()
       await selectFolder(name)
+      return true
     } catch (error) {
       showError(error)
+      return false
     }
   }
 
-  const deleteFolder = async () => {
-    if (folder === null) return
+  const submitCreateFolder = async (event: Event) => {
+    event.preventDefault()
+    if (await createFolder()) setCreatingFolder(false)
+  }
+
+  const deleteFolder = async (target: string) => {
     const ok = await ask({
       title: '刪除資料夾',
       body: (
         <>
-          <p>確定要刪除「{folder}」嗎？</p>
+          <p>確定要刪除「{target}」嗎？</p>
           <p>只有沒有圖檔的資料夾刪得掉；裡面還有東西的話伺服器會拒絕。</p>
         </>
       ),
@@ -131,12 +142,14 @@ export function AdminPage() {
     })
     if (!ok) return
     try {
-      await api(`/api/folders/${encodeURIComponent(folder)}`, { method: 'DELETE' })
+      await api(`/api/folders/${encodeURIComponent(target)}`, { method: 'DELETE' })
       show('資料夾已刪除。', 'ok')
-      setFolder(null)
-      setFiles([])
-      setChoice({ ...defaultPrintChoice })
-      setSummary('')
+      if (folder === target) {
+        setFolder(null)
+        setFiles([])
+        setChoice({ ...defaultPrintChoice })
+        setSummary('')
+      }
       await loadFolders()
     } catch (error) {
       showError(error)
@@ -160,6 +173,15 @@ export function AdminPage() {
       await api(`/api/objects?key=${encodeURIComponent(item.key)}`, { method: 'DELETE' })
       show('已刪除圖片，pincode 快取已清除；下次公開列印會建立新的取件編號。', 'ok')
       await loadFiles(folder)
+    } catch (error) {
+      showError(error)
+    }
+  }
+
+  const copyUrl = async (label: string, url: string) => {
+    try {
+      await writeToClipboard(url)
+      show(`已複製「${label}」的網址。`, 'ok')
     } catch (error) {
       showError(error)
     }
@@ -233,62 +255,60 @@ export function AdminPage() {
     <AdminShell current="/ibon" message={message} onError={showError}>
       {dialog}
 
-      <section class="grid">
-        <div class="card">
-          <h2>資料夾</h2>
-          <p class="muted">資料夾名稱就是列印 API 的 id。</p>
-          <div class="row">
-            <input
-              maxLength={128}
-              placeholder="例如 20260721_soda"
-              value={newFolder}
-              onInput={(event) => setNewFolder(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void createFolder()
-              }}
-            />
-            <button onClick={createFolder}>新增</button>
-          </div>
-          <ul class="folders">
-            {!ready || folders.length === 0 ? (
-              <li>{ready ? <EmptyState title="沒有資料夾" compact /> : <Spinner />}</li>
-            ) : (
-              folders.map((name) => (
-                <li key={name} class={name === folder ? 'folder-row selected' : 'folder-row'}>
-                  <button class="folder" onClick={() => selectFolder(name)}>
-                    📁 {name}
+      <div class="ibon-layout">
+        <Panel
+          title="資料夾"
+          actions={
+            <Button tone="primary" size="sm" onClick={() => setCreatingFolder(true)}>
+              新增資料夾
+            </Button>
+          }
+        >
+          {!ready ? (
+            <Spinner />
+          ) : folders.length === 0 ? (
+            <EmptyState title="沒有資料夾" compact />
+          ) : (
+            <ul class="ibon-folders">
+              {folders.map((name) => (
+                <li key={name} class={name === folder ? 'is-selected' : ''}>
+                  <button type="button" class="ibon-folder-name" onClick={() => selectFolder(name)}>
+                    {name}
                   </button>
-                  <OpenButton url={printPageUrl(name)} label={`${name} 的列印頁`} />
-                  <CopyButton url={printPageUrl(name)} label={`${name} 的列印頁`} onCopied={(label) => show(`已複製「${label}」的網址。`, 'ok')} onFailed={showError} />
+                  <Menu label={`${name} 的操作`}>
+                    <MenuItem onClick={() => window.open(printPageUrl(name), '_blank', 'noopener,noreferrer')}>
+                      開啟列印頁
+                    </MenuItem>
+                    <MenuItem onClick={() => void copyUrl(`${name} 的列印頁`, printPageUrl(name))}>
+                      複製網址
+                    </MenuItem>
+                    <MenuItem tone="danger" onClick={() => void deleteFolder(name)}>
+                      刪除資料夾
+                    </MenuItem>
+                  </Menu>
                 </li>
-              ))
-            )}
-          </ul>
-        </div>
+              ))}
+            </ul>
+          )}
+        </Panel>
 
-        <div class="card">
-          <h2>{folder === null ? '請選擇資料夾' : `資料夾：${folder}`}</h2>
-          <p class="muted">可上傳 jpg、jpeg、png、bmp、gif；每個列印資料夾最多 8 張、總計 15 MB。</p>
-          <p class="cache-notice">圖片上傳、刪除或列印規格異動時，會清除這個資料夾的 pincode 快取；下次公開列印將重新建立取件編號。</p>
-
-          {folder !== null && (
-            <section class="print-settings" aria-labelledby="print-settings-title">
-              <div class="print-settings-header">
-                <div>
-                  <h2 id="print-settings-title">列印規格</h2>
-                  <p class="muted">規格異動會清除目前資料夾的 ibon 快取。</p>
-                </div>
-              </div>
-              <div class="setting-grid">
+        {folder === null ? (
+          <Panel>
+            <EmptyState title="尚未選擇資料夾" body="從左邊選一個資料夾，開始設定列印規格或上傳圖片。" />
+          </Panel>
+        ) : (
+          <div class="ibon-folder-detail">
+            <Panel title={`列印規格：${folder}`}>
+              <div class="ibon-setting-grid">
                 {settingGroups.map((group) => (
                   <fieldset key={group.key}>
                     <legend>{group.legend}</legend>
-                    <div class="choices">
+                    <div class="ibon-choices">
                       {group.options.map((option) => (
                         <button
                           key={option.value}
                           type="button"
-                          class={choice[group.key] === option.value ? 'choice selected' : 'choice'}
+                          class={choice[group.key] === option.value ? 'ibon-choice is-selected' : 'ibon-choice'}
                           disabled={isOptionDisabled(choice, group.key, option.value)}
                           onClick={() => changeSetting(group.key, option.value)}
                         >
@@ -299,12 +319,10 @@ export function AdminPage() {
                   </fieldset>
                 ))}
               </div>
-              <p class="print-summary">{summary}</p>
-            </section>
-          )}
+              <p class="ui-note">{summary}</p>
+            </Panel>
 
-          {folder !== null && !full && (
-            <section class="upload-area" aria-label="圖片上傳">
+            <Panel title="圖片">
               <input
                 ref={fileInput}
                 type="file"
@@ -315,7 +333,7 @@ export function AdminPage() {
               />
               <button
                 type="button"
-                class={dragging ? 'drop-zone drag-over' : 'drop-zone'}
+                class={dragging ? 'ibon-dropzone drag-over' : 'ibon-dropzone'}
                 disabled={uploadDisabled}
                 onClick={() => fileInput.current?.click()}
                 onDragEnter={(event) => {
@@ -336,70 +354,88 @@ export function AdminPage() {
                   if (!uploadDisabled) void acceptFiles(event.dataTransfer?.files ?? null)
                 }}
               >
-                <span class="drop-zone-icon" aria-hidden="true">
-                  ⇧
+                <span class="ibon-dropzone-title">拖曳檔案至此，或點擊選擇檔案</span>
+                <span class="ibon-dropzone-hint">
+                  {full
+                    ? '已達上傳上限，請先刪除圖檔再上傳'
+                    : `可上傳 jpg／jpeg／png／bmp／gif，目前 ${files.length} / ${MAX_FILE_COUNT} 張，還可上傳 ${remaining} 張（總計 15 MB 內）`}
                 </span>
-                <span class="drop-zone-title">
-                  拖曳檔案至此
-                  <br />／點擊這裡選擇檔案即可上傳
-                </span>
-                <span class="drop-zone-hint">{`目前 ${files.length} / ${MAX_FILE_COUNT} 張，還可上傳 ${remaining} 張。`}</span>
               </button>
               {progress && (
-                <div class="upload-progress" aria-live="polite">
-                  <span class="upload-progress-label">{progress.label}</span>
-                  <div class="progress-track">
-                    <div class="progress-bar" style={{ width: `${Math.round(progress.ratio * 100)}%` }} />
+                <div class="ibon-upload-progress" aria-live="polite">
+                  <span>{progress.label}</span>
+                  <div class="ibon-progress-track">
+                    <div class="ibon-progress-bar" style={{ width: `${Math.round(progress.ratio * 100)}%` }} />
                   </div>
                 </div>
               )}
-            </section>
-          )}
 
-          {full && <p class="upload-limit">已達上傳上限（8 / 8 張）。請先刪除圖檔後再上傳。</p>}
-
-          <div class="folder-actions">
-            <button class="danger" disabled={folder === null} onClick={deleteFolder}>
-              刪除空資料夾
-            </button>
+              {files.length === 0 ? (
+                <EmptyState title="沒有圖檔" compact />
+              ) : (
+                <ul class="ibon-files">
+                  {files.map((item) => (
+                    <li key={item.key}>
+                      <button
+                        type="button"
+                        class="ibon-file-thumb-btn"
+                        onClick={() => setLightbox({ src: publicImageUrl(item.key), alt: item.name })}
+                      >
+                        <img
+                          class="ibon-file-thumb"
+                          src={thumbnailUrl(item.key, item.size)}
+                          alt={`${item.name} 縮圖`}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </button>
+                      <span class="ibon-file-name">{`${item.name}（${fileSize(item.size)}）`}</span>
+                      <Menu label={`${item.name} 的操作`}>
+                        <MenuItem onClick={() => window.open(publicImageUrl(item.key), '_blank', 'noopener,noreferrer')}>
+                          開啟原始圖檔
+                        </MenuItem>
+                        <MenuItem onClick={() => void copyUrl(`${item.name} 的公開圖檔`, publicImageUrl(item.key))}>
+                          複製圖檔網址
+                        </MenuItem>
+                        <MenuItem tone="danger" onClick={() => void deleteFile(item)}>
+                          刪除圖片
+                        </MenuItem>
+                      </Menu>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
+        )}
+      </div>
 
-          <ul class="files">
-            {folder === null ? (
-              <li class="empty">尚未選擇資料夾</li>
-            ) : files.length === 0 ? (
-              <li class="empty">沒有圖檔</li>
-            ) : (
-              files.map((item) => (
-                <li key={item.key}>
-                  <div class="file-main">
-                    <button
-                      type="button"
-                      class="file-thumb-btn"
-                      onClick={() => setLightbox({ src: publicImageUrl(item.key), alt: item.name })}
-                    >
-                      <img class="file-thumb" src={thumbnailUrl(item.key, item.size)} alt={`${item.name} 縮圖`} loading="lazy" decoding="async" />
-                    </button>
-                    <span class="file-name">{`${item.name} (${fileSize(item.size)})`}</span>
-                  </div>
-                  <div class="file-actions">
-                    <OpenButton url={publicImageUrl(item.key)} label={item.name} />
-                    <CopyButton
-                      url={publicImageUrl(item.key)}
-                      label={`${item.name} 的公開圖檔`}
-                      onCopied={(label) => show(`已複製「${label}」的網址。`, 'ok')}
-                      onFailed={showError}
-                    />
-                    <button class="danger" onClick={() => deleteFile(item)}>
-                      刪除
-                    </button>
-                  </div>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      </section>
+      <Modal
+        title="新增資料夾"
+        open={creatingFolder}
+        onClose={() => setCreatingFolder(false)}
+        footer={
+          <>
+            <Button tone="ghost" onClick={() => setCreatingFolder(false)}>
+              取消
+            </Button>
+            <Button type="submit" form={CREATE_FORM} tone="primary" disabled={newFolder.trim() === ''}>
+              新增
+            </Button>
+          </>
+        }
+      >
+        <form id={CREATE_FORM} onSubmit={submitCreateFolder}>
+          <TextField
+            label="資料夾名稱"
+            hint="這個名稱就是列印 API 的 id，例如 20260721_soda"
+            maxLength={128}
+            value={newFolder}
+            onInput={(event) => setNewFolder((event.currentTarget as HTMLInputElement).value)}
+          />
+        </form>
+      </Modal>
+
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </AdminShell>
   )
