@@ -472,3 +472,56 @@ test('the label follows the element, not the last button pressed', async () => {
   expect(button('取消靜音')).not.toBeNull()
   expect(button('靜音')).toBeNull()
 })
+
+/**
+ * Theatre mode.
+ *
+ * Not remembered — every mount starts out of it, same as playback speed —
+ * because a mount is a fresh lesson and a member should not have to fight
+ * their way back out of a layout they never chose for this one.
+ *
+ * The player only owns the flag and says so; widening itself and collapsing
+ * whatever sits beside it is the page's layout, not the player's video.
+ */
+
+test('theatre mode starts off', async () => {
+  await mount()
+
+  expect(button('劇院模式')).not.toBeNull()
+  expect(container.querySelector('.lesson-player')?.classList.contains('is-theater')).toBe(false)
+})
+
+test('the theatre button turns it on, and back off', async () => {
+  await mount()
+
+  button('劇院模式')!.click()
+  await settle()
+
+  expect(container.querySelector('.lesson-player')?.classList.contains('is-theater')).toBe(true)
+  expect(button('結束劇院模式')).not.toBeNull()
+
+  button('結束劇院模式')!.click()
+  await settle()
+
+  expect(container.querySelector('.lesson-player')?.classList.contains('is-theater')).toBe(false)
+  expect(button('劇院模式')).not.toBeNull()
+})
+
+test('the page is told when theatre mode changes, not just the player', async () => {
+  const onTheaterChange = vi.fn()
+  render(
+    <LessonPlayer src="https://api.example.test/course-media/a/1/master.m3u8" onTheaterChange={onTheaterChange} />,
+    container,
+  )
+  await settle()
+
+  button('劇院模式')!.click()
+  await settle()
+
+  expect(onTheaterChange).toHaveBeenCalledWith(true)
+
+  button('結束劇院模式')!.click()
+  await settle()
+
+  expect(onTheaterChange).toHaveBeenCalledWith(false)
+})

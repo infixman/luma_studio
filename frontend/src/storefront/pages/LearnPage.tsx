@@ -47,6 +47,7 @@ export function LearnPage({ slug }: { slug: string }) {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<{ reason: PlaybackRefusal | 'unknown'; message: string } | null>(null)
   const [failed, setFailed] = useState(false)
+  const [theater, setTheater] = useState(false)
   const renewal = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSaved = useRef<number | null>(null)
 
@@ -134,7 +135,7 @@ export function LearnPage({ slug }: { slug: string }) {
     <main class="shop learn">
       <h1>{course.title}</h1>
 
-      <div class="learn-layout">
+      <div class={`learn-layout${theater ? ' is-theater' : ''}`}>
         <section class="learn-stage">
           {current === null ? (
             <p class="note">這門課程還沒有單元。</p>
@@ -150,6 +151,7 @@ export function LearnPage({ slug }: { slug: string }) {
                   onPosition={(seconds) => record(seconds, false)}
                   onEnded={() => record(Math.max(1, lastSaved.current ?? 1), true)}
                   onError={() => setRefusal({ reason: 'unknown', message: '影片載入失敗，請重新整理再試。' })}
+                  onTheaterChange={setTheater}
                 />
               )}
 

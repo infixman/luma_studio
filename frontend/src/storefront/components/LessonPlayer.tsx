@@ -39,11 +39,15 @@ export function LessonPlayer({
   onPosition,
   onEnded,
   onError,
+  onTheaterChange,
 }: {
   src: string
   onPosition?: (seconds: number) => void
   onEnded?: () => void
   onError?: () => void
+  /** Widening the player and collapsing whatever sits beside it is the
+   *  page's layout, not the video's — this only says the flag changed. */
+  onTheaterChange?: (active: boolean) => void
 }) {
   const media = useRef<HTMLVideoElement | null>(null)
   const shell = useRef<HTMLDivElement>(null)
@@ -55,6 +59,7 @@ export function LessonPlayer({
   const [fullscreen, setFullscreen] = useState(false)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
+  const [theater, setTheater] = useState(false)
 
   // The ladder the manifest turned out to have, which rung the member asked
   // for, and which one hls.js is actually serving — the last is worth keeping
@@ -178,10 +183,18 @@ export function LessonPlayer({
     else void shell.current?.requestFullscreen()
   }, [])
 
+  const toggleTheater = useCallback(() => {
+    setTheater((active) => {
+      const next = !active
+      onTheaterChange?.(next)
+      return next
+    })
+  }, [onTheaterChange])
+
   const known = Number.isFinite(duration)
 
   return (
-    <div class="lesson-player" ref={shell}>
+    <div class={`lesson-player${theater ? ' is-theater' : ''}`} ref={shell}>
       <HlsVideo
         src={src}
         controls={false}
@@ -341,6 +354,15 @@ export function LessonPlayer({
 
         <button
           type="button"
+          aria-label={theater ? '結束劇院模式' : '劇院模式'}
+          aria-pressed={theater}
+          onClick={toggleTheater}
+        >
+          <TheaterGlyph />
+        </button>
+
+        <button
+          type="button"
           aria-label={fullscreen ? '離開全螢幕' : '全螢幕'}
           onClick={toggleFullscreen}
         >
@@ -398,6 +420,15 @@ function MutedGlyph() {
         stroke-width="1.8"
         stroke-linecap="round"
       />
+    </svg>
+  )
+}
+
+function TheaterGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="6" width="18" height="12" rx="1.5" />
+      <path d="M7 9v6M17 9v6" />
     </svg>
   )
 }

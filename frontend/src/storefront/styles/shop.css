@@ -1403,6 +1403,18 @@ main.order .totals {
   }
 }
 
+/* Theatre mode folds the outline away rather than shrinking it: a course
+   directory at half width reads as broken, not as compact. */
+.learn-layout.is-theater .learn-outline {
+  display: none;
+}
+
+@media (min-width: 60rem) {
+  .learn-layout.is-theater {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Visible to a screen reader, not on screen. Completion is a tick plus this,
    because a tick alone is a shape and two greens are the same green to a good
    number of people. */

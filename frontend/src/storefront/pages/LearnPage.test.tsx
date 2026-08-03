@@ -17,11 +17,20 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const API_ORIGIN = 'https://api.example.test'
 
-let session: { ok: true; playbackUrl: string; expiresAt: number } | { ok: false; reason: string; message: string } = {
-  ok: true,
-  playbackUrl: '/course-media/asset-1/1/master.m3u8',
-  expiresAt: 1_700_000_900,
+// An hour out from whenever the test actually runs, not a fixed epoch: a
+// timestamp already in the past makes renewDelay return zero, and the
+// session then renews itself on a real-timer loop for the rest of the test,
+// tearing LessonPlayer down and rebuilding it between every settle().
+function freshSession(): { ok: true; playbackUrl: string; expiresAt: number } {
+  return {
+    ok: true,
+    playbackUrl: '/course-media/asset-1/1/master.m3u8',
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  }
 }
+
+let session: { ok: true; playbackUrl: string; expiresAt: number } | { ok: false; reason: string; message: string } =
+  freshSession()
 
 vi.mock('../../shared/api', () => ({
   api: vi.fn(async () => ({
@@ -63,7 +72,7 @@ import { LearnPage } from './LearnPage'
 let container: HTMLDivElement
 
 beforeEach(() => {
-  session = { ok: true, playbackUrl: '/course-media/asset-1/1/master.m3u8', expiresAt: 1_700_000_900 }
+  session = freshSession()
   container = document.createElement('div')
   document.body.append(container)
 })
@@ -99,3 +108,23 @@ test('a refusal is shown instead of a player', async () => {
 // Choosing a rendition and a playback speed is LessonPlayer's own job now —
 // see LessonPlayer.test.tsx — so this page only has to prove it hands the
 // player a URL and shows a refusal in its place, both above.
+
+test('theatre mode widens the stage by collapsing the outline beside it', async () => {
+  /** The player only says the flag changed; folding the outline away is the
+   *  page's layout to own, not the video's. */
+  render(<LearnPage slug="watercolour" />, container)
+  await settle()
+
+  const layout = container.querySelector('.learn-layout')
+  expect(layout?.classList.contains('is-theater')).toBe(false)
+
+  container.querySelector<HTMLButtonElement>('button[aria-label="劇院模式"]')!.click()
+  await settle()
+
+  expect(layout?.classList.contains('is-theater')).toBe(true)
+
+  container.querySelector<HTMLButtonElement>('button[aria-label="結束劇院模式"]')!.click()
+  await settle()
+
+  expect(layout?.classList.contains('is-theater')).toBe(false)
+})
