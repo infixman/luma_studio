@@ -63,7 +63,7 @@ curl -s https://api.luma-studio.tw/api/health
 
 1. GitHub repository variable `API_BASE_URL` 改為 `https://api.luma-studio.tw`。
 2. [backend/wrangler.toml](../backend/wrangler.toml) 的 `FRONTEND_ORIGIN` 改為 `https://luma-studio.tw`。
-3. [backend/src/auth.py](../backend/src/auth.py) 的 `session_cookie` 從 `SameSite=None` 改為 `SameSite=Lax`，並更新該函式的註解。
+3. [backend/src/auth_core.py](../backend/src/auth_core.py) 的 `session_cookie` 從 `SameSite=None` 改為 `SameSite=Lax`，並更新該函式的註解。
 4. 推上 main，等兩個 job 都部署完成。
 
 順序很重要：`API_BASE_URL` 要在前端重新建置之前設定好，否則前端會繼續打 workers.dev 的後端。
