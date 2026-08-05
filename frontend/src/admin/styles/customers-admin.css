@@ -108,6 +108,40 @@ body.admin .customer-access-setting p {
   font-size: var(--font-sm);
 }
 
+/* One entitlement can have several reasons behind it, and they belong in the
+   row they hold up rather than in a table of their own. */
+body.admin .entitlement-sources {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.admin .entitlement-sources li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+body.admin .entitlement-source-kind {
+  font-weight: 650;
+}
+
+/* What was decided, under what it was decided about. Quieter than the sources
+   because it is history: read when something is being argued about, skipped
+   the rest of the time. */
+body.admin .entitlement-history {
+  display: grid;
+  gap: 2px;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
 body.admin .customer-activity-target {
   justify-content: flex-start;
   min-height: 1.75rem;

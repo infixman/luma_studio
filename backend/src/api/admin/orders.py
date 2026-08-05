@@ -152,6 +152,28 @@ async def handle(ctx: Ctx):
         await orders.audit(env, order_id, _actor(ctx), "refund_recorded", detail=reason)
         return ctx.json({"revoked": revoked})
 
+    if action == "reconcile-entitlements":
+        # The repair for the one failure a customer feels immediately: they
+        # paid, and the course is not there. `/api/health/reconciliation`
+        # reports these; this is the button that fixes one.
+        #
+        # It runs the same provisioning the payment callback runs rather than
+        # granting by hand, and that is the whole point. A grant made here by
+        # hand would have no fulfilment to name it by, so a later refund would
+        # not take it back — the member would get their money returned and keep
+        # the course. Provisioning produces a `purchase` source tied to the
+        # fulfilment, which the refund path knows how to revoke.
+        order = await orders.get_order(env, order_id)
+        if order is None:
+            return ctx.error("Order not found", 404)
+        if order["paidAt"] is None or order["status"] in ("cancelled", "expired"):
+            # Money landed, and the order was not reversed. Not `status ==
+            # 'paid'`: a mixed order whose parcel went out is `shipped`, and
+            # its course can still be the one that failed to grant.
+            return ctx.error("只有付過款且未取消的訂單可以重新開通", 409)
+        await orders.provision_paid_order(env, order_id)
+        await orders.audit(env, order_id, _actor(ctx), "entitlements_reconciled")
+        return ctx.json(await _detail(ctx, order_id))
 
     if action == "paid":
         # For a bank transfer that arrived before any gateway exists. The

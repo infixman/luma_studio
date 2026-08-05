@@ -263,6 +263,26 @@ export function OrdersAdminPage() {
     }, '備註已儲存。')
   }
 
+  /**
+   * Re-run what payment should have done. Safe to press twice.
+   *
+   * The server runs the same provisioning the payment callback runs, rather
+   * than granting the course by hand: a hand-made grant has no fulfilment to
+   * name it by, so a later refund would not take it back.
+   */
+  async function reconcile() {
+    if (!detail) return
+    await run(async () => {
+      const next = await apiJson<AdminOrderDetail>(
+        `/api/orders/${encodeURIComponent(detail.order.id)}/reconcile-entitlements`,
+        'POST',
+        {},
+      )
+      setDetail(next)
+      await load()
+    }, '已重新開通。')
+  }
+
   const counts = list?.counts ?? {}
   const orders = useMemo(() => list?.orders ?? [], [list])
   const filtered = selectedStatuses.length > 0 || dateFrom !== '' || dateTo !== '' || search.trim() !== ''
@@ -537,6 +557,19 @@ export function OrdersAdminPage() {
                   ))}
                 </tbody>
               </TableWrap>
+              {/* The one failure a customer feels immediately and cannot work
+                  around: they paid, and the course is not there. */}
+              {needsEntitlementRepair(detail.order, digital) && (
+                <div class="order-reconcile">
+                  <p class="muted">
+                    這筆訂單付款已收到，但上面還有課程沒有開通。重新開通會重跑付款當下該做的事，
+                    重複執行是安全的。
+                  </p>
+                  <Button size="sm" tone="primary" busy={busy} onClick={() => void reconcile()}>
+                    重新開通
+                  </Button>
+                </div>
+              )}
             </>
           )}
 
@@ -697,4 +730,23 @@ export function shippableMoves<T extends { action: string }>(
   hasPhysical: boolean | undefined,
 ): T[] {
   return moves.filter((move) => move.action !== 'shipped' || hasPhysical !== false)
+}
+
+/**
+ * Whether to offer the repair for a paid order whose course never landed.
+ *
+ * Both halves matter. Money must have arrived, or the button hands out a
+ * course nobody bought. And something must actually be missing — a repair
+ * offered on a healthy order invites a click that means nothing, and teaches
+ * people to press it whenever they are unsure.
+ *
+ * Not `status === 'paid'`: a mixed order whose parcel went out is `shipped`,
+ * and its course can still be the part that failed.
+ */
+export function needsEntitlementRepair(
+  order: { paidAt: number | null; status: string },
+  digital: readonly { status: string }[],
+): boolean {
+  if (order.paidAt === null || order.status === 'cancelled' || order.status === 'expired') return false
+  return digital.some((entry) => entry.status !== 'fulfilled')
 }

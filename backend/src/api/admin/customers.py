@@ -12,6 +12,22 @@ from shared import paging
 from shared.responses import Ctx
 
 
+# A year is not a limit anybody would hit on purpose; it is there so a typo in
+# a box that means "days" cannot produce a grant lasting until the next century.
+MAX_ACCESS_DAYS = 3650
+
+
+def _access_days(value) -> int | None:
+    """Blank means permanent, which is a real answer and not a missing one."""
+
+    if value is None or value == "":
+        return None
+    days = int(value)
+    if days < 1 or days > MAX_ACCESS_DAYS:
+        raise ValueError(f"觀看天數必須介於 1 與 {MAX_ACCESS_DAYS} 之間")
+    return days
+
+
 async def _detail(ctx: Ctx, customer_id: str) -> dict:
     customer = await customers.get(ctx.env, customer_id)
     if customer is None:
@@ -57,21 +73,78 @@ async def handle(ctx: Ctx):
     if method != "POST":
         return ctx.error("Not found", 404)
 
-    if action == "entitlements/gift":
-        # A gift with no reason is a grant nobody can account for, and
-        # therefore one nobody can undo with confidence later.
+    if action in ("entitlements/gift", "entitlements/grant"):
+        # A grant with no reason is one nobody can account for, and therefore
+        # one nobody can undo with confidence later.
+        #
+        # Two actions rather than one with a flag: the difference between "the
+        # shop gave this away" and "the shop failed to deliver and put it
+        # right" is a claim about what happened, and a caller that can get it
+        # wrong by omitting a field will.
         try:
             body = await ctx.json_body()
-            await entitlements.grant_as_gift(
+            course_id = str(body.get("courseId") or "")
+            reason = str(body.get("reason") or "").strip()
+            if action == "entitlements/gift":
+                await entitlements.grant_as_gift(
+                    env, customer_id=customer_id, course_id=course_id,
+                    actor=ctx.admin_email, reason=reason,
+                )
+            else:
+                await entitlements.grant_manually(
+                    env, customer_id=customer_id, course_id=course_id,
+                    actor=ctx.admin_email, reason=reason,
+                    access_days=_access_days(body.get("accessDays")),
+                )
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid grant", 400)
+        # The list as it now stands, for the same reason blocking answers with
+        # the customer: the back office should not have to guess whether the
+        # click landed, and granting a course they already had changes nothing
+        # visible unless the answer says so.
+        return ctx.json(
+            {"granted": True, "entitlements": await entitlements.list_for_customer(env, customer_id)},
+            201,
+        )
+
+    if action == "entitlements/revoke":
+        try:
+            body = await ctx.json_body()
+            revoked = await entitlements.revoke_by_hand(
                 env,
                 customer_id=customer_id,
-                course_id=str(body.get("courseId") or ""),
+                source_id=str(body.get("sourceId") or ""),
                 actor=ctx.admin_email,
                 reason=str(body.get("reason") or "").strip(),
             )
         except (ValueError, AttributeError) as error:
-            return ctx.error(str(error) or "Invalid gift", 400)
-        return ctx.json({"granted": True}, 201)
+            return ctx.error(str(error) or "Invalid revoke", 400)
+        if not revoked:
+            return ctx.error("這筆授與不存在、已經撤銷過了，或是購買來的（要走退款）", 409)
+        return ctx.json(
+            {"revoked": True, "entitlements": await entitlements.list_for_customer(env, customer_id)}
+        )
+
+    if action == "entitlements/restore":
+        # Any kind of source, unlike revoking. Taking a purchase back has to go
+        # through the refund that justifies it; giving one back is undoing a
+        # mistake, and the mistake is the whole reason this exists.
+        try:
+            body = await ctx.json_body()
+            restored = await entitlements.restore_source(
+                env,
+                customer_id=customer_id,
+                source_id=str(body.get("sourceId") or ""),
+                actor=ctx.admin_email,
+                reason=str(body.get("reason") or "").strip(),
+            )
+        except (ValueError, AttributeError) as error:
+            return ctx.error(str(error) or "Invalid restore", 400)
+        if not restored:
+            return ctx.error("這筆來源不存在，或本來就沒有被撤銷", 409)
+        return ctx.json(
+            {"restored": True, "entitlements": await entitlements.list_for_customer(env, customer_id)}
+        )
 
     if action == "blocked":
         try:

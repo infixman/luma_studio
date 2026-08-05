@@ -26,12 +26,12 @@
 ## 3. Entitlement 管理
 
 - [x] 建立會員 entitlement 列表。
-- [ ] 建立人工補發、撤銷與恢復。 gift 與撤銷已完成；restore 未做。
+- [x] 建立人工補發、撤銷與恢復。 gift／manual 授與、撤銷與 restore 都完成，含後台畫面。
 - [x] 撤銷以 source 為單位；顯示「是否連帶停權」的推導結果。
 - [x] 建立 gift 授與（actor／recipient／course／reason），不建立零元 OrderItem。
 - [x] 每次操作要求 reason 並寫 audit。
 - [x] 顯示每筆 source 的來源 order fulfillment、`source_kind` 與撤銷狀態。
-- [ ] 顯示 `access_days`／`first_viewed_at`／`expires_at` 三種期限狀態。 API 已回傳，畫面未做。
+- [x] 顯示 `access_days`／`first_viewed_at`／`expires_at` 三種期限狀態。
 - [x] 防止重複補發或 restore 造成意外延長；延長須為獨立操作。
 - [ ] 建立 purchase lock 查詢與人工釋放（要求 reason）。 對帳查詢已完成；人工釋放未做。
 - [ ] 建立過期與即將到期查詢，若產品沒有期限方案則保持隱藏。 未做。
@@ -74,8 +74,8 @@
 - [ ] 更新 D1 備份與還原，涵蓋新增表。 未做。
 - [x] 決定 R2 source 與 HLS 的第二份保存策略。 原始檔在管理員機器與 R2 各一份（兩個失效域）；HLS 可從原始檔重建，不另備份。不設依時間刪除的 lifecycle rule。見 phase4/spec.md「保存規格」。
 - [ ] 實際演練從備份還原 Course、Entitlement 與 Video metadata。 blocker：需部署環境。
-- [ ] 撰寫付款成功但未授權 runbook。 runbook 未寫。
-- [ ] 撰寫誤撤銷 entitlement 的 restore runbook。 runbook 未寫。
+- [x] 撰寫付款成功但未授權 runbook。 見 docs/courses.md「觀看權出事的時候」；訂單頁已有「重新開通」。
+- [x] 撰寫誤撤銷 entitlement 的 restore runbook。 見 docs/courses.md「觀看權出事的時候」。
 - [ ] 撰寫 purchase lock 卡住導致無法購買的排除 runbook。 runbook 未寫。
 - [ ] 撰寫上傳中斷、import 驗證缺漏的排除 runbook。 runbook 未寫。
 - [ ] 撰寫桌面工具無法驗證或版本被封鎖的排除 runbook。 runbook 未寫。

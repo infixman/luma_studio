@@ -10,7 +10,7 @@
 
 import { expect, test } from 'vitest'
 
-import { shippableMoves } from './OrdersAdminPage'
+import { needsEntitlementRepair, shippableMoves } from './OrdersAdminPage'
 
 const MOVES = [
   { action: 'shipped', label: '標記已出貨' },
@@ -23,6 +23,38 @@ test('an order with something to post offers the shipping action', () => {
 
 test('an order with nothing to post does not', () => {
   expect(shippableMoves(MOVES, false).map((move) => move.action)).toEqual(['cancelled'])
+})
+
+/**
+ * The repair for a paid order whose course never landed.
+ *
+ * It is offered only where it applies. A repair button on a healthy order
+ * invites a click that means nothing, and teaches people to press it whenever
+ * they are unsure.
+ */
+const PAID = { paidAt: 1_700_000_000, status: 'paid' }
+
+test('a paid order with a course still waiting offers the repair', () => {
+  expect(needsEntitlementRepair(PAID, [{ status: 'pending' }])).toBe(true)
+})
+
+test('an order whose courses all landed does not', () => {
+  expect(needsEntitlementRepair(PAID, [{ status: 'fulfilled' }])).toBe(false)
+})
+
+test('an order nobody has paid for does not, whatever its courses say', () => {
+  // The button would otherwise hand out a course nobody bought.
+  expect(needsEntitlementRepair({ paidAt: null, status: 'pending' }, [{ status: 'pending' }])).toBe(false)
+})
+
+test('a cancelled order does not', () => {
+  expect(needsEntitlementRepair({ ...PAID, status: 'cancelled' }, [{ status: 'pending' }])).toBe(false)
+})
+
+test('a mixed order whose parcel already went out still offers it', () => {
+  // Its course can be the part that failed, and `shipped` says nothing about
+  // whether it landed.
+  expect(needsEntitlementRepair({ ...PAID, status: 'shipped' }, [{ status: 'pending' }])).toBe(true)
 })
 
 test('an order that cannot say keeps the action', () => {

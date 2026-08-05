@@ -1220,6 +1220,34 @@ MIGRATIONS = [
             " ON desktop_releases (version)",
         ],
     },
+    {
+        # What a person decided about somebody's access, and why.
+        #
+        # The source row could carry its own history until restoring existed.
+        # It cannot now: putting a revocation back means clearing `revoked_at`,
+        # and a column is one value — the second revocation would overwrite the
+        # first, and the restore in between would leave no trace at all. So the
+        # decisions move here and the source row goes back to holding only
+        # what is true right now.
+        #
+        # Payments write nothing here. A grant that followed a paid order is
+        # the system doing its job and is already in `order_audit_log`; a line
+        # per sale would bury exactly the entries somebody is looking for.
+        "name": "0040_create_course_entitlement_audit_log",
+        "statements": [
+            """CREATE TABLE IF NOT EXISTS course_entitlement_audit_log (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 entitlement_id TEXT NOT NULL,
+                 source_id TEXT,
+                 actor TEXT NOT NULL,
+                 action TEXT NOT NULL,
+                 reason TEXT NOT NULL DEFAULT '',
+                 created_at INTEGER NOT NULL
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_course_entitlement_audit_log_entitlement"
+            " ON course_entitlement_audit_log (entitlement_id, created_at DESC)",
+        ],
+    },
 ]
 
 _lock = asyncio.Lock()

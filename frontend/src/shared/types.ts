@@ -295,6 +295,68 @@ export interface AdminCustomerDetail {
   stats: CustomerActivityStats
 }
 
+/**
+ * One reason a member holds a course.
+ *
+ * A member has one entitlement per course and any number of reasons for it —
+ * two purchases of the same bundle, or a purchase and a gift. Which is why
+ * revoking works on a source and not on the access: taking back one reason
+ * only ends the access when no reason is left.
+ */
+export interface EntitlementSource {
+  id: string
+  /**
+   * `manual` is a re-issue: something the member should already have had.
+   * Kept apart from `gift` because they are different claims about what
+   * happened, and the accounts read differently for each.
+   */
+  kind: 'purchase' | 'gift' | 'manual'
+  /** The order fulfilment that granted it. Null on a gift — that is the point of one. */
+  fulfillmentId: string | null
+  /** Who gave it, on a gift. */
+  actor: string | null
+  reason: string | null
+  revokedAt: number | null
+  /** Who took it away, and why. Cleared again if it is restored. */
+  revokedBy: string | null
+  revokeReason: string | null
+}
+
+/**
+ * A decision somebody made about this access.
+ *
+ * Kept apart from the source because restoring clears the revocation off the
+ * source row: without this, a course that was revoked and put back would look
+ * as though nothing had ever happened to it. Payments write nothing here —
+ * those live in the order's own log.
+ */
+export interface EntitlementEvent {
+  sourceId: string | null
+  actor: string
+  action: 'gift' | 'manual' | 'revoke' | 'restore'
+  reason: string
+  createdAt: number
+}
+
+export interface CustomerEntitlement {
+  id: string
+  customerId: string
+  courseId: string
+  courseTitle: string
+  grantedAt: number
+  /** Null means permanent. Otherwise the clock starts at the first play. */
+  accessDays: number | null
+  firstViewedAt: number | null
+  expiresAt: number | null
+  revokedAt: number | null
+  revokeReason: string | null
+  /** Whether this lets them watch right now, worked out by the server. */
+  active: boolean
+  sources: EntitlementSource[]
+  /** Newest first. Empty for a course nobody has intervened in. */
+  history: EntitlementEvent[]
+}
+
 export interface CustomerActivity {
   type: 'page_view' | 'product_view' | 'cart_add'
   path: string
