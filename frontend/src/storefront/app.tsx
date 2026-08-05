@@ -10,6 +10,7 @@ import { ProductPage } from './pages/ProductPage'
 import { OrderPage } from './pages/OrderPage'
 import { OrdersPage } from './pages/OrdersPage'
 import { MyCoursesPage } from './pages/MyCoursesPage'
+import { CoursePage } from './pages/CoursePage'
 import { LearnPage } from './pages/LearnPage'
 import { ShopPage } from './pages/ShopPage'
 
@@ -23,6 +24,9 @@ const PREVIEW_PATH = /^\/__preview\/([A-Za-z0-9_-]{20,64})$/
 const CATEGORY_PATH = /^\/shop\/c\/(.+)$/
 const PRODUCT_PATH = /^\/shop\/([^/]+)$/
 const ORDER_PATH = /^\/orders\/([^/]+)$/
+// Two pages behind one prefix: the course is what there is to watch, the
+// lesson is watching it. Matched lesson-first so a slug is never read as one.
+const LESSON_PATH = /^\/learn\/([^/]+)\/([^/]+)$/
 const LEARN_PATH = /^\/learn\/([^/]+)$/
 
 /**
@@ -120,10 +124,18 @@ function route() {
     return <MyCoursesPage />
   }
 
+  const lesson = LESSON_PATH.exec(path)
+  if (lesson) {
+    markBody('learn')
+    return (
+      <LearnPage slug={decodeURIComponent(lesson[1]!)} lessonId={decodeURIComponent(lesson[2]!)} />
+    )
+  }
+
   const learn = LEARN_PATH.exec(path)
   if (learn) {
     markBody('learn')
-    return <LearnPage slug={decodeURIComponent(learn[1]!)} />
+    return <CoursePage slug={decodeURIComponent(learn[1]!)} />
   }
 
   const order = ORDER_PATH.exec(path)

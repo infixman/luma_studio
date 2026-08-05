@@ -1248,6 +1248,19 @@ MIGRATIONS = [
             " ON course_entitlement_audit_log (entitlement_id, created_at DESC)",
         ],
     },
+    {
+        # A picture for a lesson, when the one the video produced is not the
+        # one to lead with.
+        #
+        # Nullable, and null is the normal state: the transcode already grabs a
+        # frame, so every lesson with a video has a thumbnail without anybody
+        # choosing one. This column only records a deliberate override, which
+        # is what makes "revert to the default" a matter of clearing it rather
+        # than of finding the frame again.
+        "name": "0041_add_lesson_cover",
+        "add_columns": [("course_lessons", "cover_media_id", "TEXT")],
+        "statements": [],
+    },
 ]
 
 _lock = asyncio.Lock()

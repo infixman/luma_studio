@@ -13,6 +13,20 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import type { EnrolledCourse } from '../../shared/types'
 
+function aCourse(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
+  return {
+    id: 'c1',
+    slug: 'watercolour',
+    title: '水彩花卉入門',
+    summary: '',
+    coverPath: null,
+    completedCount: 0,
+    lessonCount: 0,
+    lastViewedAt: null,
+    ...overrides,
+  }
+}
+
 let courses: EnrolledCourse[] = []
 
 vi.mock('../../shared/api', () => ({
@@ -51,7 +65,7 @@ test('a member with no courses is pointed at the shop rather than left blank', a
 })
 
 test('a course is listed with a way into it', async () => {
-  courses = [{ id: 'c1', slug: 'watercolour', title: '水彩花卉入門', completedCount: 0, lastViewedAt: null }]
+  courses = [aCourse()]
 
   render(<MyCoursesPage />, container)
   await settle()
@@ -64,7 +78,7 @@ test('a course is listed with a way into it', async () => {
 test('a course already started says continue rather than start', async () => {
   // Small difference, but "開始上課" on something half-watched reads as though
   // the progress was lost.
-  courses = [{ id: 'c1', slug: 'watercolour', title: '水彩花卉入門', completedCount: 3, lastViewedAt: 1000 }]
+  courses = [aCourse({ completedCount: 3, lessonCount: 9, lastViewedAt: 1000 })]
 
   render(<MyCoursesPage />, container)
   await settle()
@@ -73,7 +87,7 @@ test('a course already started says continue rather than start', async () => {
 })
 
 test('a course not yet started says start', async () => {
-  courses = [{ id: 'c1', slug: 'watercolour', title: '水彩花卉入門', completedCount: 0, lastViewedAt: null }]
+  courses = [aCourse()]
 
   render(<MyCoursesPage />, container)
   await settle()

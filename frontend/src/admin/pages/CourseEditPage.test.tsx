@@ -123,8 +123,8 @@ test('an outline is shown chapter by chapter, as editable rows', async () => {
       title: '第一章',
       position: 0,
       lessons: [
-        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: true, position: 0 },
-        { id: 'l2', title: '調色練習', contentHtml: '', videoAssetId: null, isPreview: false, position: 1 },
+        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: true, coverMediaId: null, coverPath: null, position: 0 },
+        { id: 'l2', title: '調色練習', contentHtml: '', videoAssetId: null, isPreview: false, coverMediaId: null, coverPath: null, position: 1 },
       ],
     },
   ]
@@ -149,7 +149,7 @@ test('a lesson anybody can watch is ticked', async () => {
       title: '第一章',
       position: 0,
       lessons: [
-        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: true, position: 0 },
+        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: true, coverMediaId: null, coverPath: null, position: 0 },
       ],
     },
   ]
@@ -169,7 +169,7 @@ test('a lesson with no video is not shown as broken', async () => {
       title: '第一章',
       position: 0,
       lessons: [
-        { id: 'l1', title: '課前準備', contentHtml: '<p>請準備</p>', videoAssetId: null, isPreview: false, position: 0 },
+        { id: 'l1', title: '課前準備', contentHtml: '<p>請準備</p>', videoAssetId: null, isPreview: false, coverMediaId: null, coverPath: null, position: 0 },
       ],
     },
   ]

@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 
 import { Badge, Button, EmptyState, IconButton, Select, TextField, useConfirm } from '../../components/ui'
-import { api } from '../../../shared/api'
+import { MediaPicker } from '../../components/MediaPicker'
+import { api, apiUrl } from '../../../shared/api'
 import { runtime } from '../../lib/videoFacts'
 import type { CourseLesson, CourseSection, VideoAsset } from '../../../shared/types'
 
 function emptyLesson(position: number): CourseLesson {
-  return { id: null, title: '', contentHtml: '', videoAssetId: null, isPreview: false, position }
+  return {
+    id: null,
+    title: '',
+    contentHtml: '',
+    videoAssetId: null,
+    isPreview: false,
+    coverMediaId: null,
+    coverPath: null,
+    position,
+  }
 }
 
 function nameOf(titled: { title: string }): string {
@@ -32,6 +42,8 @@ export function CourseOutlineEditor({
   onChange: (next: CourseSection[]) => void
 }) {
   const [assets, setAssets] = useState<VideoAsset[]>([])
+  /** Which lesson the picker is open for, or null when it is shut. */
+  const [picking, setPicking] = useState<{ sectionIndex: number; lessonIndex: number } | null>(null)
   const { ask, dialog } = useConfirm()
 
   useEffect(() => {
@@ -188,6 +200,33 @@ export function CourseOutlineEditor({
                           editor: anybody may watch it without buying. */}
                       <span>試看</span>
                     </label>
+                    {/* A video already has a thumbnail — the transcode grabs a
+                        frame — so this is an override and reads as one. The
+                        default is never stored, which is what makes 改用預設
+                        a matter of clearing the field. */}
+                    <div class="course-lesson-cover">
+                      {lesson.coverPath ? (
+                        <>
+                          <img src={apiUrl(lesson.coverPath)} alt="" />
+                          <Button size="sm" tone="ghost" onClick={() => setPicking({ sectionIndex, lessonIndex })}>
+                            更換
+                          </Button>
+                          <Button
+                            size="sm"
+                            tone="ghost"
+                            onClick={() =>
+                              patchLesson(sectionIndex, lessonIndex, { coverMediaId: null, coverPath: null })
+                            }
+                          >
+                            改用預設
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="sm" tone="ghost" onClick={() => setPicking({ sectionIndex, lessonIndex })}>
+                          {lesson.videoAssetId ? '自訂縮圖' : '設定縮圖'}
+                        </Button>
+                      )}
+                    </div>
                     {lesson.videoAssetId === null && <Badge tone="neutral">文字單元</Badge>}
                     <IconButton
                       label={`將「${nameOf(lesson)}」往上移`}
@@ -242,6 +281,27 @@ export function CourseOutlineEditor({
       >
         新增章節
       </Button>
+
+      {/* One picker for the whole tree rather than one per row: a dialog is a
+          dialog, and forty of them mounted at once is forty focus traps. */}
+      <MediaPicker
+        open={picking !== null}
+        selectedId={
+          picking ? sections[picking.sectionIndex]?.lessons[picking.lessonIndex]?.coverMediaId ?? null : null
+        }
+        onPick={(item) => {
+          // Both, so the preview is the picture just chosen rather than
+          // whatever the last save resolved.
+          if (picking) {
+            patchLesson(picking.sectionIndex, picking.lessonIndex, {
+              coverMediaId: item.id,
+              coverPath: item.path,
+            })
+          }
+          setPicking(null)
+        }}
+        onClose={() => setPicking(null)}
+      />
     </>
   )
 }

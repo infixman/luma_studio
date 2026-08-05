@@ -11,7 +11,7 @@ would eventually disagree, and the disagreement would be silent in one
 direction and embarrassing in the other.
 """
 
-from domain import entitlements
+from domain import entitlements, media
 from shared.common import d1_rows, utc_timestamp
 
 
@@ -138,8 +138,13 @@ async def save_progress(
 async def my_courses(env, customer_id: str) -> list[dict]:
     """The courses this member may watch right now, newest activity first.
 
-    Progress is counted in one query rather than one per card: a member with a
-    dozen courses should not cost a dozen round trips to render a list.
+    Progress is counted in one query rather than one per card, and so are the
+    lesson totals and the covers: a member with a dozen courses should not cost
+    a dozen round trips to render a list.
+
+    `completedCount` on its own was never enough to draw. "已完成 3 個單元" says
+    nothing about whether that is nearly done or barely started, which is the
+    one thing somebody scanning this page wants to know.
     """
 
     course_ids = sorted(await entitlements.active_course_ids(env, customer_id))
@@ -157,17 +162,35 @@ async def my_courses(env, customer_id: str) -> list[dict]:
             " GROUP BY course_id"
         ).bind(customer_id)
     )
+    totals = await d1_rows(
+        env.DB.prepare(
+            "SELECT s.course_id AS course_id, COUNT(l.id) AS total"
+            " FROM course_sections s JOIN course_lessons l ON l.section_id = s.id"
+            f" WHERE s.course_id IN ({placeholders})"
+            " GROUP BY s.course_id"
+        ).bind(*course_ids)
+    )
+    covers = await media.resolve(env, [course.get("cover_media_id") for course in courses])
+
     by_course = {row["course_id"]: row for row in progress}
+    lesson_count = {row["course_id"]: int(row["total"]) for row in totals}
 
     cards = []
     for course in courses:
         seen = by_course.get(course["id"])
+        # A cover whose picture has since been deleted comes back as nothing,
+        # and the card draws its own placeholder. The alternative is the
+        # browser's broken-image icon, which reads as the page being at fault.
+        cover = covers.get(course.get("cover_media_id"))
         cards.append(
             {
                 "id": course["id"],
                 "slug": course["slug"],
                 "title": course["title"],
+                "summary": course.get("summary") or "",
+                "coverPath": cover["path"] if cover else None,
                 "completedCount": int(seen["completed"]) if seen else 0,
+                "lessonCount": lesson_count.get(course["id"], 0),
                 "lastViewedAt": int(seen["last_seen"]) if seen else None,
             }
         )
@@ -209,14 +232,34 @@ async def course_for_member(env, *, customer_id: str, slug: str) -> dict | None:
     )
     progress = await d1_rows(
         env.DB.prepare(
-            "SELECT lesson_id, completed_at FROM course_lesson_progress"
+            "SELECT lesson_id, position_seconds, completed_at FROM course_lesson_progress"
             " WHERE customer_id = ?1 AND course_id = ?2"
         ).bind(customer_id, course["id"])
     )
-    completed = {row["lesson_id"] for row in progress if row["completed_at"] is not None}
+    seen = {row["lesson_id"]: row for row in progress}
+
+    # How long each lesson runs, and whether the transcode left a frame worth
+    # showing. One query for the lot: a course is a list, and a round trip per
+    # row to draw it is how a list gets slow.
+    asset_ids = sorted({row["video_asset_id"] for row in lessons if row["video_asset_id"]})
+    assets: dict[str, dict] = {}
+    if asset_ids:
+        asset_placeholders = ", ".join(f"?{index + 1}" for index in range(len(asset_ids)))
+        assets = {
+            row["id"]: row
+            for row in await d1_rows(
+                env.DB.prepare(
+                    "SELECT id, duration_seconds, poster_key FROM video_assets"
+                    f" WHERE id IN ({asset_placeholders})"
+                ).bind(*asset_ids)
+            )
+        }
+    chosen = await media.resolve(env, [row.get("cover_media_id") for row in lessons])
 
     by_section: dict[str, list[dict]] = {}
     for row in lessons:
+        asset = assets.get(row["video_asset_id"]) if row["video_asset_id"] else None
+        watched = seen.get(row["id"])
         by_section.setdefault(row["section_id"], []).append(
             {
                 "id": row["id"],
@@ -224,15 +267,53 @@ async def course_for_member(env, *, customer_id: str, slug: str) -> dict | None:
                 "contentHtml": row["content_html"],
                 "hasVideo": bool(row["video_asset_id"]),
                 "isPreview": bool(row["is_preview"]),
-                "completed": row["id"] in completed,
+                "completed": watched is not None and watched["completed_at"] is not None,
+                # Where they got to. The card needs this to say "看到 3:12"
+                # rather than only "started", which is the difference between
+                # somewhere to go back to and a fact about the past.
+                "positionSeconds": int(watched["position_seconds"]) if watched else 0,
+                "durationSeconds": (
+                    int(asset["duration_seconds"])
+                    if asset and asset["duration_seconds"] is not None
+                    else None
+                ),
+                # One field, whichever kind it is. The page draws what it is
+                # given; which of the two it came from is this function's
+                # problem and nobody else's.
+                "coverPath": _lesson_cover(row, asset, chosen),
             }
         )
 
     return {
         "title": course["title"],
         "slug": course["slug"],
+        "summary": course.get("summary") or "",
         "sections": [
             {"title": section["title"], "lessons": by_section.get(section["id"], [])}
             for section in sections
         ],
     }
+
+
+def _lesson_cover(lesson: dict, asset: dict | None, chosen: dict) -> str | None:
+    """The picture for a lesson: the chosen one, else the frame the transcode
+    grabbed, else nothing.
+
+    In that order because the override is the deliberate act. Clearing it is
+    how somebody goes back to the default, which only works if the default is
+    never stored — the moment it were copied into the column, "revert" would
+    mean finding the frame again.
+    """
+
+    picked = chosen.get(lesson.get("cover_media_id"))
+    # `path` and not merely the row: a chosen picture whose file has since been
+    # deleted resolves to a row with nothing to draw, and falling back to the
+    # frame is better than a card with a hole in it.
+    if picked and picked["path"]:
+        return picked["path"]
+    if asset and asset["poster_key"]:
+        # Through the Worker rather than as a signed URL: a URL for a private
+        # object is a capability that outlives the page it was put on, and a
+        # thumbnail is not worth minting one for.
+        return f"/api/learning/lessons/{lesson['id']}/poster"
+    return None

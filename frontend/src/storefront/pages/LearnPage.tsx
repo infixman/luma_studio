@@ -3,27 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { LessonPlayer } from '../components/LessonPlayer'
 import { api, apiJson, apiUrl } from '../../shared/api'
 import { renewDelay, requestSession, shouldSaveProgress, worthRetrying } from '../lib/playback'
-import type { PlaybackRefusal } from '../../shared/types'
+import { inOrder } from '../lib/lessons'
+import type { LearnCourse, PlaybackRefusal } from '../../shared/types'
 import '../styles/shop.css'
-
-interface LearnLesson {
-  id: string
-  title: string
-  contentHtml: string
-  hasVideo: boolean
-  isPreview: boolean
-  completed: boolean
-}
-
-interface LearnSection {
-  title: string
-  lessons: LearnLesson[]
-}
-
-interface LearnCourse {
-  title: string
-  sections: LearnSection[]
-}
 
 /** How long to leave a "still encoding" lesson before trying again. */
 const RETRY_SECONDS = 20
@@ -52,7 +34,7 @@ function rememberedAutoplay(): boolean {
 }
 
 /**
- * Watching a course.
+ * Watching one lesson.
  *
  * The player is pointed at a gateway URL and the permission travels as a
  * cookie the page never sees. Two consequences shape this component: the URL
@@ -63,10 +45,16 @@ function rememberedAutoplay(): boolean {
  * A refusal is not retried unless it can change on its own. "Still encoding"
  * becomes ready; "you have not bought this" does not, and asking again is
  * asking the same question louder.
+ *
+ * Which lesson is in the address, so a lesson can be linked to and the back
+ * button means what it looks like. It is still held in state as well: moving
+ * to the next one rewrites the address rather than reloading the page, because
+ * the course is already here and fetching it again to draw the same header
+ * would put a blank screen between two lessons.
  */
-export function LearnPage({ slug }: { slug: string }) {
+export function LearnPage({ slug, lessonId: opened }: { slug: string; lessonId: string }) {
   const [course, setCourse] = useState<LearnCourse | null>(null)
-  const [lessonId, setLessonId] = useState<string | null>(null)
+  const [lessonId, setLessonId] = useState<string | null>(opened)
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<{ reason: PlaybackRefusal | 'unknown'; message: string } | null>(null)
   const [failed, setFailed] = useState(false)
@@ -86,15 +74,34 @@ export function LearnPage({ slug }: { slug: string }) {
   const lastSaved = useRef<number | null>(null)
 
   useEffect(() => {
-    document.title = '課程 | Luma Studio'
     api<LearnCourse>(`/api/learning/courses/${encodeURIComponent(slug)}`)
       .then((data) => {
         setCourse(data)
-        const first = data.sections.flatMap((section) => section.lessons)[0]
-        if (first) setLessonId(first.id)
+        // A lesson id that is not in this course — an old link, or an outline
+        // that has been rewritten since — falls back to the start rather than
+        // to an error. There is a course here and it is theirs.
+        const lessons = inOrder(data)
+        if (!lessons.some((lesson) => lesson.id === opened)) {
+          const first = lessons[0]
+          setLessonId(first ? first.id : null)
+        }
       })
       .catch(() => setFailed(true))
-  }, [slug])
+  }, [slug, opened])
+
+  useEffect(() => {
+    const lesson = course && inOrder(course).find((entry) => entry.id === lessonId)
+    document.title = lesson ? `${lesson.title} | Luma Studio` : '課程 | Luma Studio'
+  }, [course, lessonId])
+
+  /** The address follows the lesson, so linking and the back button both work. */
+  const show = useCallback(
+    (id: string) => {
+      setLessonId(id)
+      history.replaceState(null, '', `/learn/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`)
+    },
+    [slug],
+  )
 
   const open = useCallback(async (id: string) => {
     if (renewal.current) clearTimeout(renewal.current)
@@ -157,7 +164,7 @@ export function LearnPage({ slug }: { slug: string }) {
     )
   }
 
-  const lessons = course.sections.flatMap((section) => section.lessons)
+  const lessons = inOrder(course)
   const index = lessons.findIndex((lesson) => lesson.id === lessonId)
   const current = index >= 0 ? lessons[index]! : null
   // Across chapters, not within one: to somebody watching, the course is one
@@ -165,9 +172,16 @@ export function LearnPage({ slug }: { slug: string }) {
   const previous = index > 0 ? lessons[index - 1]! : null
   const next = index >= 0 && index < lessons.length - 1 ? lessons[index + 1]! : null
 
+  const courseHref = `/learn/${encodeURIComponent(course.slug)}`
+
   return (
     <main class="shop learn">
-      <h1>{course.title}</h1>
+      {/* The course title is a way back rather than a heading. What this page
+          is showing is the lesson, and printing both as headings was the same
+          two lines the contents beside them already said. */}
+      <p class="crumb">
+        <a href={courseHref}>← {course.title}</a>
+      </p>
 
       <div class={`learn-layout${theater ? ' is-theater' : ''}`}>
         <section class="learn-stage">
@@ -175,7 +189,12 @@ export function LearnPage({ slug }: { slug: string }) {
             <p class="note">這門課程還沒有單元。</p>
           ) : (
             <>
-              <h2>{current.title}</h2>
+              <h1>{current.title}</h1>
+              {lessons.length > 1 && (
+                <p class="note learn-place">
+                  第 {index + 1} / {lessons.length} 單元
+                </p>
+              )}
 
               {refusal && <p class="note">{refusal.message}</p>}
 
@@ -186,7 +205,7 @@ export function LearnPage({ slug }: { slug: string }) {
                   onEnded={() => {
                     record(Math.max(1, lastSaved.current ?? 1), true)
                     // Marked finished either way; moving on is the extra.
-                    if (autoplay && next) setLessonId(next.id)
+                    if (autoplay && next) show(next.id)
                   }}
                   autoplay={autoplay}
                   onAutoplayChange={chooseAutoplay}
@@ -202,7 +221,7 @@ export function LearnPage({ slug }: { slug: string }) {
               <div class="learn-content" dangerouslySetInnerHTML={{ __html: current.contentHtml }} />
 
               <div class="learn-actions">
-                <button type="button" disabled={previous === null} onClick={() => previous && setLessonId(previous.id)}>
+                <button type="button" disabled={previous === null} onClick={() => previous && show(previous.id)}>
                   上一單元
                 </button>
                 {/* A reading has no `ended` to fire, so finishing it is a
@@ -210,39 +229,19 @@ export function LearnPage({ slug }: { slug: string }) {
                 <button type="button" onClick={() => record(Math.max(1, lastSaved.current ?? 1), true)}>
                   標記完成
                 </button>
-                <button type="button" disabled={next === null} onClick={() => next && setLessonId(next.id)}>
+                <button type="button" disabled={next === null} onClick={() => next && show(next.id)}>
                   下一單元
                 </button>
+                {/* The way back to everything else. The contents used to be a
+                    column on this page; they are a page of their own now, and
+                    this is the door to it. */}
+                <a class="learn-contents" href={courseHref}>
+                  課程目錄
+                </a>
               </div>
             </>
           )}
         </section>
-
-        <nav class="learn-outline" aria-label="課程大綱">
-          {course.sections.map((section) => (
-            <div key={section.title}>
-              <h3>{section.title}</h3>
-              <ul>
-                {section.lessons.map((lesson) => (
-                  <li key={lesson.id}>
-                    <button
-                      type="button"
-                      class={lesson.id === lessonId ? 'is-current' : ''}
-                      aria-current={lesson.id === lessonId ? 'true' : undefined}
-                      onClick={() => setLessonId(lesson.id)}
-                    >
-                      {/* Not colour alone: a tick reads the same to somebody
-                          who cannot tell the two greens apart. */}
-                      <span aria-hidden="true">{lesson.completed ? '✓' : '○'}</span>
-                      <span>{lesson.title}</span>
-                      {lesson.completed && <span class="sr-only">（已完成）</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
       </div>
     </main>
   )

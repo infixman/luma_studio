@@ -53,8 +53,8 @@ function outline(): CourseSection[] {
       title: '第一章',
       position: 0,
       lessons: [
-        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: false, position: 0 },
-        { id: 'l2', title: '調色練習', contentHtml: '', videoAssetId: null, isPreview: false, position: 1 },
+        { id: 'l1', title: '工具介紹', contentHtml: '', videoAssetId: 'asset-1', isPreview: false, coverMediaId: null, coverPath: null, position: 0 },
+        { id: 'l2', title: '調色練習', contentHtml: '', videoAssetId: null, isPreview: false, coverMediaId: null, coverPath: null, position: 1 },
       ],
     },
   ]

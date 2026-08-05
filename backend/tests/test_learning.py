@@ -28,6 +28,18 @@ def entitlement_row(**extra) -> dict:
     }
 
 
+def _media_row(**extra) -> dict:
+    """A library row. `object_key` has to sit under the media prefix, which is
+    what turns it into a URL — anything else resolves to a row with no path."""
+
+    return {
+        "id": "media-9", "object_key": "_media/chosen.webp", "file_name": "chosen.webp",
+        "title": "", "alt": "", "tags": "", "byte_size": 10, "width": 0, "height": 0,
+        "sizes": "", "created_at": 0,
+        **extra,
+    }
+
+
 def lesson_row(**extra) -> dict:
     return {
         "id": "lesson-1", "section_id": "s1", "title": "工具介紹", "content_html": "<p>你好</p>",
@@ -193,6 +205,83 @@ class TestProgress:
 
         statement, _ = database.writes[0]
         assert "COALESCE(course_lesson_progress.completed_at" in statement
+
+
+class TestTheLessonThumbnail:
+    """The frame the transcode grabbed, drawn on the course page.
+
+    Served through the Worker rather than as a signed URL: a URL for a private
+    object is a capability that outlives the page it was put on, and a
+    thumbnail is not worth minting one for. Which means the entitlement check
+    has to happen here, on every card.
+    """
+
+    @pytest.fixture
+    def call(self):
+        import main
+        from shared import migrations
+
+        def run(database, bucket=None):
+            migrations._applied_names = None
+            worker = main.Default()
+            worker.env = make_env(database, COURSE_VIDEO=bucket or _EmptyBucket())
+            from conftest import FakeRequest, STOREFRONT_ORIGIN
+
+            return asyncio.run(
+                worker.fetch(
+                    FakeRequest(
+                        "/api/learning/lessons/lesson-1/poster",
+                        "GET",
+                        {
+                            "Origin": STOREFRONT_ORIGIN,
+                            "x-luma-app": "1",
+                            "Cookie": "luma_customer_session=" + "a" * 40,
+                        },
+                    )
+                )
+            )
+
+        return run
+
+    def _database(self, *, entitlements=None) -> FakeDatabase:
+        member = TestReachingALesson()._database(entitlements=entitlements)
+        member.answers["FROM customer_sessions s JOIN customers c"] = [
+            {
+                "id": "cust-1", "google_sub": "g-1", "email": "a@example.com",
+                "display_name": "王小明", "default_recipient_name": "王小明",
+                "default_recipient_phone": "0912345678", "default_address": "台北市",
+                "blocked": 0, "account_blocked": 0, "anonymized_at": None,
+                "created_at": 0, "updated_at": 0,
+            }
+        ]
+        return member
+
+    def test_it_asks_the_bucket_for_the_active_version_of_that_lesson(self, call):
+        bucket = _EmptyBucket()
+
+        call(self._database(), bucket)
+
+        assert bucket.asked == ["videos/asset-1/1/poster.webp"]
+
+    def test_somebody_without_the_course_is_refused(self, call):
+        """A course somebody no longer owns stops showing them its pictures at
+        the same moment it stops playing."""
+
+        bucket = _EmptyBucket()
+
+        response = call(self._database(entitlements=[]), bucket)
+
+        assert response.status == 403
+        assert bucket.asked == []
+
+
+class _EmptyBucket:
+    def __init__(self):
+        self.asked: list[str] = []
+
+    async def get(self, key):
+        self.asked.append(key)
+        return None
 
 
 class TestStartingALesson:
@@ -477,8 +566,8 @@ class TestTheLearningPage:
                      "created_at": 0, "updated_at": 0}
                 ],
                 "SELECT * FROM course_lessons": [lesson_row(), lesson_row(id="lesson-2", title="調色練習")],
-                "SELECT lesson_id, completed_at FROM course_lesson_progress": [
-                    {"lesson_id": "lesson-1", "completed_at": 500}
+                "FROM course_lesson_progress": [
+                    {"lesson_id": "lesson-1", "position_seconds": 192, "completed_at": 500}
                 ],
             }
         )
@@ -508,6 +597,94 @@ class TestTheLearningPage:
         assert asyncio.run(
             learning.course_for_member(make_env(self._database(entitlements=[])), customer_id="cust-1", slug="watercolour")
         ) is None
+
+    def test_how_far_they_got_comes_back_too(self, learning):
+        """"Started" is a fact about the past. "看到 3:12" is somewhere to
+        go back to."""
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(self._database()), customer_id="cust-1", slug="watercolour")
+        )
+
+        lessons = page["sections"][0]["lessons"]
+        assert lessons[0]["positionSeconds"] == 192
+        assert lessons[1]["positionSeconds"] == 0
+
+    def test_a_lesson_carries_how_long_it_runs(self, learning):
+        database = self._database()
+        database.answers["SELECT id, duration_seconds, poster_key FROM video_assets"] = [
+            {"id": "asset-1", "duration_seconds": 175, "poster_key": "videos/asset-1/1/poster.webp"}
+        ]
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(database), customer_id="cust-1", slug="watercolour")
+        )
+
+        assert page["sections"][0]["lessons"][0]["durationSeconds"] == 175
+
+    def test_the_frame_the_transcode_grabbed_is_the_default_picture(self, learning):
+        """Nobody has to choose one for a lesson to have a thumbnail."""
+
+        database = self._database()
+        database.answers["SELECT id, duration_seconds, poster_key FROM video_assets"] = [
+            {"id": "asset-1", "duration_seconds": 175, "poster_key": "videos/asset-1/1/poster.webp"}
+        ]
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(database), customer_id="cust-1", slug="watercolour")
+        )
+
+        assert page["sections"][0]["lessons"][0]["coverPath"] == "/api/learning/lessons/lesson-1/poster"
+
+    def test_a_chosen_picture_wins_over_the_frame(self, learning):
+        """And clearing it goes back to the frame, which only works because
+        the default is never written into the column."""
+
+        database = self._database()
+        database.answers["SELECT * FROM course_lessons"] = [lesson_row(cover_media_id="media-9")]
+        database.answers["SELECT id, duration_seconds, poster_key FROM video_assets"] = [
+            {"id": "asset-1", "duration_seconds": 175, "poster_key": "videos/asset-1/1/poster.webp"}
+        ]
+        database.answers["FROM media WHERE id IN"] = [_media_row()]
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(database), customer_id="cust-1", slug="watercolour")
+        )
+
+        assert page["sections"][0]["lessons"][0]["coverPath"] == "/media-assets/chosen.webp"
+
+    def test_a_chosen_picture_that_was_deleted_falls_back_to_the_frame(self, learning):
+        """A row can outlive its file. A card with a hole in it is worse than
+        the default picture."""
+
+        database = self._database()
+        database.answers["SELECT * FROM course_lessons"] = [lesson_row(cover_media_id="media-9")]
+        database.answers["SELECT id, duration_seconds, poster_key FROM video_assets"] = [
+            {"id": "asset-1", "duration_seconds": 175, "poster_key": "videos/asset-1/1/poster.webp"}
+        ]
+        # Outside the media prefix, which is what a key with nothing behind it
+        # resolves to: a row, and no URL.
+        database.answers["FROM media WHERE id IN"] = [_media_row(object_key="gone/chosen.webp")]
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(database), customer_id="cust-1", slug="watercolour")
+        )
+
+        assert page["sections"][0]["lessons"][0]["coverPath"] == "/api/learning/lessons/lesson-1/poster"
+
+    def test_a_lesson_with_no_video_and_no_picture_has_none(self, learning):
+        """Drawn as a placeholder rather than a broken image."""
+
+        database = self._database()
+        database.answers["SELECT * FROM course_lessons"] = [lesson_row(video_asset_id=None)]
+
+        page = asyncio.run(
+            learning.course_for_member(make_env(database), customer_id="cust-1", slug="watercolour")
+        )
+
+        lesson = page["sections"][0]["lessons"][0]
+        assert lesson["coverPath"] is None
+        assert lesson["durationSeconds"] is None
 
 
 class TestAReadingIsStillPartOfACourse:

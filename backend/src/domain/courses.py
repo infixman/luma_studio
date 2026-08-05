@@ -228,6 +228,7 @@ def validate_outline(raw) -> list[dict]:
             if not isinstance(lesson_raw, dict):
                 raise ValueError("單元格式不正確")
             video_asset_id = lesson_raw.get("videoAssetId") or None
+            cover_media_id = lesson_raw.get("coverMediaId") or None
             lessons.append(
                 {
                     "id": str(lesson_raw.get("id") or "") or None,
@@ -236,6 +237,11 @@ def validate_outline(raw) -> list[dict]:
                         validate_text(lesson_raw.get("contentHtml") or "", MAX_HTML, "單元內容", required=False)
                     ),
                     "videoAssetId": str(video_asset_id) if video_asset_id else None,
+                    # Null is the normal state and means "use the frame the
+                    # transcode grabbed". Clearing the choice is how somebody
+                    # goes back to it, which only works because the default is
+                    # never written here.
+                    "coverMediaId": str(cover_media_id) if cover_media_id else None,
                     # Whatever arrived, read as the yes/no it has to be.
                     "isPreview": bool(lesson_raw.get("isPreview")),
                     "position": lesson_position,
@@ -348,6 +354,8 @@ def lesson_row(row: dict) -> dict:
         "title": row["title"],
         "contentHtml": row["content_html"],
         "videoAssetId": row["video_asset_id"],
+        # `.get`, because a row read before migration 0041 has no such column.
+        "coverMediaId": row.get("cover_media_id"),
         "isPreview": bool(row["is_preview"]),
         "position": int(row["position"]),
     }
@@ -375,31 +383,64 @@ async def get_outline(env, course_id: str) -> list[dict]:
             f"SELECT * FROM course_lessons WHERE section_id IN ({placeholders}) ORDER BY position"
         ).bind(*[section["id"] for section in sections])
     )
+    # The chosen pictures, resolved to URLs the editor can draw. The id alone
+    # cannot be turned into one: it is built from the object key, and only the
+    # media library knows it.
+    chosen = await media.resolve(env, [row.get("cover_media_id") for row in lessons])
+
     by_section: dict[str, list[dict]] = {}
     for row in lessons:
-        by_section.setdefault(row["section_id"], []).append(lesson_row(row))
+        mapped = lesson_row(row)
+        picked = chosen.get(row.get("cover_media_id"))
+        mapped["coverPath"] = picked["path"] if picked else None
+        by_section.setdefault(row["section_id"], []).append(mapped)
     for section in sections:
         section["lessons"] = by_section.get(section["id"], [])
     return sections
 
 
 async def replace_outline(env, course_id: str, sections: list[dict]) -> None:
-    """Swap the whole tree.
+    """Swap the whole tree — except the one thing hanging off it.
 
     Already validated, so the gap between the delete and the inserts holds a
     tree that was correct a moment ago rather than one that was never correct.
-    Ids are regenerated: an author who reorders and renames everything is not
-    obliged to keep the client's temporary ids straight.
+
+    Section ids are regenerated; nothing outside this table refers to one.
+    Lesson ids are not. A member's viewing record is keyed on the lesson id
+    (`course_lesson_progress`), and so is a bookmarked lesson URL — an id
+    regenerated on save means every member's ticks and positions turn into
+    orphans because an author fixed a typo in a chapter title. That is also
+    why the two progress readers used to disagree after an edit: the count
+    per course still saw the orphaned rows, the per-lesson lookup did not,
+    and a card could claim 3/9 finished over a list with no ticks on it.
+
+    A lesson keeps its id only if that id already belongs to this course.
+    Anything else — a new row, a stray id from another course, a duplicate —
+    gets a fresh one. The membership check is not politeness: reusing a
+    foreign id would collide with the row that still owns it, and accepting
+    it would let a crafted request move lessons between courses.
     """
 
     now = utc_timestamp()
     existing = await d1_rows(
+        env.DB.prepare(
+            "SELECT l.id, l.created_at FROM course_lessons l"
+            " JOIN course_sections s ON s.id = l.section_id WHERE s.course_id = ?1"
+        ).bind(course_id)
+    )
+    # Kept with their creation times: a surviving lesson did not become new by
+    # being saved, and `created_at` rewritten on every edit had made the field
+    # mean "when the outline was last touched".
+    ours = {row["id"]: int(row["created_at"]) for row in existing}
+
+    old_sections = await d1_rows(
         env.DB.prepare("SELECT id FROM course_sections WHERE course_id = ?1").bind(course_id)
     )
-    for row in existing:
+    for row in old_sections:
         await env.DB.prepare("DELETE FROM course_lessons WHERE section_id = ?1").bind(row["id"]).run()
     await env.DB.prepare("DELETE FROM course_sections WHERE course_id = ?1").bind(course_id).run()
 
+    reused: set[str] = set()
     for section in sections:
         section_id = urlsafe_token(18)
         await env.DB.prepare(
@@ -407,19 +448,35 @@ async def replace_outline(env, course_id: str, sections: list[dict]) -> None:
             " VALUES (?1, ?2, ?3, ?4, ?5, ?5)"
         ).bind(section_id, course_id, section["title"], section["position"], now).run()
         for lesson in section["lessons"]:
+            claimed = lesson["id"]
+            keep = claimed is not None and claimed in ours and claimed not in reused
+            if keep:
+                reused.add(claimed)
             await env.DB.prepare(
                 "INSERT INTO course_lessons (id, section_id, title, content_html, video_asset_id,"
-                " is_preview, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)"
+                " cover_media_id, is_preview, position, created_at, updated_at)"
+                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
             ).bind(
-                urlsafe_token(18),
+                claimed if keep else urlsafe_token(18),
                 section_id,
                 lesson["title"],
                 lesson["contentHtml"],
                 lesson["videoAssetId"],
+                lesson["coverMediaId"],
                 1 if lesson["isPreview"] else 0,
                 lesson["position"],
+                ours[claimed] if keep else now,
                 now,
             ).run()
+
+    # A lesson that was dropped from the outline is gone, and its record goes
+    # with it — that is deliberate deletion, not a side effect of saving. The
+    # rows are orphans either way; deleting them is what keeps the per-course
+    # count honest about what still exists to be counted.
+    for gone in set(ours) - reused:
+        await env.DB.prepare(
+            "DELETE FROM course_lesson_progress WHERE lesson_id = ?1"
+        ).bind(gone).run()
 
 
 async def ready_video_asset_ids(env, outline: list[dict]) -> set[str]:

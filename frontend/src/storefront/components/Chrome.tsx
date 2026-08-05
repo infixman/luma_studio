@@ -85,7 +85,10 @@ export function Chrome({ bare, children }: { bare?: boolean; children: Component
           menu={chrome.menu}
           cartCount={items}
           signedIn={customer !== null}
-          loginHref={loginUrl(`${location.origin}/orders`)}
+          // Home, not 我的訂單. Signing in is how somebody starts, and most
+          // of them are not here about an order — landing on an empty order
+          // list reads as though the shop lost something.
+          loginHref={loginUrl(`${location.origin}/`)}
           onLogout={logout}
         />
       )}

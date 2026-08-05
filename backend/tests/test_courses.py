@@ -151,6 +151,22 @@ class TestOutlineValidation:
 
         assert validated[0]["lessons"][0]["isPreview"] is True
 
+    def test_a_chosen_thumbnail_is_carried_through(self, courses):
+        validated = courses.validate_outline([section(lessons=[lesson(coverMediaId="media-9")])])
+
+        assert validated[0]["lessons"][0]["coverMediaId"] == "media-9"
+
+    def test_no_thumbnail_stays_null_rather_than_being_filled_in(self, courses):
+        """Null means "use the frame the transcode grabbed". Writing that
+        default into the column would make 改用預設 impossible: reverting is
+        clearing the field, and there would be nothing to clear."""
+
+        validated = courses.validate_outline([section(lessons=[lesson()])])
+        cleared = courses.validate_outline([section(lessons=[lesson(coverMediaId="")])])
+
+        assert validated[0]["lessons"][0]["coverMediaId"] is None
+        assert cleared[0]["lessons"][0]["coverMediaId"] is None
+
     def test_html_is_cleaned_before_it_is_stored(self, courses):
         """The editor's own restrictions are a convenience, not a boundary."""
 
@@ -159,6 +175,112 @@ class TestOutlineValidation:
         )
 
         assert "script" not in validated[0]["lessons"][0]["contentHtml"]
+
+
+class TestReplacingTheOutline:
+    """Saving the outline must not orphan what members have already watched.
+
+    `course_lesson_progress` is keyed on the lesson id, and so is a bookmarked
+    lesson URL. An id regenerated on every save meant one typo fix in a chapter
+    title wiped every member's ticks — and left the per-course count and the
+    per-lesson lookup disagreeing, because only one of them could still see
+    the orphaned rows.
+    """
+
+    def _database(self, lesson_ids=("lesson-a",)):
+        return FakeDatabase(
+            {
+                # What this course already owns, with when it was made.
+                "FROM course_lessons l JOIN course_sections s": [
+                    {"id": lesson_id, "created_at": 111} for lesson_id in lesson_ids
+                ],
+                "SELECT id FROM course_sections": [{"id": "s-old"}],
+            }
+        )
+
+    def _saved_lessons(self, database):
+        return [
+            bindings for sql, bindings in database.writes if "INSERT INTO course_lessons" in sql
+        ]
+
+    def _lesson(self, **extra):
+        return {
+            "id": None, "title": "工具介紹", "contentHtml": "", "videoAssetId": None,
+            "coverMediaId": None, "isPreview": False, "position": 0,
+            **extra,
+        }
+
+    def _save(self, courses, database, lessons):
+        asyncio.run(
+            courses.replace_outline(
+                make_env(database),
+                "course-1",
+                [{"id": None, "title": "第一章", "position": 0, "lessons": lessons}],
+            )
+        )
+
+    def test_a_surviving_lesson_keeps_its_id_and_its_birthday(self, courses):
+        database = self._database()
+
+        self._save(courses, database, [self._lesson(id="lesson-a")])
+
+        saved = self._saved_lessons(database)[0]
+        assert saved[0] == "lesson-a"
+        # Not rewritten to "now": being saved did not make it new.
+        assert saved[8] == 111
+
+    def test_a_new_lesson_gets_a_fresh_id(self, courses):
+        database = self._database()
+
+        self._save(courses, database, [self._lesson()])
+
+        assert self._saved_lessons(database)[0][0] not in (None, "lesson-a")
+
+    def test_an_id_from_another_course_is_not_taken_at_its_word(self, courses):
+        """Accepting it would let a crafted request move lessons between
+        courses — and collide with the row that still owns the id."""
+
+        database = self._database(lesson_ids=())
+
+        self._save(courses, database, [self._lesson(id="somebody-elses")])
+
+        assert self._saved_lessons(database)[0][0] != "somebody-elses"
+
+    def test_the_same_id_sent_twice_is_only_believed_once(self, courses):
+        database = self._database()
+
+        self._save(
+            courses, database,
+            [self._lesson(id="lesson-a"), self._lesson(id="lesson-a", position=1)],
+        )
+
+        first, second = self._saved_lessons(database)
+        assert first[0] == "lesson-a"
+        assert second[0] != "lesson-a"
+
+    def test_a_dropped_lesson_takes_its_viewing_record_with_it(self, courses):
+        """Deliberate deletion, not a side effect of saving: the rows are
+        orphans either way, and deleting them is what keeps the per-course
+        count honest."""
+
+        database = self._database(lesson_ids=("lesson-a", "lesson-b"))
+
+        self._save(courses, database, [self._lesson(id="lesson-a")])
+
+        purged = [
+            bindings for sql, bindings in database.writes
+            if "DELETE FROM course_lesson_progress" in sql
+        ]
+        assert [entry[0] for entry in purged] == ["lesson-b"]
+
+    def test_a_kept_lesson_loses_no_viewing_record(self, courses):
+        database = self._database()
+
+        self._save(courses, database, [self._lesson(id="lesson-a")])
+
+        assert not any(
+            "DELETE FROM course_lesson_progress" in sql for sql, _ in database.writes
+        )
 
 
 class TestPublishChecks:

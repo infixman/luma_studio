@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { api } from '../../shared/api'
+import { api, apiUrl } from '../../shared/api'
 import type { EnrolledCourse } from '../../shared/types'
 import '../styles/shop.css'
 
@@ -55,19 +55,58 @@ export function MyCoursesPage() {
         </div>
       ) : (
         <ul class="course-cards">
-          {courses.map((course) => (
-            <li key={course.id}>
-              <a class="course-card" href={`/learn/${encodeURIComponent(course.slug)}`}>
-                <span class="title">{course.title}</span>
-                {course.completedCount > 0 && (
-                  <span class="note">已完成 {course.completedCount} 個單元</span>
-                )}
-                {/* "開始上課" on something half-watched reads as though the
-                    progress was lost. */}
-                <span class="cta">{course.lastViewedAt === null ? '開始上課' : '繼續上課'}</span>
-              </a>
-            </li>
-          ))}
+          {courses.map((course) => {
+            const done = Math.min(course.completedCount, course.lessonCount)
+            const finished = course.lessonCount > 0 && done >= course.lessonCount
+            return (
+              <li key={course.id}>
+                <a class="course-card" href={`/learn/${encodeURIComponent(course.slug)}`}>
+                  {/* Decorative: the title is in the same link, and reading the
+                      course name twice helps nobody. */}
+                  <span class="course-card-cover">
+                    {course.coverPath ? (
+                      <img src={apiUrl(course.coverPath)} alt="" loading="lazy" />
+                    ) : (
+                      <span class="course-card-blank" aria-hidden="true" />
+                    )}
+                    {finished && <span class="course-card-flag">已完成</span>}
+                  </span>
+
+                  <span class="course-card-body">
+                    <span class="title">{course.title}</span>
+                    {course.summary && <span class="summary">{course.summary}</span>}
+
+                    {/* A bare "已完成 3 個單元" says nothing about whether that
+                        is nearly done or barely started, which is the one thing
+                        worth knowing at a glance. */}
+                    {course.lessonCount > 0 && (
+                      <span class="course-card-progress">
+                        <span
+                          class="bar"
+                          role="progressbar"
+                          aria-valuenow={done}
+                          aria-valuemin={0}
+                          aria-valuemax={course.lessonCount}
+                          aria-label={`已完成 ${done} / ${course.lessonCount} 個單元`}
+                        >
+                          <span class="fill" style={{ inlineSize: `${(done / course.lessonCount) * 100}%` }} />
+                        </span>
+                        <span class="note">
+                          {done} / {course.lessonCount} 個單元
+                        </span>
+                      </span>
+                    )}
+
+                    {/* "開始上課" on something half-watched reads as though the
+                        progress was lost. */}
+                    <span class="cta">
+                      {finished ? '再看一次' : course.lastViewedAt === null ? '開始上課' : '繼續上課'}
+                    </span>
+                  </span>
+                </a>
+              </li>
+            )
+          })}
         </ul>
       )}
     </main>

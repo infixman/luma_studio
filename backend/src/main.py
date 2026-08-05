@@ -129,6 +129,10 @@ async def dispatch(ctx: Ctx):
             return await learning_api.playback_session_response(
                 ctx, customer, path.removeprefix("/api/learning/lessons/").removesuffix("/playback-session")
             )
+        if path.startswith("/api/learning/lessons/") and path.endswith("/poster") and method == "GET":
+            return await learning_api.lesson_poster_response(
+                ctx, customer, path.removeprefix("/api/learning/lessons/").removesuffix("/poster")
+            )
         if path.startswith("/api/learning/lessons/") and path.endswith("/progress") and method == "PUT":
             if not await rate_limit.allows(ctx.env, rate_limit.SHOP, ctx.request, "progress"):
                 return ctx.too_many_requests()

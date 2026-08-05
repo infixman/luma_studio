@@ -1329,19 +1329,299 @@ main.order .totals {
   gap: 1rem;
 }
 
+/* The card leads with the picture. A course is a thing somebody watches, and
+   two lines of text is a filing entry rather than something you want to open.
+
+   `overflow: hidden` so the cover's corners are the card's corners: rounding
+   both and hoping they agree leaves a hairline of card colour outside the
+   image at most zoom levels. */
 .course-card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem;
-  border: 1px solid currentColor;
-  border-radius: 0.5rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--surface, #fff);
   text-decoration: none;
   color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+@media (hover: hover) {
+  .course-card:hover {
+    transform: translateY(-2px);
+    border-color: rgb(0 0 0 / 0.2);
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.1);
+  }
+}
+
+/* Keyboard users get the same affordance the mouse gets, plus a real ring. */
+.course-card:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* A fixed shape, so a wall of cards lines up whatever the pictures are.
+   Covers are landscape and this is the ratio the admin uploads at. */
+.course-card-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: rgb(0 0 0 / 0.06);
+}
+
+.course-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A course with no cover keeps the same shape rather than collapsing, so one
+   missing picture does not make one card a different size from the rest. */
+.course-card-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.12));
+}
+
+.course-card-flag {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.72);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.course-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem 1rem;
 }
 
 .course-card .title {
   font-weight: 600;
+  line-height: 1.35;
+}
+
+/* Two lines at most. A summary written for a product page will run long, and
+   a card that grows to fit it drags the whole row's height with it. */
+.course-card .summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.course-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.course-card-progress .bar {
+  flex: 1;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.1);
+  overflow: hidden;
+}
+
+.course-card-progress .fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: currentColor;
+}
+
+.course-card-progress .note {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Pushed to the bottom so the call to action sits on one line across the row
+   however long the titles above it are. */
+.course-card .cta {
+  margin-top: auto;
+  padding-top: 0.3rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* --- the course overview ------------------------------------------------ */
+
+.course-overview-head {
+  margin-bottom: 2rem;
+}
+
+.course-overview-head h1 {
+  margin: 0.2rem 0 0.4rem;
+}
+
+.course-overview-head .summary {
+  max-width: 48rem;
+  margin: 0 0 0.6rem;
+  opacity: 0.85;
+}
+
+/* Small, above the title, and a link rather than a heading: it is the way
+   back, not what this page is about. */
+.crumb {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.course-overview-resume {
+  margin: 1rem 0 0;
+}
+
+.course-section + .course-section {
+  margin-top: 2rem;
+}
+
+.course-section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.lesson-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--surface, #fff);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+@media (hover: hover) {
+  .lesson-card:hover {
+    transform: translateY(-2px);
+    border-color: rgb(0 0 0 / 0.2);
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.1);
+  }
+}
+
+.lesson-card:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.lesson-card-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: rgb(0 0 0 / 0.06);
+}
+
+.lesson-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A reading has no frame to take a picture from, and a lesson whose transcode
+   produced none keeps the same shape rather than collapsing. */
+.lesson-card-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.12));
+}
+
+/* On the picture, where every video player in the world puts it. */
+.lesson-card-length {
+  position: absolute;
+  inset-block-end: 0.4rem;
+  inset-inline-end: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  background: rgb(0 0 0 / 0.75);
+  color: #fff;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Along the bottom edge of the picture rather than under the title, so it
+   reads as "how far into this video" and not as an ornament. */
+.lesson-card-bar {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 0.25rem;
+  background: rgb(0 0 0 / 0.25);
+}
+
+.lesson-card-bar .fill {
+  display: block;
+  block-size: 100%;
+  background: currentColor;
+}
+
+.lesson-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+}
+
+.lesson-card .title {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lesson-card-state {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one state worth colouring. Finished is the thing being scanned for;
+   the other two are read, not spotted. */
+.lesson-card-state.is-done {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* --- the player --------------------------------------------------------- */
+
+.learn .crumb {
+  margin-bottom: 0.75rem;
+}
+
+.learn-place {
+  margin-top: 0.2rem;
+}
+
+/* Beside the lesson buttons but not one of them: it leaves the lesson rather
+   than moving within it. */
+.learn-contents {
+  align-self: center;
+  margin-inline-start: auto;
+  font-size: 0.9rem;
 }
 
 /* `minmax(0, 1fr)`, not the implicit `auto`. An auto track is floored at its
@@ -1378,49 +1658,9 @@ main.order .totals {
   flex-wrap: wrap;
 }
 
-.learn-outline ul {
-  margin: 0 0 1rem;
-  padding: 0;
-  list-style: none;
-}
-
-.learn-outline button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.4rem 0.2rem;
-  background: none;
-  border: 0;
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
-}
-
-.learn-outline button.is-current {
-  font-weight: 600;
-}
-
-/* Two columns once there is room for the video and the contents side by side.
-   Below that the contents go under the player rather than squeezing it. */
-@media (min-width: 60rem) {
-  .learn-layout {
-    grid-template-columns: minmax(0, 1fr) 18rem;
-    align-items: start;
-  }
-}
-
-/* Theatre mode folds the outline away rather than shrinking it: a course
-   directory at half width reads as broken, not as compact. */
-.learn-layout.is-theater .learn-outline {
-  display: none;
-}
-
-@media (min-width: 60rem) {
-  .learn-layout.is-theater {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
+/* One column. The contents used to be a sidebar here, which is why this was a
+   two-track grid — they are the course page now, and a lone track with an
+   18rem gap beside it is just a narrower video. */
 
 /* And the page itself gets out of the way.
 

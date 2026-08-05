@@ -854,6 +854,24 @@ body.admin .desktop-pairing dd {
   margin: 0;
 }
 
+/* The override, sitting in the lesson row beside the video it overrides. Small:
+   a lesson already has a thumbnail without anybody choosing one, so this is a
+   correction rather than a required field. */
+body.admin .course-lesson-cover {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+body.admin .course-lesson-cover img {
+  display: block;
+  width: 4rem;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+}
+
 /* Monospace so the digits are unambiguous, at reading size rather than poster
    size: it is copied with the button beside it, not read across a room. */
 body.admin .desktop-pairing-code {

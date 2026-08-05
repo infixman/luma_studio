@@ -14,9 +14,9 @@ can be.
 """
 
 from api import media_gateway
-from domain import entitlements, learning
-from shared.common import utc_timestamp
-from shared.responses import Ctx
+from domain import entitlements, learning, video
+from shared.common import CACHE_PRIVATE_VERSIONED, utc_timestamp
+from shared.responses import Ctx, serve_r2_object
 
 
 def _refusal(ctx: Ctx, reason: str):
@@ -89,6 +89,35 @@ async def playback_session_response(ctx: Ctx, customer: dict | None, lesson_id: 
     )
 
 
+async def lesson_poster_response(ctx: Ctx, customer: dict | None, lesson_id: str):
+    """The frame the transcode grabbed, for somebody allowed to watch it.
+
+    Through the Worker rather than as a signed URL: a URL for a private object
+    is a capability that outlives the page it was put on, and a thumbnail is
+    not worth minting one for.
+
+    The same `playable` decision the player uses, so a course somebody no
+    longer owns stops showing them its pictures at the same moment it stops
+    playing. Cheaper than it looks — a poster is one request per card, not the
+    hundreds a lesson's segments make, which is why this can afford the check
+    the gateway cannot.
+    """
+
+    decision = await learning.playable(
+        ctx.env, customer_id=customer["id"] if customer else None, lesson_id=lesson_id
+    )
+    if not decision["allowed"]:
+        return _refusal(ctx, decision["reason"])
+
+    return await serve_r2_object(
+        ctx,
+        ctx.env.COURSE_VIDEO,
+        video.poster_key(decision["assetId"], decision["encodeVersion"]),
+        {".webp": "image/webp"},
+        CACHE_PRIVATE_VERSIONED,
+    )
+
+
 async def progress_response(ctx: Ctx, customer: dict, lesson_id: str):
     decision = await learning.playable(ctx.env, customer_id=customer["id"], lesson_id=lesson_id)
     # A reading has no video and is still something to finish, so `no_video`
@@ -120,6 +149,7 @@ async def progress_response(ctx: Ctx, customer: dict, lesson_id: str):
 
 __all__ = [
     "course_response",
+    "lesson_poster_response",
     "my_courses_response",
     "playback_session_response",
     "progress_response",

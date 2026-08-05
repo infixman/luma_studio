@@ -35,12 +35,16 @@ let session: { ok: true; playbackUrl: string; expiresAt: number } | { ok: false;
 vi.mock('../../shared/api', () => ({
   api: vi.fn(async () => ({
     title: '水彩入門',
+    slug: 'watercolour',
+    summary: '',
     sections: [
       {
         title: '第一章',
         lessons: [
-          { id: 'lesson-1', title: '調色', contentHtml: '', hasVideo: true, isPreview: false, completed: false },
-          { id: 'lesson-2', title: '疊色', contentHtml: '', hasVideo: true, isPreview: false, completed: false },
+          { id: 'lesson-1', title: '調色', contentHtml: '', hasVideo: true, isPreview: false, completed: false,
+            positionSeconds: 0, durationSeconds: 180, coverPath: null },
+          { id: 'lesson-2', title: '疊色', contentHtml: '', hasVideo: true, isPreview: false, completed: false,
+            positionSeconds: 0, durationSeconds: 240, coverPath: null },
         ],
       },
     ],
@@ -91,7 +95,7 @@ async function settle() {
 }
 
 test('the player is pointed at the gateway, not at the page it is on', async () => {
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   expect(container.querySelector('video')?.getAttribute('data-src')).toBe(
@@ -102,7 +106,7 @@ test('the player is pointed at the gateway, not at the page it is on', async () 
 test('a refusal is shown instead of a player', async () => {
   session = { ok: false, reason: 'not_entitled', message: '你還沒有這門課程的觀看權' }
 
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   expect(container.textContent).toContain('你還沒有這門課程的觀看權')
@@ -126,12 +130,14 @@ function endVideo(): void {
   container.querySelector('video')!.dispatchEvent(new Event('ended'))
 }
 
+// The lesson is what this page is about now, so its title is the h1. The
+// course name above it is a link back to the contents, not a heading.
 function currentLesson(): string {
-  return container.querySelector('.learn-stage h2')?.textContent ?? ''
+  return container.querySelector('.learn-stage h1')?.textContent ?? ''
 }
 
 test('a finished lesson runs on into the next one', async () => {
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
   expect(currentLesson()).toBe('調色')
 
@@ -145,7 +151,7 @@ test('the switch is on the bar itself, not two taps inside the gear', async () =
   /** It is changed while watching — at the end of a lesson, when the next one
    *  starts and somebody did not want it to — so it has to be reachable
    *  without opening a menu first. */
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')
@@ -156,7 +162,7 @@ test('the switch is on the bar itself, not two taps inside the gear', async () =
 test('turning it off leaves the lesson where it ended', async () => {
   /** Somebody who wants to sit with what they just watched, or who is
    *  following along with their hands full, should not be moved on. */
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')!.click()
@@ -169,7 +175,7 @@ test('turning it off leaves the lesson where it ended', async () => {
 })
 
 test('the last lesson stays put rather than wrapping round', async () => {
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
   const buttons = [...container.querySelectorAll<HTMLButtonElement>('.learn-actions button')]
   buttons.find((button) => button.textContent === '下一單元')!.click()
@@ -183,13 +189,13 @@ test('the last lesson stays put rather than wrapping round', async () => {
 })
 
 test('the choice is remembered, because it is about how somebody watches', async () => {
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
   container.querySelector<HTMLButtonElement>('button[aria-label="已啟用自動播放功能"]')!.click()
   await settle()
 
   render(null, container)
-  render(<LearnPage slug="watercolour" />, container)
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   endVideo()
@@ -197,10 +203,10 @@ test('the choice is remembered, because it is about how somebody watches', async
   expect(currentLesson()).toBe('調色')
 })
 
-test('theatre mode widens the stage by collapsing the outline beside it', async () => {
-  /** The player only says the flag changed; folding the outline away is the
-   *  page's layout to own, not the video's. */
-  render(<LearnPage slug="watercolour" />, container)
+test('theatre mode is the page’s layout to change, not the video’s', async () => {
+  /** The player only reports that the flag changed. What that does to the page
+   *  around it belongs here. */
+  render(<LearnPage slug="watercolour" lessonId="lesson-1" />, container)
   await settle()
 
   const layout = container.querySelector('.learn-layout')

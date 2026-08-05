@@ -630,6 +630,14 @@ export interface CourseLesson {
   videoAssetId: string | null
   /** Watchable without buying. Still goes through the playback gateway. */
   isPreview: boolean
+  /**
+   * A chosen thumbnail. Null is the normal state and means "use the frame the
+   * transcode grabbed" — clearing this is how somebody goes back to it, which
+   * only works because the default is never stored here.
+   */
+  coverMediaId: string | null
+  /** Where that picture is served, resolved by the server. */
+  coverPath: string | null
   position: number
 }
 
@@ -691,9 +699,48 @@ export interface EnrolledCourse {
   id: string
   slug: string
   title: string
+  summary: string
+  /** Resolved by the server; null when there is no cover or the picture is gone. */
+  coverPath: string | null
   completedCount: number
+  /** Everything in the course, so a count can be shown as progress rather than a bare number. */
+  lessonCount: number
   /** Null until the member has finished a lesson in it. */
   lastViewedAt: number | null
+}
+
+/**
+ * A course as somebody who owns it reads it.
+ *
+ * Shared by the two halves of `/learn`: the overview that lists what there is
+ * to watch, and the player for one lesson. One endpoint feeds both, so the
+ * shapes cannot drift apart.
+ */
+export interface LearnLesson {
+  id: string
+  title: string
+  contentHtml: string
+  hasVideo: boolean
+  isPreview: boolean
+  completed: boolean
+  /** Where they got to. 0 for a lesson never opened. */
+  positionSeconds: number
+  /** Null for a reading, and for a video whose duration was never measured. */
+  durationSeconds: number | null
+  /** The chosen picture, else the frame the transcode grabbed, else null. */
+  coverPath: string | null
+}
+
+export interface LearnSection {
+  title: string
+  lessons: LearnLesson[]
+}
+
+export interface LearnCourse {
+  title: string
+  slug: string
+  summary: string
+  sections: LearnSection[]
 }
 
 /**
